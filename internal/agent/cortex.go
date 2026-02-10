@@ -7,6 +7,7 @@ import (
 	protoio "protogonos/internal/io"
 	"protogonos/internal/model"
 	"protogonos/internal/nn"
+	"protogonos/internal/substrate"
 )
 
 type Cortex struct {
@@ -16,6 +17,7 @@ type Cortex struct {
 	actuators       map[string]protoio.Actuator
 	inputNeuronIDs  []string
 	outputNeuronIDs []string
+	substrate       substrate.Runtime
 }
 
 func NewCortex(
@@ -25,6 +27,7 @@ func NewCortex(
 	actuators map[string]protoio.Actuator,
 	inputNeuronIDs []string,
 	outputNeuronIDs []string,
+	substrateRuntime substrate.Runtime,
 ) (*Cortex, error) {
 	if id == "" {
 		return nil, fmt.Errorf("agent id is required")
@@ -43,6 +46,7 @@ func NewCortex(
 		actuators:       actuators,
 		inputNeuronIDs:  append([]string(nil), inputNeuronIDs...),
 		outputNeuronIDs: append([]string(nil), outputNeuronIDs...),
+		substrate:       substrateRuntime,
 	}, nil
 }
 
@@ -108,6 +112,15 @@ func (c *Cortex) execute(ctx context.Context, inputs []float64) ([]float64, erro
 	outputs := make([]float64, len(c.outputNeuronIDs))
 	for i, neuronID := range c.outputNeuronIDs {
 		outputs[i] = values[neuronID]
+	}
+	if c.substrate != nil {
+		substrateOutputs, err := c.substrate.Step(ctx, outputs)
+		if err != nil {
+			return nil, err
+		}
+		if len(substrateOutputs) >= len(outputs) {
+			copy(outputs, substrateOutputs[:len(outputs)])
+		}
 	}
 
 	if len(c.genome.ActuatorIDs) > 0 {

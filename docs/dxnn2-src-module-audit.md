@@ -49,7 +49,7 @@ Status legend:
 | `flatland.erl` | interactive multi-agent world/scape server | none | `out-of-scope-now` | `.ref/src/flatland.erl` |
 | `fx.erl` | financial simulation/evaluation tooling | none | `out-of-scope-now` | `.ref/src/fx.erl` |
 | `scape_GTSA.erl` | time-series scape process | none | `out-of-scope-now` | `.ref/src/scape_GTSA.erl` |
-| `substrate.erl` | substrate encoding runtime | `internal/substrate/runtime.go` scaffold | `partial` | `internal/substrate/runtime.go`, `.ref/src/substrate.erl` |
+| `substrate.erl` | substrate encoding runtime | `internal/substrate/runtime.go` + cortex/monitor integration | `partial` | `internal/substrate/runtime.go`, `internal/agent/cortex.go`, `internal/evo/population_monitor.go`, `.ref/src/substrate.erl` |
 | `substrate_cpp.erl` | substrate CPP runtime | `internal/substrate/components.go` + registry | `partial` | `internal/substrate/components.go`, `internal/substrate/registry.go`, `.ref/src/substrate_cpp.erl` |
 | `substrate_cep.erl` | substrate CEP runtime | `internal/substrate/components.go` + registry | `partial` | `internal/substrate/components.go`, `internal/substrate/registry.go`, `.ref/src/substrate_cep.erl` |
 | `visor.erl` | visualization loop/UI drawing | none | `out-of-scope-now` | `.ref/src/visor.erl` |

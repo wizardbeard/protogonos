@@ -6,6 +6,7 @@ import (
 
 	protoio "protogonos/internal/io"
 	"protogonos/internal/model"
+	"protogonos/internal/substrate"
 )
 
 type testSensor struct {
@@ -51,7 +52,7 @@ func TestCortexTickSensorToActuator(t *testing.T) {
 	act := &testActuator{}
 	actuators := map[string]protoio.Actuator{"a1": act}
 
-	c, err := NewCortex("agent-1", genome, sensors, actuators, []string{"i1", "i2"}, []string{"o"})
+	c, err := NewCortex("agent-1", genome, sensors, actuators, []string{"i1", "i2"}, []string{"o"}, nil)
 	if err != nil {
 		t.Fatalf("new cortex: %v", err)
 	}
@@ -67,5 +68,50 @@ func TestCortexTickSensorToActuator(t *testing.T) {
 	}
 	if len(act.last) != 1 || act.last[0] != want {
 		t.Fatalf("unexpected actuator write: got=%v want=[%f]", act.last, want)
+	}
+}
+
+func TestCortexSubstrateTransformsOutputs(t *testing.T) {
+	genome := model.Genome{
+		Neurons: []model.Neuron{
+			{ID: "i", Activation: "identity"},
+			{ID: "o", Activation: "identity", Bias: 0.0},
+		},
+		Synapses: []model.Synapse{
+			{From: "i", To: "o", Weight: 1.0, Enabled: true},
+		},
+	}
+
+	rt, err := substrate.NewSimpleRuntime(substrate.Spec{
+		CPPName: substrate.DefaultCPPName,
+		CEPName: substrate.DefaultCEPName,
+		Parameters: map[string]float64{
+			"scale": 1.0,
+		},
+	}, 1)
+	if err != nil {
+		t.Fatalf("new substrate runtime: %v", err)
+	}
+
+	c, err := NewCortex("agent-sub", genome, nil, nil, []string{"i"}, []string{"o"}, rt)
+	if err != nil {
+		t.Fatalf("new cortex: %v", err)
+	}
+
+	out1, err := c.RunStep(context.Background(), []float64{1.5})
+	if err != nil {
+		t.Fatalf("run step 1: %v", err)
+	}
+	if len(out1) != 1 || out1[0] != 1.5 {
+		t.Fatalf("unexpected output 1: %+v", out1)
+	}
+
+	out2, err := c.RunStep(context.Background(), []float64{1.5})
+	if err != nil {
+		t.Fatalf("run step 2: %v", err)
+	}
+	// Substrate keeps state and applies delta each step: second output should be larger.
+	if len(out2) != 1 || out2[0] <= out1[0] {
+		t.Fatalf("expected substrate-transformed output to increase: out1=%v out2=%v", out1, out2)
 	}
 }

@@ -323,6 +323,51 @@ func TestPopulationMonitorUsesRegisteredIOForRegressionMimic(t *testing.T) {
 	}
 }
 
+func TestPopulationMonitorBuildsSubstrateFromGenomeConfig(t *testing.T) {
+	initial := []model.Genome{
+		{
+			VersionedRecord: model.VersionedRecord{SchemaVersion: 1, CodecVersion: 1},
+			ID:              "sub-0",
+			Neurons: []model.Neuron{
+				{ID: "i", Activation: "identity", Bias: 0},
+				{ID: "o", Activation: "identity", Bias: 0},
+			},
+			Synapses: []model.Synapse{
+				{ID: "s", From: "i", To: "o", Weight: 1, Enabled: true, Recurrent: false},
+			},
+			Substrate: &model.SubstrateConfig{
+				CPPName:     "set_weight",
+				CEPName:     "delta_weight",
+				WeightCount: 1,
+				Parameters:  map[string]float64{"scale": 1.0},
+			},
+		},
+	}
+
+	monitor, err := NewPopulationMonitor(MonitorConfig{
+		Scape:           oneDimScape{},
+		Mutation:        PerturbWeightAt{Index: 0, Delta: 0},
+		PopulationSize:  1,
+		EliteCount:      1,
+		Generations:     1,
+		Workers:         1,
+		Seed:            1,
+		InputNeuronIDs:  []string{"i"},
+		OutputNeuronIDs: []string{"o"},
+	})
+	if err != nil {
+		t.Fatalf("new monitor: %v", err)
+	}
+
+	result, err := monitor.Run(context.Background(), initial)
+	if err != nil {
+		t.Fatalf("run: %v", err)
+	}
+	if len(result.BestByGeneration) != 1 {
+		t.Fatalf("expected one generation result, got=%d", len(result.BestByGeneration))
+	}
+}
+
 func TestPopulationMonitorSizeProportionalPostprocessorChangesWinner(t *testing.T) {
 	complexBestRaw := newComplexLinearGenome("complex", 1.0)
 	simpleSecondRaw := newLinearGenome("simple", 0.9)

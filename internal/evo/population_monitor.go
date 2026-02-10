@@ -12,6 +12,7 @@ import (
 	protoio "protogonos/internal/io"
 	"protogonos/internal/model"
 	"protogonos/internal/scape"
+	"protogonos/internal/substrate"
 	"protogonos/internal/tuning"
 )
 
@@ -244,6 +245,10 @@ func (m *PopulationMonitor) evaluateGenome(ctx context.Context, genome model.Gen
 	if err != nil {
 		return 0, nil, err
 	}
+	substrateRuntime, err := m.buildSubstrate(genome)
+	if err != nil {
+		return 0, nil, err
+	}
 
 	cortex, err := agent.NewCortex(
 		genome.ID,
@@ -252,6 +257,7 @@ func (m *PopulationMonitor) evaluateGenome(ctx context.Context, genome model.Gen
 		actuators,
 		m.cfg.InputNeuronIDs,
 		m.cfg.OutputNeuronIDs,
+		substrateRuntime,
 	)
 	if err != nil {
 		return 0, nil, err
@@ -291,6 +297,31 @@ func (m *PopulationMonitor) buildIO(genome model.Genome) (map[string]protoio.Sen
 	}
 
 	return sensors, actuators, nil
+}
+
+func (m *PopulationMonitor) buildSubstrate(genome model.Genome) (substrate.Runtime, error) {
+	if genome.Substrate == nil {
+		return nil, nil
+	}
+	cfg := genome.Substrate
+	spec := substrate.Spec{
+		CPPName:    cfg.CPPName,
+		CEPName:    cfg.CEPName,
+		Dimensions: append([]int(nil), cfg.Dimensions...),
+		Parameters: map[string]float64{},
+	}
+	for k, v := range cfg.Parameters {
+		spec.Parameters[k] = v
+	}
+	weightCount := cfg.WeightCount
+	if weightCount <= 0 {
+		weightCount = len(m.cfg.OutputNeuronIDs)
+	}
+	rt, err := substrate.NewSimpleRuntime(spec, weightCount)
+	if err != nil {
+		return nil, fmt.Errorf("build substrate runtime for genome %s: %w", genome.ID, err)
+	}
+	return rt, nil
 }
 
 func (m *PopulationMonitor) nextGeneration(ctx context.Context, ranked []ScoredGenome, generation int) ([]model.Genome, []LineageRecord, error) {

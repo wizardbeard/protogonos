@@ -8,11 +8,20 @@ type VersionedRecord struct {
 
 type Genome struct {
 	VersionedRecord
-	ID          string    `json:"id"`
-	Neurons     []Neuron  `json:"neurons"`
-	Synapses    []Synapse `json:"synapses"`
-	SensorIDs   []string  `json:"sensor_ids"`
-	ActuatorIDs []string  `json:"actuator_ids"`
+	ID          string           `json:"id"`
+	Neurons     []Neuron         `json:"neurons"`
+	Synapses    []Synapse        `json:"synapses"`
+	SensorIDs   []string         `json:"sensor_ids"`
+	ActuatorIDs []string         `json:"actuator_ids"`
+	Substrate   *SubstrateConfig `json:"substrate,omitempty"`
+}
+
+type SubstrateConfig struct {
+	CPPName     string             `json:"cpp_name"`
+	CEPName     string             `json:"cep_name"`
+	Dimensions  []int              `json:"dimensions"`
+	Parameters  map[string]float64 `json:"parameters"`
+	WeightCount int                `json:"weight_count"`
 }
 
 type Neuron struct {

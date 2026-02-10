@@ -20,7 +20,7 @@ func TestRegressionMimicScapeEvaluateWithIdentityAgent(t *testing.T) {
 		},
 	}
 
-	cortex, err := agent.NewCortex("reg-agent", genome, nil, nil, []string{"i"}, []string{"o"})
+	cortex, err := agent.NewCortex("reg-agent", genome, nil, nil, []string{"i"}, []string{"o"}, nil)
 	if err != nil {
 		t.Fatalf("new cortex: %v", err)
 	}
@@ -63,7 +63,7 @@ func TestRegressionMimicScapeEvaluateWithScalarIOComponents(t *testing.T) {
 		protoio.ScalarOutputActuatorName: protoio.NewScalarOutputActuator(),
 	}
 
-	cortex, err := agent.NewCortex("reg-agent-io", genome, sensors, actuators, []string{"i"}, []string{"o"})
+	cortex, err := agent.NewCortex("reg-agent-io", genome, sensors, actuators, []string{"i"}, []string{"o"}, nil)
 	if err != nil {
 		t.Fatalf("new cortex: %v", err)
 	}

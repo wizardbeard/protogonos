@@ -29,7 +29,7 @@ func TestXORScapeEvaluateWithHandBuiltAgent(t *testing.T) {
 		},
 	}
 
-	cortex, err := agent.NewCortex("xor-agent", genome, nil, nil, []string{"i1", "i2"}, []string{"o"})
+	cortex, err := agent.NewCortex("xor-agent", genome, nil, nil, []string{"i1", "i2"}, []string{"o"}, nil)
 	if err != nil {
 		t.Fatalf("new cortex: %v", err)
 	}
@@ -81,7 +81,7 @@ func TestXORScapeEvaluateWithIOComponents(t *testing.T) {
 		protoio.XOROutputActuatorName: protoio.NewScalarOutputActuator(),
 	}
 
-	cortex, err := agent.NewCortex("xor-agent-io", genome, sensors, actuators, []string{"i1", "i2"}, []string{"o"})
+	cortex, err := agent.NewCortex("xor-agent-io", genome, sensors, actuators, []string{"i1", "i2"}, []string{"o"}, nil)
 	if err != nil {
 		t.Fatalf("new cortex: %v", err)
 	}
