@@ -1,0 +1,96 @@
+package protogonos
+
+import (
+	"context"
+	"os"
+	"path/filepath"
+	"testing"
+)
+
+func TestClientRunRunsAndExport(t *testing.T) {
+	base := t.TempDir()
+	benchmarksDir := filepath.Join(base, "benchmarks")
+	exportsDir := filepath.Join(base, "exports")
+
+	client, err := New(Options{
+		StoreKind:     "memory",
+		BenchmarksDir: benchmarksDir,
+		ExportsDir:    exportsDir,
+	})
+	if err != nil {
+		t.Fatalf("new client: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = client.Close()
+	})
+
+	summary, err := client.Run(context.Background(), RunRequest{
+		Scape:       "xor",
+		Population:  8,
+		Generations: 2,
+		Seed:        42,
+		Workers:     2,
+	})
+	if err != nil {
+		t.Fatalf("run: %v", err)
+	}
+	if summary.RunID == "" {
+		t.Fatal("expected run id")
+	}
+	if len(summary.BestByGeneration) != 2 {
+		t.Fatalf("unexpected generation history length: %d", len(summary.BestByGeneration))
+	}
+
+	runs, err := client.Runs(context.Background(), RunsRequest{Limit: 5})
+	if err != nil {
+		t.Fatalf("runs: %v", err)
+	}
+	if len(runs) == 0 || runs[0].RunID != summary.RunID {
+		t.Fatalf("expected latest run %s in runs list: %+v", summary.RunID, runs)
+	}
+
+	exported, err := client.Export(context.Background(), ExportRequest{Latest: true})
+	if err != nil {
+		t.Fatalf("export latest: %v", err)
+	}
+	if exported.RunID != summary.RunID {
+		t.Fatalf("exported run mismatch: got=%s want=%s", exported.RunID, summary.RunID)
+	}
+
+	for _, file := range []string{"config.json", "fitness_history.json", "top_genomes.json", "lineage.json"} {
+		if _, err := os.Stat(filepath.Join(exported.Directory, file)); err != nil {
+			t.Fatalf("expected exported file %s: %v", file, err)
+		}
+	}
+}
+
+func TestClientRunRejectsUnknownSelectionAndPostprocessor(t *testing.T) {
+	client, err := New(Options{StoreKind: "memory", BenchmarksDir: t.TempDir(), ExportsDir: t.TempDir()})
+	if err != nil {
+		t.Fatalf("new client: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = client.Close()
+	})
+
+	_, err = client.Run(context.Background(), RunRequest{
+		Scape:       "xor",
+		Population:  6,
+		Generations: 1,
+		Selection:   "unknown",
+	})
+	if err == nil {
+		t.Fatal("expected selection validation error")
+	}
+
+	_, err = client.Run(context.Background(), RunRequest{
+		Scape:                "xor",
+		Population:           6,
+		Generations:          1,
+		Selection:            "elite",
+		FitnessPostprocessor: "unknown",
+	})
+	if err == nil {
+		t.Fatal("expected postprocessor validation error")
+	}
+}

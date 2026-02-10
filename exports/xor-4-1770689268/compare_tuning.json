@@ -1,0 +1,17 @@
+{
+  "scape": "xor",
+  "population_size": 8,
+  "generations": 2,
+  "seed": 4,
+  "without_tuning_best": [
+    0.7319328463262826,
+    0.7547722388344628
+  ],
+  "with_tuning_best": [
+    0.7336534414563356,
+    0.7611173882849515
+  ],
+  "without_final_best": 0.7547722388344628,
+  "with_final_best": 0.7611173882849515,
+  "final_improvement": 0.006345149450488696
+}

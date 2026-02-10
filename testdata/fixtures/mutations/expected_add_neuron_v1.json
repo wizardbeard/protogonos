@@ -1,0 +1,42 @@
+{
+  "schema_version": 1,
+  "codec_version": 1,
+  "id": "genome-minimal-1",
+  "neurons": [
+    {
+      "id": "n-input",
+      "activation": "identity",
+      "bias": 0
+    },
+    {
+      "id": "n-output",
+      "activation": "identity",
+      "bias": 0
+    },
+    {
+      "id": "n-hidden",
+      "activation": "relu",
+      "bias": 0
+    }
+  ],
+  "synapses": [
+    {
+      "id": "s-1a",
+      "from": "n-input",
+      "to": "n-hidden",
+      "weight": 1,
+      "enabled": true,
+      "recurrent": false
+    },
+    {
+      "id": "s-1b",
+      "from": "n-hidden",
+      "to": "n-output",
+      "weight": 1,
+      "enabled": true,
+      "recurrent": false
+    }
+  ],
+  "sensor_ids": ["sensor:input"],
+  "actuator_ids": ["actuator:output"]
+}

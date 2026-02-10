@@ -1,0 +1,47 @@
+{
+  "schema_version": 1,
+  "codec_version": 1,
+  "id": "genome-io-xor-1",
+  "neurons": [
+    {
+      "id": "i1",
+      "activation": "identity",
+      "bias": 0
+    },
+    {
+      "id": "i2",
+      "activation": "identity",
+      "bias": 0
+    },
+    {
+      "id": "o",
+      "activation": "identity",
+      "bias": 0
+    }
+  ],
+  "synapses": [
+    {
+      "id": "s1",
+      "from": "i1",
+      "to": "o",
+      "weight": 1,
+      "enabled": true,
+      "recurrent": false
+    },
+    {
+      "id": "s2",
+      "from": "i2",
+      "to": "o",
+      "weight": -1,
+      "enabled": true,
+      "recurrent": false
+    }
+  ],
+  "sensor_ids": [
+    "xor_input_left",
+    "xor_input_right"
+  ],
+  "actuator_ids": [
+    "xor_output"
+  ]
+}

@@ -1,0 +1,9 @@
+{
+  "run_id": "xor-1-1770685871",
+  "scape": "xor",
+  "population_size": 8,
+  "generations": 3,
+  "seed": 1,
+  "workers": 2,
+  "elite_count": 1
+}

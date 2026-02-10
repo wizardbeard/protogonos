@@ -1,0 +1,20 @@
+{
+  "schema_version": 1,
+  "codec_version": 1,
+  "id": "genome-minimal-1",
+  "neurons": [
+    {
+      "id": "n-input",
+      "activation": "identity",
+      "bias": 0
+    },
+    {
+      "id": "n-output",
+      "activation": "identity",
+      "bias": 0
+    }
+  ],
+  "synapses": [],
+  "sensor_ids": ["sensor:input"],
+  "actuator_ids": ["actuator:output"]
+}

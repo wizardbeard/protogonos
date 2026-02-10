@@ -1,0 +1,506 @@
+[
+  {
+    "genome_id": "xor-g0-0",
+    "parent_id": "",
+    "generation": 0,
+    "operation": "seed"
+  },
+  {
+    "genome_id": "xor-g0-1",
+    "parent_id": "",
+    "generation": 0,
+    "operation": "seed"
+  },
+  {
+    "genome_id": "xor-g0-2",
+    "parent_id": "",
+    "generation": 0,
+    "operation": "seed"
+  },
+  {
+    "genome_id": "xor-g0-3",
+    "parent_id": "",
+    "generation": 0,
+    "operation": "seed"
+  },
+  {
+    "genome_id": "xor-g0-4",
+    "parent_id": "",
+    "generation": 0,
+    "operation": "seed"
+  },
+  {
+    "genome_id": "xor-g0-5",
+    "parent_id": "",
+    "generation": 0,
+    "operation": "seed"
+  },
+  {
+    "genome_id": "xor-g0-6",
+    "parent_id": "",
+    "generation": 0,
+    "operation": "seed"
+  },
+  {
+    "genome_id": "xor-g0-7",
+    "parent_id": "",
+    "generation": 0,
+    "operation": "seed"
+  },
+  {
+    "genome_id": "xor-g0-8",
+    "parent_id": "",
+    "generation": 0,
+    "operation": "seed"
+  },
+  {
+    "genome_id": "xor-g0-9",
+    "parent_id": "",
+    "generation": 0,
+    "operation": "seed"
+  },
+  {
+    "genome_id": "xor-g0-10",
+    "parent_id": "",
+    "generation": 0,
+    "operation": "seed"
+  },
+  {
+    "genome_id": "xor-g0-11",
+    "parent_id": "",
+    "generation": 0,
+    "operation": "seed"
+  },
+  {
+    "genome_id": "xor-g0-2",
+    "parent_id": "xor-g0-2",
+    "generation": 1,
+    "operation": "elite_clone"
+  },
+  {
+    "genome_id": "xor-g0-0",
+    "parent_id": "xor-g0-0",
+    "generation": 1,
+    "operation": "elite_clone"
+  },
+  {
+    "genome_id": "xor-g0-0-g1-i2",
+    "parent_id": "xor-g0-0",
+    "generation": 1,
+    "operation": "perturb_random_weight"
+  },
+  {
+    "genome_id": "xor-g0-2-g1-i3",
+    "parent_id": "xor-g0-2",
+    "generation": 1,
+    "operation": "perturb_random_weight"
+  },
+  {
+    "genome_id": "xor-g0-0-g1-i4",
+    "parent_id": "xor-g0-0",
+    "generation": 1,
+    "operation": "perturb_random_weight"
+  },
+  {
+    "genome_id": "xor-g0-2-g1-i5",
+    "parent_id": "xor-g0-2",
+    "generation": 1,
+    "operation": "perturb_random_weight"
+  },
+  {
+    "genome_id": "xor-g0-0-g1-i6",
+    "parent_id": "xor-g0-0",
+    "generation": 1,
+    "operation": "perturb_random_weight"
+  },
+  {
+    "genome_id": "xor-g0-0-g1-i7",
+    "parent_id": "xor-g0-0",
+    "generation": 1,
+    "operation": "perturb_random_weight"
+  },
+  {
+    "genome_id": "xor-g0-0-g1-i8",
+    "parent_id": "xor-g0-0",
+    "generation": 1,
+    "operation": "perturb_random_weight"
+  },
+  {
+    "genome_id": "xor-g0-0-g1-i9",
+    "parent_id": "xor-g0-0",
+    "generation": 1,
+    "operation": "perturb_random_weight"
+  },
+  {
+    "genome_id": "xor-g0-2-g1-i10",
+    "parent_id": "xor-g0-2",
+    "generation": 1,
+    "operation": "perturb_random_weight"
+  },
+  {
+    "genome_id": "xor-g0-0-g1-i11",
+    "parent_id": "xor-g0-0",
+    "generation": 1,
+    "operation": "perturb_random_weight"
+  },
+  {
+    "genome_id": "xor-g0-0-g1-i9",
+    "parent_id": "xor-g0-0-g1-i9",
+    "generation": 2,
+    "operation": "elite_clone"
+  },
+  {
+    "genome_id": "xor-g0-2-g1-i10",
+    "parent_id": "xor-g0-2-g1-i10",
+    "generation": 2,
+    "operation": "elite_clone"
+  },
+  {
+    "genome_id": "xor-g0-2-g1-i10-g2-i2",
+    "parent_id": "xor-g0-2-g1-i10",
+    "generation": 2,
+    "operation": "perturb_random_weight"
+  },
+  {
+    "genome_id": "xor-g0-0-g1-i9-g2-i3",
+    "parent_id": "xor-g0-0-g1-i9",
+    "generation": 2,
+    "operation": "perturb_random_weight"
+  },
+  {
+    "genome_id": "xor-g0-2-g1-i10-g2-i4",
+    "parent_id": "xor-g0-2-g1-i10",
+    "generation": 2,
+    "operation": "perturb_random_weight"
+  },
+  {
+    "genome_id": "xor-g0-2-g1-i10-g2-i5",
+    "parent_id": "xor-g0-2-g1-i10",
+    "generation": 2,
+    "operation": "perturb_random_weight"
+  },
+  {
+    "genome_id": "xor-g0-0-g1-i9-g2-i6",
+    "parent_id": "xor-g0-0-g1-i9",
+    "generation": 2,
+    "operation": "perturb_random_weight"
+  },
+  {
+    "genome_id": "xor-g0-0-g1-i9-g2-i7",
+    "parent_id": "xor-g0-0-g1-i9",
+    "generation": 2,
+    "operation": "perturb_random_weight"
+  },
+  {
+    "genome_id": "xor-g0-2-g1-i10-g2-i8",
+    "parent_id": "xor-g0-2-g1-i10",
+    "generation": 2,
+    "operation": "perturb_random_weight"
+  },
+  {
+    "genome_id": "xor-g0-0-g1-i9-g2-i9",
+    "parent_id": "xor-g0-0-g1-i9",
+    "generation": 2,
+    "operation": "perturb_random_weight"
+  },
+  {
+    "genome_id": "xor-g0-2-g1-i10-g2-i10",
+    "parent_id": "xor-g0-2-g1-i10",
+    "generation": 2,
+    "operation": "perturb_random_weight"
+  },
+  {
+    "genome_id": "xor-g0-2-g1-i10-g2-i11",
+    "parent_id": "xor-g0-2-g1-i10",
+    "generation": 2,
+    "operation": "perturb_random_weight"
+  },
+  {
+    "genome_id": "xor-g0-2-g1-i10-g2-i8",
+    "parent_id": "xor-g0-2-g1-i10-g2-i8",
+    "generation": 3,
+    "operation": "elite_clone"
+  },
+  {
+    "genome_id": "xor-g0-0-g1-i9-g2-i7",
+    "parent_id": "xor-g0-0-g1-i9-g2-i7",
+    "generation": 3,
+    "operation": "elite_clone"
+  },
+  {
+    "genome_id": "xor-g0-2-g1-i10-g2-i8-g3-i2",
+    "parent_id": "xor-g0-2-g1-i10-g2-i8",
+    "generation": 3,
+    "operation": "perturb_random_weight"
+  },
+  {
+    "genome_id": "xor-g0-0-g1-i9-g2-i7-g3-i3",
+    "parent_id": "xor-g0-0-g1-i9-g2-i7",
+    "generation": 3,
+    "operation": "perturb_random_weight"
+  },
+  {
+    "genome_id": "xor-g0-0-g1-i9-g2-i7-g3-i4",
+    "parent_id": "xor-g0-0-g1-i9-g2-i7",
+    "generation": 3,
+    "operation": "perturb_random_weight"
+  },
+  {
+    "genome_id": "xor-g0-2-g1-i10-g2-i8-g3-i5",
+    "parent_id": "xor-g0-2-g1-i10-g2-i8",
+    "generation": 3,
+    "operation": "perturb_random_weight"
+  },
+  {
+    "genome_id": "xor-g0-0-g1-i9-g2-i7-g3-i6",
+    "parent_id": "xor-g0-0-g1-i9-g2-i7",
+    "generation": 3,
+    "operation": "perturb_random_weight"
+  },
+  {
+    "genome_id": "xor-g0-2-g1-i10-g2-i8-g3-i7",
+    "parent_id": "xor-g0-2-g1-i10-g2-i8",
+    "generation": 3,
+    "operation": "perturb_random_weight"
+  },
+  {
+    "genome_id": "xor-g0-0-g1-i9-g2-i7-g3-i8",
+    "parent_id": "xor-g0-0-g1-i9-g2-i7",
+    "generation": 3,
+    "operation": "perturb_random_weight"
+  },
+  {
+    "genome_id": "xor-g0-0-g1-i9-g2-i7-g3-i9",
+    "parent_id": "xor-g0-0-g1-i9-g2-i7",
+    "generation": 3,
+    "operation": "perturb_random_weight"
+  },
+  {
+    "genome_id": "xor-g0-0-g1-i9-g2-i7-g3-i10",
+    "parent_id": "xor-g0-0-g1-i9-g2-i7",
+    "generation": 3,
+    "operation": "perturb_random_weight"
+  },
+  {
+    "genome_id": "xor-g0-2-g1-i10-g2-i8-g3-i11",
+    "parent_id": "xor-g0-2-g1-i10-g2-i8",
+    "generation": 3,
+    "operation": "perturb_random_weight"
+  },
+  {
+    "genome_id": "xor-g0-2-g1-i10-g2-i8-g3-i2",
+    "parent_id": "xor-g0-2-g1-i10-g2-i8-g3-i2",
+    "generation": 4,
+    "operation": "elite_clone"
+  },
+  {
+    "genome_id": "xor-g0-0-g1-i9-g2-i7-g3-i10",
+    "parent_id": "xor-g0-0-g1-i9-g2-i7-g3-i10",
+    "generation": 4,
+    "operation": "elite_clone"
+  },
+  {
+    "genome_id": "xor-g0-0-g1-i9-g2-i7-g3-i10-g4-i2",
+    "parent_id": "xor-g0-0-g1-i9-g2-i7-g3-i10",
+    "generation": 4,
+    "operation": "perturb_random_weight"
+  },
+  {
+    "genome_id": "xor-g0-2-g1-i10-g2-i8-g3-i2-g4-i3",
+    "parent_id": "xor-g0-2-g1-i10-g2-i8-g3-i2",
+    "generation": 4,
+    "operation": "perturb_random_weight"
+  },
+  {
+    "genome_id": "xor-g0-2-g1-i10-g2-i8-g3-i2-g4-i4",
+    "parent_id": "xor-g0-2-g1-i10-g2-i8-g3-i2",
+    "generation": 4,
+    "operation": "perturb_random_weight"
+  },
+  {
+    "genome_id": "xor-g0-2-g1-i10-g2-i8-g3-i2-g4-i5",
+    "parent_id": "xor-g0-2-g1-i10-g2-i8-g3-i2",
+    "generation": 4,
+    "operation": "perturb_random_weight"
+  },
+  {
+    "genome_id": "xor-g0-2-g1-i10-g2-i8-g3-i2-g4-i6",
+    "parent_id": "xor-g0-2-g1-i10-g2-i8-g3-i2",
+    "generation": 4,
+    "operation": "perturb_random_weight"
+  },
+  {
+    "genome_id": "xor-g0-0-g1-i9-g2-i7-g3-i10-g4-i7",
+    "parent_id": "xor-g0-0-g1-i9-g2-i7-g3-i10",
+    "generation": 4,
+    "operation": "perturb_random_weight"
+  },
+  {
+    "genome_id": "xor-g0-2-g1-i10-g2-i8-g3-i2-g4-i8",
+    "parent_id": "xor-g0-2-g1-i10-g2-i8-g3-i2",
+    "generation": 4,
+    "operation": "perturb_random_weight"
+  },
+  {
+    "genome_id": "xor-g0-2-g1-i10-g2-i8-g3-i2-g4-i9",
+    "parent_id": "xor-g0-2-g1-i10-g2-i8-g3-i2",
+    "generation": 4,
+    "operation": "perturb_random_weight"
+  },
+  {
+    "genome_id": "xor-g0-2-g1-i10-g2-i8-g3-i2-g4-i10",
+    "parent_id": "xor-g0-2-g1-i10-g2-i8-g3-i2",
+    "generation": 4,
+    "operation": "perturb_random_weight"
+  },
+  {
+    "genome_id": "xor-g0-0-g1-i9-g2-i7-g3-i10-g4-i11",
+    "parent_id": "xor-g0-0-g1-i9-g2-i7-g3-i10",
+    "generation": 4,
+    "operation": "perturb_random_weight"
+  },
+  {
+    "genome_id": "xor-g0-2-g1-i10-g2-i8-g3-i2-g4-i5",
+    "parent_id": "xor-g0-2-g1-i10-g2-i8-g3-i2-g4-i5",
+    "generation": 5,
+    "operation": "elite_clone"
+  },
+  {
+    "genome_id": "xor-g0-2-g1-i10-g2-i8-g3-i2-g4-i4",
+    "parent_id": "xor-g0-2-g1-i10-g2-i8-g3-i2-g4-i4",
+    "generation": 5,
+    "operation": "elite_clone"
+  },
+  {
+    "genome_id": "xor-g0-2-g1-i10-g2-i8-g3-i2-g4-i5-g5-i2",
+    "parent_id": "xor-g0-2-g1-i10-g2-i8-g3-i2-g4-i5",
+    "generation": 5,
+    "operation": "perturb_random_weight"
+  },
+  {
+    "genome_id": "xor-g0-2-g1-i10-g2-i8-g3-i2-g4-i5-g5-i3",
+    "parent_id": "xor-g0-2-g1-i10-g2-i8-g3-i2-g4-i5",
+    "generation": 5,
+    "operation": "perturb_random_weight"
+  },
+  {
+    "genome_id": "xor-g0-2-g1-i10-g2-i8-g3-i2-g4-i5-g5-i4",
+    "parent_id": "xor-g0-2-g1-i10-g2-i8-g3-i2-g4-i5",
+    "generation": 5,
+    "operation": "perturb_random_weight"
+  },
+  {
+    "genome_id": "xor-g0-2-g1-i10-g2-i8-g3-i2-g4-i5-g5-i5",
+    "parent_id": "xor-g0-2-g1-i10-g2-i8-g3-i2-g4-i5",
+    "generation": 5,
+    "operation": "perturb_random_weight"
+  },
+  {
+    "genome_id": "xor-g0-2-g1-i10-g2-i8-g3-i2-g4-i4-g5-i6",
+    "parent_id": "xor-g0-2-g1-i10-g2-i8-g3-i2-g4-i4",
+    "generation": 5,
+    "operation": "perturb_random_weight"
+  },
+  {
+    "genome_id": "xor-g0-2-g1-i10-g2-i8-g3-i2-g4-i4-g5-i7",
+    "parent_id": "xor-g0-2-g1-i10-g2-i8-g3-i2-g4-i4",
+    "generation": 5,
+    "operation": "perturb_random_weight"
+  },
+  {
+    "genome_id": "xor-g0-2-g1-i10-g2-i8-g3-i2-g4-i4-g5-i8",
+    "parent_id": "xor-g0-2-g1-i10-g2-i8-g3-i2-g4-i4",
+    "generation": 5,
+    "operation": "perturb_random_weight"
+  },
+  {
+    "genome_id": "xor-g0-2-g1-i10-g2-i8-g3-i2-g4-i5-g5-i9",
+    "parent_id": "xor-g0-2-g1-i10-g2-i8-g3-i2-g4-i5",
+    "generation": 5,
+    "operation": "perturb_random_weight"
+  },
+  {
+    "genome_id": "xor-g0-2-g1-i10-g2-i8-g3-i2-g4-i5-g5-i10",
+    "parent_id": "xor-g0-2-g1-i10-g2-i8-g3-i2-g4-i5",
+    "generation": 5,
+    "operation": "perturb_random_weight"
+  },
+  {
+    "genome_id": "xor-g0-2-g1-i10-g2-i8-g3-i2-g4-i5-g5-i11",
+    "parent_id": "xor-g0-2-g1-i10-g2-i8-g3-i2-g4-i5",
+    "generation": 5,
+    "operation": "perturb_random_weight"
+  },
+  {
+    "genome_id": "xor-g0-2-g1-i10-g2-i8-g3-i2-g4-i5-g5-i3",
+    "parent_id": "xor-g0-2-g1-i10-g2-i8-g3-i2-g4-i5-g5-i3",
+    "generation": 6,
+    "operation": "elite_clone"
+  },
+  {
+    "genome_id": "xor-g0-2-g1-i10-g2-i8-g3-i2-g4-i5-g5-i11",
+    "parent_id": "xor-g0-2-g1-i10-g2-i8-g3-i2-g4-i5-g5-i11",
+    "generation": 6,
+    "operation": "elite_clone"
+  },
+  {
+    "genome_id": "xor-g0-2-g1-i10-g2-i8-g3-i2-g4-i5-g5-i11-g6-i2",
+    "parent_id": "xor-g0-2-g1-i10-g2-i8-g3-i2-g4-i5-g5-i11",
+    "generation": 6,
+    "operation": "perturb_random_weight"
+  },
+  {
+    "genome_id": "xor-g0-2-g1-i10-g2-i8-g3-i2-g4-i5-g5-i3-g6-i3",
+    "parent_id": "xor-g0-2-g1-i10-g2-i8-g3-i2-g4-i5-g5-i3",
+    "generation": 6,
+    "operation": "perturb_random_weight"
+  },
+  {
+    "genome_id": "xor-g0-2-g1-i10-g2-i8-g3-i2-g4-i5-g5-i11-g6-i4",
+    "parent_id": "xor-g0-2-g1-i10-g2-i8-g3-i2-g4-i5-g5-i11",
+    "generation": 6,
+    "operation": "perturb_random_weight"
+  },
+  {
+    "genome_id": "xor-g0-2-g1-i10-g2-i8-g3-i2-g4-i5-g5-i3-g6-i5",
+    "parent_id": "xor-g0-2-g1-i10-g2-i8-g3-i2-g4-i5-g5-i3",
+    "generation": 6,
+    "operation": "perturb_random_weight"
+  },
+  {
+    "genome_id": "xor-g0-2-g1-i10-g2-i8-g3-i2-g4-i5-g5-i11-g6-i6",
+    "parent_id": "xor-g0-2-g1-i10-g2-i8-g3-i2-g4-i5-g5-i11",
+    "generation": 6,
+    "operation": "perturb_random_weight"
+  },
+  {
+    "genome_id": "xor-g0-2-g1-i10-g2-i8-g3-i2-g4-i5-g5-i3-g6-i7",
+    "parent_id": "xor-g0-2-g1-i10-g2-i8-g3-i2-g4-i5-g5-i3",
+    "generation": 6,
+    "operation": "perturb_random_weight"
+  },
+  {
+    "genome_id": "xor-g0-2-g1-i10-g2-i8-g3-i2-g4-i5-g5-i3-g6-i8",
+    "parent_id": "xor-g0-2-g1-i10-g2-i8-g3-i2-g4-i5-g5-i3",
+    "generation": 6,
+    "operation": "perturb_random_weight"
+  },
+  {
+    "genome_id": "xor-g0-2-g1-i10-g2-i8-g3-i2-g4-i5-g5-i11-g6-i9",
+    "parent_id": "xor-g0-2-g1-i10-g2-i8-g3-i2-g4-i5-g5-i11",
+    "generation": 6,
+    "operation": "perturb_random_weight"
+  },
+  {
+    "genome_id": "xor-g0-2-g1-i10-g2-i8-g3-i2-g4-i5-g5-i11-g6-i10",
+    "parent_id": "xor-g0-2-g1-i10-g2-i8-g3-i2-g4-i5-g5-i11",
+    "generation": 6,
+    "operation": "perturb_random_weight"
+  },
+  {
+    "genome_id": "xor-g0-2-g1-i10-g2-i8-g3-i2-g4-i5-g5-i11-g6-i11",
+    "parent_id": "xor-g0-2-g1-i10-g2-i8-g3-i2-g4-i5-g5-i11",
+    "generation": 6,
+    "operation": "perturb_random_weight"
+  }
+]

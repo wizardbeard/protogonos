@@ -1,0 +1,7 @@
+{
+  "schema_version": 1,
+  "codec_version": 1,
+  "name": "xor",
+  "description": "toy xor benchmark",
+  "best_fitness": 0.75
+}

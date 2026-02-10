@@ -1,0 +1,67 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - "**"
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  lint-and-test:
+    name: Test (Go ${{ matrix.go-version }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        go-version: ["1.22.x", "1.23.x"]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ matrix.go-version }}
+          cache: true
+
+      - name: Verify formatting
+        run: |
+          unformatted=$(gofmt -l $(find . -name '*.go' -type f))
+          if [ -n "$unformatted" ]; then
+            echo "Unformatted files:" >&2
+            echo "$unformatted" >&2
+            exit 1
+          fi
+
+      - name: Test default build
+        run: go test ./...
+
+      - name: Test sqlite build
+        run: go test -tags sqlite ./...
+
+      - name: Build CLI (default)
+        run: go build -v ./cmd/protogonosctl
+
+      - name: Build CLI (sqlite)
+        run: go build -tags sqlite -v ./cmd/protogonosctl
+
+  done-check:
+    name: Done Check
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.23.x"
+          cache: true
+
+      - name: Run acceptance script
+        run: ./scripts/done_check.sh

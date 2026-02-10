@@ -1,0 +1,320 @@
+//go:build sqlite
+
+package main
+
+import (
+	"bytes"
+	"context"
+	"encoding/json"
+	"io"
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+
+	"protogonos/internal/stats"
+)
+
+func TestRunCommandSQLiteCreatesArtifacts(t *testing.T) {
+	origWD, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("getwd: %v", err)
+	}
+	workdir := t.TempDir()
+	if err := os.Chdir(workdir); err != nil {
+		t.Fatalf("chdir tempdir: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = os.Chdir(origWD)
+	})
+
+	dbPath := filepath.Join(workdir, "protogonos.db")
+	args := []string{
+		"run",
+		"--store", "sqlite",
+		"--db-path", dbPath,
+		"--scape", "xor",
+		"--pop", "6",
+		"--gens", "2",
+		"--seed", "11",
+		"--workers", "2",
+	}
+
+	if err := run(context.Background(), args); err != nil {
+		t.Fatalf("run command: %v", err)
+	}
+
+	if _, err := os.Stat(dbPath); err != nil {
+		t.Fatalf("expected sqlite db at %s: %v", dbPath, err)
+	}
+
+	entries, err := stats.ListRunIndex("benchmarks")
+	if err != nil {
+		t.Fatalf("list run index: %v", err)
+	}
+	if len(entries) == 0 {
+		t.Fatal("expected at least one indexed run")
+	}
+
+	runID := entries[0].RunID
+	for _, file := range []string{"config.json", "fitness_history.json", "top_genomes.json", "lineage.json"} {
+		path := filepath.Join("benchmarks", runID, file)
+		if _, err := os.Stat(path); err != nil {
+			t.Fatalf("expected artifact %s: %v", path, err)
+		}
+	}
+
+	lineageData, err := os.ReadFile(filepath.Join("benchmarks", runID, "lineage.json"))
+	if err != nil {
+		t.Fatalf("read lineage: %v", err)
+	}
+	var lineage []stats.LineageEntry
+	if err := json.Unmarshal(lineageData, &lineage); err != nil {
+		t.Fatalf("decode lineage: %v", err)
+	}
+	seenStructural := false
+	for _, record := range lineage {
+		switch record.Operation {
+		case "add_random_synapse", "remove_random_synapse", "add_random_neuron", "remove_random_neuron":
+			seenStructural = true
+		}
+	}
+	if !seenStructural {
+		t.Fatalf("expected at least one structural mutation in lineage: %+v", lineage)
+	}
+}
+
+func TestRunsCommandSQLiteListsPersistedRun(t *testing.T) {
+	origWD, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("getwd: %v", err)
+	}
+	workdir := t.TempDir()
+	if err := os.Chdir(workdir); err != nil {
+		t.Fatalf("chdir tempdir: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = os.Chdir(origWD)
+	})
+
+	dbPath := filepath.Join(workdir, "protogonos.db")
+	runArgs := []string{
+		"run",
+		"--store", "sqlite",
+		"--db-path", dbPath,
+		"--scape", "xor",
+		"--pop", "6",
+		"--gens", "2",
+		"--seed", "21",
+		"--workers", "2",
+	}
+
+	if err := run(context.Background(), runArgs); err != nil {
+		t.Fatalf("run command: %v", err)
+	}
+
+	entries, err := stats.ListRunIndex("benchmarks")
+	if err != nil {
+		t.Fatalf("list run index: %v", err)
+	}
+	if len(entries) == 0 {
+		t.Fatal("expected at least one indexed run")
+	}
+	expectedRunID := entries[0].RunID
+
+	output, err := captureStdout(func() error {
+		return run(context.Background(), []string{
+			"runs",
+			"--limit", "1",
+		})
+	})
+	if err != nil {
+		t.Fatalf("runs command failed: %v", err)
+	}
+
+	if !strings.Contains(output, "run_id="+expectedRunID) {
+		t.Fatalf("runs output missing expected run id %s: %s", expectedRunID, output)
+	}
+}
+
+func TestExportLatestSQLiteCopiesArtifacts(t *testing.T) {
+	origWD, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("getwd: %v", err)
+	}
+	workdir := t.TempDir()
+	if err := os.Chdir(workdir); err != nil {
+		t.Fatalf("chdir tempdir: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = os.Chdir(origWD)
+	})
+
+	dbPath := filepath.Join(workdir, "protogonos.db")
+	runArgs := []string{
+		"run",
+		"--store", "sqlite",
+		"--db-path", dbPath,
+		"--scape", "xor",
+		"--pop", "6",
+		"--gens", "2",
+		"--seed", "31",
+		"--workers", "2",
+	}
+	if err := run(context.Background(), runArgs); err != nil {
+		t.Fatalf("run command: %v", err)
+	}
+
+	entries, err := stats.ListRunIndex("benchmarks")
+	if err != nil {
+		t.Fatalf("list run index: %v", err)
+	}
+	if len(entries) == 0 {
+		t.Fatal("expected at least one indexed run")
+	}
+	runID := entries[0].RunID
+
+	if err := run(context.Background(), []string{"export", "--latest"}); err != nil {
+		t.Fatalf("export latest command: %v", err)
+	}
+
+	for _, file := range []string{"config.json", "fitness_history.json", "top_genomes.json", "lineage.json"} {
+		path := filepath.Join("exports", runID, file)
+		if _, err := os.Stat(path); err != nil {
+			t.Fatalf("expected exported artifact %s: %v", path, err)
+		}
+	}
+}
+
+func TestBenchmarkCommandWritesSummary(t *testing.T) {
+	origWD, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("getwd: %v", err)
+	}
+	workdir := t.TempDir()
+	if err := os.Chdir(workdir); err != nil {
+		t.Fatalf("chdir tempdir: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = os.Chdir(origWD)
+	})
+
+	dbPath := filepath.Join(workdir, "protogonos.db")
+	args := []string{
+		"benchmark",
+		"--store", "sqlite",
+		"--db-path", dbPath,
+		"--scape", "xor",
+		"--pop", "8",
+		"--gens", "3",
+		"--seed", "9",
+		"--workers", "2",
+		"--min-improvement", "0.0001",
+	}
+	if err := run(context.Background(), args); err != nil {
+		t.Fatalf("benchmark command: %v", err)
+	}
+
+	entries, err := stats.ListRunIndex("benchmarks")
+	if err != nil {
+		t.Fatalf("list run index: %v", err)
+	}
+	if len(entries) == 0 {
+		t.Fatal("expected at least one indexed run")
+	}
+	runID := entries[0].RunID
+
+	summaryPath := filepath.Join("benchmarks", runID, "benchmark_summary.json")
+	data, err := os.ReadFile(summaryPath)
+	if err != nil {
+		t.Fatalf("read benchmark summary: %v", err)
+	}
+
+	var summary stats.BenchmarkSummary
+	if err := json.Unmarshal(data, &summary); err != nil {
+		t.Fatalf("decode benchmark summary: %v", err)
+	}
+	if summary.RunID != runID {
+		t.Fatalf("run id mismatch: got=%s want=%s", summary.RunID, runID)
+	}
+	if summary.Scape != "xor" {
+		t.Fatalf("unexpected scape in summary: %s", summary.Scape)
+	}
+}
+
+func TestBenchmarkCommandWritesSummaryRegressionMimic(t *testing.T) {
+	origWD, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("getwd: %v", err)
+	}
+	workdir := t.TempDir()
+	if err := os.Chdir(workdir); err != nil {
+		t.Fatalf("chdir tempdir: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = os.Chdir(origWD)
+	})
+
+	dbPath := filepath.Join(workdir, "protogonos.db")
+	args := []string{
+		"benchmark",
+		"--store", "sqlite",
+		"--db-path", dbPath,
+		"--scape", "regression-mimic",
+		"--pop", "10",
+		"--gens", "4",
+		"--seed", "12",
+		"--workers", "2",
+		"--min-improvement", "0.0001",
+	}
+	if err := run(context.Background(), args); err != nil {
+		t.Fatalf("benchmark command: %v", err)
+	}
+
+	entries, err := stats.ListRunIndex("benchmarks")
+	if err != nil {
+		t.Fatalf("list run index: %v", err)
+	}
+	if len(entries) == 0 {
+		t.Fatal("expected at least one indexed run")
+	}
+	runID := entries[0].RunID
+
+	summaryPath := filepath.Join("benchmarks", runID, "benchmark_summary.json")
+	data, err := os.ReadFile(summaryPath)
+	if err != nil {
+		t.Fatalf("read benchmark summary: %v", err)
+	}
+
+	var summary stats.BenchmarkSummary
+	if err := json.Unmarshal(data, &summary); err != nil {
+		t.Fatalf("decode benchmark summary: %v", err)
+	}
+	if summary.RunID != runID {
+		t.Fatalf("run id mismatch: got=%s want=%s", summary.RunID, runID)
+	}
+	if summary.Scape != "regression-mimic" {
+		t.Fatalf("unexpected scape in summary: %s", summary.Scape)
+	}
+}
+
+func captureStdout(fn func() error) (string, error) {
+	origStdout := os.Stdout
+	r, w, err := os.Pipe()
+	if err != nil {
+		return "", err
+	}
+
+	os.Stdout = w
+	runErr := fn()
+	_ = w.Close()
+	os.Stdout = origStdout
+
+	var buf bytes.Buffer
+	if _, err := io.Copy(&buf, r); err != nil {
+		_ = r.Close()
+		return "", err
+	}
+	_ = r.Close()
+	return buf.String(), runErr
+}

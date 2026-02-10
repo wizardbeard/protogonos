@@ -1,0 +1,7 @@
+{
+  "schema_version": 1,
+  "codec_version": 1,
+  "id": "population-minimal-1",
+  "agent_ids": ["agent-minimal-1"],
+  "generation": 0
+}

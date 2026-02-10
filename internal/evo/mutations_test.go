@@ -1,0 +1,365 @@
+package evo
+
+import (
+	"context"
+	"math"
+	"math/rand"
+	"os"
+	"path/filepath"
+	"reflect"
+	"strconv"
+	"testing"
+
+	"protogonos/internal/model"
+	"protogonos/internal/storage"
+)
+
+func TestPerturbWeightAtMatchesFixture(t *testing.T) {
+	input := decodeGenomeFixture(t, filepath.Join("..", "..", "testdata", "fixtures", "minimal_genome_v1.json"))
+	expected := decodeGenomeFixture(t, filepath.Join("..", "..", "testdata", "fixtures", "mutations", "expected_perturb_weight_v1.json"))
+
+	op := PerturbWeightAt{Index: 0, Delta: 0.25}
+	actual, err := op.Apply(context.Background(), input)
+	if err != nil {
+		t.Fatalf("apply operator: %v", err)
+	}
+
+	if !reflect.DeepEqual(actual, expected) {
+		t.Fatalf("mutation mismatch\nactual=%+v\nexpected=%+v", actual, expected)
+	}
+}
+
+func TestChangeActivationAtMatchesFixture(t *testing.T) {
+	input := decodeGenomeFixture(t, filepath.Join("..", "..", "testdata", "fixtures", "minimal_genome_v1.json"))
+	expected := decodeGenomeFixture(t, filepath.Join("..", "..", "testdata", "fixtures", "mutations", "expected_change_activation_v1.json"))
+
+	op := ChangeActivationAt{Index: 1, Activation: "relu"}
+	actual, err := op.Apply(context.Background(), input)
+	if err != nil {
+		t.Fatalf("apply operator: %v", err)
+	}
+
+	if !reflect.DeepEqual(actual, expected) {
+		t.Fatalf("mutation mismatch\nactual=%+v\nexpected=%+v", actual, expected)
+	}
+}
+
+func TestAddSynapseMatchesFixture(t *testing.T) {
+	input := decodeGenomeFixture(t, filepath.Join("..", "..", "testdata", "fixtures", "minimal_genome_v1.json"))
+	expected := decodeGenomeFixture(t, filepath.Join("..", "..", "testdata", "fixtures", "mutations", "expected_add_synapse_v1.json"))
+
+	op := AddSynapse{ID: "s-2", From: "n-output", To: "n-input", Weight: -0.5, Enabled: true}
+	actual, err := op.Apply(context.Background(), input)
+	if err != nil {
+		t.Fatalf("apply operator: %v", err)
+	}
+	if !reflect.DeepEqual(actual, expected) {
+		t.Fatalf("mutation mismatch\nactual=%+v\nexpected=%+v", actual, expected)
+	}
+}
+
+func TestRemoveSynapseMatchesFixture(t *testing.T) {
+	input := decodeGenomeFixture(t, filepath.Join("..", "..", "testdata", "fixtures", "minimal_genome_v1.json"))
+	expected := decodeGenomeFixture(t, filepath.Join("..", "..", "testdata", "fixtures", "mutations", "expected_remove_synapse_v1.json"))
+
+	op := RemoveSynapse{ID: "s-1"}
+	actual, err := op.Apply(context.Background(), input)
+	if err != nil {
+		t.Fatalf("apply operator: %v", err)
+	}
+	if !reflect.DeepEqual(actual, expected) {
+		t.Fatalf("mutation mismatch\nactual=%+v\nexpected=%+v", actual, expected)
+	}
+}
+
+func TestAddNeuronMatchesFixture(t *testing.T) {
+	input := decodeGenomeFixture(t, filepath.Join("..", "..", "testdata", "fixtures", "minimal_genome_v1.json"))
+	expected := decodeGenomeFixture(t, filepath.Join("..", "..", "testdata", "fixtures", "mutations", "expected_add_neuron_v1.json"))
+
+	op := AddNeuronAtSynapse{SynapseIndex: 0, NeuronID: "n-hidden", Activation: "relu", Bias: 0}
+	actual, err := op.Apply(context.Background(), input)
+	if err != nil {
+		t.Fatalf("apply operator: %v", err)
+	}
+	if !reflect.DeepEqual(actual, expected) {
+		t.Fatalf("mutation mismatch\nactual=%+v\nexpected=%+v", actual, expected)
+	}
+}
+
+func TestRemoveNeuronMatchesFixture(t *testing.T) {
+	input := decodeGenomeFixture(t, filepath.Join("..", "..", "testdata", "fixtures", "mutations", "expected_add_neuron_v1.json"))
+	expected := decodeGenomeFixture(t, filepath.Join("..", "..", "testdata", "fixtures", "mutations", "expected_remove_neuron_v1.json"))
+
+	op := RemoveNeuron{ID: "n-hidden"}
+	actual, err := op.Apply(context.Background(), input)
+	if err != nil {
+		t.Fatalf("apply operator: %v", err)
+	}
+	if !reflect.DeepEqual(actual, expected) {
+		t.Fatalf("mutation mismatch\nactual=%+v\nexpected=%+v", actual, expected)
+	}
+}
+
+func TestAddNeuronOnIOXORGenomeMatchesFixture(t *testing.T) {
+	input := decodeGenomeFixture(t, filepath.Join("..", "..", "testdata", "fixtures", "io_xor_genome_v1.json"))
+	expected := decodeGenomeFixture(t, filepath.Join("..", "..", "testdata", "fixtures", "mutations", "expected_io_xor_add_neuron_v1.json"))
+
+	op := AddNeuronAtSynapse{SynapseIndex: 0, NeuronID: "h1", Activation: "relu", Bias: 0}
+	actual, err := op.Apply(context.Background(), input)
+	if err != nil {
+		t.Fatalf("apply operator: %v", err)
+	}
+	if !reflect.DeepEqual(actual, expected) {
+		t.Fatalf("mutation mismatch\nactual=%+v\nexpected=%+v", actual, expected)
+	}
+}
+
+func TestRemoveSynapseOnIOXORGenomeMatchesFixture(t *testing.T) {
+	input := decodeGenomeFixture(t, filepath.Join("..", "..", "testdata", "fixtures", "io_xor_genome_v1.json"))
+	expected := decodeGenomeFixture(t, filepath.Join("..", "..", "testdata", "fixtures", "mutations", "expected_io_xor_remove_synapse_v1.json"))
+
+	op := RemoveSynapse{ID: "s2"}
+	actual, err := op.Apply(context.Background(), input)
+	if err != nil {
+		t.Fatalf("apply operator: %v", err)
+	}
+	if !reflect.DeepEqual(actual, expected) {
+		t.Fatalf("mutation mismatch\nactual=%+v\nexpected=%+v", actual, expected)
+	}
+}
+
+func TestPerturbWeightAtInvariants(t *testing.T) {
+	rng := rand.New(rand.NewSource(7))
+
+	for i := 0; i < 200; i++ {
+		genome := randomGenome(rng)
+		idx := rng.Intn(len(genome.Synapses))
+		delta := (rng.Float64() * 2) - 1
+
+		op := PerturbWeightAt{Index: idx, Delta: delta}
+		mutated, err := op.Apply(context.Background(), genome)
+		if err != nil {
+			t.Fatalf("apply failed: %v", err)
+		}
+
+		if len(mutated.Synapses) != len(genome.Synapses) {
+			t.Fatalf("synapse count changed: got=%d want=%d", len(mutated.Synapses), len(genome.Synapses))
+		}
+		if len(mutated.Neurons) != len(genome.Neurons) {
+			t.Fatalf("neuron count changed: got=%d want=%d", len(mutated.Neurons), len(genome.Neurons))
+		}
+
+		for j := range genome.Synapses {
+			before := genome.Synapses[j]
+			after := mutated.Synapses[j]
+			if before.ID != after.ID || before.From != after.From || before.To != after.To || before.Enabled != after.Enabled || before.Recurrent != after.Recurrent {
+				t.Fatalf("topology changed for synapse %d", j)
+			}
+			if math.IsNaN(after.Weight) || math.IsInf(after.Weight, 0) {
+				t.Fatalf("invalid mutated weight at synapse %d", j)
+			}
+		}
+
+		if mutated.Synapses[idx].Weight != genome.Synapses[idx].Weight+delta {
+			t.Fatalf("weight delta not applied at index %d", idx)
+		}
+	}
+}
+
+func TestChangeActivationAtInvariants(t *testing.T) {
+	rng := rand.New(rand.NewSource(11))
+	activations := []string{"identity", "relu", "tanh", "sigmoid"}
+
+	for i := 0; i < 200; i++ {
+		genome := randomGenome(rng)
+		idx := rng.Intn(len(genome.Neurons))
+		nextActivation := activations[rng.Intn(len(activations))]
+
+		op := ChangeActivationAt{Index: idx, Activation: nextActivation}
+		mutated, err := op.Apply(context.Background(), genome)
+		if err != nil {
+			t.Fatalf("apply failed: %v", err)
+		}
+
+		if len(mutated.Synapses) != len(genome.Synapses) {
+			t.Fatalf("synapse count changed: got=%d want=%d", len(mutated.Synapses), len(genome.Synapses))
+		}
+		if len(mutated.Neurons) != len(genome.Neurons) {
+			t.Fatalf("neuron count changed: got=%d want=%d", len(mutated.Neurons), len(genome.Neurons))
+		}
+
+		for j := range genome.Neurons {
+			before := genome.Neurons[j]
+			after := mutated.Neurons[j]
+			if before.ID != after.ID || before.Bias != after.Bias {
+				t.Fatalf("neuron identity changed at index %d", j)
+			}
+		}
+
+		if mutated.Neurons[idx].Activation != nextActivation {
+			t.Fatalf("activation not applied at index %d", idx)
+		}
+	}
+}
+
+func TestAddSynapseInvariants(t *testing.T) {
+	rng := rand.New(rand.NewSource(13))
+	for i := 0; i < 200; i++ {
+		genome := randomGenome(rng)
+		from := genome.Neurons[rng.Intn(len(genome.Neurons))].ID
+		to := genome.Neurons[rng.Intn(len(genome.Neurons))].ID
+
+		op := AddSynapse{
+			ID:      "s-new-" + strconv.Itoa(i),
+			From:    from,
+			To:      to,
+			Weight:  (rng.Float64() * 2) - 1,
+			Enabled: true,
+		}
+		mutated, err := op.Apply(context.Background(), genome)
+		if err != nil {
+			t.Fatalf("apply failed: %v", err)
+		}
+
+		if len(mutated.Neurons) != len(genome.Neurons) {
+			t.Fatalf("neuron count changed")
+		}
+		if len(mutated.Synapses) != len(genome.Synapses)+1 {
+			t.Fatalf("synapse count mismatch")
+		}
+		assertNoDanglingSynapses(t, mutated)
+	}
+}
+
+func TestRemoveSynapseInvariants(t *testing.T) {
+	rng := rand.New(rand.NewSource(17))
+	for i := 0; i < 200; i++ {
+		genome := randomGenome(rng)
+		target := genome.Synapses[rng.Intn(len(genome.Synapses))]
+
+		op := RemoveSynapse{ID: target.ID}
+		mutated, err := op.Apply(context.Background(), genome)
+		if err != nil {
+			t.Fatalf("apply failed: %v", err)
+		}
+
+		if len(mutated.Neurons) != len(genome.Neurons) {
+			t.Fatalf("neuron count changed")
+		}
+		if len(mutated.Synapses) != len(genome.Synapses)-1 {
+			t.Fatalf("synapse count mismatch")
+		}
+		if hasSynapse(mutated, target.ID) {
+			t.Fatalf("synapse still present after remove: %s", target.ID)
+		}
+		assertNoDanglingSynapses(t, mutated)
+	}
+}
+
+func TestAddNeuronInvariants(t *testing.T) {
+	rng := rand.New(rand.NewSource(19))
+	for i := 0; i < 200; i++ {
+		genome := randomGenome(rng)
+		idx := rng.Intn(len(genome.Synapses))
+		op := AddNeuronAtSynapse{
+			SynapseIndex: idx,
+			NeuronID:     "n-added-" + strconv.Itoa(i),
+			Activation:   "relu",
+			Bias:         0,
+		}
+		mutated, err := op.Apply(context.Background(), genome)
+		if err != nil {
+			t.Fatalf("apply failed: %v", err)
+		}
+
+		if len(mutated.Neurons) != len(genome.Neurons)+1 {
+			t.Fatalf("neuron count mismatch")
+		}
+		if len(mutated.Synapses) != len(genome.Synapses)+1 {
+			t.Fatalf("synapse count mismatch")
+		}
+		assertNoDanglingSynapses(t, mutated)
+	}
+}
+
+func TestRemoveNeuronInvariants(t *testing.T) {
+	rng := rand.New(rand.NewSource(23))
+	for i := 0; i < 200; i++ {
+		genome := randomGenome(rng)
+		target := genome.Neurons[rng.Intn(len(genome.Neurons))].ID
+
+		op := RemoveNeuron{ID: target}
+		mutated, err := op.Apply(context.Background(), genome)
+		if err != nil {
+			t.Fatalf("apply failed: %v", err)
+		}
+		if len(mutated.Neurons) != len(genome.Neurons)-1 {
+			t.Fatalf("neuron count mismatch")
+		}
+		if hasNeuron(mutated, target) {
+			t.Fatalf("neuron still present after remove: %s", target)
+		}
+		assertNoDanglingSynapses(t, mutated)
+	}
+}
+
+func decodeGenomeFixture(t *testing.T, path string) model.Genome {
+	t.Helper()
+
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read fixture: %v", err)
+	}
+
+	genome, err := storage.DecodeGenome(data)
+	if err != nil {
+		t.Fatalf("decode fixture: %v", err)
+	}
+	return genome
+}
+
+func randomGenome(rng *rand.Rand) model.Genome {
+	neuronCount := 2 + rng.Intn(5)
+	synapseCount := 1 + rng.Intn(6)
+
+	neurons := make([]model.Neuron, 0, neuronCount)
+	for i := 0; i < neuronCount; i++ {
+		neurons = append(neurons, model.Neuron{
+			ID:         "n" + strconv.Itoa(i),
+			Activation: "identity",
+			Bias:       (rng.Float64() * 2) - 1,
+		})
+	}
+
+	synapses := make([]model.Synapse, 0, synapseCount)
+	for i := 0; i < synapseCount; i++ {
+		from := rng.Intn(neuronCount)
+		to := rng.Intn(neuronCount)
+		synapses = append(synapses, model.Synapse{
+			ID:        "s" + strconv.Itoa(i),
+			From:      "n" + strconv.Itoa(from),
+			To:        "n" + strconv.Itoa(to),
+			Weight:    (rng.Float64() * 4) - 2,
+			Enabled:   true,
+			Recurrent: from == to,
+		})
+	}
+
+	return model.Genome{
+		VersionedRecord: model.VersionedRecord{SchemaVersion: storage.CurrentSchemaVersion, CodecVersion: storage.CurrentCodecVersion},
+		ID:              "random",
+		Neurons:         neurons,
+		Synapses:        synapses,
+		SensorIDs:       []string{"sensor:input"},
+		ActuatorIDs:     []string{"actuator:output"},
+	}
+}
+
+func assertNoDanglingSynapses(t *testing.T, g model.Genome) {
+	t.Helper()
+	for _, s := range g.Synapses {
+		if !hasNeuron(g, s.From) || !hasNeuron(g, s.To) {
+			t.Fatalf("dangling synapse %+v", s)
+		}
+	}
+}

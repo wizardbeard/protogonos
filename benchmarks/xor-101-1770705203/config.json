@@ -1,0 +1,18 @@
+{
+  "run_id": "xor-101-1770705203",
+  "scape": "xor",
+  "population_size": 12,
+  "generations": 6,
+  "seed": 101,
+  "workers": 2,
+  "elite_count": 2,
+  "tuning_enabled": false,
+  "tune_attempts": 4,
+  "tune_steps": 6,
+  "tune_step_size": 0.35,
+  "weight_perturb": 0.7,
+  "weight_add_synapse": 0.1,
+  "weight_remove_synapse": 0.08,
+  "weight_add_neuron": 0.07,
+  "weight_remove_neuron": 0.05
+}

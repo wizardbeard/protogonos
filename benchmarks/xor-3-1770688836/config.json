@@ -1,0 +1,13 @@
+{
+  "run_id": "xor-3-1770688836",
+  "scape": "xor",
+  "population_size": 8,
+  "generations": 2,
+  "seed": 3,
+  "workers": 2,
+  "elite_count": 1,
+  "tuning_enabled": true,
+  "tune_attempts": 6,
+  "tune_steps": 5,
+  "tune_step_size": 0.3
+}

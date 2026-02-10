@@ -1,0 +1,442 @@
+[
+  {
+    "rank": 1,
+    "fitness": 0.7526170178249098,
+    "genome": {
+      "schema_version": 1,
+      "codec_version": 1,
+      "id": "xor-g0-4-g1-i4",
+      "neurons": [
+        {
+          "id": "i1",
+          "activation": "identity",
+          "bias": 0
+        },
+        {
+          "id": "i2",
+          "activation": "identity",
+          "bias": 0
+        },
+        {
+          "id": "h1",
+          "activation": "sigmoid",
+          "bias": 1.305786902674594
+        },
+        {
+          "id": "h2",
+          "activation": "sigmoid",
+          "bias": -0.29545078111182965
+        },
+        {
+          "id": "o",
+          "activation": "sigmoid",
+          "bias": -0.14497493012327478
+        }
+      ],
+      "synapses": [
+        {
+          "id": "s1",
+          "from": "i1",
+          "to": "h1",
+          "weight": -1.5124395933662276,
+          "enabled": true,
+          "recurrent": false
+        },
+        {
+          "id": "s2",
+          "from": "i2",
+          "to": "h1",
+          "weight": -2.0186360185812497,
+          "enabled": true,
+          "recurrent": false
+        },
+        {
+          "id": "s3",
+          "from": "i1",
+          "to": "h2",
+          "weight": 0.5169388165743891,
+          "enabled": true,
+          "recurrent": false
+        },
+        {
+          "id": "s4",
+          "from": "i2",
+          "to": "h2",
+          "weight": -3.8964912131518075,
+          "enabled": true,
+          "recurrent": false
+        },
+        {
+          "id": "s5",
+          "from": "h1",
+          "to": "o",
+          "weight": -0.12980306942747966,
+          "enabled": true,
+          "recurrent": false
+        },
+        {
+          "id": "s6",
+          "from": "h2",
+          "to": "o",
+          "weight": 0.36765455517215395,
+          "enabled": true,
+          "recurrent": false
+        }
+      ],
+      "sensor_ids": null,
+      "actuator_ids": null
+    }
+  },
+  {
+    "rank": 2,
+    "fitness": 0.7450212699649001,
+    "genome": {
+      "schema_version": 1,
+      "codec_version": 1,
+      "id": "xor-g0-4",
+      "neurons": [
+        {
+          "id": "i1",
+          "activation": "identity",
+          "bias": 0
+        },
+        {
+          "id": "i2",
+          "activation": "identity",
+          "bias": 0
+        },
+        {
+          "id": "h1",
+          "activation": "sigmoid",
+          "bias": 1.305786902674594
+        },
+        {
+          "id": "h2",
+          "activation": "sigmoid",
+          "bias": -0.29545078111182965
+        },
+        {
+          "id": "o",
+          "activation": "sigmoid",
+          "bias": -0.14497493012327478
+        }
+      ],
+      "synapses": [
+        {
+          "id": "s1",
+          "from": "i1",
+          "to": "h1",
+          "weight": -1.5124395933662276,
+          "enabled": true,
+          "recurrent": false
+        },
+        {
+          "id": "s2",
+          "from": "i2",
+          "to": "h1",
+          "weight": -2.0186360185812497,
+          "enabled": true,
+          "recurrent": false
+        },
+        {
+          "id": "s3",
+          "from": "i1",
+          "to": "h2",
+          "weight": 0.5169388165743891,
+          "enabled": true,
+          "recurrent": false
+        },
+        {
+          "id": "s4",
+          "from": "i2",
+          "to": "h2",
+          "weight": -3.8964912131518075,
+          "enabled": true,
+          "recurrent": false
+        },
+        {
+          "id": "s5",
+          "from": "h1",
+          "to": "o",
+          "weight": -0.9067122045047202,
+          "enabled": true,
+          "recurrent": false
+        },
+        {
+          "id": "s6",
+          "from": "h2",
+          "to": "o",
+          "weight": 0.36765455517215395,
+          "enabled": true,
+          "recurrent": false
+        }
+      ],
+      "sensor_ids": null,
+      "actuator_ids": null
+    }
+  },
+  {
+    "rank": 3,
+    "fitness": 0.7449754325624138,
+    "genome": {
+      "schema_version": 1,
+      "codec_version": 1,
+      "id": "xor-g0-4-g1-i5",
+      "neurons": [
+        {
+          "id": "i1",
+          "activation": "identity",
+          "bias": 0
+        },
+        {
+          "id": "i2",
+          "activation": "identity",
+          "bias": 0
+        },
+        {
+          "id": "h1",
+          "activation": "sigmoid",
+          "bias": 1.305786902674594
+        },
+        {
+          "id": "h2",
+          "activation": "sigmoid",
+          "bias": -0.29545078111182965
+        },
+        {
+          "id": "o",
+          "activation": "sigmoid",
+          "bias": -0.14497493012327478
+        }
+      ],
+      "synapses": [
+        {
+          "id": "s1",
+          "from": "i1",
+          "to": "h1",
+          "weight": -1.5124395933662276,
+          "enabled": true,
+          "recurrent": false
+        },
+        {
+          "id": "s2",
+          "from": "i2",
+          "to": "h1",
+          "weight": -2.0186360185812497,
+          "enabled": true,
+          "recurrent": false
+        },
+        {
+          "id": "s3",
+          "from": "i1",
+          "to": "h2",
+          "weight": 0.5169388165743891,
+          "enabled": true,
+          "recurrent": false
+        },
+        {
+          "id": "s4",
+          "from": "i2",
+          "to": "h2",
+          "weight": -3.4961641931401606,
+          "enabled": true,
+          "recurrent": false
+        },
+        {
+          "id": "s5",
+          "from": "h1",
+          "to": "o",
+          "weight": -0.9067122045047202,
+          "enabled": true,
+          "recurrent": false
+        },
+        {
+          "id": "s6",
+          "from": "h2",
+          "to": "o",
+          "weight": 0.36765455517215395,
+          "enabled": true,
+          "recurrent": false
+        }
+      ],
+      "sensor_ids": null,
+      "actuator_ids": null
+    }
+  },
+  {
+    "rank": 4,
+    "fitness": 0.7439399078891873,
+    "genome": {
+      "schema_version": 1,
+      "codec_version": 1,
+      "id": "xor-g0-4-g1-i3",
+      "neurons": [
+        {
+          "id": "i1",
+          "activation": "identity",
+          "bias": 0
+        },
+        {
+          "id": "i2",
+          "activation": "identity",
+          "bias": 0
+        },
+        {
+          "id": "h1",
+          "activation": "sigmoid",
+          "bias": 1.305786902674594
+        },
+        {
+          "id": "h2",
+          "activation": "sigmoid",
+          "bias": -0.29545078111182965
+        },
+        {
+          "id": "o",
+          "activation": "sigmoid",
+          "bias": -0.14497493012327478
+        }
+      ],
+      "synapses": [
+        {
+          "id": "s1",
+          "from": "i1",
+          "to": "h1",
+          "weight": -1.5124395933662276,
+          "enabled": true,
+          "recurrent": false
+        },
+        {
+          "id": "s2",
+          "from": "i2",
+          "to": "h1",
+          "weight": -2.0186360185812497,
+          "enabled": true,
+          "recurrent": false
+        },
+        {
+          "id": "s3",
+          "from": "i1",
+          "to": "h2",
+          "weight": 0.33869416790021367,
+          "enabled": true,
+          "recurrent": false
+        },
+        {
+          "id": "s4",
+          "from": "i2",
+          "to": "h2",
+          "weight": -3.8964912131518075,
+          "enabled": true,
+          "recurrent": false
+        },
+        {
+          "id": "s5",
+          "from": "h1",
+          "to": "o",
+          "weight": -0.9067122045047202,
+          "enabled": true,
+          "recurrent": false
+        },
+        {
+          "id": "s6",
+          "from": "h2",
+          "to": "o",
+          "weight": 0.36765455517215395,
+          "enabled": true,
+          "recurrent": false
+        }
+      ],
+      "sensor_ids": null,
+      "actuator_ids": null
+    }
+  },
+  {
+    "rank": 5,
+    "fitness": 0.7415554497441605,
+    "genome": {
+      "schema_version": 1,
+      "codec_version": 1,
+      "id": "xor-g0-4-g1-i2",
+      "neurons": [
+        {
+          "id": "i1",
+          "activation": "identity",
+          "bias": 0
+        },
+        {
+          "id": "i2",
+          "activation": "identity",
+          "bias": 0
+        },
+        {
+          "id": "h1",
+          "activation": "sigmoid",
+          "bias": 1.305786902674594
+        },
+        {
+          "id": "h2",
+          "activation": "sigmoid",
+          "bias": -0.29545078111182965
+        },
+        {
+          "id": "o",
+          "activation": "sigmoid",
+          "bias": -0.14497493012327478
+        }
+      ],
+      "synapses": [
+        {
+          "id": "s1",
+          "from": "i1",
+          "to": "h1",
+          "weight": -1.5124395933662276,
+          "enabled": true,
+          "recurrent": false
+        },
+        {
+          "id": "s2",
+          "from": "i2",
+          "to": "h1",
+          "weight": -2.0186360185812497,
+          "enabled": true,
+          "recurrent": false
+        },
+        {
+          "id": "s3",
+          "from": "i1",
+          "to": "h2",
+          "weight": 0.5169388165743891,
+          "enabled": true,
+          "recurrent": false
+        },
+        {
+          "id": "s4",
+          "from": "i2",
+          "to": "h2",
+          "weight": -3.8964912131518075,
+          "enabled": true,
+          "recurrent": false
+        },
+        {
+          "id": "s5",
+          "from": "h1",
+          "to": "o",
+          "weight": -0.9067122045047202,
+          "enabled": true,
+          "recurrent": false
+        },
+        {
+          "id": "s6",
+          "from": "h2",
+          "to": "o",
+          "weight": 0.2252719605550807,
+          "enabled": true,
+          "recurrent": false
+        }
+      ],
+      "sensor_ids": null,
+      "actuator_ids": null
+    }
+  }
+]
