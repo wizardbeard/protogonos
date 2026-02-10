@@ -123,6 +123,10 @@ func runRun(ctx context.Context, args []string) error {
 	compareTuning := fs.Bool("compare-tuning", false, "run with and without tuning and emit side-by-side metrics")
 	selectionName := fs.String("selection", "elite", "parent selection strategy: elite|tournament|species_tournament")
 	postprocessorName := fs.String("fitness-postprocessor", "none", "fitness postprocessor: none|size_proportional|novelty_proportional")
+	topoPolicyName := fs.String("topo-policy", "const", "topological mutation count policy: const|ncount_linear|ncount_exponential")
+	topoCount := fs.Int("topo-count", 1, "mutation count for topo-policy=const")
+	topoParam := fs.Float64("topo-param", 0.5, "policy parameter (multiplier/power) for topo-policy")
+	topoMax := fs.Int("topo-max", 8, "maximum mutation count for non-const topo policies (<=0 disables cap)")
 	tuneAttempts := fs.Int("attempts", 4, "tuning attempts per agent evaluation")
 	tuneSteps := fs.Int("tune-steps", 6, "tuning perturbation steps per attempt")
 	tuneStepSize := fs.Float64("tune-step-size", 0.35, "tuning perturbation magnitude")
@@ -145,6 +149,10 @@ func runRun(ctx context.Context, args []string) error {
 		return err
 	}
 	postprocessor, err := postprocessorFromName(*postprocessorName)
+	if err != nil {
+		return err
+	}
+	topoPolicy, err := topologicalPolicyFromConfig(*topoPolicyName, *topoCount, *topoParam, *topoMax)
 	if err != nil {
 		return err
 	}
@@ -206,6 +214,7 @@ func runRun(ctx context.Context, args []string) error {
 			MutationPolicy:  policy,
 			Selector:        selector,
 			Postprocessor:   postprocessor,
+			TopologicalMutations: topoPolicy,
 			Tuner:           tuner,
 			TuneAttempts:    *tuneAttempts,
 			Initial:         initialRun,
@@ -273,6 +282,10 @@ func runRun(ctx context.Context, args []string) error {
 			EliteCount:           eliteCount,
 			Selection:            *selectionName,
 			FitnessPostprocessor: *postprocessorName,
+			TopologicalPolicy:    *topoPolicyName,
+			TopologicalCount:     *topoCount,
+			TopologicalParam:     *topoParam,
+			TopologicalMax:       *topoMax,
 			TuningEnabled:        *enableTuning,
 			TuneAttempts:         *tuneAttempts,
 			TuneSteps:            *tuneSteps,
@@ -391,6 +404,10 @@ func runBenchmark(ctx context.Context, args []string) error {
 	enableTuning := fs.Bool("tuning", false, "enable exoself tuning")
 	selectionName := fs.String("selection", "elite", "parent selection strategy: elite|tournament|species_tournament")
 	postprocessorName := fs.String("fitness-postprocessor", "none", "fitness postprocessor: none|size_proportional|novelty_proportional")
+	topoPolicyName := fs.String("topo-policy", "const", "topological mutation count policy: const|ncount_linear|ncount_exponential")
+	topoCount := fs.Int("topo-count", 1, "mutation count for topo-policy=const")
+	topoParam := fs.Float64("topo-param", 0.5, "policy parameter (multiplier/power) for topo-policy")
+	topoMax := fs.Int("topo-max", 8, "maximum mutation count for non-const topo policies (<=0 disables cap)")
 	tuneAttempts := fs.Int("attempts", 4, "tuning attempts per agent evaluation")
 	tuneSteps := fs.Int("tune-steps", 6, "tuning perturbation steps per attempt")
 	tuneStepSize := fs.Float64("tune-step-size", 0.35, "tuning perturbation magnitude")
@@ -434,6 +451,10 @@ func runBenchmark(ctx context.Context, args []string) error {
 		Workers:              *workers,
 		Selection:            *selectionName,
 		FitnessPostprocessor: *postprocessorName,
+		TopologicalPolicy:    *topoPolicyName,
+		TopologicalCount:     *topoCount,
+		TopologicalParam:     *topoParam,
+		TopologicalMax:       *topoMax,
 		EnableTuning:         *enableTuning,
 		TuneAttempts:         *tuneAttempts,
 		TuneSteps:            *tuneSteps,
@@ -645,5 +666,33 @@ func postprocessorFromName(name string) (evo.FitnessPostprocessor, error) {
 		return evo.NoveltyProportionalPostprocessor{}, nil
 	default:
 		return nil, fmt.Errorf("unsupported fitness postprocessor: %s", name)
+	}
+}
+
+func topologicalPolicyFromConfig(name string, count int, param float64, maxCount int) (evo.TopologicalMutationPolicy, error) {
+	switch name {
+	case "const":
+		if count <= 0 {
+			return nil, fmt.Errorf("topo-count must be > 0 for const policy")
+		}
+		return evo.ConstTopologicalMutations{Count: count}, nil
+	case "ncount_linear":
+		if param <= 0 {
+			return nil, fmt.Errorf("topo-param must be > 0 for ncount_linear policy")
+		}
+		return evo.NCountLinearTopologicalMutations{
+			Multiplier: param,
+			MaxCount:   maxCount,
+		}, nil
+	case "ncount_exponential":
+		if param <= 0 {
+			return nil, fmt.Errorf("topo-param must be > 0 for ncount_exponential policy")
+		}
+		return evo.NCountExponentialTopologicalMutations{
+			Power:    param,
+			MaxCount: maxCount,
+		}, nil
+	default:
+		return nil, fmt.Errorf("unsupported topological mutation policy: %s", name)
 	}
 }

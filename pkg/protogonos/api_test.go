@@ -93,4 +93,15 @@ func TestClientRunRejectsUnknownSelectionAndPostprocessor(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected postprocessor validation error")
 	}
+
+	_, err = client.Run(context.Background(), RunRequest{
+		Scape:             "xor",
+		Population:        6,
+		Generations:       1,
+		Selection:         "elite",
+		TopologicalPolicy: "unknown",
+	})
+	if err == nil {
+		t.Fatal("expected topological policy validation error")
+	}
 }

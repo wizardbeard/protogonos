@@ -30,6 +30,7 @@ type EvolutionConfig struct {
 	MutationPolicy  []evo.WeightedMutation
 	Selector        evo.Selector
 	Postprocessor   evo.FitnessPostprocessor
+	TopologicalMutations evo.TopologicalMutationPolicy
 	Tuner           tuning.Tuner
 	TuneAttempts    int
 	Initial         []model.Genome
@@ -129,6 +130,7 @@ func (p *Polis) RunEvolution(ctx context.Context, cfg EvolutionConfig) (Evolutio
 		MutationPolicy:  cfg.MutationPolicy,
 		Selector:        cfg.Selector,
 		Postprocessor:   cfg.Postprocessor,
+		TopologicalMutations: cfg.TopologicalMutations,
 		Tuner:           cfg.Tuner,
 		TuneAttempts:    cfg.TuneAttempts,
 	})

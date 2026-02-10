@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math/rand"
 	"sort"
+	"strings"
 	"sync"
 
 	"protogonos/internal/agent"
@@ -39,6 +40,7 @@ type MonitorConfig struct {
 	MutationPolicy  []WeightedMutation
 	Selector        Selector
 	Postprocessor   FitnessPostprocessor
+	TopologicalMutations TopologicalMutationPolicy
 	PopulationSize  int
 	EliteCount      int
 	Generations     int
@@ -103,6 +105,9 @@ func NewPopulationMonitor(cfg MonitorConfig) (*PopulationMonitor, error) {
 	}
 	if cfg.Postprocessor == nil {
 		cfg.Postprocessor = NoopFitnessPostprocessor{}
+	}
+	if cfg.TopologicalMutations == nil {
+		cfg.TopologicalMutations = ConstTopologicalMutations{Count: 1}
 	}
 
 	return &PopulationMonitor{
@@ -316,24 +321,39 @@ func (m *PopulationMonitor) nextGeneration(ctx context.Context, ranked []ScoredG
 		child := cloneGenome(parent)
 		child.ID = fmt.Sprintf("%s-g%d-i%d", parent.ID, generation+1, len(next))
 
-		operator := m.chooseMutation()
-		mutated, err := operator.Apply(ctx, child)
-		operationName := operator.Name()
-		if err != nil {
-			if m.cfg.Mutation != nil && operator != m.cfg.Mutation {
-				mutated, err = m.cfg.Mutation.Apply(ctx, child)
-				operationName = m.cfg.Mutation.Name() + "(fallback)"
-			}
-		}
+		mutationCount, err := m.cfg.TopologicalMutations.MutationCount(parent, generation, m.rng)
 		if err != nil {
 			return nil, nil, err
 		}
+		if mutationCount <= 0 {
+			return nil, nil, fmt.Errorf("invalid mutation count from policy: %d", mutationCount)
+		}
+
+		mutated := child
+		operationNames := make([]string, 0, mutationCount)
+		for step := 0; step < mutationCount; step++ {
+			operator := m.chooseMutation()
+			next, opErr := operator.Apply(ctx, mutated)
+			operationName := operator.Name()
+			if opErr != nil {
+				if m.cfg.Mutation != nil && operator != m.cfg.Mutation {
+					next, opErr = m.cfg.Mutation.Apply(ctx, mutated)
+					operationName = m.cfg.Mutation.Name() + "(fallback)"
+				}
+			}
+			if opErr != nil {
+				return nil, nil, opErr
+			}
+			mutated = next
+			operationNames = append(operationNames, operationName)
+		}
+
 		next = append(next, mutated)
 		lineage = append(lineage, LineageRecord{
 			GenomeID:   mutated.ID,
 			ParentID:   parent.ID,
 			Generation: nextGeneration,
-			Operation:  operationName,
+			Operation:  strings.Join(operationNames, "+"),
 		})
 	}
 

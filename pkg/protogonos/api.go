@@ -48,6 +48,10 @@ type RunRequest struct {
 	Workers              int
 	Selection            string
 	FitnessPostprocessor string
+	TopologicalPolicy    string
+	TopologicalCount     int
+	TopologicalParam     float64
+	TopologicalMax       int
 	EnableTuning         bool
 	CompareTuning        bool
 	TuneAttempts         int
@@ -168,6 +172,18 @@ func (c *Client) Run(ctx context.Context, req RunRequest) (RunSummary, error) {
 	if req.FitnessPostprocessor == "" {
 		req.FitnessPostprocessor = "none"
 	}
+	if req.TopologicalPolicy == "" {
+		req.TopologicalPolicy = "const"
+	}
+	if req.TopologicalCount <= 0 {
+		req.TopologicalCount = 1
+	}
+	if req.TopologicalParam <= 0 {
+		req.TopologicalParam = 0.5
+	}
+	if req.TopologicalMax == 0 {
+		req.TopologicalMax = 8
+	}
 	if req.TuneAttempts <= 0 {
 		req.TuneAttempts = 4
 	}
@@ -195,6 +211,10 @@ func (c *Client) Run(ctx context.Context, req RunRequest) (RunSummary, error) {
 		return RunSummary{}, err
 	}
 	postprocessor, err := postprocessorFromName(req.FitnessPostprocessor)
+	if err != nil {
+		return RunSummary{}, err
+	}
+	topologicalPolicy, err := topologicalPolicyFromConfig(req.TopologicalPolicy, req.TopologicalCount, req.TopologicalParam, req.TopologicalMax)
 	if err != nil {
 		return RunSummary{}, err
 	}
@@ -248,6 +268,7 @@ func (c *Client) Run(ctx context.Context, req RunRequest) (RunSummary, error) {
 			MutationPolicy:  policy,
 			Selector:        selector,
 			Postprocessor:   postprocessor,
+			TopologicalMutations: topologicalPolicy,
 			Tuner:           tuner,
 			TuneAttempts:    req.TuneAttempts,
 			Initial:         initialRun,
@@ -315,6 +336,10 @@ func (c *Client) Run(ctx context.Context, req RunRequest) (RunSummary, error) {
 			EliteCount:           eliteCount,
 			Selection:            req.Selection,
 			FitnessPostprocessor: req.FitnessPostprocessor,
+			TopologicalPolicy:    req.TopologicalPolicy,
+			TopologicalCount:     req.TopologicalCount,
+			TopologicalParam:     req.TopologicalParam,
+			TopologicalMax:       req.TopologicalMax,
 			TuningEnabled:        req.EnableTuning,
 			TuneAttempts:         req.TuneAttempts,
 			TuneSteps:            req.TuneSteps,
@@ -572,5 +597,33 @@ func postprocessorFromName(name string) (evo.FitnessPostprocessor, error) {
 		return evo.NoveltyProportionalPostprocessor{}, nil
 	default:
 		return nil, fmt.Errorf("unsupported fitness postprocessor: %s", name)
+	}
+}
+
+func topologicalPolicyFromConfig(name string, count int, param float64, maxCount int) (evo.TopologicalMutationPolicy, error) {
+	switch name {
+	case "const":
+		if count <= 0 {
+			return nil, fmt.Errorf("topological count must be > 0 for const policy")
+		}
+		return evo.ConstTopologicalMutations{Count: count}, nil
+	case "ncount_linear":
+		if param <= 0 {
+			return nil, fmt.Errorf("topological param must be > 0 for ncount_linear")
+		}
+		return evo.NCountLinearTopologicalMutations{
+			Multiplier: param,
+			MaxCount:   maxCount,
+		}, nil
+	case "ncount_exponential":
+		if param <= 0 {
+			return nil, fmt.Errorf("topological param must be > 0 for ncount_exponential")
+		}
+		return evo.NCountExponentialTopologicalMutations{
+			Power:    param,
+			MaxCount: maxCount,
+		}, nil
+	default:
+		return nil, fmt.Errorf("unsupported topological mutation policy: %s", name)
 	}
 }

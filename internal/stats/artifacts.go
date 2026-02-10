@@ -23,6 +23,10 @@ type RunConfig struct {
 	EliteCount           int     `json:"elite_count"`
 	Selection            string  `json:"selection"`
 	FitnessPostprocessor string  `json:"fitness_postprocessor"`
+	TopologicalPolicy    string  `json:"topological_policy"`
+	TopologicalCount     int     `json:"topological_count"`
+	TopologicalParam     float64 `json:"topological_param"`
+	TopologicalMax       int     `json:"topological_max"`
 	TuningEnabled        bool    `json:"tuning_enabled"`
 	TuneAttempts         int     `json:"tune_attempts"`
 	TuneSteps            int     `json:"tune_steps"`
