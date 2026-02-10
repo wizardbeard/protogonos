@@ -18,22 +18,22 @@ type Config struct {
 }
 
 type EvolutionConfig struct {
-	ScapeName       string
-	PopulationSize  int
-	Generations     int
-	EliteCount      int
-	Workers         int
-	Seed            int64
-	InputNeuronIDs  []string
-	OutputNeuronIDs []string
-	Mutation        evo.Operator
-	MutationPolicy  []evo.WeightedMutation
-	Selector        evo.Selector
-	Postprocessor   evo.FitnessPostprocessor
+	ScapeName            string
+	PopulationSize       int
+	Generations          int
+	EliteCount           int
+	Workers              int
+	Seed                 int64
+	InputNeuronIDs       []string
+	OutputNeuronIDs      []string
+	Mutation             evo.Operator
+	MutationPolicy       []evo.WeightedMutation
+	Selector             evo.Selector
+	Postprocessor        evo.FitnessPostprocessor
 	TopologicalMutations evo.TopologicalMutationPolicy
-	Tuner           tuning.Tuner
-	TuneAttempts    int
-	Initial         []model.Genome
+	Tuner                tuning.Tuner
+	TuneAttempts         int
+	Initial              []model.Genome
 }
 
 type EvolutionResult struct {
@@ -118,21 +118,21 @@ func (p *Polis) RunEvolution(ctx context.Context, cfg EvolutionConfig) (Evolutio
 	}
 
 	monitor, err := evo.NewPopulationMonitor(evo.MonitorConfig{
-		Scape:           targetScape,
-		Mutation:        cfg.Mutation,
-		PopulationSize:  cfg.PopulationSize,
-		EliteCount:      cfg.EliteCount,
-		Generations:     cfg.Generations,
-		Workers:         cfg.Workers,
-		Seed:            cfg.Seed,
-		InputNeuronIDs:  cfg.InputNeuronIDs,
-		OutputNeuronIDs: cfg.OutputNeuronIDs,
-		MutationPolicy:  cfg.MutationPolicy,
-		Selector:        cfg.Selector,
-		Postprocessor:   cfg.Postprocessor,
+		Scape:                targetScape,
+		Mutation:             cfg.Mutation,
+		PopulationSize:       cfg.PopulationSize,
+		EliteCount:           cfg.EliteCount,
+		Generations:          cfg.Generations,
+		Workers:              cfg.Workers,
+		Seed:                 cfg.Seed,
+		InputNeuronIDs:       cfg.InputNeuronIDs,
+		OutputNeuronIDs:      cfg.OutputNeuronIDs,
+		MutationPolicy:       cfg.MutationPolicy,
+		Selector:             cfg.Selector,
+		Postprocessor:        cfg.Postprocessor,
 		TopologicalMutations: cfg.TopologicalMutations,
-		Tuner:           cfg.Tuner,
-		TuneAttempts:    cfg.TuneAttempts,
+		Tuner:                cfg.Tuner,
+		TuneAttempts:         cfg.TuneAttempts,
 	})
 	if err != nil {
 		return EvolutionResult{}, err

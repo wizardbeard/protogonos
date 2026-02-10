@@ -202,22 +202,22 @@ func runRun(ctx context.Context, args []string) error {
 			return platform.EvolutionResult{}, err
 		}
 		return polis.RunEvolution(ctx, platform.EvolutionConfig{
-			ScapeName:       *scapeName,
-			PopulationSize:  *population,
-			Generations:     *generations,
-			EliteCount:      eliteCount,
-			Workers:         *workers,
-			Seed:            *seed,
-			InputNeuronIDs:  inIDs,
-			OutputNeuronIDs: outIDs,
-			Mutation:        mutation,
-			MutationPolicy:  policy,
-			Selector:        selector,
-			Postprocessor:   postprocessor,
+			ScapeName:            *scapeName,
+			PopulationSize:       *population,
+			Generations:          *generations,
+			EliteCount:           eliteCount,
+			Workers:              *workers,
+			Seed:                 *seed,
+			InputNeuronIDs:       inIDs,
+			OutputNeuronIDs:      outIDs,
+			Mutation:             mutation,
+			MutationPolicy:       policy,
+			Selector:             selector,
+			Postprocessor:        postprocessor,
 			TopologicalMutations: topoPolicy,
-			Tuner:           tuner,
-			TuneAttempts:    *tuneAttempts,
-			Initial:         initialRun,
+			Tuner:                tuner,
+			TuneAttempts:         *tuneAttempts,
+			Initial:              initialRun,
 		})
 	}
 

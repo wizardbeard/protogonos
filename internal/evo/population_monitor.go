@@ -35,21 +35,21 @@ type LineageRecord struct {
 }
 
 type MonitorConfig struct {
-	Scape           scape.Scape
-	Mutation        Operator
-	MutationPolicy  []WeightedMutation
-	Selector        Selector
-	Postprocessor   FitnessPostprocessor
+	Scape                scape.Scape
+	Mutation             Operator
+	MutationPolicy       []WeightedMutation
+	Selector             Selector
+	Postprocessor        FitnessPostprocessor
 	TopologicalMutations TopologicalMutationPolicy
-	PopulationSize  int
-	EliteCount      int
-	Generations     int
-	Workers         int
-	Seed            int64
-	InputNeuronIDs  []string
-	OutputNeuronIDs []string
-	Tuner           tuning.Tuner
-	TuneAttempts    int
+	PopulationSize       int
+	EliteCount           int
+	Generations          int
+	Workers              int
+	Seed                 int64
+	InputNeuronIDs       []string
+	OutputNeuronIDs      []string
+	Tuner                tuning.Tuner
+	TuneAttempts         int
 }
 
 type PopulationMonitor struct {

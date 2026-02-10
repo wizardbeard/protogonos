@@ -34,7 +34,7 @@ Status legend:
 | `selection_algorithm.erl` | selection strategy variants | `internal/evo/selection.go` + monitor integration | `partial` | `internal/evo/selection.go`, `internal/evo/population_monitor.go`, `.ref/src/selection_algorithm.erl` |
 | `tuning_selection.erl` | exoself selection schedule variants | `internal/tuning/exoself.go` (single strategy) | `partial` | `internal/tuning/exoself.go`, `.ref/src/tuning_selection.erl` |
 | `tuning_duration.erl` | tuning-attempt duration policies | `TuneAttempts` in monitor config | `partial` | `internal/evo/population_monitor.go`, `.ref/src/tuning_duration.erl` |
-| `tot_topological_mutations.erl` | mutation-count policy functions | fixed one-mutation child in monitor | `missing` | `internal/evo/population_monitor.go`, `.ref/src/tot_topological_mutations.erl` |
+| `tot_topological_mutations.erl` | mutation-count policy functions | `internal/evo/topological_mutations.go` + monitor integration | `partial` | `internal/evo/topological_mutations.go`, `internal/evo/population_monitor.go`, `.ref/src/tot_topological_mutations.erl` |
 | `functions.erl` | activation/math utility set | `internal/nn/registry.go` built-ins | `partial` | `internal/nn/registry.go`, `.ref/src/functions.erl` |
 | `derivatives.erl` | derivative functions for activations | none | `missing` | `.ref/src/derivatives.erl`, `internal/nn/network.go` |
 | `plasticity.erl` | Hebbian/Oja/etc plasticity rules | none | `missing` | `.ref/src/plasticity.erl`, `internal/nn/network.go` |
@@ -59,8 +59,8 @@ Status legend:
 ## Summary
 
 - `implemented`: 0
-- `partial`: 20
-- `missing`: 6
+- `partial`: 21
+- `missing`: 5
 - `out-of-scope-now`: 7
 
 Most core AGENTS responsibilities are present but still `partial` versus reference breadth. The largest parity gaps are:

@@ -256,22 +256,22 @@ func (c *Client) Run(ctx context.Context, req RunRequest) (RunSummary, error) {
 			return platform.EvolutionResult{}, err
 		}
 		return p.RunEvolution(ctx, platform.EvolutionConfig{
-			ScapeName:       req.Scape,
-			PopulationSize:  req.Population,
-			Generations:     req.Generations,
-			EliteCount:      eliteCount,
-			Workers:         req.Workers,
-			Seed:            req.Seed,
-			InputNeuronIDs:  inIDs,
-			OutputNeuronIDs: outIDs,
-			Mutation:        mutation,
-			MutationPolicy:  policy,
-			Selector:        selector,
-			Postprocessor:   postprocessor,
+			ScapeName:            req.Scape,
+			PopulationSize:       req.Population,
+			Generations:          req.Generations,
+			EliteCount:           eliteCount,
+			Workers:              req.Workers,
+			Seed:                 req.Seed,
+			InputNeuronIDs:       inIDs,
+			OutputNeuronIDs:      outIDs,
+			Mutation:             mutation,
+			MutationPolicy:       policy,
+			Selector:             selector,
+			Postprocessor:        postprocessor,
 			TopologicalMutations: topologicalPolicy,
-			Tuner:           tuner,
-			TuneAttempts:    req.TuneAttempts,
-			Initial:         initialRun,
+			Tuner:                tuner,
+			TuneAttempts:         req.TuneAttempts,
+			Initial:              initialRun,
 		})
 	}
 
