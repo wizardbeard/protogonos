@@ -1,0 +1,29 @@
+package substrate
+
+import "context"
+
+// CPP computes a candidate weight update signal from substrate inputs.
+type CPP interface {
+	Name() string
+	Compute(ctx context.Context, inputs []float64, params map[string]float64) (float64, error)
+}
+
+// CEP applies a computed update signal to an existing weight.
+type CEP interface {
+	Name() string
+	Apply(ctx context.Context, current float64, delta float64, params map[string]float64) (float64, error)
+}
+
+// Spec configures a substrate runtime instance.
+type Spec struct {
+	CPPName    string
+	CEPName    string
+	Dimensions []int
+	Parameters map[string]float64
+}
+
+// Runtime executes substrate update steps over an internal weight vector.
+type Runtime interface {
+	Step(ctx context.Context, inputs []float64) ([]float64, error)
+	Weights() []float64
+}

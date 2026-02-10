@@ -49,9 +49,9 @@ Status legend:
 | `flatland.erl` | interactive multi-agent world/scape server | none | `out-of-scope-now` | `.ref/src/flatland.erl` |
 | `fx.erl` | financial simulation/evaluation tooling | none | `out-of-scope-now` | `.ref/src/fx.erl` |
 | `scape_GTSA.erl` | time-series scape process | none | `out-of-scope-now` | `.ref/src/scape_GTSA.erl` |
-| `substrate.erl` | substrate encoding runtime | none | `missing` | `.ref/src/substrate.erl` |
-| `substrate_cpp.erl` | substrate CPP runtime | none | `missing` | `.ref/src/substrate_cpp.erl` |
-| `substrate_cep.erl` | substrate CEP runtime | none | `missing` | `.ref/src/substrate_cep.erl` |
+| `substrate.erl` | substrate encoding runtime | `internal/substrate/runtime.go` scaffold | `partial` | `internal/substrate/runtime.go`, `.ref/src/substrate.erl` |
+| `substrate_cpp.erl` | substrate CPP runtime | `internal/substrate/components.go` + registry | `partial` | `internal/substrate/components.go`, `internal/substrate/registry.go`, `.ref/src/substrate_cpp.erl` |
+| `substrate_cep.erl` | substrate CEP runtime | `internal/substrate/components.go` + registry | `partial` | `internal/substrate/components.go`, `internal/substrate/registry.go`, `.ref/src/substrate_cep.erl` |
 | `visor.erl` | visualization loop/UI drawing | none | `out-of-scope-now` | `.ref/src/visor.erl` |
 | `epitopes.erl` | experiment/sim utility tooling | none | `out-of-scope-now` | `.ref/src/epitopes.erl` |
 | `data_extractor.erl` | dataset ingestion and conversion tooling | none | `out-of-scope-now` | `.ref/src/data_extractor.erl` |
@@ -59,8 +59,8 @@ Status legend:
 ## Summary
 
 - `implemented`: 0
-- `partial`: 21
-- `missing`: 5
+- `partial`: 24
+- `missing`: 2
 - `out-of-scope-now`: 7
 
 Most core AGENTS responsibilities are present but still `partial` versus reference breadth. The largest parity gaps are:
