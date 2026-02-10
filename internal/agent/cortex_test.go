@@ -115,3 +115,36 @@ func TestCortexSubstrateTransformsOutputs(t *testing.T) {
 		t.Fatalf("expected substrate-transformed output to increase: out1=%v out2=%v", out1, out2)
 	}
 }
+
+func TestCortexHebbianPlasticityStatefulWeights(t *testing.T) {
+	genome := model.Genome{
+		Plasticity: &model.PlasticityConfig{
+			Rule: "hebbian",
+			Rate: 0.1,
+		},
+		Neurons: []model.Neuron{
+			{ID: "i", Activation: "identity"},
+			{ID: "o", Activation: "identity", Bias: 0.0},
+		},
+		Synapses: []model.Synapse{
+			{ID: "s1", From: "i", To: "o", Weight: 1.0, Enabled: true},
+		},
+	}
+
+	c, err := NewCortex("agent-plastic", genome, nil, nil, []string{"i"}, []string{"o"}, nil)
+	if err != nil {
+		t.Fatalf("new cortex: %v", err)
+	}
+
+	out1, err := c.RunStep(context.Background(), []float64{2})
+	if err != nil {
+		t.Fatalf("run step 1: %v", err)
+	}
+	out2, err := c.RunStep(context.Background(), []float64{2})
+	if err != nil {
+		t.Fatalf("run step 2: %v", err)
+	}
+	if out2[0] <= out1[0] {
+		t.Fatalf("expected second output to increase after hebbian plasticity: out1=%v out2=%v", out1, out2)
+	}
+}

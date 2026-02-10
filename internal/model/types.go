@@ -8,12 +8,13 @@ type VersionedRecord struct {
 
 type Genome struct {
 	VersionedRecord
-	ID          string           `json:"id"`
-	Neurons     []Neuron         `json:"neurons"`
-	Synapses    []Synapse        `json:"synapses"`
-	SensorIDs   []string         `json:"sensor_ids"`
-	ActuatorIDs []string         `json:"actuator_ids"`
-	Substrate   *SubstrateConfig `json:"substrate,omitempty"`
+	ID          string            `json:"id"`
+	Neurons     []Neuron          `json:"neurons"`
+	Synapses    []Synapse         `json:"synapses"`
+	SensorIDs   []string          `json:"sensor_ids"`
+	ActuatorIDs []string          `json:"actuator_ids"`
+	Substrate   *SubstrateConfig  `json:"substrate,omitempty"`
+	Plasticity  *PlasticityConfig `json:"plasticity,omitempty"`
 }
 
 type SubstrateConfig struct {
@@ -22,6 +23,12 @@ type SubstrateConfig struct {
 	Dimensions  []int              `json:"dimensions"`
 	Parameters  map[string]float64 `json:"parameters"`
 	WeightCount int                `json:"weight_count"`
+}
+
+type PlasticityConfig struct {
+	Rule            string  `json:"rule"`
+	Rate            float64 `json:"rate"`
+	SaturationLimit float64 `json:"saturation_limit"`
 }
 
 type Neuron struct {

@@ -36,8 +36,8 @@ Status legend:
 | `tuning_duration.erl` | tuning-attempt duration policies | `TuneAttempts` in monitor config | `partial` | `internal/evo/population_monitor.go`, `.ref/src/tuning_duration.erl` |
 | `tot_topological_mutations.erl` | mutation-count policy functions | `internal/evo/topological_mutations.go` + monitor integration | `partial` | `internal/evo/topological_mutations.go`, `internal/evo/population_monitor.go`, `.ref/src/tot_topological_mutations.erl` |
 | `functions.erl` | activation/math utility set | `internal/nn/registry.go` built-ins | `partial` | `internal/nn/registry.go`, `.ref/src/functions.erl` |
-| `derivatives.erl` | derivative functions for activations | none | `missing` | `.ref/src/derivatives.erl`, `internal/nn/network.go` |
-| `plasticity.erl` | Hebbian/Oja/etc plasticity rules | none | `missing` | `.ref/src/plasticity.erl`, `internal/nn/network.go` |
+| `derivatives.erl` | derivative functions for activations | `internal/nn/derivatives.go` | `partial` | `internal/nn/derivatives.go`, `.ref/src/derivatives.erl` |
+| `plasticity.erl` | Hebbian/Oja/etc plasticity rules | `internal/nn/plasticity.go` + cortex integration | `partial` | `internal/nn/plasticity.go`, `internal/agent/cortex.go`, `.ref/src/plasticity.erl` |
 | `signal_aggregator.erl` | dot/mult/diff aggregation modes | fixed weighted sum path | `partial` | `internal/nn/network.go`, `.ref/src/signal_aggregator.erl` |
 | `genotype.erl` | construction/cloning/deletion/fingerprint topologies | seed builders + model/store basics | `partial` | `cmd/protogonosctl/main.go`, `pkg/protogonos/api.go`, `internal/model/types.go`, `.ref/src/genotype.erl` |
 | `specie_identifier.erl` | species topology identifiers | `internal/evo/specie_identifier.go` + species tournament selector | `partial` | `internal/evo/specie_identifier.go`, `internal/evo/selection.go`, `.ref/src/specie_identifier.erl` |
@@ -59,8 +59,8 @@ Status legend:
 ## Summary
 
 - `implemented`: 0
-- `partial`: 24
-- `missing`: 2
+- `partial`: 26
+- `missing`: 0
 - `out-of-scope-now`: 7
 
 Most core AGENTS responsibilities are present but still `partial` versus reference breadth. The largest parity gaps are:

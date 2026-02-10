@@ -108,6 +108,11 @@ func (c *Cortex) execute(ctx context.Context, inputs []float64) ([]float64, erro
 	if err != nil {
 		return nil, err
 	}
+	if c.genome.Plasticity != nil {
+		if err := nn.ApplyPlasticity(&c.genome, values, *c.genome.Plasticity); err != nil {
+			return nil, err
+		}
+	}
 
 	outputs := make([]float64, len(c.outputNeuronIDs))
 	for i, neuronID := range c.outputNeuronIDs {
