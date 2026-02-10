@@ -38,7 +38,7 @@ Status legend:
 | `functions.erl` | activation/math utility set | `internal/nn/registry.go` built-ins | `partial` | `internal/nn/registry.go`, `.ref/src/functions.erl` |
 | `derivatives.erl` | derivative functions for activations | `internal/nn/derivatives.go` | `partial` | `internal/nn/derivatives.go`, `.ref/src/derivatives.erl` |
 | `plasticity.erl` | Hebbian/Oja/etc plasticity rules | `internal/nn/plasticity.go` + cortex integration | `partial` | `internal/nn/plasticity.go`, `internal/agent/cortex.go`, `.ref/src/plasticity.erl` |
-| `signal_aggregator.erl` | dot/mult/diff aggregation modes | fixed weighted sum path | `partial` | `internal/nn/network.go`, `.ref/src/signal_aggregator.erl` |
+| `signal_aggregator.erl` | dot/mult/diff aggregation modes | selectable per-neuron aggregation in forward path | `partial` | `internal/nn/network.go`, `internal/nn/network_test.go`, `.ref/src/signal_aggregator.erl` |
 | `genotype.erl` | construction/cloning/deletion/fingerprint topologies | seed builders + model/store basics | `partial` | `cmd/protogonosctl/main.go`, `pkg/protogonos/api.go`, `internal/model/types.go`, `.ref/src/genotype.erl` |
 | `specie_identifier.erl` | species topology identifiers | `internal/evo/specie_identifier.go` + species tournament selector | `partial` | `internal/evo/specie_identifier.go`, `internal/evo/selection.go`, `.ref/src/specie_identifier.erl` |
 | `fitness_postprocessor.erl` | post-fitness adjustment (size/novelty) | `internal/evo/fitness_postprocessor.go` + monitor integration | `partial` | `internal/evo/fitness_postprocessor.go`, `internal/evo/population_monitor.go`, `.ref/src/fitness_postprocessor.erl` |

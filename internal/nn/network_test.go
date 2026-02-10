@@ -77,3 +77,65 @@ func TestApplyActivation(t *testing.T) {
 		})
 	}
 }
+
+func TestForwardAggregatorModes(t *testing.T) {
+	base := model.Genome{
+		Neurons: []model.Neuron{
+			{ID: "i1", Activation: "identity"},
+			{ID: "i2", Activation: "identity"},
+			{ID: "o", Activation: "identity", Bias: 1.0},
+		},
+		Synapses: []model.Synapse{
+			{ID: "s1", From: "i1", To: "o", Weight: 2, Enabled: true},
+			{ID: "s2", From: "i2", To: "o", Weight: 3, Enabled: true},
+		},
+	}
+
+	inputs := map[string]float64{"i1": 2, "i2": 4}
+
+	dot := base
+	dot.Neurons[2].Aggregator = "dot_product"
+	values, err := Forward(dot, inputs)
+	if err != nil {
+		t.Fatalf("forward dot: %v", err)
+	}
+	if values["o"] != 17 {
+		t.Fatalf("unexpected dot output: %f", values["o"])
+	}
+
+	mult := base
+	mult.Neurons[2].Aggregator = "mult_product"
+	values, err = Forward(mult, inputs)
+	if err != nil {
+		t.Fatalf("forward mult: %v", err)
+	}
+	if values["o"] != 49 {
+		t.Fatalf("unexpected mult output: %f", values["o"])
+	}
+
+	diff := base
+	diff.Neurons[2].Aggregator = "diff_product"
+	values, err = Forward(diff, inputs)
+	if err != nil {
+		t.Fatalf("forward diff: %v", err)
+	}
+	if values["o"] != -7 {
+		t.Fatalf("unexpected diff output: %f", values["o"])
+	}
+}
+
+func TestForwardUnsupportedAggregator(t *testing.T) {
+	genome := model.Genome{
+		Neurons: []model.Neuron{
+			{ID: "i", Activation: "identity"},
+			{ID: "o", Activation: "identity", Aggregator: "unknown"},
+		},
+		Synapses: []model.Synapse{
+			{ID: "s1", From: "i", To: "o", Weight: 1, Enabled: true},
+		},
+	}
+	_, err := Forward(genome, map[string]float64{"i": 1})
+	if err == nil {
+		t.Fatal("expected unsupported aggregator error")
+	}
+}

@@ -2,6 +2,7 @@ package nn
 
 import (
 	"fmt"
+	"math"
 
 	"protogonos/internal/model"
 )
@@ -25,9 +26,9 @@ func Forward(genome model.Genome, inputByNeuron map[string]float64) (map[string]
 			continue
 		}
 
-		total := neuron.Bias
-		for _, synapse := range incoming[neuron.ID] {
-			total += values[synapse.From] * synapse.Weight
+		total, err := aggregateIncoming(neuron.Aggregator, neuron.Bias, incoming[neuron.ID], values)
+		if err != nil {
+			return nil, fmt.Errorf("neuron %s: %w", neuron.ID, err)
 		}
 
 		activated, err := applyActivation(neuron.Activation, total)
@@ -46,4 +47,39 @@ func applyActivation(name string, x float64) (float64, error) {
 		return 0, fmt.Errorf("unsupported activation: %s", name)
 	}
 	return fn(x), nil
+}
+
+func aggregateIncoming(mode string, bias float64, synapses []model.Synapse, values map[string]float64) (float64, error) {
+	switch mode {
+	case "", "dot_product":
+		total := bias
+		for _, synapse := range synapses {
+			total += values[synapse.From] * synapse.Weight
+		}
+		return total, nil
+	case "mult_product":
+		if len(synapses) == 0 {
+			return bias, nil
+		}
+		total := 1.0
+		for _, synapse := range synapses {
+			total *= values[synapse.From] * synapse.Weight
+		}
+		return total + bias, nil
+	case "diff_product":
+		if len(synapses) == 0 {
+			return bias, nil
+		}
+		total := values[synapses[0].From] * synapses[0].Weight
+		for _, synapse := range synapses[1:] {
+			total -= values[synapse.From] * synapse.Weight
+		}
+		// keep numerical behavior stable near +-Inf in pathological genomes
+		if math.IsInf(total, 0) || math.IsNaN(total) {
+			return 0, fmt.Errorf("invalid diff_product aggregate")
+		}
+		return total + bias, nil
+	default:
+		return 0, fmt.Errorf("unsupported aggregator: %s", mode)
+	}
 }
