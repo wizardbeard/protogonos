@@ -4,6 +4,7 @@ import (
 	"context"
 	"math"
 	"math/rand"
+	"sync"
 	"testing"
 
 	"protogonos/internal/model"
@@ -82,5 +83,37 @@ func TestExoselfAttemptsZeroReturnsClone(t *testing.T) {
 	}
 	if out.Synapses[0].Weight != genome.Synapses[0].Weight {
 		t.Fatalf("weight changed unexpectedly")
+	}
+}
+
+func TestExoselfConcurrentTuneSafe(t *testing.T) {
+	genome := model.Genome{
+		ID: "g",
+		Neurons: []model.Neuron{
+			{ID: "i", Activation: "identity"},
+			{ID: "o", Activation: "identity"},
+		},
+		Synapses: []model.Synapse{{ID: "s", From: "i", To: "o", Weight: 0.1, Enabled: true}},
+	}
+	tuner := &Exoself{Rand: rand.New(rand.NewSource(1)), Steps: 4, StepSize: 0.2}
+	fitnessFn := func(_ context.Context, g model.Genome) (float64, error) {
+		return g.Synapses[0].Weight, nil
+	}
+
+	var wg sync.WaitGroup
+	errCh := make(chan error, 32)
+	for i := 0; i < 32; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			if _, err := tuner.Tune(context.Background(), genome, 8, fitnessFn); err != nil {
+				errCh <- err
+			}
+		}()
+	}
+	wg.Wait()
+	close(errCh)
+	for err := range errCh {
+		t.Fatalf("unexpected tuning error: %v", err)
 	}
 }

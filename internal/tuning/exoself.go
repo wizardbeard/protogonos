@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"math/rand"
+	"sync"
 
 	"protogonos/internal/model"
 )
@@ -12,6 +13,7 @@ type Exoself struct {
 	Rand     *rand.Rand
 	Steps    int
 	StepSize float64
+	mu       sync.Mutex
 }
 
 func (e *Exoself) Name() string {
@@ -53,8 +55,11 @@ func (e *Exoself) Tune(ctx context.Context, genome model.Genome, attempts int, f
 			if err := ctx.Err(); err != nil {
 				return model.Genome{}, err
 			}
-			idx := e.Rand.Intn(len(candidate.Synapses))
-			delta := (e.Rand.Float64()*2 - 1) * e.StepSize
+			if len(candidate.Synapses) == 0 {
+				break
+			}
+			idx := e.randIntn(len(candidate.Synapses))
+			delta := (e.randFloat64()*2 - 1) * e.StepSize
 			candidate.Synapses[idx].Weight += delta
 		}
 
@@ -69,6 +74,18 @@ func (e *Exoself) Tune(ctx context.Context, genome model.Genome, attempts int, f
 	}
 
 	return best, nil
+}
+
+func (e *Exoself) randIntn(n int) int {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	return e.Rand.Intn(n)
+}
+
+func (e *Exoself) randFloat64() float64 {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	return e.Rand.Float64()
 }
 
 func cloneGenome(g model.Genome) model.Genome {
