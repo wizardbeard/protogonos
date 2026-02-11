@@ -56,6 +56,8 @@ func defaultMorphologyForScape(scapeName string) (Morphology, bool) {
 		return XORMorphology{}, true
 	case "regression-mimic":
 		return RegressionMimicMorphology{}, true
+	case "cart-pole-lite":
+		return CartPoleLiteMorphology{}, true
 	default:
 		return nil, false
 	}

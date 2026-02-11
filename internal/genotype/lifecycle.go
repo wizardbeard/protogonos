@@ -30,6 +30,12 @@ func ConstructSeedPopulation(scapeName string, size int, seed int64) (SeedPopula
 			InputNeuronIDs:  []string{"i"},
 			OutputNeuronIDs: []string{"o"},
 		}, nil
+	case "cart-pole-lite":
+		return SeedPopulation{
+			Genomes:         seedCartPoleLitePopulation(size, seed),
+			InputNeuronIDs:  []string{"x", "v"},
+			OutputNeuronIDs: []string{"f"},
+		}, nil
 	default:
 		return SeedPopulation{}, fmt.Errorf("unsupported scape: %s", scapeName)
 	}
@@ -123,6 +129,29 @@ func seedRegressionMimicPopulation(size int, seed int64) []model.Genome {
 			},
 			Synapses: []model.Synapse{
 				{ID: "s1", From: "i", To: "o", Weight: jitter(rng, 2), Enabled: true},
+			},
+		})
+	}
+	return population
+}
+
+func seedCartPoleLitePopulation(size int, seed int64) []model.Genome {
+	rng := rand.New(rand.NewSource(seed))
+	population := make([]model.Genome, 0, size)
+	for i := 0; i < size; i++ {
+		population = append(population, model.Genome{
+			VersionedRecord: model.VersionedRecord{SchemaVersion: storage.CurrentSchemaVersion, CodecVersion: storage.CurrentCodecVersion},
+			ID:              fmt.Sprintf("cp-g0-%d", i),
+			SensorIDs:       []string{protoio.CartPolePositionSensorName, protoio.CartPoleVelocitySensorName},
+			ActuatorIDs:     []string{protoio.CartPoleForceActuatorName},
+			Neurons: []model.Neuron{
+				{ID: "x", Activation: "identity", Bias: 0},
+				{ID: "v", Activation: "identity", Bias: 0},
+				{ID: "f", Activation: "identity", Bias: jitter(rng, 0.2)},
+			},
+			Synapses: []model.Synapse{
+				{ID: "s1", From: "x", To: "f", Weight: jitter(rng, 1.5), Enabled: true},
+				{ID: "s2", From: "v", To: "f", Weight: jitter(rng, 1.0), Enabled: true},
 			},
 		})
 	}

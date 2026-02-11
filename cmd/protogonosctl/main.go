@@ -835,6 +835,9 @@ func registerDefaultScapes(p *platform.Polis) error {
 	if err := p.RegisterScape(scape.RegressionMimicScape{}); err != nil {
 		return err
 	}
+	if err := p.RegisterScape(scape.CartPoleLiteScape{}); err != nil {
+		return err
+	}
 	return nil
 }
 

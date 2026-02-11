@@ -76,4 +76,28 @@ func TestScalarComponentsRegistered(t *testing.T) {
 	if xorActuator.Name() != ScalarOutputActuatorName {
 		t.Fatalf("unexpected xor actuator name: %s", xorActuator.Name())
 	}
+
+	cartPosition, err := ResolveSensor(CartPolePositionSensorName, "cart-pole-lite")
+	if err != nil {
+		t.Fatalf("resolve cart-pole position sensor: %v", err)
+	}
+	if cartPosition.Name() != ScalarInputSensorName {
+		t.Fatalf("unexpected cart-pole position sensor name: %s", cartPosition.Name())
+	}
+
+	cartVelocity, err := ResolveSensor(CartPoleVelocitySensorName, "cart-pole-lite")
+	if err != nil {
+		t.Fatalf("resolve cart-pole velocity sensor: %v", err)
+	}
+	if cartVelocity.Name() != ScalarInputSensorName {
+		t.Fatalf("unexpected cart-pole velocity sensor name: %s", cartVelocity.Name())
+	}
+
+	cartForce, err := ResolveActuator(CartPoleForceActuatorName, "cart-pole-lite")
+	if err != nil {
+		t.Fatalf("resolve cart-pole force actuator: %v", err)
+	}
+	if cartForce.Name() != ScalarOutputActuatorName {
+		t.Fatalf("unexpected cart-pole force actuator name: %s", cartForce.Name())
+	}
 }

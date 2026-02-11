@@ -7,11 +7,14 @@ import (
 )
 
 const (
-	ScalarInputSensorName    = "scalar_input"
-	ScalarOutputActuatorName = "scalar_output"
-	XORInputLeftSensorName   = "xor_input_left"
-	XORInputRightSensorName  = "xor_input_right"
-	XOROutputActuatorName    = "xor_output"
+	ScalarInputSensorName      = "scalar_input"
+	ScalarOutputActuatorName   = "scalar_output"
+	XORInputLeftSensorName     = "xor_input_left"
+	XORInputRightSensorName    = "xor_input_right"
+	XOROutputActuatorName      = "xor_output"
+	CartPolePositionSensorName = "cart_pole_position"
+	CartPoleVelocitySensorName = "cart_pole_velocity"
+	CartPoleForceActuatorName  = "cart_pole_force"
 )
 
 type ScalarInputSensor struct {
@@ -86,6 +89,36 @@ func initializeDefaultComponents() {
 		panic(err)
 	}
 	err = RegisterSensorWithSpec(SensorSpec{
+		Name:          CartPolePositionSensorName,
+		Factory:       func() Sensor { return NewScalarInputSensor(0) },
+		SchemaVersion: SupportedSchemaVersion,
+		CodecVersion:  SupportedCodecVersion,
+		Compatible: func(scape string) error {
+			if scape != "cart-pole-lite" {
+				return fmt.Errorf("unsupported scape: %s", scape)
+			}
+			return nil
+		},
+	})
+	if err != nil {
+		panic(err)
+	}
+	err = RegisterSensorWithSpec(SensorSpec{
+		Name:          CartPoleVelocitySensorName,
+		Factory:       func() Sensor { return NewScalarInputSensor(0) },
+		SchemaVersion: SupportedSchemaVersion,
+		CodecVersion:  SupportedCodecVersion,
+		Compatible: func(scape string) error {
+			if scape != "cart-pole-lite" {
+				return fmt.Errorf("unsupported scape: %s", scape)
+			}
+			return nil
+		},
+	})
+	if err != nil {
+		panic(err)
+	}
+	err = RegisterSensorWithSpec(SensorSpec{
 		Name:          XORInputLeftSensorName,
 		Factory:       func() Sensor { return NewScalarInputSensor(0) },
 		SchemaVersion: SupportedSchemaVersion,
@@ -138,6 +171,21 @@ func initializeDefaultComponents() {
 		CodecVersion:  SupportedCodecVersion,
 		Compatible: func(scape string) error {
 			if scape != "xor" {
+				return fmt.Errorf("unsupported scape: %s", scape)
+			}
+			return nil
+		},
+	})
+	if err != nil {
+		panic(err)
+	}
+	err = RegisterActuatorWithSpec(ActuatorSpec{
+		Name:          CartPoleForceActuatorName,
+		Factory:       func() Actuator { return NewScalarOutputActuator() },
+		SchemaVersion: SupportedSchemaVersion,
+		CodecVersion:  SupportedCodecVersion,
+		Compatible: func(scape string) error {
+			if scape != "cart-pole-lite" {
 				return fmt.Errorf("unsupported scape: %s", scape)
 			}
 			return nil
