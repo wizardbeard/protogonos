@@ -49,6 +49,8 @@ func run(ctx context.Context, args []string) error {
 		return runBenchmark(ctx, args[1:])
 	case "runs":
 		return runRuns(ctx, args[1:])
+	case "lineage":
+		return runLineage(ctx, args[1:])
 	case "export":
 		return runExport(ctx, args[1:])
 	default:
@@ -184,6 +186,8 @@ func runRun(ctx context.Context, args []string) error {
 	if eliteCount < 1 {
 		eliteCount = 1
 	}
+	now := time.Now().UTC()
+	runID := fmt.Sprintf("%s-%d-%d", *scapeName, *seed, now.Unix())
 
 	runEvolution := func(useTuning bool) (platform.EvolutionResult, error) {
 		mutation := &evo.PerturbRandomWeight{Rand: rand.New(rand.NewSource(*seed + 1000)), MaxDelta: 1.0}
@@ -197,6 +201,7 @@ func runRun(ctx context.Context, args []string) error {
 			}
 		}
 		return polis.RunEvolution(ctx, platform.EvolutionConfig{
+			RunID:                runID,
 			ScapeName:            *scapeName,
 			PopulationSize:       *population,
 			Generations:          *generations,
@@ -219,28 +224,47 @@ func runRun(ctx context.Context, args []string) error {
 	var result platform.EvolutionResult
 	var compareReport *stats.TuningComparison
 	if *compareTuning {
-		withoutTuning, err := runEvolution(false)
-		if err != nil {
-			return err
-		}
-		withTuning, err := runEvolution(true)
-		if err != nil {
-			return err
-		}
-		compareReport = &stats.TuningComparison{
-			Scape:             *scapeName,
-			PopulationSize:    *population,
-			Generations:       *generations,
-			Seed:              *seed,
-			WithoutTuningBest: withoutTuning.BestByGeneration,
-			WithTuningBest:    withTuning.BestByGeneration,
-			WithoutFinalBest:  withoutTuning.BestFinalFitness,
-			WithFinalBest:     withTuning.BestFinalFitness,
-			FinalImprovement:  withTuning.BestFinalFitness - withoutTuning.BestFinalFitness,
-		}
 		if *enableTuning {
+			withoutTuning, err := runEvolution(false)
+			if err != nil {
+				return err
+			}
+			withTuning, err := runEvolution(true)
+			if err != nil {
+				return err
+			}
+			compareReport = &stats.TuningComparison{
+				Scape:             *scapeName,
+				PopulationSize:    *population,
+				Generations:       *generations,
+				Seed:              *seed,
+				WithoutTuningBest: withoutTuning.BestByGeneration,
+				WithTuningBest:    withTuning.BestByGeneration,
+				WithoutFinalBest:  withoutTuning.BestFinalFitness,
+				WithFinalBest:     withTuning.BestFinalFitness,
+				FinalImprovement:  withTuning.BestFinalFitness - withoutTuning.BestFinalFitness,
+			}
 			result = withTuning
 		} else {
+			withTuning, err := runEvolution(true)
+			if err != nil {
+				return err
+			}
+			withoutTuning, err := runEvolution(false)
+			if err != nil {
+				return err
+			}
+			compareReport = &stats.TuningComparison{
+				Scape:             *scapeName,
+				PopulationSize:    *population,
+				Generations:       *generations,
+				Seed:              *seed,
+				WithoutTuningBest: withoutTuning.BestByGeneration,
+				WithTuningBest:    withTuning.BestByGeneration,
+				WithoutFinalBest:  withoutTuning.BestFinalFitness,
+				WithFinalBest:     withTuning.BestFinalFitness,
+				FinalImprovement:  withTuning.BestFinalFitness - withoutTuning.BestFinalFitness,
+			}
 			result = withoutTuning
 		}
 	} else {
@@ -250,8 +274,6 @@ func runRun(ctx context.Context, args []string) error {
 		}
 	}
 
-	now := time.Now().UTC()
-	runID := fmt.Sprintf("%s-%d-%d", *scapeName, *seed, now.Unix())
 	top := make([]stats.TopGenome, 0, len(result.TopFinal))
 	for i, scored := range result.TopFinal {
 		top = append(top, stats.TopGenome{Rank: i + 1, Fitness: scored.Fitness, Genome: scored.Genome})
@@ -392,6 +414,63 @@ func runRuns(_ context.Context, args []string) error {
 			e.TuningEnabled,
 			e.FinalBestFitness,
 			compareDisplay,
+		)
+	}
+	return nil
+}
+
+func runLineage(ctx context.Context, args []string) error {
+	fs := flag.NewFlagSet("lineage", flag.ContinueOnError)
+	runID := fs.String("run-id", "", "run id")
+	latest := fs.Bool("latest", false, "show lineage for the most recent run from run index")
+	limit := fs.Int("limit", 50, "max lineage rows to print (<=0 for all)")
+	storeKind := fs.String("store", storage.DefaultStoreKind(), "store backend: memory|sqlite")
+	dbPath := fs.String("db-path", "protogonos.db", "sqlite database path")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	if *runID != "" && *latest {
+		return errors.New("use either --run-id or --latest, not both")
+	}
+	if *runID == "" && !*latest {
+		return errors.New("lineage requires --run-id or --latest")
+	}
+
+	client, err := protoapi.New(protoapi.Options{
+		StoreKind:     *storeKind,
+		DBPath:        *dbPath,
+		BenchmarksDir: benchmarksDir,
+		ExportsDir:    exportsDir,
+	})
+	if err != nil {
+		return err
+	}
+	defer func() {
+		_ = client.Close()
+	}()
+
+	lineage, err := client.Lineage(ctx, protoapi.LineageRequest{
+		RunID:  *runID,
+		Latest: *latest,
+		Limit:  *limit,
+	})
+	if err != nil {
+		return err
+	}
+	if len(lineage) == 0 {
+		fmt.Println("no lineage records")
+		return nil
+	}
+
+	for _, rec := range lineage {
+		fmt.Printf("gen=%d genome_id=%s parent_id=%s op=%s fingerprint=%s neurons=%d synapses=%d\n",
+			rec.Generation,
+			rec.GenomeID,
+			rec.ParentID,
+			rec.Operation,
+			rec.Fingerprint,
+			rec.Summary.TotalNeurons,
+			rec.Summary.TotalSynapses,
 		)
 	}
 	return nil
@@ -576,7 +655,7 @@ func defaultMutationPolicy(
 }
 
 func usageError(msg string) error {
-	return fmt.Errorf("%s\nusage: protogonosctl <init|start|run|benchmark|runs|export> [flags]", msg)
+	return fmt.Errorf("%s\nusage: protogonosctl <init|start|run|benchmark|runs|lineage|export> [flags]", msg)
 }
 
 func selectionFromName(name string) (evo.Selector, error) {

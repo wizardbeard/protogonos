@@ -10,6 +10,7 @@ import (
 
 	"protogonos/internal/evo"
 	"protogonos/internal/genotype"
+	"protogonos/internal/model"
 	"protogonos/internal/morphology"
 	"protogonos/internal/platform"
 	"protogonos/internal/scape"
@@ -103,6 +104,21 @@ type ExportRequest struct {
 type ExportSummary struct {
 	RunID     string
 	Directory string
+}
+
+type LineageRequest struct {
+	RunID  string
+	Latest bool
+	Limit  int
+}
+
+type LineageItem struct {
+	GenomeID    string
+	ParentID    string
+	Generation  int
+	Operation   string
+	Fingerprint string
+	Summary     model.LineageSummary
 }
 
 func New(opts Options) (*Client, error) {
@@ -238,6 +254,8 @@ func (c *Client) Run(ctx context.Context, req RunRequest) (RunSummary, error) {
 	if eliteCount < 1 {
 		eliteCount = 1
 	}
+	now := time.Now().UTC()
+	runID := fmt.Sprintf("%s-%d-%d", req.Scape, req.Seed, now.Unix())
 
 	runEvolution := func(useTuning bool) (platform.EvolutionResult, error) {
 		mutation := &evo.PerturbRandomWeight{Rand: rand.New(rand.NewSource(req.Seed + 1000)), MaxDelta: 1.0}
@@ -251,6 +269,7 @@ func (c *Client) Run(ctx context.Context, req RunRequest) (RunSummary, error) {
 			}
 		}
 		return p.RunEvolution(ctx, platform.EvolutionConfig{
+			RunID:                runID,
 			ScapeName:            req.Scape,
 			PopulationSize:       req.Population,
 			Generations:          req.Generations,
@@ -273,28 +292,47 @@ func (c *Client) Run(ctx context.Context, req RunRequest) (RunSummary, error) {
 	var result platform.EvolutionResult
 	var compareReport *stats.TuningComparison
 	if req.CompareTuning {
-		withoutTuning, err := runEvolution(false)
-		if err != nil {
-			return RunSummary{}, err
-		}
-		withTuning, err := runEvolution(true)
-		if err != nil {
-			return RunSummary{}, err
-		}
-		compareReport = &stats.TuningComparison{
-			Scape:             req.Scape,
-			PopulationSize:    req.Population,
-			Generations:       req.Generations,
-			Seed:              req.Seed,
-			WithoutTuningBest: withoutTuning.BestByGeneration,
-			WithTuningBest:    withTuning.BestByGeneration,
-			WithoutFinalBest:  withoutTuning.BestFinalFitness,
-			WithFinalBest:     withTuning.BestFinalFitness,
-			FinalImprovement:  withTuning.BestFinalFitness - withoutTuning.BestFinalFitness,
-		}
 		if req.EnableTuning {
+			withoutTuning, err := runEvolution(false)
+			if err != nil {
+				return RunSummary{}, err
+			}
+			withTuning, err := runEvolution(true)
+			if err != nil {
+				return RunSummary{}, err
+			}
+			compareReport = &stats.TuningComparison{
+				Scape:             req.Scape,
+				PopulationSize:    req.Population,
+				Generations:       req.Generations,
+				Seed:              req.Seed,
+				WithoutTuningBest: withoutTuning.BestByGeneration,
+				WithTuningBest:    withTuning.BestByGeneration,
+				WithoutFinalBest:  withoutTuning.BestFinalFitness,
+				WithFinalBest:     withTuning.BestFinalFitness,
+				FinalImprovement:  withTuning.BestFinalFitness - withoutTuning.BestFinalFitness,
+			}
 			result = withTuning
 		} else {
+			withTuning, err := runEvolution(true)
+			if err != nil {
+				return RunSummary{}, err
+			}
+			withoutTuning, err := runEvolution(false)
+			if err != nil {
+				return RunSummary{}, err
+			}
+			compareReport = &stats.TuningComparison{
+				Scape:             req.Scape,
+				PopulationSize:    req.Population,
+				Generations:       req.Generations,
+				Seed:              req.Seed,
+				WithoutTuningBest: withoutTuning.BestByGeneration,
+				WithTuningBest:    withTuning.BestByGeneration,
+				WithoutFinalBest:  withoutTuning.BestFinalFitness,
+				WithFinalBest:     withTuning.BestFinalFitness,
+				FinalImprovement:  withTuning.BestFinalFitness - withoutTuning.BestFinalFitness,
+			}
 			result = withoutTuning
 		}
 	} else {
@@ -304,8 +342,6 @@ func (c *Client) Run(ctx context.Context, req RunRequest) (RunSummary, error) {
 		}
 	}
 
-	now := time.Now().UTC()
-	runID := fmt.Sprintf("%s-%d-%d", req.Scape, req.Seed, now.Unix())
 	top := make([]stats.TopGenome, 0, len(result.TopFinal))
 	for i, scored := range result.TopFinal {
 		top = append(top, stats.TopGenome{Rank: i + 1, Fitness: scored.Fitness, Genome: scored.Genome})
@@ -468,6 +504,58 @@ func (c *Client) Export(_ context.Context, req ExportRequest) (ExportSummary, er
 		return ExportSummary{}, err
 	}
 	return ExportSummary{RunID: runID, Directory: filepath.Clean(exportedDir)}, nil
+}
+
+func (c *Client) Lineage(ctx context.Context, req LineageRequest) ([]LineageItem, error) {
+	if req.RunID != "" && req.Latest {
+		return nil, errors.New("use either run id or latest")
+	}
+	if req.Limit < 0 {
+		return nil, errors.New("limit must be >= 0")
+	}
+
+	runID := req.RunID
+	if req.Latest {
+		entries, err := stats.ListRunIndex(c.benchmarksDir)
+		if err != nil {
+			return nil, err
+		}
+		if len(entries) == 0 {
+			return nil, errors.New("no runs available")
+		}
+		runID = entries[0].RunID
+	}
+	if runID == "" {
+		return nil, errors.New("lineage requires run id or latest")
+	}
+
+	if _, err := c.ensurePolis(ctx); err != nil {
+		return nil, err
+	}
+	lineage, ok, err := c.store.GetLineage(ctx, runID)
+	if err != nil {
+		return nil, err
+	}
+	if !ok {
+		return nil, fmt.Errorf("lineage not found for run id: %s", runID)
+	}
+
+	if req.Limit > 0 && len(lineage) > req.Limit {
+		lineage = lineage[:req.Limit]
+	}
+
+	out := make([]LineageItem, 0, len(lineage))
+	for _, rec := range lineage {
+		out = append(out, LineageItem{
+			GenomeID:    rec.GenomeID,
+			ParentID:    rec.ParentID,
+			Generation:  rec.Generation,
+			Operation:   rec.Operation,
+			Fingerprint: rec.Fingerprint,
+			Summary:     rec.Summary,
+		})
+	}
+	return out, nil
 }
 
 func (c *Client) ensurePolis(ctx context.Context) (*platform.Polis, error) {

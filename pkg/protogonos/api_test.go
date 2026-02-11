@@ -49,6 +49,14 @@ func TestClientRunRunsAndExport(t *testing.T) {
 		t.Fatalf("expected latest run %s in runs list: %+v", summary.RunID, runs)
 	}
 
+	lineage, err := client.Lineage(context.Background(), LineageRequest{RunID: summary.RunID, Limit: 10})
+	if err != nil {
+		t.Fatalf("lineage: %v", err)
+	}
+	if len(lineage) == 0 {
+		t.Fatal("expected non-empty lineage")
+	}
+
 	exported, err := client.Export(context.Background(), ExportRequest{Latest: true})
 	if err != nil {
 		t.Fatalf("export latest: %v", err)

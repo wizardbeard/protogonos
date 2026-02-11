@@ -19,6 +19,7 @@ type Config struct {
 }
 
 type EvolutionConfig struct {
+	RunID                string
 	ScapeName            string
 	PopulationSize       int
 	Generations          int
@@ -147,11 +148,15 @@ func (p *Polis) RunEvolution(ctx context.Context, cfg EvolutionConfig) (Evolutio
 	for _, scored := range result.FinalPopulation {
 		finalGenomes = append(finalGenomes, scored.Genome)
 	}
-	populationID := fmt.Sprintf("evo:%s:%d", cfg.ScapeName, cfg.Seed)
+	persistenceRunID := cfg.RunID
+	if persistenceRunID == "" {
+		persistenceRunID = fmt.Sprintf("evo:%s:%d", cfg.ScapeName, cfg.Seed)
+	}
+	populationID := persistenceRunID
 	if err := genotype.SavePopulationSnapshot(ctx, p.store, populationID, cfg.Generations, finalGenomes); err != nil {
 		return EvolutionResult{}, err
 	}
-	if err := p.store.SaveLineage(ctx, populationID, toModelLineage(result.Lineage)); err != nil {
+	if err := p.store.SaveLineage(ctx, persistenceRunID, toModelLineage(result.Lineage)); err != nil {
 		return EvolutionResult{}, err
 	}
 
