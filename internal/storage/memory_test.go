@@ -84,3 +84,29 @@ func TestMemoryStoreGenerationDiagnosticsRoundTrip(t *testing.T) {
 		t.Fatalf("unexpected diagnostics: %+v", output)
 	}
 }
+
+func TestMemoryStoreTopGenomesRoundTrip(t *testing.T) {
+	ctx := context.Background()
+	store := NewMemoryStore()
+	if err := store.Init(ctx); err != nil {
+		t.Fatalf("init: %v", err)
+	}
+
+	input := []model.TopGenomeRecord{
+		{Rank: 1, Fitness: 0.9, Genome: model.Genome{ID: "g1"}},
+		{Rank: 2, Fitness: 0.8, Genome: model.Genome{ID: "g2"}},
+	}
+	if err := store.SaveTopGenomes(ctx, "run-1", input); err != nil {
+		t.Fatalf("save top genomes: %v", err)
+	}
+	output, ok, err := store.GetTopGenomes(ctx, "run-1")
+	if err != nil {
+		t.Fatalf("get top genomes: %v", err)
+	}
+	if !ok {
+		t.Fatal("expected persisted top genomes")
+	}
+	if len(output) != len(input) || output[0].Genome.ID != input[0].Genome.ID {
+		t.Fatalf("unexpected top genomes: %+v", output)
+	}
+}

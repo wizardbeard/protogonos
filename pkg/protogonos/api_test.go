@@ -70,6 +70,13 @@ func TestClientRunRunsAndExport(t *testing.T) {
 	if len(diagnostics) == 0 {
 		t.Fatal("expected non-empty diagnostics")
 	}
+	top, err := client.TopGenomes(context.Background(), TopGenomesRequest{RunID: summary.RunID, Limit: 5})
+	if err != nil {
+		t.Fatalf("top genomes: %v", err)
+	}
+	if len(top) == 0 {
+		t.Fatal("expected non-empty top genomes")
+	}
 
 	exported, err := client.Export(context.Background(), ExportRequest{Latest: true})
 	if err != nil {

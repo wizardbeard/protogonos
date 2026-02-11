@@ -55,6 +55,8 @@ func run(ctx context.Context, args []string) error {
 		return runFitness(ctx, args[1:])
 	case "diagnostics":
 		return runDiagnostics(ctx, args[1:])
+	case "top":
+		return runTop(ctx, args[1:])
 	case "export":
 		return runExport(ctx, args[1:])
 	default:
@@ -586,6 +588,61 @@ func runDiagnostics(ctx context.Context, args []string) error {
 	return nil
 }
 
+func runTop(ctx context.Context, args []string) error {
+	fs := flag.NewFlagSet("top", flag.ContinueOnError)
+	runID := fs.String("run-id", "", "run id")
+	latest := fs.Bool("latest", false, "show top genomes for the most recent run from run index")
+	limit := fs.Int("limit", 5, "max top genomes to print (<=0 for all)")
+	storeKind := fs.String("store", storage.DefaultStoreKind(), "store backend: memory|sqlite")
+	dbPath := fs.String("db-path", "protogonos.db", "sqlite database path")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	if *runID != "" && *latest {
+		return errors.New("use either --run-id or --latest, not both")
+	}
+	if *runID == "" && !*latest {
+		return errors.New("top requires --run-id or --latest")
+	}
+
+	client, err := protoapi.New(protoapi.Options{
+		StoreKind:     *storeKind,
+		DBPath:        *dbPath,
+		BenchmarksDir: benchmarksDir,
+		ExportsDir:    exportsDir,
+	})
+	if err != nil {
+		return err
+	}
+	defer func() {
+		_ = client.Close()
+	}()
+
+	top, err := client.TopGenomes(ctx, protoapi.TopGenomesRequest{
+		RunID:  *runID,
+		Latest: *latest,
+		Limit:  *limit,
+	})
+	if err != nil {
+		return err
+	}
+	if len(top) == 0 {
+		fmt.Println("no top genomes")
+		return nil
+	}
+
+	for _, item := range top {
+		fmt.Printf("rank=%d fitness=%.6f genome_id=%s neurons=%d synapses=%d\n",
+			item.Rank,
+			item.Fitness,
+			item.Genome.ID,
+			len(item.Genome.Neurons),
+			len(item.Genome.Synapses),
+		)
+	}
+	return nil
+}
+
 func runBenchmark(ctx context.Context, args []string) error {
 	fs := flag.NewFlagSet("benchmark", flag.ContinueOnError)
 	scapeName := fs.String("scape", "xor", "scape name")
@@ -765,7 +822,7 @@ func defaultMutationPolicy(
 }
 
 func usageError(msg string) error {
-	return fmt.Errorf("%s\nusage: protogonosctl <init|start|run|benchmark|runs|lineage|fitness|diagnostics|export> [flags]", msg)
+	return fmt.Errorf("%s\nusage: protogonosctl <init|start|run|benchmark|runs|lineage|fitness|diagnostics|top|export> [flags]", msg)
 }
 
 func selectionFromName(name string) (evo.Selector, error) {

@@ -14,6 +14,7 @@ type MemoryStore struct {
 	populations map[string]model.Population
 	history     map[string][]float64
 	diagnostics map[string][]model.GenerationDiagnostics
+	topGenomes  map[string][]model.TopGenomeRecord
 	lineage     map[string][]model.LineageRecord
 }
 
@@ -30,6 +31,7 @@ func (s *MemoryStore) Init(_ context.Context) error {
 	s.populations = make(map[string]model.Population)
 	s.history = make(map[string][]float64)
 	s.diagnostics = make(map[string][]model.GenerationDiagnostics)
+	s.topGenomes = make(map[string][]model.TopGenomeRecord)
 	s.lineage = make(map[string][]model.LineageRecord)
 	return nil
 }
@@ -107,6 +109,29 @@ func (s *MemoryStore) GetGenerationDiagnostics(_ context.Context, runID string) 
 	}
 	copied := make([]model.GenerationDiagnostics, len(diagnostics))
 	copy(copied, diagnostics)
+	return copied, true, nil
+}
+
+func (s *MemoryStore) SaveTopGenomes(_ context.Context, runID string, top []model.TopGenomeRecord) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	copied := make([]model.TopGenomeRecord, len(top))
+	copy(copied, top)
+	s.topGenomes[runID] = copied
+	return nil
+}
+
+func (s *MemoryStore) GetTopGenomes(_ context.Context, runID string) ([]model.TopGenomeRecord, bool, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	top, ok := s.topGenomes[runID]
+	if !ok {
+		return nil, false, nil
+	}
+	copied := make([]model.TopGenomeRecord, len(top))
+	copy(copied, top)
 	return copied, true, nil
 }
 

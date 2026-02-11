@@ -227,6 +227,48 @@ func (s *SQLiteStore) GetGenerationDiagnostics(ctx context.Context, runID string
 	return diagnostics, true, nil
 }
 
+func (s *SQLiteStore) SaveTopGenomes(ctx context.Context, runID string, top []model.TopGenomeRecord) error {
+	db, err := s.getDB()
+	if err != nil {
+		return err
+	}
+
+	payload, err := EncodeTopGenomes(top)
+	if err != nil {
+		return err
+	}
+
+	_, err = db.ExecContext(ctx, `
+		INSERT INTO top_genomes (run_id, payload)
+		VALUES (?, ?)
+		ON CONFLICT(run_id) DO UPDATE SET
+			payload = excluded.payload
+	`, runID, payload)
+	return err
+}
+
+func (s *SQLiteStore) GetTopGenomes(ctx context.Context, runID string) ([]model.TopGenomeRecord, bool, error) {
+	db, err := s.getDB()
+	if err != nil {
+		return nil, false, err
+	}
+
+	var payload []byte
+	err = db.QueryRowContext(ctx, `SELECT payload FROM top_genomes WHERE run_id = ?`, runID).Scan(&payload)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, false, nil
+		}
+		return nil, false, err
+	}
+
+	top, err := DecodeTopGenomes(payload)
+	if err != nil {
+		return nil, false, fmt.Errorf("decode top genomes %s: %w", runID, err)
+	}
+	return top, true, nil
+}
+
 func (s *SQLiteStore) SaveLineage(ctx context.Context, runID string, lineage []model.LineageRecord) error {
 	db, err := s.getDB()
 	if err != nil {
@@ -310,6 +352,10 @@ func createTables(ctx context.Context, db *sql.DB) error {
 			payload BLOB NOT NULL
 		);
 		CREATE TABLE IF NOT EXISTS generation_diagnostics (
+			run_id TEXT PRIMARY KEY,
+			payload BLOB NOT NULL
+		);
+		CREATE TABLE IF NOT EXISTS top_genomes (
 			run_id TEXT PRIMARY KEY,
 			payload BLOB NOT NULL
 		);

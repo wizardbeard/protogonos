@@ -89,6 +89,12 @@ type GenerationDiagnostics struct {
 	FingerprintDiversity int     `json:"fingerprint_diversity"`
 }
 
+type TopGenomeRecord struct {
+	Rank    int     `json:"rank"`
+	Fitness float64 `json:"fitness"`
+	Genome  Genome  `json:"genome"`
+}
+
 type ScapeSummary struct {
 	VersionedRecord
 	Name        string  `json:"name"`

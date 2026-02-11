@@ -333,6 +333,24 @@ func TestGenerationDiagnosticsCodecRoundTrip(t *testing.T) {
 	}
 }
 
+func TestTopGenomesCodecRoundTrip(t *testing.T) {
+	input := []model.TopGenomeRecord{
+		{Rank: 1, Fitness: 0.9, Genome: model.Genome{ID: "g1"}},
+		{Rank: 2, Fitness: 0.8, Genome: model.Genome{ID: "g2"}},
+	}
+	encoded, err := EncodeTopGenomes(input)
+	if err != nil {
+		t.Fatalf("encode: %v", err)
+	}
+	decoded, err := DecodeTopGenomes(encoded)
+	if err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if !reflect.DeepEqual(decoded, input) {
+		t.Fatalf("decoded top genomes mismatch: got=%+v want=%+v", decoded, input)
+	}
+}
+
 func TestDecodeGenomeVersionMismatch(t *testing.T) {
 	genome := decodeGenomeFixture(t, "minimal_genome_v1.json")
 	genome.CodecVersion++

@@ -115,6 +115,18 @@ func DecodeGenerationDiagnostics(data []byte) ([]model.GenerationDiagnostics, er
 	return diagnostics, nil
 }
 
+func EncodeTopGenomes(top []model.TopGenomeRecord) ([]byte, error) {
+	return json.Marshal(top)
+}
+
+func DecodeTopGenomes(data []byte) ([]model.TopGenomeRecord, error) {
+	var top []model.TopGenomeRecord
+	if err := json.Unmarshal(data, &top); err != nil {
+		return nil, err
+	}
+	return top, nil
+}
+
 func checkVersion(v model.VersionedRecord) error {
 	if v.SchemaVersion != CurrentSchemaVersion || v.CodecVersion != CurrentCodecVersion {
 		return ErrVersionMismatch

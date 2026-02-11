@@ -181,6 +181,9 @@ func (p *Polis) RunEvolution(ctx context.Context, cfg EvolutionConfig) (Evolutio
 		}
 		topFinal = append(topFinal, ranked[:topCount]...)
 	}
+	if err := p.store.SaveTopGenomes(ctx, persistenceRunID, toModelTopGenomes(topFinal)); err != nil {
+		return EvolutionResult{}, err
+	}
 
 	return EvolutionResult{
 		BestByGeneration:      result.BestByGeneration,
@@ -228,6 +231,18 @@ func toModelDiagnostics(diags []evo.GenerationDiagnostics) []model.GenerationDia
 			MinFitness:           d.MinFitness,
 			SpeciesCount:         d.SpeciesCount,
 			FingerprintDiversity: d.FingerprintDiversity,
+		})
+	}
+	return out
+}
+
+func toModelTopGenomes(top []evo.ScoredGenome) []model.TopGenomeRecord {
+	out := make([]model.TopGenomeRecord, 0, len(top))
+	for i, item := range top {
+		out = append(out, model.TopGenomeRecord{
+			Rank:    i + 1,
+			Fitness: item.Fitness,
+			Genome:  item.Genome,
 		})
 	}
 	return out

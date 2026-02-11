@@ -117,6 +117,16 @@ func TestPolisRunEvolution(t *testing.T) {
 	if len(diagnostics) != len(result.BestByGeneration) {
 		t.Fatalf("diagnostics length mismatch: persisted=%d result=%d", len(diagnostics), len(result.BestByGeneration))
 	}
+	top, ok, err := store.GetTopGenomes(context.Background(), "evo:linear:1")
+	if err != nil {
+		t.Fatalf("load persisted top genomes: %v", err)
+	}
+	if !ok {
+		t.Fatal("expected persisted top genomes")
+	}
+	if len(top) == 0 {
+		t.Fatal("expected at least one persisted top genome")
+	}
 }
 
 func linearGenome(id string, weight float64) model.Genome {

@@ -321,6 +321,51 @@ func TestDiagnosticsCommandSQLiteReadsPersistedDiagnostics(t *testing.T) {
 	}
 }
 
+func TestTopCommandSQLiteReadsPersistedTopGenomes(t *testing.T) {
+	origWD, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("getwd: %v", err)
+	}
+	workdir := t.TempDir()
+	if err := os.Chdir(workdir); err != nil {
+		t.Fatalf("chdir tempdir: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = os.Chdir(origWD)
+	})
+
+	dbPath := filepath.Join(workdir, "protogonos.db")
+	runArgs := []string{
+		"run",
+		"--store", "sqlite",
+		"--db-path", dbPath,
+		"--scape", "xor",
+		"--pop", "6",
+		"--gens", "2",
+		"--seed", "44",
+		"--workers", "2",
+	}
+	if err := run(context.Background(), runArgs); err != nil {
+		t.Fatalf("run command: %v", err)
+	}
+
+	out, err := captureStdout(func() error {
+		return run(context.Background(), []string{
+			"top",
+			"--store", "sqlite",
+			"--db-path", dbPath,
+			"--latest",
+			"--limit", "2",
+		})
+	})
+	if err != nil {
+		t.Fatalf("top command: %v", err)
+	}
+	if !strings.Contains(out, "rank=1") || !strings.Contains(out, "genome_id=") {
+		t.Fatalf("unexpected top output: %s", out)
+	}
+}
+
 func TestBenchmarkCommandWritesSummary(t *testing.T) {
 	origWD, err := os.Getwd()
 	if err != nil {

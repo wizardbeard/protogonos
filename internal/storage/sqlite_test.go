@@ -100,6 +100,23 @@ func TestSQLiteStoreGenomeAndPopulationRoundTrip(t *testing.T) {
 		t.Fatalf("unexpected diagnostics loaded: %+v", loadedDiagnostics)
 	}
 
+	top := []model.TopGenomeRecord{
+		{Rank: 1, Fitness: 0.9, Genome: model.Genome{ID: "g1"}},
+	}
+	if err := store.SaveTopGenomes(ctx, "run-1", top); err != nil {
+		t.Fatalf("save top genomes: %v", err)
+	}
+	loadedTop, ok, err := store.GetTopGenomes(ctx, "run-1")
+	if err != nil {
+		t.Fatalf("get top genomes: %v", err)
+	}
+	if !ok {
+		t.Fatal("expected top genomes run-1")
+	}
+	if len(loadedTop) != 1 || loadedTop[0].Rank != 1 {
+		t.Fatalf("unexpected top genomes loaded: %+v", loadedTop)
+	}
+
 	lineage := []model.LineageRecord{
 		{
 			VersionedRecord: model.VersionedRecord{SchemaVersion: CurrentSchemaVersion, CodecVersion: CurrentCodecVersion},
