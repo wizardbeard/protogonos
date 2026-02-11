@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"math/rand"
 
+	"protogonos/internal/genotype"
 	"protogonos/internal/model"
 )
 
@@ -390,12 +391,7 @@ func (o RemoveNeuron) Apply(_ context.Context, genome model.Genome) (model.Genom
 }
 
 func cloneGenome(g model.Genome) model.Genome {
-	out := g
-	out.Neurons = append([]model.Neuron(nil), g.Neurons...)
-	out.Synapses = append([]model.Synapse(nil), g.Synapses...)
-	out.SensorIDs = append([]string(nil), g.SensorIDs...)
-	out.ActuatorIDs = append([]string(nil), g.ActuatorIDs...)
-	return out
+	return genotype.CloneGenome(g)
 }
 
 func hasNeuron(g model.Genome, id string) bool {

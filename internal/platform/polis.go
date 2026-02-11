@@ -7,6 +7,7 @@ import (
 	"sync"
 
 	"protogonos/internal/evo"
+	"protogonos/internal/genotype"
 	"protogonos/internal/model"
 	"protogonos/internal/scape"
 	"protogonos/internal/storage"
@@ -140,6 +141,14 @@ func (p *Polis) RunEvolution(ctx context.Context, cfg EvolutionConfig) (Evolutio
 
 	result, err := monitor.Run(ctx, cfg.Initial)
 	if err != nil {
+		return EvolutionResult{}, err
+	}
+	finalGenomes := make([]model.Genome, 0, len(result.FinalPopulation))
+	for _, scored := range result.FinalPopulation {
+		finalGenomes = append(finalGenomes, scored.Genome)
+	}
+	populationID := fmt.Sprintf("evo:%s:%d", cfg.ScapeName, cfg.Seed)
+	if err := genotype.SavePopulationSnapshot(ctx, p.store, populationID, cfg.Generations, finalGenomes); err != nil {
 		return EvolutionResult{}, err
 	}
 

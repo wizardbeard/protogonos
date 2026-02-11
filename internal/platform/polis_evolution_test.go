@@ -29,7 +29,8 @@ func (linearScape) Evaluate(ctx context.Context, a scape.Agent) (scape.Fitness, 
 }
 
 func TestPolisRunEvolution(t *testing.T) {
-	p := NewPolis(Config{Store: storage.NewMemoryStore()})
+	store := storage.NewMemoryStore()
+	p := NewPolis(Config{Store: store})
 	if err := p.Init(context.Background()); err != nil {
 		t.Fatalf("init: %v", err)
 	}
@@ -65,6 +66,23 @@ func TestPolisRunEvolution(t *testing.T) {
 	}
 	if result.BestFinalFitness == 0 {
 		t.Fatalf("expected non-zero final fitness")
+	}
+
+	pop, ok, err := store.GetPopulation(context.Background(), "evo:linear:1")
+	if err != nil {
+		t.Fatalf("load persisted population: %v", err)
+	}
+	if !ok {
+		t.Fatal("expected persisted population snapshot")
+	}
+	if pop.Generation != 5 {
+		t.Fatalf("expected persisted generation=5, got %d", pop.Generation)
+	}
+	if len(pop.AgentIDs) == 0 {
+		t.Fatal("expected persisted population agent ids")
+	}
+	if _, ok, err := store.GetGenome(context.Background(), pop.AgentIDs[0]); err != nil || !ok {
+		t.Fatalf("expected persisted genome, ok=%t err=%v", ok, err)
 	}
 }
 
