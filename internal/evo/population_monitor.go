@@ -9,6 +9,7 @@ import (
 	"sync"
 
 	"protogonos/internal/agent"
+	"protogonos/internal/genotype"
 	protoio "protogonos/internal/io"
 	"protogonos/internal/model"
 	"protogonos/internal/scape"
@@ -335,7 +336,7 @@ func (m *PopulationMonitor) nextGeneration(ctx context.Context, ranked []ScoredG
 	nextGeneration := generation + 1
 
 	for i := 0; i < m.cfg.EliteCount; i++ {
-		elite := cloneGenome(ranked[i].Genome)
+		elite := genotype.CloneAgent(ranked[i].Genome, ranked[i].Genome.ID)
 		sig := ComputeGenomeSignature(elite)
 		next = append(next, elite)
 		lineage = append(lineage, LineageRecord{
@@ -357,8 +358,7 @@ func (m *PopulationMonitor) nextGeneration(ctx context.Context, ranked []ScoredG
 		if err != nil {
 			return nil, nil, err
 		}
-		child := cloneGenome(parent)
-		child.ID = fmt.Sprintf("%s-g%d-i%d", parent.ID, generation+1, len(next))
+		child := genotype.CloneAgent(parent, fmt.Sprintf("%s-g%d-i%d", parent.ID, generation+1, len(next)))
 
 		mutationCount, err := m.cfg.TopologicalMutations.MutationCount(parent, generation, m.rng)
 		if err != nil {
