@@ -121,6 +121,12 @@ type LineageItem struct {
 	Summary     model.LineageSummary
 }
 
+type FitnessHistoryRequest struct {
+	RunID  string
+	Latest bool
+	Limit  int
+}
+
 func New(opts Options) (*Client, error) {
 	storeKind := opts.StoreKind
 	if storeKind == "" {
@@ -556,6 +562,45 @@ func (c *Client) Lineage(ctx context.Context, req LineageRequest) ([]LineageItem
 		})
 	}
 	return out, nil
+}
+
+func (c *Client) FitnessHistory(ctx context.Context, req FitnessHistoryRequest) ([]float64, error) {
+	if req.RunID != "" && req.Latest {
+		return nil, errors.New("use either run id or latest")
+	}
+	if req.Limit < 0 {
+		return nil, errors.New("limit must be >= 0")
+	}
+
+	runID := req.RunID
+	if req.Latest {
+		entries, err := stats.ListRunIndex(c.benchmarksDir)
+		if err != nil {
+			return nil, err
+		}
+		if len(entries) == 0 {
+			return nil, errors.New("no runs available")
+		}
+		runID = entries[0].RunID
+	}
+	if runID == "" {
+		return nil, errors.New("fitness history requires run id or latest")
+	}
+
+	if _, err := c.ensurePolis(ctx); err != nil {
+		return nil, err
+	}
+	history, ok, err := c.store.GetFitnessHistory(ctx, runID)
+	if err != nil {
+		return nil, err
+	}
+	if !ok {
+		return nil, fmt.Errorf("fitness history not found for run id: %s", runID)
+	}
+	if req.Limit > 0 && len(history) > req.Limit {
+		history = history[:req.Limit]
+	}
+	return append([]float64(nil), history...), nil
 }
 
 func (c *Client) ensurePolis(ctx context.Context) (*platform.Polis, error) {

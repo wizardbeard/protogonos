@@ -51,6 +51,8 @@ func run(ctx context.Context, args []string) error {
 		return runRuns(ctx, args[1:])
 	case "lineage":
 		return runLineage(ctx, args[1:])
+	case "fitness":
+		return runFitness(ctx, args[1:])
 	case "export":
 		return runExport(ctx, args[1:])
 	default:
@@ -476,6 +478,55 @@ func runLineage(ctx context.Context, args []string) error {
 	return nil
 }
 
+func runFitness(ctx context.Context, args []string) error {
+	fs := flag.NewFlagSet("fitness", flag.ContinueOnError)
+	runID := fs.String("run-id", "", "run id")
+	latest := fs.Bool("latest", false, "show fitness history for the most recent run from run index")
+	limit := fs.Int("limit", 50, "max generations to print (<=0 for all)")
+	storeKind := fs.String("store", storage.DefaultStoreKind(), "store backend: memory|sqlite")
+	dbPath := fs.String("db-path", "protogonos.db", "sqlite database path")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	if *runID != "" && *latest {
+		return errors.New("use either --run-id or --latest, not both")
+	}
+	if *runID == "" && !*latest {
+		return errors.New("fitness requires --run-id or --latest")
+	}
+
+	client, err := protoapi.New(protoapi.Options{
+		StoreKind:     *storeKind,
+		DBPath:        *dbPath,
+		BenchmarksDir: benchmarksDir,
+		ExportsDir:    exportsDir,
+	})
+	if err != nil {
+		return err
+	}
+	defer func() {
+		_ = client.Close()
+	}()
+
+	history, err := client.FitnessHistory(ctx, protoapi.FitnessHistoryRequest{
+		RunID:  *runID,
+		Latest: *latest,
+		Limit:  *limit,
+	})
+	if err != nil {
+		return err
+	}
+	if len(history) == 0 {
+		fmt.Println("no fitness history")
+		return nil
+	}
+
+	for i, best := range history {
+		fmt.Printf("generation=%d best_fitness=%.6f\n", i+1, best)
+	}
+	return nil
+}
+
 func runBenchmark(ctx context.Context, args []string) error {
 	fs := flag.NewFlagSet("benchmark", flag.ContinueOnError)
 	scapeName := fs.String("scape", "xor", "scape name")
@@ -655,7 +706,7 @@ func defaultMutationPolicy(
 }
 
 func usageError(msg string) error {
-	return fmt.Errorf("%s\nusage: protogonosctl <init|start|run|benchmark|runs|lineage|export> [flags]", msg)
+	return fmt.Errorf("%s\nusage: protogonosctl <init|start|run|benchmark|runs|lineage|fitness|export> [flags]", msg)
 }
 
 func selectionFromName(name string) (evo.Selector, error) {

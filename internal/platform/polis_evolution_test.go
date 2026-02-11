@@ -97,6 +97,16 @@ func TestPolisRunEvolution(t *testing.T) {
 	if len(lineage) != len(result.Lineage) {
 		t.Fatalf("lineage count mismatch: persisted=%d result=%d", len(lineage), len(result.Lineage))
 	}
+	history, ok, err := store.GetFitnessHistory(context.Background(), "evo:linear:1")
+	if err != nil {
+		t.Fatalf("load persisted history: %v", err)
+	}
+	if !ok {
+		t.Fatal("expected persisted fitness history")
+	}
+	if len(history) != len(result.BestByGeneration) {
+		t.Fatalf("history length mismatch: persisted=%d result=%d", len(history), len(result.BestByGeneration))
+	}
 }
 
 func linearGenome(id string, weight float64) model.Genome {

@@ -35,3 +35,26 @@ func TestMemoryStoreLineageRoundTrip(t *testing.T) {
 		t.Fatalf("unexpected lineage: %+v", output)
 	}
 }
+
+func TestMemoryStoreFitnessHistoryRoundTrip(t *testing.T) {
+	ctx := context.Background()
+	store := NewMemoryStore()
+	if err := store.Init(ctx); err != nil {
+		t.Fatalf("init: %v", err)
+	}
+
+	input := []float64{0.1, 0.2, 0.3}
+	if err := store.SaveFitnessHistory(ctx, "run-1", input); err != nil {
+		t.Fatalf("save history: %v", err)
+	}
+	output, ok, err := store.GetFitnessHistory(ctx, "run-1")
+	if err != nil {
+		t.Fatalf("get history: %v", err)
+	}
+	if !ok {
+		t.Fatal("expected persisted fitness history")
+	}
+	if len(output) != len(input) || output[2] != input[2] {
+		t.Fatalf("unexpected history: %+v", output)
+	}
+}

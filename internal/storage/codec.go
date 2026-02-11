@@ -91,6 +91,18 @@ func DecodeLineage(data []byte) ([]model.LineageRecord, error) {
 	return records, nil
 }
 
+func EncodeFitnessHistory(history []float64) ([]byte, error) {
+	return json.Marshal(history)
+}
+
+func DecodeFitnessHistory(data []byte) ([]float64, error) {
+	var history []float64
+	if err := json.Unmarshal(data, &history); err != nil {
+		return nil, err
+	}
+	return history, nil
+}
+
 func checkVersion(v model.VersionedRecord) error {
 	if v.SchemaVersion != CurrentSchemaVersion || v.CodecVersion != CurrentCodecVersion {
 		return ErrVersionMismatch

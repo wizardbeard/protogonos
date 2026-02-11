@@ -300,6 +300,21 @@ func TestLineageCodecVersionMismatch(t *testing.T) {
 	}
 }
 
+func TestFitnessHistoryCodecRoundTrip(t *testing.T) {
+	input := []float64{0.1, 0.4, 0.8}
+	encoded, err := EncodeFitnessHistory(input)
+	if err != nil {
+		t.Fatalf("encode: %v", err)
+	}
+	decoded, err := DecodeFitnessHistory(encoded)
+	if err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if !reflect.DeepEqual(decoded, input) {
+		t.Fatalf("decoded history mismatch: got=%+v want=%+v", decoded, input)
+	}
+}
+
 func TestDecodeGenomeVersionMismatch(t *testing.T) {
 	genome := decodeGenomeFixture(t, "minimal_genome_v1.json")
 	genome.CodecVersion++

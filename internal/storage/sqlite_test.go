@@ -68,6 +68,21 @@ func TestSQLiteStoreGenomeAndPopulationRoundTrip(t *testing.T) {
 		t.Fatalf("unexpected population loaded: %+v", loadedPopulation)
 	}
 
+	history := []float64{0.5, 0.7, 0.9}
+	if err := store.SaveFitnessHistory(ctx, "run-1", history); err != nil {
+		t.Fatalf("save history: %v", err)
+	}
+	loadedHistory, ok, err := store.GetFitnessHistory(ctx, "run-1")
+	if err != nil {
+		t.Fatalf("get history: %v", err)
+	}
+	if !ok {
+		t.Fatal("expected fitness history run-1")
+	}
+	if len(loadedHistory) != len(history) || loadedHistory[1] != history[1] {
+		t.Fatalf("unexpected history loaded: %+v", loadedHistory)
+	}
+
 	lineage := []model.LineageRecord{
 		{
 			VersionedRecord: model.VersionedRecord{SchemaVersion: CurrentSchemaVersion, CodecVersion: CurrentCodecVersion},

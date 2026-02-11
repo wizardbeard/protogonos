@@ -56,6 +56,13 @@ func TestClientRunRunsAndExport(t *testing.T) {
 	if len(lineage) == 0 {
 		t.Fatal("expected non-empty lineage")
 	}
+	history, err := client.FitnessHistory(context.Background(), FitnessHistoryRequest{RunID: summary.RunID, Limit: 10})
+	if err != nil {
+		t.Fatalf("fitness history: %v", err)
+	}
+	if len(history) == 0 {
+		t.Fatal("expected non-empty fitness history")
+	}
 
 	exported, err := client.Export(context.Background(), ExportRequest{Latest: true})
 	if err != nil {

@@ -156,6 +156,9 @@ func (p *Polis) RunEvolution(ctx context.Context, cfg EvolutionConfig) (Evolutio
 	if err := genotype.SavePopulationSnapshot(ctx, p.store, populationID, cfg.Generations, finalGenomes); err != nil {
 		return EvolutionResult{}, err
 	}
+	if err := p.store.SaveFitnessHistory(ctx, persistenceRunID, result.BestByGeneration); err != nil {
+		return EvolutionResult{}, err
+	}
 	if err := p.store.SaveLineage(ctx, persistenceRunID, toModelLineage(result.Lineage)); err != nil {
 		return EvolutionResult{}, err
 	}

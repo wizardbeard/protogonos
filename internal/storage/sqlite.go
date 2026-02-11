@@ -143,6 +143,48 @@ func (s *SQLiteStore) GetPopulation(ctx context.Context, id string) (model.Popul
 	return population, true, nil
 }
 
+func (s *SQLiteStore) SaveFitnessHistory(ctx context.Context, runID string, history []float64) error {
+	db, err := s.getDB()
+	if err != nil {
+		return err
+	}
+
+	payload, err := EncodeFitnessHistory(history)
+	if err != nil {
+		return err
+	}
+
+	_, err = db.ExecContext(ctx, `
+		INSERT INTO fitness_history (run_id, payload)
+		VALUES (?, ?)
+		ON CONFLICT(run_id) DO UPDATE SET
+			payload = excluded.payload
+	`, runID, payload)
+	return err
+}
+
+func (s *SQLiteStore) GetFitnessHistory(ctx context.Context, runID string) ([]float64, bool, error) {
+	db, err := s.getDB()
+	if err != nil {
+		return nil, false, err
+	}
+
+	var payload []byte
+	err = db.QueryRowContext(ctx, `SELECT payload FROM fitness_history WHERE run_id = ?`, runID).Scan(&payload)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, false, nil
+		}
+		return nil, false, err
+	}
+
+	history, err := DecodeFitnessHistory(payload)
+	if err != nil {
+		return nil, false, fmt.Errorf("decode fitness history %s: %w", runID, err)
+	}
+	return history, true, nil
+}
+
 func (s *SQLiteStore) SaveLineage(ctx context.Context, runID string, lineage []model.LineageRecord) error {
 	db, err := s.getDB()
 	if err != nil {
@@ -219,6 +261,10 @@ func createTables(ctx context.Context, db *sql.DB) error {
 			id TEXT PRIMARY KEY,
 			schema_version INTEGER NOT NULL,
 			codec_version INTEGER NOT NULL,
+			payload BLOB NOT NULL
+		);
+		CREATE TABLE IF NOT EXISTS fitness_history (
+			run_id TEXT PRIMARY KEY,
 			payload BLOB NOT NULL
 		);
 		CREATE TABLE IF NOT EXISTS lineage (
