@@ -87,6 +87,10 @@ type GenerationDiagnostics struct {
 	MinFitness           float64 `json:"min_fitness"`
 	SpeciesCount         int     `json:"species_count"`
 	FingerprintDiversity int     `json:"fingerprint_diversity"`
+	SpeciationThreshold  float64 `json:"speciation_threshold"`
+	TargetSpeciesCount   int     `json:"target_species_count"`
+	MeanSpeciesSize      float64 `json:"mean_species_size"`
+	LargestSpeciesSize   int     `json:"largest_species_size"`
 }
 
 type TopGenomeRecord struct {

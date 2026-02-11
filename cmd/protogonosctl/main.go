@@ -592,13 +592,17 @@ func runDiagnostics(ctx context.Context, args []string) error {
 	}
 
 	for _, d := range diagnostics {
-		fmt.Printf("generation=%d best=%.6f mean=%.6f min=%.6f species=%d fingerprints=%d\n",
+		fmt.Printf("generation=%d best=%.6f mean=%.6f min=%.6f species=%d fingerprints=%d threshold=%.4f target_species=%d mean_species_size=%.2f largest_species=%d\n",
 			d.Generation,
 			d.BestFitness,
 			d.MeanFitness,
 			d.MinFitness,
 			d.SpeciesCount,
 			d.FingerprintDiversity,
+			d.SpeciationThreshold,
+			d.TargetSpeciesCount,
+			d.MeanSpeciesSize,
+			d.LargestSpeciesSize,
 		)
 	}
 	return nil

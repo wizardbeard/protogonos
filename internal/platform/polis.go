@@ -236,6 +236,10 @@ func toModelDiagnostics(diags []evo.GenerationDiagnostics) []model.GenerationDia
 			MinFitness:           d.MinFitness,
 			SpeciesCount:         d.SpeciesCount,
 			FingerprintDiversity: d.FingerprintDiversity,
+			SpeciationThreshold:  d.SpeciationThreshold,
+			TargetSpeciesCount:   d.TargetSpeciesCount,
+			MeanSpeciesSize:      d.MeanSpeciesSize,
+			LargestSpeciesSize:   d.LargestSpeciesSize,
 		})
 	}
 	return out

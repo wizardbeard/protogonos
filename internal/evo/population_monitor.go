@@ -37,6 +37,10 @@ type GenerationDiagnostics struct {
 	MinFitness           float64 `json:"min_fitness"`
 	SpeciesCount         int     `json:"species_count"`
 	FingerprintDiversity int     `json:"fingerprint_diversity"`
+	SpeciationThreshold  float64 `json:"speciation_threshold"`
+	TargetSpeciesCount   int     `json:"target_species_count"`
+	MeanSpeciesSize      float64 `json:"mean_species_size"`
+	LargestSpeciesSize   int     `json:"largest_species_size"`
 }
 
 type LineageRecord struct {
@@ -68,8 +72,9 @@ type MonitorConfig struct {
 }
 
 type PopulationMonitor struct {
-	cfg MonitorConfig
-	rng *rand.Rand
+	cfg        MonitorConfig
+	rng        *rand.Rand
+	speciation *AdaptiveSpeciation
 }
 
 func NewPopulationMonitor(cfg MonitorConfig) (*PopulationMonitor, error) {
@@ -129,8 +134,9 @@ func NewPopulationMonitor(cfg MonitorConfig) (*PopulationMonitor, error) {
 	}
 
 	return &PopulationMonitor{
-		cfg: cfg,
-		rng: rand.New(rand.NewSource(cfg.Seed)),
+		cfg:        cfg,
+		rng:        rand.New(rand.NewSource(cfg.Seed)),
+		speciation: NewAdaptiveSpeciation(cfg.PopulationSize),
 	}, nil
 }
 
@@ -174,7 +180,7 @@ func (m *PopulationMonitor) Run(ctx context.Context, initial []model.Genome) (Ru
 			return scored[i].Fitness > scored[j].Fitness
 		})
 		bestHistory = append(bestHistory, scored[0].Fitness)
-		diagnostics = append(diagnostics, summarizeGeneration(scored, gen+1))
+		diagnostics = append(diagnostics, m.summarizeGeneration(scored, gen+1))
 
 		var generationLineage []LineageRecord
 		population, generationLineage, err = m.nextGeneration(ctx, scored, gen)
@@ -192,25 +198,25 @@ func (m *PopulationMonitor) Run(ctx context.Context, initial []model.Genome) (Ru
 	}, nil
 }
 
-func summarizeGeneration(scored []ScoredGenome, generation int) GenerationDiagnostics {
+func (m *PopulationMonitor) summarizeGeneration(scored []ScoredGenome, generation int) GenerationDiagnostics {
 	if len(scored) == 0 {
 		return GenerationDiagnostics{Generation: generation}
 	}
 
 	total := 0.0
 	minFitness := scored[0].Fitness
-	species := make(map[string]struct{}, len(scored))
 	fingerprints := make(map[string]struct{}, len(scored))
-	identifier := TopologySpecieIdentifier{}
+	genomes := make([]model.Genome, 0, len(scored))
 	for _, item := range scored {
 		total += item.Fitness
 		if item.Fitness < minFitness {
 			minFitness = item.Fitness
 		}
-		species[identifier.Identify(item.Genome)] = struct{}{}
+		genomes = append(genomes, item.Genome)
 		fingerprint := ComputeGenomeSignature(item.Genome).Fingerprint
 		fingerprints[fingerprint] = struct{}{}
 	}
+	species, speciationStats := m.speciation.Assign(genomes)
 
 	return GenerationDiagnostics{
 		Generation:           generation,
@@ -219,6 +225,10 @@ func summarizeGeneration(scored []ScoredGenome, generation int) GenerationDiagno
 		MinFitness:           minFitness,
 		SpeciesCount:         len(species),
 		FingerprintDiversity: len(fingerprints),
+		SpeciationThreshold:  speciationStats.Threshold,
+		TargetSpeciesCount:   speciationStats.TargetSpeciesCount,
+		MeanSpeciesSize:      speciationStats.MeanSpeciesSize,
+		LargestSpeciesSize:   speciationStats.LargestSpeciesSize,
 	}
 }
 

@@ -95,6 +95,12 @@ func TestPopulationMonitorImprovesFitness(t *testing.T) {
 	if result.GenerationDiagnostics[0].Generation != 1 {
 		t.Fatalf("expected first diagnostics generation=1, got %d", result.GenerationDiagnostics[0].Generation)
 	}
+	if result.GenerationDiagnostics[0].SpeciationThreshold <= 0 {
+		t.Fatalf("expected speciation threshold diagnostics, got %f", result.GenerationDiagnostics[0].SpeciationThreshold)
+	}
+	if result.GenerationDiagnostics[0].TargetSpeciesCount <= 0 {
+		t.Fatalf("expected target species diagnostics, got %d", result.GenerationDiagnostics[0].TargetSpeciesCount)
+	}
 	if len(result.FinalPopulation) != len(initial) {
 		t.Fatalf("final population size mismatch: got=%d want=%d", len(result.FinalPopulation), len(initial))
 	}
