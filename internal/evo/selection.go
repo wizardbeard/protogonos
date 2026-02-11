@@ -20,6 +20,11 @@ type GenerationAwareSelector interface {
 	PickParentForGeneration(rng *rand.Rand, ranked []ScoredGenome, eliteCount, generation int) (model.Genome, error)
 }
 
+type SpeciesAwareGenerationSelector interface {
+	GenerationAwareSelector
+	PickParentForGenerationWithSpecies(rng *rand.Rand, ranked []ScoredGenome, eliteCount, generation int, speciesByGenomeID map[string]string) (model.Genome, error)
+}
+
 // EliteSelector picks uniformly from the top elite set.
 type EliteSelector struct{}
 
@@ -97,13 +102,25 @@ func (SpeciesTournamentSelector) Name() string {
 }
 
 func (s SpeciesTournamentSelector) PickParent(rng *rand.Rand, ranked []ScoredGenome, eliteCount int) (model.Genome, error) {
+	return s.pickParentInternal(rng, ranked, eliteCount, nil)
+}
+
+func (s SpeciesTournamentSelector) PickParentForGeneration(rng *rand.Rand, ranked []ScoredGenome, eliteCount, _ int) (model.Genome, error) {
+	return s.pickParentInternal(rng, ranked, eliteCount, nil)
+}
+
+func (s SpeciesTournamentSelector) PickParentForGenerationWithSpecies(rng *rand.Rand, ranked []ScoredGenome, eliteCount, _ int, speciesByGenomeID map[string]string) (model.Genome, error) {
+	return s.pickParentInternal(rng, ranked, eliteCount, speciesByGenomeID)
+}
+
+func (s SpeciesTournamentSelector) pickParentInternal(rng *rand.Rand, ranked []ScoredGenome, eliteCount int, speciesByGenomeID map[string]string) (model.Genome, error) {
 	if rng == nil {
 		return model.Genome{}, fmt.Errorf("random source is required")
 	}
 	if eliteCount <= 0 || eliteCount > len(ranked) {
 		return model.Genome{}, fmt.Errorf("invalid elite count: %d", eliteCount)
 	}
-	if s.Identifier == nil {
+	if s.Identifier == nil && speciesByGenomeID == nil {
 		return model.Genome{}, fmt.Errorf("species identifier is required")
 	}
 
@@ -119,11 +136,7 @@ func (s SpeciesTournamentSelector) PickParent(rng *rand.Rand, ranked []ScoredGen
 	}
 	pool := ranked[:poolSize]
 
-	bySpecies := make(map[string][]ScoredGenome, poolSize)
-	for _, scored := range pool {
-		key := s.Identifier.Identify(scored.Genome)
-		bySpecies[key] = append(bySpecies[key], scored)
-	}
+	bySpecies := buildSpeciesBuckets(pool, s.Identifier, speciesByGenomeID)
 
 	speciesKeys := make([]string, 0, len(bySpecies))
 	for key := range bySpecies {
@@ -177,13 +190,21 @@ func (s *SpeciesSharedTournamentSelector) PickParent(rng *rand.Rand, ranked []Sc
 }
 
 func (s *SpeciesSharedTournamentSelector) PickParentForGeneration(rng *rand.Rand, ranked []ScoredGenome, eliteCount, generation int) (model.Genome, error) {
+	return s.pickParentInternal(rng, ranked, eliteCount, generation, nil)
+}
+
+func (s *SpeciesSharedTournamentSelector) PickParentForGenerationWithSpecies(rng *rand.Rand, ranked []ScoredGenome, eliteCount, generation int, speciesByGenomeID map[string]string) (model.Genome, error) {
+	return s.pickParentInternal(rng, ranked, eliteCount, generation, speciesByGenomeID)
+}
+
+func (s *SpeciesSharedTournamentSelector) pickParentInternal(rng *rand.Rand, ranked []ScoredGenome, eliteCount, generation int, speciesByGenomeID map[string]string) (model.Genome, error) {
 	if rng == nil {
 		return model.Genome{}, fmt.Errorf("random source is required")
 	}
 	if eliteCount <= 0 || eliteCount > len(ranked) {
 		return model.Genome{}, fmt.Errorf("invalid elite count: %d", eliteCount)
 	}
-	if s.Identifier == nil {
+	if s.Identifier == nil && speciesByGenomeID == nil {
 		return model.Genome{}, fmt.Errorf("species identifier is required")
 	}
 
@@ -199,11 +220,7 @@ func (s *SpeciesSharedTournamentSelector) PickParentForGeneration(rng *rand.Rand
 	}
 	pool := ranked[:poolSize]
 
-	bySpecies := make(map[string][]ScoredGenome, poolSize)
-	for _, scored := range pool {
-		key := s.Identifier.Identify(scored.Genome)
-		bySpecies[key] = append(bySpecies[key], scored)
-	}
+	bySpecies := buildSpeciesBuckets(pool, s.Identifier, speciesByGenomeID)
 	speciesKeys := make([]string, 0, len(bySpecies))
 	for key := range bySpecies {
 		speciesKeys = append(speciesKeys, key)
@@ -302,4 +319,22 @@ func (s *SpeciesSharedTournamentSelector) shouldKeepSpecies(key string, bestFitn
 		return true
 	}
 	return generation-prev.lastImprovedAt <= s.StagnationGenerations
+}
+
+func buildSpeciesBuckets(pool []ScoredGenome, identifier SpecieIdentifier, speciesByGenomeID map[string]string) map[string][]ScoredGenome {
+	bySpecies := make(map[string][]ScoredGenome, len(pool))
+	for _, scored := range pool {
+		key := ""
+		if speciesByGenomeID != nil {
+			key = speciesByGenomeID[scored.Genome.ID]
+		}
+		if key == "" && identifier != nil {
+			key = identifier.Identify(scored.Genome)
+		}
+		if key == "" {
+			key = "species:unknown"
+		}
+		bySpecies[key] = append(bySpecies[key], scored)
+	}
+	return bySpecies
 }

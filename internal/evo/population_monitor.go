@@ -180,10 +180,11 @@ func (m *PopulationMonitor) Run(ctx context.Context, initial []model.Genome) (Ru
 			return scored[i].Fitness > scored[j].Fitness
 		})
 		bestHistory = append(bestHistory, scored[0].Fitness)
-		diagnostics = append(diagnostics, m.summarizeGeneration(scored, gen+1))
+		speciesByGenomeID, speciationStats := m.assignSpecies(scored)
+		diagnostics = append(diagnostics, summarizeGeneration(scored, gen+1, speciationStats))
 
 		var generationLineage []LineageRecord
-		population, generationLineage, err = m.nextGeneration(ctx, scored, gen)
+		population, generationLineage, err = m.nextGeneration(ctx, scored, speciesByGenomeID, gen)
 		if err != nil {
 			return RunResult{}, err
 		}
@@ -198,7 +199,7 @@ func (m *PopulationMonitor) Run(ctx context.Context, initial []model.Genome) (Ru
 	}, nil
 }
 
-func (m *PopulationMonitor) summarizeGeneration(scored []ScoredGenome, generation int) GenerationDiagnostics {
+func summarizeGeneration(scored []ScoredGenome, generation int, speciationStats SpeciationStats) GenerationDiagnostics {
 	if len(scored) == 0 {
 		return GenerationDiagnostics{Generation: generation}
 	}
@@ -206,30 +207,42 @@ func (m *PopulationMonitor) summarizeGeneration(scored []ScoredGenome, generatio
 	total := 0.0
 	minFitness := scored[0].Fitness
 	fingerprints := make(map[string]struct{}, len(scored))
-	genomes := make([]model.Genome, 0, len(scored))
 	for _, item := range scored {
 		total += item.Fitness
 		if item.Fitness < minFitness {
 			minFitness = item.Fitness
 		}
-		genomes = append(genomes, item.Genome)
 		fingerprint := ComputeGenomeSignature(item.Genome).Fingerprint
 		fingerprints[fingerprint] = struct{}{}
 	}
-	species, speciationStats := m.speciation.Assign(genomes)
 
 	return GenerationDiagnostics{
 		Generation:           generation,
 		BestFitness:          scored[0].Fitness,
 		MeanFitness:          total / float64(len(scored)),
 		MinFitness:           minFitness,
-		SpeciesCount:         len(species),
+		SpeciesCount:         speciationStats.SpeciesCount,
 		FingerprintDiversity: len(fingerprints),
 		SpeciationThreshold:  speciationStats.Threshold,
 		TargetSpeciesCount:   speciationStats.TargetSpeciesCount,
 		MeanSpeciesSize:      speciationStats.MeanSpeciesSize,
 		LargestSpeciesSize:   speciationStats.LargestSpeciesSize,
 	}
+}
+
+func (m *PopulationMonitor) assignSpecies(scored []ScoredGenome) (map[string]string, SpeciationStats) {
+	genomes := make([]model.Genome, 0, len(scored))
+	for _, item := range scored {
+		genomes = append(genomes, item.Genome)
+	}
+	bySpecies, stats := m.speciation.Assign(genomes)
+	speciesByGenomeID := make(map[string]string, len(scored))
+	for key, members := range bySpecies {
+		for _, genome := range members {
+			speciesByGenomeID[genome.ID] = key
+		}
+	}
+	return speciesByGenomeID, stats
 }
 
 func (m *PopulationMonitor) evaluatePopulation(ctx context.Context, population []model.Genome, generation int) ([]ScoredGenome, error) {
@@ -395,7 +408,7 @@ func (m *PopulationMonitor) buildSubstrate(genome model.Genome) (substrate.Runti
 	return rt, nil
 }
 
-func (m *PopulationMonitor) nextGeneration(ctx context.Context, ranked []ScoredGenome, generation int) ([]model.Genome, []LineageRecord, error) {
+func (m *PopulationMonitor) nextGeneration(ctx context.Context, ranked []ScoredGenome, speciesByGenomeID map[string]string, generation int) ([]model.Genome, []LineageRecord, error) {
 	next := make([]model.Genome, 0, m.cfg.PopulationSize)
 	lineage := make([]LineageRecord, 0, m.cfg.PopulationSize)
 	nextGeneration := generation + 1
@@ -423,7 +436,9 @@ func (m *PopulationMonitor) nextGeneration(ctx context.Context, ranked []ScoredG
 			parent model.Genome
 			err    error
 		)
-		if generationAware, ok := m.cfg.Selector.(GenerationAwareSelector); ok {
+		if speciesAware, ok := m.cfg.Selector.(SpeciesAwareGenerationSelector); ok {
+			parent, err = speciesAware.PickParentForGenerationWithSpecies(m.rng, ranked, m.cfg.EliteCount, generation, speciesByGenomeID)
+		} else if generationAware, ok := m.cfg.Selector.(GenerationAwareSelector); ok {
 			parent, err = generationAware.PickParentForGeneration(m.rng, ranked, m.cfg.EliteCount, generation)
 		} else {
 			parent, err = m.cfg.Selector.PickParent(m.rng, ranked, m.cfg.EliteCount)

@@ -159,3 +159,71 @@ func TestSpeciesSharedTournamentSelectorFiltersStagnantSpecies(t *testing.T) {
 		t.Fatalf("expected active species %q to be selected", activeSpecies)
 	}
 }
+
+func TestSpeciesTournamentSelectorUsesProvidedSpeciesAssignments(t *testing.T) {
+	scored := []ScoredGenome{
+		{Genome: newLinearGenome("a0", 1), Fitness: 1.0},
+		{Genome: newLinearGenome("a1", 1), Fitness: 0.9},
+		{Genome: newComplexLinearGenome("b0", 1), Fitness: 0.8},
+		{Genome: newComplexLinearGenome("b1", 1), Fitness: 0.7},
+	}
+	speciesByGenomeID := map[string]string{
+		"a0": "sp-1",
+		"b0": "sp-1",
+		"a1": "sp-2",
+		"b1": "sp-2",
+	}
+
+	selector := SpeciesTournamentSelector{
+		Identifier:     TopologySpecieIdentifier{},
+		PoolSize:       len(scored),
+		TournamentSize: 1,
+	}
+	rng := rand.New(rand.NewSource(33))
+	seen := map[string]struct{}{}
+
+	for i := 0; i < 40; i++ {
+		parent, err := selector.PickParentForGenerationWithSpecies(rng, scored, 1, 1, speciesByGenomeID)
+		if err != nil {
+			t.Fatalf("pick parent: %v", err)
+		}
+		seen[speciesByGenomeID[parent.ID]] = struct{}{}
+	}
+	if len(seen) != 2 {
+		t.Fatalf("expected picks from both provided species, got %d", len(seen))
+	}
+}
+
+func TestSpeciesSharedTournamentSelectorUsesProvidedSpeciesAssignments(t *testing.T) {
+	scored := []ScoredGenome{
+		{Genome: newLinearGenome("a0", 1), Fitness: 0.95},
+		{Genome: newComplexLinearGenome("b0", 1), Fitness: 0.85},
+		{Genome: newLinearGenome("a1", 1), Fitness: 0.25},
+		{Genome: newComplexLinearGenome("b1", 1), Fitness: 0.15},
+	}
+	speciesByGenomeID := map[string]string{
+		"a0": "sp-1",
+		"b0": "sp-1",
+		"a1": "sp-2",
+		"b1": "sp-2",
+	}
+
+	selector := &SpeciesSharedTournamentSelector{
+		Identifier:     TopologySpecieIdentifier{},
+		PoolSize:       len(scored),
+		TournamentSize: 1,
+	}
+	rng := rand.New(rand.NewSource(37))
+	countBySpecies := map[string]int{}
+
+	for i := 0; i < 200; i++ {
+		parent, err := selector.PickParentForGenerationWithSpecies(rng, scored, 1, 1, speciesByGenomeID)
+		if err != nil {
+			t.Fatalf("pick parent: %v", err)
+		}
+		countBySpecies[speciesByGenomeID[parent.ID]]++
+	}
+	if countBySpecies["sp-1"] <= countBySpecies["sp-2"] {
+		t.Fatalf("expected fitter provided species to dominate picks: sp-1=%d sp-2=%d", countBySpecies["sp-1"], countBySpecies["sp-2"])
+	}
+}

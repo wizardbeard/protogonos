@@ -31,6 +31,31 @@ func (o failingMutation) Apply(_ context.Context, _ model.Genome) (model.Genome,
 	return model.Genome{}, errors.New("forced failure")
 }
 
+type captureSpeciesSelector struct {
+	gotSpeciesByGenomeID map[string]string
+}
+
+func (captureSpeciesSelector) Name() string { return "capture_species_selector" }
+
+func (captureSpeciesSelector) PickParent(_ *rand.Rand, _ []ScoredGenome, _ int) (model.Genome, error) {
+	return model.Genome{}, errors.New("unexpected non-generation selector path")
+}
+
+func (captureSpeciesSelector) PickParentForGeneration(_ *rand.Rand, _ []ScoredGenome, _ int, _ int) (model.Genome, error) {
+	return model.Genome{}, errors.New("unexpected generation selector path")
+}
+
+func (s *captureSpeciesSelector) PickParentForGenerationWithSpecies(_ *rand.Rand, ranked []ScoredGenome, eliteCount, _ int, speciesByGenomeID map[string]string) (model.Genome, error) {
+	if eliteCount <= 0 || eliteCount > len(ranked) {
+		return model.Genome{}, errors.New("invalid elite count")
+	}
+	s.gotSpeciesByGenomeID = make(map[string]string, len(speciesByGenomeID))
+	for k, v := range speciesByGenomeID {
+		s.gotSpeciesByGenomeID[k] = v
+	}
+	return ranked[0].Genome, nil
+}
+
 type oneDimScape struct{}
 
 func (oneDimScape) Name() string { return "one-dim" }
@@ -479,6 +504,39 @@ func TestPopulationMonitorTournamentSelectorCanPickNonEliteParent(t *testing.T) 
 	}
 	if !seenNonTopParent {
 		t.Fatalf("expected tournament selector to pick non-top parent at least once: %+v", result.Lineage)
+	}
+}
+
+func TestPopulationMonitorPassesAdaptiveSpeciesAssignmentsToSelector(t *testing.T) {
+	initial := []model.Genome{
+		newLinearGenome("g0", 1.0),
+		newLinearGenome("g1", 0.8),
+		newComplexLinearGenome("g2", 0.6),
+		newComplexLinearGenome("g3", 0.4),
+	}
+	selector := &captureSpeciesSelector{}
+	monitor, err := NewPopulationMonitor(MonitorConfig{
+		Scape:           oneDimScape{},
+		Mutation:        namedNoopMutation{name: "noop"},
+		Selector:        selector,
+		PopulationSize:  len(initial),
+		EliteCount:      1,
+		Generations:     1,
+		Workers:         1,
+		Seed:            77,
+		InputNeuronIDs:  []string{"i"},
+		OutputNeuronIDs: []string{"o"},
+	})
+	if err != nil {
+		t.Fatalf("new monitor: %v", err)
+	}
+
+	_, err = monitor.Run(context.Background(), initial)
+	if err != nil {
+		t.Fatalf("run: %v", err)
+	}
+	if len(selector.gotSpeciesByGenomeID) != len(initial) {
+		t.Fatalf("expected species assignments for all genomes, got=%d want=%d", len(selector.gotSpeciesByGenomeID), len(initial))
 	}
 }
 
