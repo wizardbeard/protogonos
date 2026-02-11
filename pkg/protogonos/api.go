@@ -803,6 +803,12 @@ func selectionFromName(name string) (evo.Selector, error) {
 			PoolSize:       0,
 			TournamentSize: 3,
 		}, nil
+	case "species_shared_tournament":
+		return &evo.SpeciesSharedTournamentSelector{
+			Identifier:     evo.TopologySpecieIdentifier{},
+			PoolSize:       0,
+			TournamentSize: 3,
+		}, nil
 	default:
 		return nil, fmt.Errorf("unsupported selection strategy: %s", name)
 	}

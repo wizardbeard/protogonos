@@ -409,7 +409,15 @@ func (m *PopulationMonitor) nextGeneration(ctx context.Context, ranked []ScoredG
 			return nil, nil, err
 		}
 
-		parent, err := m.cfg.Selector.PickParent(m.rng, ranked, m.cfg.EliteCount)
+		var (
+			parent model.Genome
+			err    error
+		)
+		if generationAware, ok := m.cfg.Selector.(GenerationAwareSelector); ok {
+			parent, err = generationAware.PickParentForGeneration(m.rng, ranked, m.cfg.EliteCount, generation)
+		} else {
+			parent, err = m.cfg.Selector.PickParent(m.rng, ranked, m.cfg.EliteCount)
+		}
 		if err != nil {
 			return nil, nil, err
 		}

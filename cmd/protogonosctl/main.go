@@ -130,7 +130,7 @@ func runRun(ctx context.Context, args []string) error {
 	dbPath := fs.String("db-path", "protogonos.db", "sqlite database path")
 	enableTuning := fs.Bool("tuning", false, "enable exoself tuning")
 	compareTuning := fs.Bool("compare-tuning", false, "run with and without tuning and emit side-by-side metrics")
-	selectionName := fs.String("selection", "elite", "parent selection strategy: elite|tournament|species_tournament")
+	selectionName := fs.String("selection", "elite", "parent selection strategy: elite|tournament|species_tournament|species_shared_tournament")
 	postprocessorName := fs.String("fitness-postprocessor", "none", "fitness postprocessor: none|size_proportional|novelty_proportional")
 	topoPolicyName := fs.String("topo-policy", "const", "topological mutation count policy: const|ncount_linear|ncount_exponential")
 	topoCount := fs.Int("topo-count", 1, "mutation count for topo-policy=const")
@@ -706,7 +706,7 @@ func runBenchmark(ctx context.Context, args []string) error {
 	storeKind := fs.String("store", storage.DefaultStoreKind(), "store backend: memory|sqlite")
 	dbPath := fs.String("db-path", "protogonos.db", "sqlite database path")
 	enableTuning := fs.Bool("tuning", false, "enable exoself tuning")
-	selectionName := fs.String("selection", "elite", "parent selection strategy: elite|tournament|species_tournament")
+	selectionName := fs.String("selection", "elite", "parent selection strategy: elite|tournament|species_tournament|species_shared_tournament")
 	postprocessorName := fs.String("fitness-postprocessor", "none", "fitness postprocessor: none|size_proportional|novelty_proportional")
 	topoPolicyName := fs.String("topo-policy", "const", "topological mutation count policy: const|ncount_linear|ncount_exponential")
 	topoCount := fs.Int("topo-count", 1, "mutation count for topo-policy=const")
@@ -895,6 +895,12 @@ func selectionFromName(name string) (evo.Selector, error) {
 		return evo.TournamentSelector{PoolSize: 0, TournamentSize: 3}, nil
 	case "species_tournament":
 		return evo.SpeciesTournamentSelector{
+			Identifier:     evo.TopologySpecieIdentifier{},
+			PoolSize:       0,
+			TournamentSize: 3,
+		}, nil
+	case "species_shared_tournament":
+		return &evo.SpeciesSharedTournamentSelector{
 			Identifier:     evo.TopologySpecieIdentifier{},
 			PoolSize:       0,
 			TournamentSize: 3,
