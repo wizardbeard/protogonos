@@ -164,10 +164,27 @@ func ListRunIndex(baseDir string) ([]RunIndexEntry, error) {
 		return nil, err
 	}
 
-	sort.Slice(entries, func(i, j int) bool {
-		return entries[i].CreatedAtUTC > entries[j].CreatedAtUTC
+	type indexedEntry struct {
+		entry RunIndexEntry
+		idx   int
+	}
+	indexed := make([]indexedEntry, len(entries))
+	for i := range entries {
+		indexed[i] = indexedEntry{entry: entries[i], idx: i}
+	}
+	sort.Slice(indexed, func(i, j int) bool {
+		if indexed[i].entry.CreatedAtUTC == indexed[j].entry.CreatedAtUTC {
+			// Prefer later appended entries for equal timestamps.
+			return indexed[i].idx > indexed[j].idx
+		}
+		return indexed[i].entry.CreatedAtUTC > indexed[j].entry.CreatedAtUTC
 	})
-	return entries, nil
+
+	sorted := make([]RunIndexEntry, 0, len(indexed))
+	for _, item := range indexed {
+		sorted = append(sorted, item.entry)
+	}
+	return sorted, nil
 }
 
 func ExportRunArtifacts(baseDir, runID, outDir string) (string, error) {

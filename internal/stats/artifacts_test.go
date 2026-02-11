@@ -175,6 +175,29 @@ func TestRunIndexAppendListAndUpsert(t *testing.T) {
 	}
 }
 
+func TestRunIndexEqualTimestampPrefersLaterAppend(t *testing.T) {
+	baseDir := t.TempDir()
+	ts := "2026-02-10T12:00:00Z"
+
+	if err := AppendRunIndex(baseDir, RunIndexEntry{RunID: "run-a", CreatedAtUTC: ts}); err != nil {
+		t.Fatalf("append run-a: %v", err)
+	}
+	if err := AppendRunIndex(baseDir, RunIndexEntry{RunID: "run-b", CreatedAtUTC: ts}); err != nil {
+		t.Fatalf("append run-b: %v", err)
+	}
+
+	entries, err := ListRunIndex(baseDir)
+	if err != nil {
+		t.Fatalf("list: %v", err)
+	}
+	if len(entries) != 2 {
+		t.Fatalf("expected 2 entries, got %d", len(entries))
+	}
+	if entries[0].RunID != "run-b" {
+		t.Fatalf("expected latest appended run-b first, got %+v", entries)
+	}
+}
+
 func TestReadTuningComparison(t *testing.T) {
 	baseDir := t.TempDir()
 	runID := "run-compare"

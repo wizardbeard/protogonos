@@ -422,7 +422,7 @@ func (c *Client) Run(ctx context.Context, req RunRequest) (RunSummary, error) {
 		EliteCount:       eliteCount,
 		TuningEnabled:    req.EnableTuning,
 		FinalBestFitness: result.BestFinalFitness,
-		CreatedAtUTC:     now.Format(time.RFC3339),
+		CreatedAtUTC:     now.Format(time.RFC3339Nano),
 	}); err != nil {
 		return RunSummary{}, err
 	}
