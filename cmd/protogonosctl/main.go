@@ -11,8 +11,7 @@ import (
 	"time"
 
 	"protogonos/internal/evo"
-	protoio "protogonos/internal/io"
-	"protogonos/internal/model"
+	"protogonos/internal/genotype"
 	"protogonos/internal/morphology"
 	"protogonos/internal/platform"
 	"protogonos/internal/scape"
@@ -173,7 +172,7 @@ func runRun(ctx context.Context, args []string) error {
 		return err
 	}
 
-	_, inIDs, outIDs, err := seedPopulationForScape(*scapeName, *population, *seed)
+	seedPopulation, err := genotype.ConstructSeedPopulation(*scapeName, *population, *seed)
 	if err != nil {
 		return err
 	}
@@ -188,7 +187,7 @@ func runRun(ctx context.Context, args []string) error {
 
 	runEvolution := func(useTuning bool) (platform.EvolutionResult, error) {
 		mutation := &evo.PerturbRandomWeight{Rand: rand.New(rand.NewSource(*seed + 1000)), MaxDelta: 1.0}
-		policy := defaultMutationPolicy(*seed, inIDs, outIDs, *wPerturb, *wAddSynapse, *wRemoveSynapse, *wAddNeuron, *wRemoveNeuron)
+		policy := defaultMutationPolicy(*seed, seedPopulation.InputNeuronIDs, seedPopulation.OutputNeuronIDs, *wPerturb, *wAddSynapse, *wRemoveSynapse, *wAddNeuron, *wRemoveNeuron)
 		var tuner tuning.Tuner
 		if useTuning {
 			tuner = &tuning.Exoself{
@@ -197,10 +196,6 @@ func runRun(ctx context.Context, args []string) error {
 				StepSize: *tuneStepSize,
 			}
 		}
-		initialRun, _, _, err := seedPopulationForScape(*scapeName, *population, *seed)
-		if err != nil {
-			return platform.EvolutionResult{}, err
-		}
 		return polis.RunEvolution(ctx, platform.EvolutionConfig{
 			ScapeName:            *scapeName,
 			PopulationSize:       *population,
@@ -208,8 +203,8 @@ func runRun(ctx context.Context, args []string) error {
 			EliteCount:           eliteCount,
 			Workers:              *workers,
 			Seed:                 *seed,
-			InputNeuronIDs:       inIDs,
-			OutputNeuronIDs:      outIDs,
+			InputNeuronIDs:       seedPopulation.InputNeuronIDs,
+			OutputNeuronIDs:      seedPopulation.OutputNeuronIDs,
 			Mutation:             mutation,
 			MutationPolicy:       policy,
 			Selector:             selector,
@@ -217,7 +212,7 @@ func runRun(ctx context.Context, args []string) error {
 			TopologicalMutations: topoPolicy,
 			Tuner:                tuner,
 			TuneAttempts:         *tuneAttempts,
-			Initial:              initialRun,
+			Initial:              seedPopulation.Genomes,
 		})
 	}
 
@@ -546,71 +541,6 @@ func runExport(_ context.Context, args []string) error {
 
 	fmt.Printf("exported run_id=%s to=%s\n", *runID, filepath.Clean(exportedDir))
 	return nil
-}
-
-func seedPopulationForScape(scapeName string, size int, seed int64) ([]model.Genome, []string, []string, error) {
-	switch scapeName {
-	case "xor":
-		return seedXORPopulation(size, seed), []string{"i1", "i2"}, []string{"o"}, nil
-	case "regression-mimic":
-		return seedRegressionMimicPopulation(size, seed), []string{"i"}, []string{"o"}, nil
-	default:
-		return nil, nil, nil, fmt.Errorf("unsupported scape: %s", scapeName)
-	}
-}
-
-func seedXORPopulation(size int, seed int64) []model.Genome {
-	rng := rand.New(rand.NewSource(seed))
-	population := make([]model.Genome, 0, size)
-	for i := 0; i < size; i++ {
-		population = append(population, model.Genome{
-			VersionedRecord: model.VersionedRecord{SchemaVersion: storage.CurrentSchemaVersion, CodecVersion: storage.CurrentCodecVersion},
-			ID:              fmt.Sprintf("xor-g0-%d", i),
-			SensorIDs:       []string{protoio.XORInputLeftSensorName, protoio.XORInputRightSensorName},
-			ActuatorIDs:     []string{protoio.XOROutputActuatorName},
-			Neurons: []model.Neuron{
-				{ID: "i1", Activation: "identity", Bias: 0},
-				{ID: "i2", Activation: "identity", Bias: 0},
-				{ID: "h1", Activation: "sigmoid", Bias: jitter(rng, 2)},
-				{ID: "h2", Activation: "sigmoid", Bias: jitter(rng, 2)},
-				{ID: "o", Activation: "sigmoid", Bias: jitter(rng, 2)},
-			},
-			Synapses: []model.Synapse{
-				{ID: "s1", From: "i1", To: "h1", Weight: jitter(rng, 6), Enabled: true},
-				{ID: "s2", From: "i2", To: "h1", Weight: jitter(rng, 6), Enabled: true},
-				{ID: "s3", From: "i1", To: "h2", Weight: jitter(rng, 6), Enabled: true},
-				{ID: "s4", From: "i2", To: "h2", Weight: jitter(rng, 6), Enabled: true},
-				{ID: "s5", From: "h1", To: "o", Weight: jitter(rng, 6), Enabled: true},
-				{ID: "s6", From: "h2", To: "o", Weight: jitter(rng, 6), Enabled: true},
-			},
-		})
-	}
-	return population
-}
-
-func jitter(rng *rand.Rand, amplitude float64) float64 {
-	return (rng.Float64()*2 - 1) * amplitude
-}
-
-func seedRegressionMimicPopulation(size int, seed int64) []model.Genome {
-	rng := rand.New(rand.NewSource(seed))
-	population := make([]model.Genome, 0, size)
-	for i := 0; i < size; i++ {
-		population = append(population, model.Genome{
-			VersionedRecord: model.VersionedRecord{SchemaVersion: storage.CurrentSchemaVersion, CodecVersion: storage.CurrentCodecVersion},
-			ID:              fmt.Sprintf("reg-g0-%d", i),
-			SensorIDs:       []string{protoio.ScalarInputSensorName},
-			ActuatorIDs:     []string{protoio.ScalarOutputActuatorName},
-			Neurons: []model.Neuron{
-				{ID: "i", Activation: "identity", Bias: 0},
-				{ID: "o", Activation: "identity", Bias: jitter(rng, 1)},
-			},
-			Synapses: []model.Synapse{
-				{ID: "s1", From: "i", To: "o", Weight: jitter(rng, 2), Enabled: true},
-			},
-		})
-	}
-	return population
 }
 
 func registerDefaultScapes(p *platform.Polis) error {
