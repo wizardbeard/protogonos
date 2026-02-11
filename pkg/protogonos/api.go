@@ -318,10 +318,20 @@ func (c *Client) Run(ctx context.Context, req RunRequest) (RunSummary, error) {
 	lineage := make([]stats.LineageEntry, 0, len(result.Lineage))
 	for _, record := range result.Lineage {
 		lineage = append(lineage, stats.LineageEntry{
-			GenomeID:   record.GenomeID,
-			ParentID:   record.ParentID,
-			Generation: record.Generation,
-			Operation:  record.Operation,
+			GenomeID:    record.GenomeID,
+			ParentID:    record.ParentID,
+			Generation:  record.Generation,
+			Operation:   record.Operation,
+			Fingerprint: record.Fingerprint,
+			Summary: map[string]any{
+				"total_neurons":            record.Summary.TotalNeurons,
+				"total_synapses":           record.Summary.TotalSynapses,
+				"total_recurrent_synapses": record.Summary.TotalRecurrentSynapses,
+				"total_sensors":            record.Summary.TotalSensors,
+				"total_actuators":          record.Summary.TotalActuators,
+				"activation_distribution":  record.Summary.ActivationDistribution,
+				"aggregator_distribution":  record.Summary.AggregatorDistribution,
+			},
 		})
 	}
 

@@ -53,10 +53,12 @@ type RunArtifacts struct {
 }
 
 type LineageEntry struct {
-	GenomeID   string `json:"genome_id"`
-	ParentID   string `json:"parent_id"`
-	Generation int    `json:"generation"`
-	Operation  string `json:"operation"`
+	GenomeID    string         `json:"genome_id"`
+	ParentID    string         `json:"parent_id"`
+	Generation  int            `json:"generation"`
+	Operation   string         `json:"operation"`
+	Fingerprint string         `json:"fingerprint,omitempty"`
+	Summary     map[string]any `json:"summary,omitempty"`
 }
 
 type TuningComparison struct {

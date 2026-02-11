@@ -95,6 +95,11 @@ func TestPopulationMonitorImprovesFitness(t *testing.T) {
 	if len(result.Lineage) == 0 {
 		t.Fatal("expected lineage records")
 	}
+	for _, rec := range result.Lineage {
+		if rec.Fingerprint == "" {
+			t.Fatalf("expected lineage fingerprint for genome %s", rec.GenomeID)
+		}
+	}
 
 	first := result.BestByGeneration[0]
 	last := result.BestByGeneration[len(result.BestByGeneration)-1]

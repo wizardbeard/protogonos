@@ -29,10 +29,12 @@ type RunResult struct {
 }
 
 type LineageRecord struct {
-	GenomeID   string `json:"genome_id"`
-	ParentID   string `json:"parent_id"`
-	Generation int    `json:"generation"`
-	Operation  string `json:"operation"`
+	GenomeID    string          `json:"genome_id"`
+	ParentID    string          `json:"parent_id"`
+	Generation  int             `json:"generation"`
+	Operation   string          `json:"operation"`
+	Fingerprint string          `json:"fingerprint,omitempty"`
+	Summary     TopologySummary `json:"summary,omitempty"`
 }
 
 type MonitorConfig struct {
@@ -128,11 +130,14 @@ func (m *PopulationMonitor) Run(ctx context.Context, initial []model.Genome) (Ru
 	bestHistory := make([]float64, 0, m.cfg.Generations)
 	lineage := make([]LineageRecord, 0, len(initial)*(m.cfg.Generations+1))
 	for _, genome := range population {
+		sig := ComputeGenomeSignature(genome)
 		lineage = append(lineage, LineageRecord{
-			GenomeID:   genome.ID,
-			ParentID:   "",
-			Generation: 0,
-			Operation:  "seed",
+			GenomeID:    genome.ID,
+			ParentID:    "",
+			Generation:  0,
+			Operation:   "seed",
+			Fingerprint: sig.Fingerprint,
+			Summary:     sig.Summary,
 		})
 	}
 	var scored []ScoredGenome
@@ -331,12 +336,15 @@ func (m *PopulationMonitor) nextGeneration(ctx context.Context, ranked []ScoredG
 
 	for i := 0; i < m.cfg.EliteCount; i++ {
 		elite := cloneGenome(ranked[i].Genome)
+		sig := ComputeGenomeSignature(elite)
 		next = append(next, elite)
 		lineage = append(lineage, LineageRecord{
-			GenomeID:   elite.ID,
-			ParentID:   ranked[i].Genome.ID,
-			Generation: nextGeneration,
-			Operation:  "elite_clone",
+			GenomeID:    elite.ID,
+			ParentID:    ranked[i].Genome.ID,
+			Generation:  nextGeneration,
+			Operation:   "elite_clone",
+			Fingerprint: sig.Fingerprint,
+			Summary:     sig.Summary,
 		})
 	}
 
@@ -380,11 +388,14 @@ func (m *PopulationMonitor) nextGeneration(ctx context.Context, ranked []ScoredG
 		}
 
 		next = append(next, mutated)
+		sig := ComputeGenomeSignature(mutated)
 		lineage = append(lineage, LineageRecord{
-			GenomeID:   mutated.ID,
-			ParentID:   parent.ID,
-			Generation: nextGeneration,
-			Operation:  strings.Join(operationNames, "+"),
+			GenomeID:    mutated.ID,
+			ParentID:    parent.ID,
+			Generation:  nextGeneration,
+			Operation:   strings.Join(operationNames, "+"),
+			Fingerprint: sig.Fingerprint,
+			Summary:     sig.Summary,
 		})
 	}
 
