@@ -62,4 +62,7 @@ run_benchmark_and_verify "xor" "101" "0.0001"
 # Scape 2: Regression mimic
 run_benchmark_and_verify "regression-mimic" "202" "0.0001"
 
+# Scape 3: Cart-pole-lite
+run_benchmark_and_verify "cart-pole-lite" "303" "0.0001"
+
 echo "[done-check] PASS"
