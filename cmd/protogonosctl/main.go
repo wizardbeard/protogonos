@@ -327,10 +327,11 @@ func runRun(ctx context.Context, args []string) error {
 			WeightAddNeuron:      *wAddNeuron,
 			WeightRemoveNeuron:   *wRemoveNeuron,
 		},
-		BestByGeneration: result.BestByGeneration,
-		FinalBestFitness: result.BestFinalFitness,
-		TopGenomes:       top,
-		Lineage:          lineage,
+		BestByGeneration:      result.BestByGeneration,
+		GenerationDiagnostics: result.GenerationDiagnostics,
+		FinalBestFitness:      result.BestFinalFitness,
+		TopGenomes:            top,
+		Lineage:               lineage,
 	})
 	if err != nil {
 		return err

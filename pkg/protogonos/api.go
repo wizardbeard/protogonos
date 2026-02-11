@@ -403,10 +403,11 @@ func (c *Client) Run(ctx context.Context, req RunRequest) (RunSummary, error) {
 			WeightAddNeuron:      req.WeightAddNeuron,
 			WeightRemoveNeuron:   req.WeightRemoveNeuron,
 		},
-		BestByGeneration: result.BestByGeneration,
-		FinalBestFitness: result.BestFinalFitness,
-		TopGenomes:       top,
-		Lineage:          lineage,
+		BestByGeneration:      result.BestByGeneration,
+		GenerationDiagnostics: result.GenerationDiagnostics,
+		FinalBestFitness:      result.BestFinalFitness,
+		TopGenomes:            top,
+		Lineage:               lineage,
 	})
 	if err != nil {
 		return RunSummary{}, err

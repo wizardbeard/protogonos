@@ -79,7 +79,7 @@ func TestClientRunRunsAndExport(t *testing.T) {
 		t.Fatalf("exported run mismatch: got=%s want=%s", exported.RunID, summary.RunID)
 	}
 
-	for _, file := range []string{"config.json", "fitness_history.json", "top_genomes.json", "lineage.json"} {
+	for _, file := range []string{"config.json", "fitness_history.json", "top_genomes.json", "lineage.json", "generation_diagnostics.json"} {
 		if _, err := os.Stat(filepath.Join(exported.Directory, file)); err != nil {
 			t.Fatalf("expected exported file %s: %v", file, err)
 		}
