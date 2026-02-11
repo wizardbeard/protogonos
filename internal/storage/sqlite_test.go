@@ -68,6 +68,26 @@ func TestSQLiteStoreGenomeAndPopulationRoundTrip(t *testing.T) {
 		t.Fatalf("unexpected population loaded: %+v", loadedPopulation)
 	}
 
+	scapeSummary := model.ScapeSummary{
+		VersionedRecord: model.VersionedRecord{SchemaVersion: CurrentSchemaVersion, CodecVersion: CurrentCodecVersion},
+		Name:            "xor",
+		Description:     "xor summary",
+		BestFitness:     0.95,
+	}
+	if err := store.SaveScapeSummary(ctx, scapeSummary); err != nil {
+		t.Fatalf("save scape summary: %v", err)
+	}
+	loadedSummary, ok, err := store.GetScapeSummary(ctx, "xor")
+	if err != nil {
+		t.Fatalf("get scape summary: %v", err)
+	}
+	if !ok {
+		t.Fatal("expected scape summary xor")
+	}
+	if loadedSummary.BestFitness != scapeSummary.BestFitness {
+		t.Fatalf("unexpected scape summary loaded: %+v", loadedSummary)
+	}
+
 	history := []float64{0.5, 0.7, 0.9}
 	if err := store.SaveFitnessHistory(ctx, "run-1", history); err != nil {
 		t.Fatalf("save history: %v", err)

@@ -143,6 +143,50 @@ func (s *SQLiteStore) GetPopulation(ctx context.Context, id string) (model.Popul
 	return population, true, nil
 }
 
+func (s *SQLiteStore) SaveScapeSummary(ctx context.Context, summary model.ScapeSummary) error {
+	db, err := s.getDB()
+	if err != nil {
+		return err
+	}
+
+	payload, err := EncodeScapeSummary(summary)
+	if err != nil {
+		return err
+	}
+
+	_, err = db.ExecContext(ctx, `
+		INSERT INTO scape_summaries (name, schema_version, codec_version, payload)
+		VALUES (?, ?, ?, ?)
+		ON CONFLICT(name) DO UPDATE SET
+			schema_version = excluded.schema_version,
+			codec_version = excluded.codec_version,
+			payload = excluded.payload
+	`, summary.Name, summary.SchemaVersion, summary.CodecVersion, payload)
+	return err
+}
+
+func (s *SQLiteStore) GetScapeSummary(ctx context.Context, name string) (model.ScapeSummary, bool, error) {
+	db, err := s.getDB()
+	if err != nil {
+		return model.ScapeSummary{}, false, err
+	}
+
+	var payload []byte
+	err = db.QueryRowContext(ctx, `SELECT payload FROM scape_summaries WHERE name = ?`, name).Scan(&payload)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return model.ScapeSummary{}, false, nil
+		}
+		return model.ScapeSummary{}, false, err
+	}
+
+	summary, err := DecodeScapeSummary(payload)
+	if err != nil {
+		return model.ScapeSummary{}, false, fmt.Errorf("decode scape summary %s: %w", name, err)
+	}
+	return summary, true, nil
+}
+
 func (s *SQLiteStore) SaveFitnessHistory(ctx context.Context, runID string, history []float64) error {
 	db, err := s.getDB()
 	if err != nil {
@@ -343,6 +387,12 @@ func createTables(ctx context.Context, db *sql.DB) error {
 		);
 		CREATE TABLE IF NOT EXISTS populations (
 			id TEXT PRIMARY KEY,
+			schema_version INTEGER NOT NULL,
+			codec_version INTEGER NOT NULL,
+			payload BLOB NOT NULL
+		);
+		CREATE TABLE IF NOT EXISTS scape_summaries (
+			name TEXT PRIMARY KEY,
 			schema_version INTEGER NOT NULL,
 			codec_version INTEGER NOT NULL,
 			payload BLOB NOT NULL

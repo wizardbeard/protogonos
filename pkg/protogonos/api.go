@@ -139,6 +139,12 @@ type TopGenomesRequest struct {
 	Limit  int
 }
 
+type ScapeSummaryItem struct {
+	Name        string
+	Description string
+	BestFitness float64
+}
+
 func New(opts Options) (*Client, error) {
 	storeKind := opts.StoreKind
 	if storeKind == "" {
@@ -696,6 +702,27 @@ func (c *Client) TopGenomes(ctx context.Context, req TopGenomesRequest) ([]model
 	out := make([]model.TopGenomeRecord, len(top))
 	copy(out, top)
 	return out, nil
+}
+
+func (c *Client) ScapeSummary(ctx context.Context, scapeName string) (ScapeSummaryItem, error) {
+	if scapeName == "" {
+		return ScapeSummaryItem{}, errors.New("scape name is required")
+	}
+	if _, err := c.ensurePolis(ctx); err != nil {
+		return ScapeSummaryItem{}, err
+	}
+	summary, ok, err := c.store.GetScapeSummary(ctx, scapeName)
+	if err != nil {
+		return ScapeSummaryItem{}, err
+	}
+	if !ok {
+		return ScapeSummaryItem{}, fmt.Errorf("scape summary not found: %s", scapeName)
+	}
+	return ScapeSummaryItem{
+		Name:        summary.Name,
+		Description: summary.Description,
+		BestFitness: summary.BestFitness,
+	}, nil
 }
 
 func (c *Client) ensurePolis(ctx context.Context) (*platform.Polis, error) {

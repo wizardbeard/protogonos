@@ -127,6 +127,16 @@ func TestPolisRunEvolution(t *testing.T) {
 	if len(top) == 0 {
 		t.Fatal("expected at least one persisted top genome")
 	}
+	summary, ok, err := store.GetScapeSummary(context.Background(), "linear")
+	if err != nil {
+		t.Fatalf("load persisted scape summary: %v", err)
+	}
+	if !ok {
+		t.Fatal("expected persisted scape summary")
+	}
+	if summary.BestFitness != result.BestFinalFitness {
+		t.Fatalf("scape summary best mismatch: got=%f want=%f", summary.BestFitness, result.BestFinalFitness)
+	}
 }
 
 func linearGenome(id string, weight float64) model.Genome {

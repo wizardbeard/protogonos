@@ -110,3 +110,31 @@ func TestMemoryStoreTopGenomesRoundTrip(t *testing.T) {
 		t.Fatalf("unexpected top genomes: %+v", output)
 	}
 }
+
+func TestMemoryStoreScapeSummaryRoundTrip(t *testing.T) {
+	ctx := context.Background()
+	store := NewMemoryStore()
+	if err := store.Init(ctx); err != nil {
+		t.Fatalf("init: %v", err)
+	}
+
+	input := model.ScapeSummary{
+		VersionedRecord: model.VersionedRecord{SchemaVersion: CurrentSchemaVersion, CodecVersion: CurrentCodecVersion},
+		Name:            "xor",
+		Description:     "xor summary",
+		BestFitness:     0.95,
+	}
+	if err := store.SaveScapeSummary(ctx, input); err != nil {
+		t.Fatalf("save scape summary: %v", err)
+	}
+	output, ok, err := store.GetScapeSummary(ctx, "xor")
+	if err != nil {
+		t.Fatalf("get scape summary: %v", err)
+	}
+	if !ok {
+		t.Fatal("expected persisted scape summary")
+	}
+	if output.Name != input.Name || output.BestFitness != input.BestFitness {
+		t.Fatalf("unexpected scape summary: %+v", output)
+	}
+}

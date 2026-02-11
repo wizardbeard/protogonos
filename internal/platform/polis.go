@@ -184,6 +184,9 @@ func (p *Polis) RunEvolution(ctx context.Context, cfg EvolutionConfig) (Evolutio
 	if err := p.store.SaveTopGenomes(ctx, persistenceRunID, toModelTopGenomes(topFinal)); err != nil {
 		return EvolutionResult{}, err
 	}
+	if err := p.updateScapeSummary(ctx, cfg.ScapeName, bestFinal); err != nil {
+		return EvolutionResult{}, err
+	}
 
 	return EvolutionResult{
 		BestByGeneration:      result.BestByGeneration,
@@ -246,6 +249,27 @@ func toModelTopGenomes(top []evo.ScoredGenome) []model.TopGenomeRecord {
 		})
 	}
 	return out
+}
+
+func (p *Polis) updateScapeSummary(ctx context.Context, scapeName string, fitness float64) error {
+	summary, ok, err := p.store.GetScapeSummary(ctx, scapeName)
+	if err != nil {
+		return err
+	}
+	if !ok {
+		summary = model.ScapeSummary{
+			VersionedRecord: model.VersionedRecord{
+				SchemaVersion: storage.CurrentSchemaVersion,
+				CodecVersion:  storage.CurrentCodecVersion,
+			},
+			Name:        scapeName,
+			Description: fmt.Sprintf("best observed fitness for scape %s", scapeName),
+		}
+	}
+	if fitness > summary.BestFitness {
+		summary.BestFitness = fitness
+	}
+	return p.store.SaveScapeSummary(ctx, summary)
 }
 
 func (p *Polis) RegisteredScapes() []string {

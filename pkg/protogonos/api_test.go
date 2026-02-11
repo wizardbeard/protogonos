@@ -77,6 +77,13 @@ func TestClientRunRunsAndExport(t *testing.T) {
 	if len(top) == 0 {
 		t.Fatal("expected non-empty top genomes")
 	}
+	scapeSummary, err := client.ScapeSummary(context.Background(), "xor")
+	if err != nil {
+		t.Fatalf("scape summary: %v", err)
+	}
+	if scapeSummary.Name != "xor" {
+		t.Fatalf("unexpected scape summary: %+v", scapeSummary)
+	}
 
 	exported, err := client.Export(context.Background(), ExportRequest{Latest: true})
 	if err != nil {

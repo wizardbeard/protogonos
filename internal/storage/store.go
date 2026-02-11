@@ -13,6 +13,8 @@ type Store interface {
 	GetGenome(ctx context.Context, id string) (model.Genome, bool, error)
 	SavePopulation(ctx context.Context, population model.Population) error
 	GetPopulation(ctx context.Context, id string) (model.Population, bool, error)
+	SaveScapeSummary(ctx context.Context, summary model.ScapeSummary) error
+	GetScapeSummary(ctx context.Context, name string) (model.ScapeSummary, bool, error)
 	SaveFitnessHistory(ctx context.Context, runID string, history []float64) error
 	GetFitnessHistory(ctx context.Context, runID string) ([]float64, bool, error)
 	SaveGenerationDiagnostics(ctx context.Context, runID string, diagnostics []model.GenerationDiagnostics) error

@@ -12,6 +12,7 @@ type MemoryStore struct {
 	initialized bool
 	genomes     map[string]model.Genome
 	populations map[string]model.Population
+	scapes      map[string]model.ScapeSummary
 	history     map[string][]float64
 	diagnostics map[string][]model.GenerationDiagnostics
 	topGenomes  map[string][]model.TopGenomeRecord
@@ -29,6 +30,7 @@ func (s *MemoryStore) Init(_ context.Context) error {
 	s.initialized = true
 	s.genomes = make(map[string]model.Genome)
 	s.populations = make(map[string]model.Population)
+	s.scapes = make(map[string]model.ScapeSummary)
 	s.history = make(map[string][]float64)
 	s.diagnostics = make(map[string][]model.GenerationDiagnostics)
 	s.topGenomes = make(map[string][]model.TopGenomeRecord)
@@ -66,6 +68,22 @@ func (s *MemoryStore) GetPopulation(_ context.Context, id string) (model.Populat
 
 	population, ok := s.populations[id]
 	return population, ok, nil
+}
+
+func (s *MemoryStore) SaveScapeSummary(_ context.Context, summary model.ScapeSummary) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	s.scapes[summary.Name] = summary
+	return nil
+}
+
+func (s *MemoryStore) GetScapeSummary(_ context.Context, name string) (model.ScapeSummary, bool, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	summary, ok := s.scapes[name]
+	return summary, ok, nil
 }
 
 func (s *MemoryStore) SaveFitnessHistory(_ context.Context, runID string, history []float64) error {

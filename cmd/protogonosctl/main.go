@@ -57,6 +57,8 @@ func run(ctx context.Context, args []string) error {
 		return runDiagnostics(ctx, args[1:])
 	case "top":
 		return runTop(ctx, args[1:])
+	case "scape-summary":
+		return runScapeSummary(ctx, args[1:])
 	case "export":
 		return runExport(ctx, args[1:])
 	default:
@@ -643,6 +645,43 @@ func runTop(ctx context.Context, args []string) error {
 	return nil
 }
 
+func runScapeSummary(ctx context.Context, args []string) error {
+	fs := flag.NewFlagSet("scape-summary", flag.ContinueOnError)
+	scapeName := fs.String("scape", "", "scape name")
+	storeKind := fs.String("store", storage.DefaultStoreKind(), "store backend: memory|sqlite")
+	dbPath := fs.String("db-path", "protogonos.db", "sqlite database path")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	if *scapeName == "" {
+		return errors.New("scape-summary requires --scape")
+	}
+
+	client, err := protoapi.New(protoapi.Options{
+		StoreKind:     *storeKind,
+		DBPath:        *dbPath,
+		BenchmarksDir: benchmarksDir,
+		ExportsDir:    exportsDir,
+	})
+	if err != nil {
+		return err
+	}
+	defer func() {
+		_ = client.Close()
+	}()
+
+	summary, err := client.ScapeSummary(ctx, *scapeName)
+	if err != nil {
+		return err
+	}
+	fmt.Printf("scape=%s best_fitness=%.6f description=%s\n",
+		summary.Name,
+		summary.BestFitness,
+		summary.Description,
+	)
+	return nil
+}
+
 func runBenchmark(ctx context.Context, args []string) error {
 	fs := flag.NewFlagSet("benchmark", flag.ContinueOnError)
 	scapeName := fs.String("scape", "xor", "scape name")
@@ -822,7 +861,7 @@ func defaultMutationPolicy(
 }
 
 func usageError(msg string) error {
-	return fmt.Errorf("%s\nusage: protogonosctl <init|start|run|benchmark|runs|lineage|fitness|diagnostics|top|export> [flags]", msg)
+	return fmt.Errorf("%s\nusage: protogonosctl <init|start|run|benchmark|runs|lineage|fitness|diagnostics|top|scape-summary|export> [flags]", msg)
 }
 
 func selectionFromName(name string) (evo.Selector, error) {
