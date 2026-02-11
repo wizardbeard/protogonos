@@ -69,6 +69,9 @@ func TestExoselfInputValidation(t *testing.T) {
 	if _, err := (&Exoself{Rand: rand.New(rand.NewSource(1)), Steps: 1, StepSize: 1}).Tune(context.Background(), genome, 1, nil); err == nil {
 		t.Fatal("expected fitness validation error")
 	}
+	if _, err := (&Exoself{Rand: rand.New(rand.NewSource(1)), Steps: 1, StepSize: 1, CandidateSelection: "unknown"}).Tune(context.Background(), genome, 1, fitnessFn); err == nil {
+		t.Fatal("expected candidate selection validation error")
+	}
 }
 
 func TestExoselfAttemptsZeroReturnsClone(t *testing.T) {

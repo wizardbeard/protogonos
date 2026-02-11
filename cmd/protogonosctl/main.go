@@ -139,6 +139,9 @@ func runRun(ctx context.Context, args []string) error {
 	tuneAttempts := fs.Int("attempts", 4, "tuning attempts per agent evaluation")
 	tuneSteps := fs.Int("tune-steps", 6, "tuning perturbation steps per attempt")
 	tuneStepSize := fs.Float64("tune-step-size", 0.35, "tuning perturbation magnitude")
+	tuneSelection := fs.String("tune-selection", tuning.CandidateSelectBestSoFar, "tuner candidate selection: best_so_far|original")
+	tuneDurationPolicy := fs.String("tune-duration-policy", "fixed", "tuning attempt policy: fixed|linear_decay|topology_scaled")
+	tuneDurationParam := fs.Float64("tune-duration-param", 1.0, "tuning attempt policy parameter")
 	wPerturb := fs.Float64("w-perturb", 0.70, "weight for perturb_random_weight mutation")
 	wAddSynapse := fs.Float64("w-add-synapse", 0.10, "weight for add_random_synapse mutation")
 	wRemoveSynapse := fs.Float64("w-remove-synapse", 0.08, "weight for remove_random_synapse mutation")
@@ -201,11 +204,18 @@ func runRun(ctx context.Context, args []string) error {
 		mutation := &evo.PerturbRandomWeight{Rand: rand.New(rand.NewSource(*seed + 1000)), MaxDelta: 1.0}
 		policy := defaultMutationPolicy(*seed, seedPopulation.InputNeuronIDs, seedPopulation.OutputNeuronIDs, *wPerturb, *wAddSynapse, *wRemoveSynapse, *wAddNeuron, *wRemoveNeuron)
 		var tuner tuning.Tuner
+		var attemptPolicy tuning.AttemptPolicy
 		if useTuning {
+			var err error
+			attemptPolicy, err = tuning.AttemptPolicyFromConfig(*tuneDurationPolicy, *tuneDurationParam)
+			if err != nil {
+				return platform.EvolutionResult{}, err
+			}
 			tuner = &tuning.Exoself{
-				Rand:     rand.New(rand.NewSource(*seed + 2000)),
-				Steps:    *tuneSteps,
-				StepSize: *tuneStepSize,
+				Rand:               rand.New(rand.NewSource(*seed + 2000)),
+				Steps:              *tuneSteps,
+				StepSize:           *tuneStepSize,
+				CandidateSelection: *tuneSelection,
 			}
 		}
 		return polis.RunEvolution(ctx, platform.EvolutionConfig{
@@ -225,6 +235,7 @@ func runRun(ctx context.Context, args []string) error {
 			TopologicalMutations: topoPolicy,
 			Tuner:                tuner,
 			TuneAttempts:         *tuneAttempts,
+			TuneAttemptPolicy:    attemptPolicy,
 			Initial:              seedPopulation.Genomes,
 		})
 	}
@@ -322,6 +333,9 @@ func runRun(ctx context.Context, args []string) error {
 			TopologicalParam:     *topoParam,
 			TopologicalMax:       *topoMax,
 			TuningEnabled:        *enableTuning,
+			TuneSelection:        *tuneSelection,
+			TuneDurationPolicy:   *tuneDurationPolicy,
+			TuneDurationParam:    *tuneDurationParam,
 			TuneAttempts:         *tuneAttempts,
 			TuneSteps:            *tuneSteps,
 			TuneStepSize:         *tuneStepSize,
@@ -701,6 +715,9 @@ func runBenchmark(ctx context.Context, args []string) error {
 	tuneAttempts := fs.Int("attempts", 4, "tuning attempts per agent evaluation")
 	tuneSteps := fs.Int("tune-steps", 6, "tuning perturbation steps per attempt")
 	tuneStepSize := fs.Float64("tune-step-size", 0.35, "tuning perturbation magnitude")
+	tuneSelection := fs.String("tune-selection", tuning.CandidateSelectBestSoFar, "tuner candidate selection: best_so_far|original")
+	tuneDurationPolicy := fs.String("tune-duration-policy", "fixed", "tuning attempt policy: fixed|linear_decay|topology_scaled")
+	tuneDurationParam := fs.Float64("tune-duration-param", 1.0, "tuning attempt policy parameter")
 	wPerturb := fs.Float64("w-perturb", 0.70, "weight for perturb_random_weight mutation")
 	wAddSynapse := fs.Float64("w-add-synapse", 0.10, "weight for add_random_synapse mutation")
 	wRemoveSynapse := fs.Float64("w-remove-synapse", 0.08, "weight for remove_random_synapse mutation")
@@ -746,6 +763,9 @@ func runBenchmark(ctx context.Context, args []string) error {
 		TopologicalParam:     *topoParam,
 		TopologicalMax:       *topoMax,
 		EnableTuning:         *enableTuning,
+		TuneSelection:        *tuneSelection,
+		TuneDurationPolicy:   *tuneDurationPolicy,
+		TuneDurationParam:    *tuneDurationParam,
 		TuneAttempts:         *tuneAttempts,
 		TuneSteps:            *tuneSteps,
 		TuneStepSize:         *tuneStepSize,

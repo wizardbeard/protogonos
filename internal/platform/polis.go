@@ -35,6 +35,7 @@ type EvolutionConfig struct {
 	TopologicalMutations evo.TopologicalMutationPolicy
 	Tuner                tuning.Tuner
 	TuneAttempts         int
+	TuneAttemptPolicy    tuning.AttemptPolicy
 	Initial              []model.Genome
 }
 
@@ -136,6 +137,7 @@ func (p *Polis) RunEvolution(ctx context.Context, cfg EvolutionConfig) (Evolutio
 		TopologicalMutations: cfg.TopologicalMutations,
 		Tuner:                cfg.Tuner,
 		TuneAttempts:         cfg.TuneAttempts,
+		TuneAttemptPolicy:    cfg.TuneAttemptPolicy,
 	})
 	if err != nil {
 		return EvolutionResult{}, err

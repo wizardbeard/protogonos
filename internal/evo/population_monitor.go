@@ -64,6 +64,7 @@ type MonitorConfig struct {
 	OutputNeuronIDs      []string
 	Tuner                tuning.Tuner
 	TuneAttempts         int
+	TuneAttemptPolicy    tuning.AttemptPolicy
 }
 
 type PopulationMonitor struct {
@@ -114,6 +115,9 @@ func NewPopulationMonitor(cfg MonitorConfig) (*PopulationMonitor, error) {
 	if cfg.Tuner != nil && cfg.TuneAttempts < 0 {
 		return nil, fmt.Errorf("tune attempts must be >= 0")
 	}
+	if cfg.Tuner != nil && cfg.TuneAttemptPolicy == nil {
+		cfg.TuneAttemptPolicy = tuning.FixedAttemptPolicy{}
+	}
 	if cfg.Selector == nil {
 		cfg.Selector = EliteSelector{}
 	}
@@ -160,7 +164,7 @@ func (m *PopulationMonitor) Run(ctx context.Context, initial []model.Genome) (Ru
 		}
 
 		var err error
-		scored, err = m.evaluatePopulation(ctx, population)
+		scored, err = m.evaluatePopulation(ctx, population, gen)
 		if err != nil {
 			return RunResult{}, err
 		}
@@ -218,7 +222,7 @@ func summarizeGeneration(scored []ScoredGenome, generation int) GenerationDiagno
 	}
 }
 
-func (m *PopulationMonitor) evaluatePopulation(ctx context.Context, population []model.Genome) ([]ScoredGenome, error) {
+func (m *PopulationMonitor) evaluatePopulation(ctx context.Context, population []model.Genome, generation int) ([]ScoredGenome, error) {
 	type job struct {
 		idx    int
 		genome model.Genome
@@ -249,8 +253,12 @@ func (m *PopulationMonitor) evaluatePopulation(ctx context.Context, population [
 				}
 
 				candidate := j.genome
-				if m.cfg.Tuner != nil && m.cfg.TuneAttempts > 0 {
-					tuned, err := m.cfg.Tuner.Tune(ctx, j.genome, m.cfg.TuneAttempts, func(ctx context.Context, g model.Genome) (float64, error) {
+				attempts := m.cfg.TuneAttempts
+				if m.cfg.TuneAttemptPolicy != nil {
+					attempts = m.cfg.TuneAttemptPolicy.Attempts(m.cfg.TuneAttempts, generation, m.cfg.Generations, j.genome)
+				}
+				if m.cfg.Tuner != nil && attempts > 0 {
+					tuned, err := m.cfg.Tuner.Tune(ctx, j.genome, attempts, func(ctx context.Context, g model.Genome) (float64, error) {
 						fitness, _, err := m.evaluateGenome(ctx, g)
 						if err != nil {
 							return 0, err

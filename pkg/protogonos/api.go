@@ -54,6 +54,9 @@ type RunRequest struct {
 	TopologicalMax       int
 	EnableTuning         bool
 	CompareTuning        bool
+	TuneSelection        string
+	TuneDurationPolicy   string
+	TuneDurationParam    float64
 	TuneAttempts         int
 	TuneSteps            int
 	TuneStepSize         float64
@@ -226,6 +229,15 @@ func (c *Client) Run(ctx context.Context, req RunRequest) (RunSummary, error) {
 	if req.TuneAttempts <= 0 {
 		req.TuneAttempts = 4
 	}
+	if req.TuneSelection == "" {
+		req.TuneSelection = tuning.CandidateSelectBestSoFar
+	}
+	if req.TuneDurationPolicy == "" {
+		req.TuneDurationPolicy = "fixed"
+	}
+	if req.TuneDurationParam <= 0 {
+		req.TuneDurationParam = 1.0
+	}
 	if req.TuneSteps <= 0 {
 		req.TuneSteps = 6
 	}
@@ -285,11 +297,18 @@ func (c *Client) Run(ctx context.Context, req RunRequest) (RunSummary, error) {
 		mutation := &evo.PerturbRandomWeight{Rand: rand.New(rand.NewSource(req.Seed + 1000)), MaxDelta: 1.0}
 		policy := defaultMutationPolicy(req.Seed, seedPopulation.InputNeuronIDs, seedPopulation.OutputNeuronIDs, req)
 		var tuner tuning.Tuner
+		var attemptPolicy tuning.AttemptPolicy
 		if useTuning {
+			var err error
+			attemptPolicy, err = tuning.AttemptPolicyFromConfig(req.TuneDurationPolicy, req.TuneDurationParam)
+			if err != nil {
+				return platform.EvolutionResult{}, err
+			}
 			tuner = &tuning.Exoself{
-				Rand:     rand.New(rand.NewSource(req.Seed + 2000)),
-				Steps:    req.TuneSteps,
-				StepSize: req.TuneStepSize,
+				Rand:               rand.New(rand.NewSource(req.Seed + 2000)),
+				Steps:              req.TuneSteps,
+				StepSize:           req.TuneStepSize,
+				CandidateSelection: req.TuneSelection,
 			}
 		}
 		return p.RunEvolution(ctx, platform.EvolutionConfig{
@@ -309,6 +328,7 @@ func (c *Client) Run(ctx context.Context, req RunRequest) (RunSummary, error) {
 			TopologicalMutations: topologicalPolicy,
 			Tuner:                tuner,
 			TuneAttempts:         req.TuneAttempts,
+			TuneAttemptPolicy:    attemptPolicy,
 			Initial:              seedPopulation.Genomes,
 		})
 	}
@@ -406,6 +426,9 @@ func (c *Client) Run(ctx context.Context, req RunRequest) (RunSummary, error) {
 			TopologicalParam:     req.TopologicalParam,
 			TopologicalMax:       req.TopologicalMax,
 			TuningEnabled:        req.EnableTuning,
+			TuneSelection:        req.TuneSelection,
+			TuneDurationPolicy:   req.TuneDurationPolicy,
+			TuneDurationParam:    req.TuneDurationParam,
 			TuneAttempts:         req.TuneAttempts,
 			TuneSteps:            req.TuneSteps,
 			TuneStepSize:         req.TuneStepSize,

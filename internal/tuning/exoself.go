@@ -10,11 +10,17 @@ import (
 )
 
 type Exoself struct {
-	Rand     *rand.Rand
-	Steps    int
-	StepSize float64
-	mu       sync.Mutex
+	Rand               *rand.Rand
+	Steps              int
+	StepSize           float64
+	CandidateSelection string
+	mu                 sync.Mutex
 }
+
+const (
+	CandidateSelectBestSoFar = "best_so_far"
+	CandidateSelectOriginal  = "original"
+)
 
 func (e *Exoself) Name() string {
 	return "exoself_hillclimb"
@@ -50,7 +56,15 @@ func (e *Exoself) Tune(ctx context.Context, genome model.Genome, attempts int, f
 	}
 
 	for a := 0; a < attempts; a++ {
-		candidate := cloneGenome(best)
+		var candidate model.Genome
+		switch e.CandidateSelection {
+		case "", CandidateSelectBestSoFar:
+			candidate = cloneGenome(best)
+		case CandidateSelectOriginal:
+			candidate = cloneGenome(genome)
+		default:
+			return model.Genome{}, errors.New("unsupported candidate selection")
+		}
 		for s := 0; s < e.Steps; s++ {
 			if err := ctx.Err(); err != nil {
 				return model.Genome{}, err
