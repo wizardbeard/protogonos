@@ -89,6 +89,12 @@ func TestPopulationMonitorImprovesFitness(t *testing.T) {
 	if len(result.BestByGeneration) != 6 {
 		t.Fatalf("expected 6 generations, got %d", len(result.BestByGeneration))
 	}
+	if len(result.GenerationDiagnostics) != 6 {
+		t.Fatalf("expected 6 generation diagnostics, got %d", len(result.GenerationDiagnostics))
+	}
+	if result.GenerationDiagnostics[0].Generation != 1 {
+		t.Fatalf("expected first diagnostics generation=1, got %d", result.GenerationDiagnostics[0].Generation)
+	}
 	if len(result.FinalPopulation) != len(initial) {
 		t.Fatalf("final population size mismatch: got=%d want=%d", len(result.FinalPopulation), len(initial))
 	}

@@ -39,10 +39,11 @@ type EvolutionConfig struct {
 }
 
 type EvolutionResult struct {
-	BestByGeneration []float64
-	BestFinalFitness float64
-	TopFinal         []evo.ScoredGenome
-	Lineage          []evo.LineageRecord
+	BestByGeneration      []float64
+	GenerationDiagnostics []model.GenerationDiagnostics
+	BestFinalFitness      float64
+	TopFinal              []evo.ScoredGenome
+	Lineage               []evo.LineageRecord
 }
 
 type Polis struct {
@@ -159,6 +160,9 @@ func (p *Polis) RunEvolution(ctx context.Context, cfg EvolutionConfig) (Evolutio
 	if err := p.store.SaveFitnessHistory(ctx, persistenceRunID, result.BestByGeneration); err != nil {
 		return EvolutionResult{}, err
 	}
+	if err := p.store.SaveGenerationDiagnostics(ctx, persistenceRunID, toModelDiagnostics(result.GenerationDiagnostics)); err != nil {
+		return EvolutionResult{}, err
+	}
 	if err := p.store.SaveLineage(ctx, persistenceRunID, toModelLineage(result.Lineage)); err != nil {
 		return EvolutionResult{}, err
 	}
@@ -179,10 +183,11 @@ func (p *Polis) RunEvolution(ctx context.Context, cfg EvolutionConfig) (Evolutio
 	}
 
 	return EvolutionResult{
-		BestByGeneration: result.BestByGeneration,
-		BestFinalFitness: bestFinal,
-		TopFinal:         topFinal,
-		Lineage:          result.Lineage,
+		BestByGeneration:      result.BestByGeneration,
+		GenerationDiagnostics: toModelDiagnostics(result.GenerationDiagnostics),
+		BestFinalFitness:      bestFinal,
+		TopFinal:              topFinal,
+		Lineage:               result.Lineage,
 	}, nil
 }
 
@@ -208,6 +213,21 @@ func toModelLineage(lineage []evo.LineageRecord) []model.LineageRecord {
 				ActivationDistribution: rec.Summary.ActivationDistribution,
 				AggregatorDistribution: rec.Summary.AggregatorDistribution,
 			},
+		})
+	}
+	return out
+}
+
+func toModelDiagnostics(diags []evo.GenerationDiagnostics) []model.GenerationDiagnostics {
+	out := make([]model.GenerationDiagnostics, 0, len(diags))
+	for _, d := range diags {
+		out = append(out, model.GenerationDiagnostics{
+			Generation:           d.Generation,
+			BestFitness:          d.BestFitness,
+			MeanFitness:          d.MeanFitness,
+			MinFitness:           d.MinFitness,
+			SpeciesCount:         d.SpeciesCount,
+			FingerprintDiversity: d.FingerprintDiversity,
 		})
 	}
 	return out

@@ -13,6 +13,7 @@ type MemoryStore struct {
 	genomes     map[string]model.Genome
 	populations map[string]model.Population
 	history     map[string][]float64
+	diagnostics map[string][]model.GenerationDiagnostics
 	lineage     map[string][]model.LineageRecord
 }
 
@@ -28,6 +29,7 @@ func (s *MemoryStore) Init(_ context.Context) error {
 	s.genomes = make(map[string]model.Genome)
 	s.populations = make(map[string]model.Population)
 	s.history = make(map[string][]float64)
+	s.diagnostics = make(map[string][]model.GenerationDiagnostics)
 	s.lineage = make(map[string][]model.LineageRecord)
 	return nil
 }
@@ -82,6 +84,29 @@ func (s *MemoryStore) GetFitnessHistory(_ context.Context, runID string) ([]floa
 		return nil, false, nil
 	}
 	copied := append([]float64(nil), history...)
+	return copied, true, nil
+}
+
+func (s *MemoryStore) SaveGenerationDiagnostics(_ context.Context, runID string, diagnostics []model.GenerationDiagnostics) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	copied := make([]model.GenerationDiagnostics, len(diagnostics))
+	copy(copied, diagnostics)
+	s.diagnostics[runID] = copied
+	return nil
+}
+
+func (s *MemoryStore) GetGenerationDiagnostics(_ context.Context, runID string) ([]model.GenerationDiagnostics, bool, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	diagnostics, ok := s.diagnostics[runID]
+	if !ok {
+		return nil, false, nil
+	}
+	copied := make([]model.GenerationDiagnostics, len(diagnostics))
+	copy(copied, diagnostics)
 	return copied, true, nil
 }
 

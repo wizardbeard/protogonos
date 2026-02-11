@@ -80,6 +80,15 @@ type LineageRecord struct {
 	Summary     LineageSummary `json:"summary,omitempty"`
 }
 
+type GenerationDiagnostics struct {
+	Generation           int     `json:"generation"`
+	BestFitness          float64 `json:"best_fitness"`
+	MeanFitness          float64 `json:"mean_fitness"`
+	MinFitness           float64 `json:"min_fitness"`
+	SpeciesCount         int     `json:"species_count"`
+	FingerprintDiversity int     `json:"fingerprint_diversity"`
+}
+
 type ScapeSummary struct {
 	VersionedRecord
 	Name        string  `json:"name"`

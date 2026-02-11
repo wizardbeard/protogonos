@@ -103,6 +103,18 @@ func DecodeFitnessHistory(data []byte) ([]float64, error) {
 	return history, nil
 }
 
+func EncodeGenerationDiagnostics(diagnostics []model.GenerationDiagnostics) ([]byte, error) {
+	return json.Marshal(diagnostics)
+}
+
+func DecodeGenerationDiagnostics(data []byte) ([]model.GenerationDiagnostics, error) {
+	var diagnostics []model.GenerationDiagnostics
+	if err := json.Unmarshal(data, &diagnostics); err != nil {
+		return nil, err
+	}
+	return diagnostics, nil
+}
+
 func checkVersion(v model.VersionedRecord) error {
 	if v.SchemaVersion != CurrentSchemaVersion || v.CodecVersion != CurrentCodecVersion {
 		return ErrVersionMismatch

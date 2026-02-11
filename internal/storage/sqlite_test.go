@@ -83,6 +83,23 @@ func TestSQLiteStoreGenomeAndPopulationRoundTrip(t *testing.T) {
 		t.Fatalf("unexpected history loaded: %+v", loadedHistory)
 	}
 
+	diagnostics := []model.GenerationDiagnostics{
+		{Generation: 1, BestFitness: 0.7, MeanFitness: 0.5, MinFitness: 0.1, SpeciesCount: 2, FingerprintDiversity: 2},
+	}
+	if err := store.SaveGenerationDiagnostics(ctx, "run-1", diagnostics); err != nil {
+		t.Fatalf("save diagnostics: %v", err)
+	}
+	loadedDiagnostics, ok, err := store.GetGenerationDiagnostics(ctx, "run-1")
+	if err != nil {
+		t.Fatalf("get diagnostics: %v", err)
+	}
+	if !ok {
+		t.Fatal("expected diagnostics run-1")
+	}
+	if len(loadedDiagnostics) != 1 || loadedDiagnostics[0].Generation != 1 {
+		t.Fatalf("unexpected diagnostics loaded: %+v", loadedDiagnostics)
+	}
+
 	lineage := []model.LineageRecord{
 		{
 			VersionedRecord: model.VersionedRecord{SchemaVersion: CurrentSchemaVersion, CodecVersion: CurrentCodecVersion},

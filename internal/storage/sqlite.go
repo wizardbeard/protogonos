@@ -185,6 +185,48 @@ func (s *SQLiteStore) GetFitnessHistory(ctx context.Context, runID string) ([]fl
 	return history, true, nil
 }
 
+func (s *SQLiteStore) SaveGenerationDiagnostics(ctx context.Context, runID string, diagnostics []model.GenerationDiagnostics) error {
+	db, err := s.getDB()
+	if err != nil {
+		return err
+	}
+
+	payload, err := EncodeGenerationDiagnostics(diagnostics)
+	if err != nil {
+		return err
+	}
+
+	_, err = db.ExecContext(ctx, `
+		INSERT INTO generation_diagnostics (run_id, payload)
+		VALUES (?, ?)
+		ON CONFLICT(run_id) DO UPDATE SET
+			payload = excluded.payload
+	`, runID, payload)
+	return err
+}
+
+func (s *SQLiteStore) GetGenerationDiagnostics(ctx context.Context, runID string) ([]model.GenerationDiagnostics, bool, error) {
+	db, err := s.getDB()
+	if err != nil {
+		return nil, false, err
+	}
+
+	var payload []byte
+	err = db.QueryRowContext(ctx, `SELECT payload FROM generation_diagnostics WHERE run_id = ?`, runID).Scan(&payload)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, false, nil
+		}
+		return nil, false, err
+	}
+
+	diagnostics, err := DecodeGenerationDiagnostics(payload)
+	if err != nil {
+		return nil, false, fmt.Errorf("decode generation diagnostics %s: %w", runID, err)
+	}
+	return diagnostics, true, nil
+}
+
 func (s *SQLiteStore) SaveLineage(ctx context.Context, runID string, lineage []model.LineageRecord) error {
 	db, err := s.getDB()
 	if err != nil {
@@ -264,6 +306,10 @@ func createTables(ctx context.Context, db *sql.DB) error {
 			payload BLOB NOT NULL
 		);
 		CREATE TABLE IF NOT EXISTS fitness_history (
+			run_id TEXT PRIMARY KEY,
+			payload BLOB NOT NULL
+		);
+		CREATE TABLE IF NOT EXISTS generation_diagnostics (
 			run_id TEXT PRIMARY KEY,
 			payload BLOB NOT NULL
 		);

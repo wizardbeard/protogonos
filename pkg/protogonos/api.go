@@ -127,6 +127,12 @@ type FitnessHistoryRequest struct {
 	Limit  int
 }
 
+type DiagnosticsRequest struct {
+	RunID  string
+	Latest bool
+	Limit  int
+}
+
 func New(opts Options) (*Client, error) {
 	storeKind := opts.StoreKind
 	if storeKind == "" {
@@ -601,6 +607,47 @@ func (c *Client) FitnessHistory(ctx context.Context, req FitnessHistoryRequest) 
 		history = history[:req.Limit]
 	}
 	return append([]float64(nil), history...), nil
+}
+
+func (c *Client) Diagnostics(ctx context.Context, req DiagnosticsRequest) ([]model.GenerationDiagnostics, error) {
+	if req.RunID != "" && req.Latest {
+		return nil, errors.New("use either run id or latest")
+	}
+	if req.Limit < 0 {
+		return nil, errors.New("limit must be >= 0")
+	}
+
+	runID := req.RunID
+	if req.Latest {
+		entries, err := stats.ListRunIndex(c.benchmarksDir)
+		if err != nil {
+			return nil, err
+		}
+		if len(entries) == 0 {
+			return nil, errors.New("no runs available")
+		}
+		runID = entries[0].RunID
+	}
+	if runID == "" {
+		return nil, errors.New("diagnostics requires run id or latest")
+	}
+
+	if _, err := c.ensurePolis(ctx); err != nil {
+		return nil, err
+	}
+	diagnostics, ok, err := c.store.GetGenerationDiagnostics(ctx, runID)
+	if err != nil {
+		return nil, err
+	}
+	if !ok {
+		return nil, fmt.Errorf("diagnostics not found for run id: %s", runID)
+	}
+	if req.Limit > 0 && len(diagnostics) > req.Limit {
+		diagnostics = diagnostics[:req.Limit]
+	}
+	out := make([]model.GenerationDiagnostics, len(diagnostics))
+	copy(out, diagnostics)
+	return out, nil
 }
 
 func (c *Client) ensurePolis(ctx context.Context) (*platform.Polis, error) {

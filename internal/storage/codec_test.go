@@ -315,6 +315,24 @@ func TestFitnessHistoryCodecRoundTrip(t *testing.T) {
 	}
 }
 
+func TestGenerationDiagnosticsCodecRoundTrip(t *testing.T) {
+	input := []model.GenerationDiagnostics{
+		{Generation: 1, BestFitness: 0.8, MeanFitness: 0.6, MinFitness: 0.2, SpeciesCount: 2, FingerprintDiversity: 2},
+		{Generation: 2, BestFitness: 0.9, MeanFitness: 0.7, MinFitness: 0.3, SpeciesCount: 3, FingerprintDiversity: 3},
+	}
+	encoded, err := EncodeGenerationDiagnostics(input)
+	if err != nil {
+		t.Fatalf("encode: %v", err)
+	}
+	decoded, err := DecodeGenerationDiagnostics(encoded)
+	if err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if !reflect.DeepEqual(decoded, input) {
+		t.Fatalf("decoded diagnostics mismatch: got=%+v want=%+v", decoded, input)
+	}
+}
+
 func TestDecodeGenomeVersionMismatch(t *testing.T) {
 	genome := decodeGenomeFixture(t, "minimal_genome_v1.json")
 	genome.CodecVersion++

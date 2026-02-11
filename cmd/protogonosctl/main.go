@@ -53,6 +53,8 @@ func run(ctx context.Context, args []string) error {
 		return runLineage(ctx, args[1:])
 	case "fitness":
 		return runFitness(ctx, args[1:])
+	case "diagnostics":
+		return runDiagnostics(ctx, args[1:])
 	case "export":
 		return runExport(ctx, args[1:])
 	default:
@@ -527,6 +529,62 @@ func runFitness(ctx context.Context, args []string) error {
 	return nil
 }
 
+func runDiagnostics(ctx context.Context, args []string) error {
+	fs := flag.NewFlagSet("diagnostics", flag.ContinueOnError)
+	runID := fs.String("run-id", "", "run id")
+	latest := fs.Bool("latest", false, "show diagnostics for the most recent run from run index")
+	limit := fs.Int("limit", 50, "max generations to print (<=0 for all)")
+	storeKind := fs.String("store", storage.DefaultStoreKind(), "store backend: memory|sqlite")
+	dbPath := fs.String("db-path", "protogonos.db", "sqlite database path")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	if *runID != "" && *latest {
+		return errors.New("use either --run-id or --latest, not both")
+	}
+	if *runID == "" && !*latest {
+		return errors.New("diagnostics requires --run-id or --latest")
+	}
+
+	client, err := protoapi.New(protoapi.Options{
+		StoreKind:     *storeKind,
+		DBPath:        *dbPath,
+		BenchmarksDir: benchmarksDir,
+		ExportsDir:    exportsDir,
+	})
+	if err != nil {
+		return err
+	}
+	defer func() {
+		_ = client.Close()
+	}()
+
+	diagnostics, err := client.Diagnostics(ctx, protoapi.DiagnosticsRequest{
+		RunID:  *runID,
+		Latest: *latest,
+		Limit:  *limit,
+	})
+	if err != nil {
+		return err
+	}
+	if len(diagnostics) == 0 {
+		fmt.Println("no diagnostics")
+		return nil
+	}
+
+	for _, d := range diagnostics {
+		fmt.Printf("generation=%d best=%.6f mean=%.6f min=%.6f species=%d fingerprints=%d\n",
+			d.Generation,
+			d.BestFitness,
+			d.MeanFitness,
+			d.MinFitness,
+			d.SpeciesCount,
+			d.FingerprintDiversity,
+		)
+	}
+	return nil
+}
+
 func runBenchmark(ctx context.Context, args []string) error {
 	fs := flag.NewFlagSet("benchmark", flag.ContinueOnError)
 	scapeName := fs.String("scape", "xor", "scape name")
@@ -706,7 +764,7 @@ func defaultMutationPolicy(
 }
 
 func usageError(msg string) error {
-	return fmt.Errorf("%s\nusage: protogonosctl <init|start|run|benchmark|runs|lineage|fitness|export> [flags]", msg)
+	return fmt.Errorf("%s\nusage: protogonosctl <init|start|run|benchmark|runs|lineage|fitness|diagnostics|export> [flags]", msg)
 }
 
 func selectionFromName(name string) (evo.Selector, error) {

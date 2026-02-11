@@ -63,6 +63,13 @@ func TestClientRunRunsAndExport(t *testing.T) {
 	if len(history) == 0 {
 		t.Fatal("expected non-empty fitness history")
 	}
+	diagnostics, err := client.Diagnostics(context.Background(), DiagnosticsRequest{RunID: summary.RunID, Limit: 10})
+	if err != nil {
+		t.Fatalf("diagnostics: %v", err)
+	}
+	if len(diagnostics) == 0 {
+		t.Fatal("expected non-empty diagnostics")
+	}
 
 	exported, err := client.Export(context.Background(), ExportRequest{Latest: true})
 	if err != nil {

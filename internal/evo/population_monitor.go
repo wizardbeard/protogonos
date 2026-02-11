@@ -24,9 +24,19 @@ type ScoredGenome struct {
 }
 
 type RunResult struct {
-	BestByGeneration []float64
-	FinalPopulation  []ScoredGenome
-	Lineage          []LineageRecord
+	BestByGeneration      []float64
+	GenerationDiagnostics []GenerationDiagnostics
+	FinalPopulation       []ScoredGenome
+	Lineage               []LineageRecord
+}
+
+type GenerationDiagnostics struct {
+	Generation           int     `json:"generation"`
+	BestFitness          float64 `json:"best_fitness"`
+	MeanFitness          float64 `json:"mean_fitness"`
+	MinFitness           float64 `json:"min_fitness"`
+	SpeciesCount         int     `json:"species_count"`
+	FingerprintDiversity int     `json:"fingerprint_diversity"`
 }
 
 type LineageRecord struct {
@@ -129,6 +139,7 @@ func (m *PopulationMonitor) Run(ctx context.Context, initial []model.Genome) (Ru
 	copy(population, initial)
 
 	bestHistory := make([]float64, 0, m.cfg.Generations)
+	diagnostics := make([]GenerationDiagnostics, 0, m.cfg.Generations)
 	lineage := make([]LineageRecord, 0, len(initial)*(m.cfg.Generations+1))
 	for _, genome := range population {
 		sig := ComputeGenomeSignature(genome)
@@ -159,6 +170,7 @@ func (m *PopulationMonitor) Run(ctx context.Context, initial []model.Genome) (Ru
 			return scored[i].Fitness > scored[j].Fitness
 		})
 		bestHistory = append(bestHistory, scored[0].Fitness)
+		diagnostics = append(diagnostics, summarizeGeneration(scored, gen+1))
 
 		var generationLineage []LineageRecord
 		population, generationLineage, err = m.nextGeneration(ctx, scored, gen)
@@ -168,7 +180,42 @@ func (m *PopulationMonitor) Run(ctx context.Context, initial []model.Genome) (Ru
 		lineage = append(lineage, generationLineage...)
 	}
 
-	return RunResult{BestByGeneration: bestHistory, FinalPopulation: scored, Lineage: lineage}, nil
+	return RunResult{
+		BestByGeneration:      bestHistory,
+		GenerationDiagnostics: diagnostics,
+		FinalPopulation:       scored,
+		Lineage:               lineage,
+	}, nil
+}
+
+func summarizeGeneration(scored []ScoredGenome, generation int) GenerationDiagnostics {
+	if len(scored) == 0 {
+		return GenerationDiagnostics{Generation: generation}
+	}
+
+	total := 0.0
+	minFitness := scored[0].Fitness
+	species := make(map[string]struct{}, len(scored))
+	fingerprints := make(map[string]struct{}, len(scored))
+	identifier := TopologySpecieIdentifier{}
+	for _, item := range scored {
+		total += item.Fitness
+		if item.Fitness < minFitness {
+			minFitness = item.Fitness
+		}
+		species[identifier.Identify(item.Genome)] = struct{}{}
+		fingerprint := ComputeGenomeSignature(item.Genome).Fingerprint
+		fingerprints[fingerprint] = struct{}{}
+	}
+
+	return GenerationDiagnostics{
+		Generation:           generation,
+		BestFitness:          scored[0].Fitness,
+		MeanFitness:          total / float64(len(scored)),
+		MinFitness:           minFitness,
+		SpeciesCount:         len(species),
+		FingerprintDiversity: len(fingerprints),
+	}
 }
 
 func (m *PopulationMonitor) evaluatePopulation(ctx context.Context, population []model.Genome) ([]ScoredGenome, error) {

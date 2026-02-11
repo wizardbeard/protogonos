@@ -15,6 +15,8 @@ type Store interface {
 	GetPopulation(ctx context.Context, id string) (model.Population, bool, error)
 	SaveFitnessHistory(ctx context.Context, runID string, history []float64) error
 	GetFitnessHistory(ctx context.Context, runID string) ([]float64, bool, error)
+	SaveGenerationDiagnostics(ctx context.Context, runID string, diagnostics []model.GenerationDiagnostics) error
+	GetGenerationDiagnostics(ctx context.Context, runID string) ([]model.GenerationDiagnostics, bool, error)
 	SaveLineage(ctx context.Context, runID string, lineage []model.LineageRecord) error
 	GetLineage(ctx context.Context, runID string) ([]model.LineageRecord, bool, error)
 }
