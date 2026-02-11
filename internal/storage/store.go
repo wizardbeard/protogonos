@@ -13,4 +13,6 @@ type Store interface {
 	GetGenome(ctx context.Context, id string) (model.Genome, bool, error)
 	SavePopulation(ctx context.Context, population model.Population) error
 	GetPopulation(ctx context.Context, id string) (model.Population, bool, error)
+	SaveLineage(ctx context.Context, runID string, lineage []model.LineageRecord) error
+	GetLineage(ctx context.Context, runID string) ([]model.LineageRecord, bool, error)
 }

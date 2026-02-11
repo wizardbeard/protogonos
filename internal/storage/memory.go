@@ -12,6 +12,7 @@ type MemoryStore struct {
 	initialized bool
 	genomes     map[string]model.Genome
 	populations map[string]model.Population
+	lineage     map[string][]model.LineageRecord
 }
 
 func NewMemoryStore() *MemoryStore {
@@ -25,6 +26,7 @@ func (s *MemoryStore) Init(_ context.Context) error {
 	s.initialized = true
 	s.genomes = make(map[string]model.Genome)
 	s.populations = make(map[string]model.Population)
+	s.lineage = make(map[string][]model.LineageRecord)
 	return nil
 }
 
@@ -58,4 +60,27 @@ func (s *MemoryStore) GetPopulation(_ context.Context, id string) (model.Populat
 
 	population, ok := s.populations[id]
 	return population, ok, nil
+}
+
+func (s *MemoryStore) SaveLineage(_ context.Context, runID string, lineage []model.LineageRecord) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	copied := make([]model.LineageRecord, len(lineage))
+	copy(copied, lineage)
+	s.lineage[runID] = copied
+	return nil
+}
+
+func (s *MemoryStore) GetLineage(_ context.Context, runID string) ([]model.LineageRecord, bool, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	lineage, ok := s.lineage[runID]
+	if !ok {
+		return nil, false, nil
+	}
+	copied := make([]model.LineageRecord, len(lineage))
+	copy(copied, lineage)
+	return copied, true, nil
 }

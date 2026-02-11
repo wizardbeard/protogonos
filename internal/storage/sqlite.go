@@ -143,6 +143,48 @@ func (s *SQLiteStore) GetPopulation(ctx context.Context, id string) (model.Popul
 	return population, true, nil
 }
 
+func (s *SQLiteStore) SaveLineage(ctx context.Context, runID string, lineage []model.LineageRecord) error {
+	db, err := s.getDB()
+	if err != nil {
+		return err
+	}
+
+	payload, err := EncodeLineage(lineage)
+	if err != nil {
+		return err
+	}
+
+	_, err = db.ExecContext(ctx, `
+		INSERT INTO lineage (run_id, payload)
+		VALUES (?, ?)
+		ON CONFLICT(run_id) DO UPDATE SET
+			payload = excluded.payload
+	`, runID, payload)
+	return err
+}
+
+func (s *SQLiteStore) GetLineage(ctx context.Context, runID string) ([]model.LineageRecord, bool, error) {
+	db, err := s.getDB()
+	if err != nil {
+		return nil, false, err
+	}
+
+	var payload []byte
+	err = db.QueryRowContext(ctx, `SELECT payload FROM lineage WHERE run_id = ?`, runID).Scan(&payload)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, false, nil
+		}
+		return nil, false, err
+	}
+
+	lineage, err := DecodeLineage(payload)
+	if err != nil {
+		return nil, false, fmt.Errorf("decode lineage %s: %w", runID, err)
+	}
+	return lineage, true, nil
+}
+
 func (s *SQLiteStore) Close() error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -177,6 +219,10 @@ func createTables(ctx context.Context, db *sql.DB) error {
 			id TEXT PRIMARY KEY,
 			schema_version INTEGER NOT NULL,
 			codec_version INTEGER NOT NULL,
+			payload BLOB NOT NULL
+		);
+		CREATE TABLE IF NOT EXISTS lineage (
+			run_id TEXT PRIMARY KEY,
 			payload BLOB NOT NULL
 		);
 	`)

@@ -151,6 +151,9 @@ func (p *Polis) RunEvolution(ctx context.Context, cfg EvolutionConfig) (Evolutio
 	if err := genotype.SavePopulationSnapshot(ctx, p.store, populationID, cfg.Generations, finalGenomes); err != nil {
 		return EvolutionResult{}, err
 	}
+	if err := p.store.SaveLineage(ctx, populationID, toModelLineage(result.Lineage)); err != nil {
+		return EvolutionResult{}, err
+	}
 
 	bestFinal := 0.0
 	topFinal := []evo.ScoredGenome{}
@@ -173,6 +176,33 @@ func (p *Polis) RunEvolution(ctx context.Context, cfg EvolutionConfig) (Evolutio
 		TopFinal:         topFinal,
 		Lineage:          result.Lineage,
 	}, nil
+}
+
+func toModelLineage(lineage []evo.LineageRecord) []model.LineageRecord {
+	out := make([]model.LineageRecord, 0, len(lineage))
+	for _, rec := range lineage {
+		out = append(out, model.LineageRecord{
+			VersionedRecord: model.VersionedRecord{
+				SchemaVersion: storage.CurrentSchemaVersion,
+				CodecVersion:  storage.CurrentCodecVersion,
+			},
+			GenomeID:    rec.GenomeID,
+			ParentID:    rec.ParentID,
+			Generation:  rec.Generation,
+			Operation:   rec.Operation,
+			Fingerprint: rec.Fingerprint,
+			Summary: model.LineageSummary{
+				TotalNeurons:           rec.Summary.TotalNeurons,
+				TotalSynapses:          rec.Summary.TotalSynapses,
+				TotalRecurrentSynapses: rec.Summary.TotalRecurrentSynapses,
+				TotalSensors:           rec.Summary.TotalSensors,
+				TotalActuators:         rec.Summary.TotalActuators,
+				ActivationDistribution: rec.Summary.ActivationDistribution,
+				AggregatorDistribution: rec.Summary.AggregatorDistribution,
+			},
+		})
+	}
+	return out
 }
 
 func (p *Polis) RegisteredScapes() []string {

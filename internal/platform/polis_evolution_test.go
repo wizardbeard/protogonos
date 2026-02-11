@@ -84,6 +84,19 @@ func TestPolisRunEvolution(t *testing.T) {
 	if _, ok, err := store.GetGenome(context.Background(), pop.AgentIDs[0]); err != nil || !ok {
 		t.Fatalf("expected persisted genome, ok=%t err=%v", ok, err)
 	}
+	lineage, ok, err := store.GetLineage(context.Background(), "evo:linear:1")
+	if err != nil {
+		t.Fatalf("load persisted lineage: %v", err)
+	}
+	if !ok {
+		t.Fatal("expected persisted lineage")
+	}
+	if len(lineage) == 0 {
+		t.Fatal("expected non-empty persisted lineage")
+	}
+	if len(lineage) != len(result.Lineage) {
+		t.Fatalf("lineage count mismatch: persisted=%d result=%d", len(lineage), len(result.Lineage))
+	}
 }
 
 func linearGenome(id string, weight float64) model.Genome {

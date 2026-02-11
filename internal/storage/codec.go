@@ -74,6 +74,23 @@ func DecodeScapeSummary(data []byte) (model.ScapeSummary, error) {
 	return summary, nil
 }
 
+func EncodeLineage(records []model.LineageRecord) ([]byte, error) {
+	return json.Marshal(records)
+}
+
+func DecodeLineage(data []byte) ([]model.LineageRecord, error) {
+	var records []model.LineageRecord
+	if err := json.Unmarshal(data, &records); err != nil {
+		return nil, err
+	}
+	for _, record := range records {
+		if err := checkVersion(record.VersionedRecord); err != nil {
+			return nil, err
+		}
+	}
+	return records, nil
+}
+
 func checkVersion(v model.VersionedRecord) error {
 	if v.SchemaVersion != CurrentSchemaVersion || v.CodecVersion != CurrentCodecVersion {
 		return ErrVersionMismatch

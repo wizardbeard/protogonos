@@ -67,6 +67,39 @@ func TestSQLiteStoreGenomeAndPopulationRoundTrip(t *testing.T) {
 	if loadedPopulation.ID != population.ID || loadedPopulation.Generation != population.Generation {
 		t.Fatalf("unexpected population loaded: %+v", loadedPopulation)
 	}
+
+	lineage := []model.LineageRecord{
+		{
+			VersionedRecord: model.VersionedRecord{SchemaVersion: CurrentSchemaVersion, CodecVersion: CurrentCodecVersion},
+			GenomeID:        "g1",
+			ParentID:        "",
+			Generation:      0,
+			Operation:       "seed",
+			Fingerprint:     "abc",
+			Summary: model.LineageSummary{
+				TotalNeurons:           2,
+				TotalSynapses:          1,
+				TotalRecurrentSynapses: 0,
+				TotalSensors:           1,
+				TotalActuators:         1,
+				ActivationDistribution: map[string]int{"identity": 2},
+				AggregatorDistribution: map[string]int{"dot_product": 2},
+			},
+		},
+	}
+	if err := store.SaveLineage(ctx, "run-1", lineage); err != nil {
+		t.Fatalf("save lineage: %v", err)
+	}
+	loadedLineage, ok, err := store.GetLineage(ctx, "run-1")
+	if err != nil {
+		t.Fatalf("get lineage: %v", err)
+	}
+	if !ok {
+		t.Fatal("expected lineage run-1")
+	}
+	if len(loadedLineage) != 1 || loadedLineage[0].GenomeID != "g1" {
+		t.Fatalf("unexpected lineage loaded: %+v", loadedLineage)
+	}
 }
 
 func TestSQLiteStorePersistsAcrossReopen(t *testing.T) {

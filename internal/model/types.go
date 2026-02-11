@@ -60,6 +60,26 @@ type Population struct {
 	Generation int      `json:"generation"`
 }
 
+type LineageSummary struct {
+	TotalNeurons           int            `json:"total_neurons"`
+	TotalSynapses          int            `json:"total_synapses"`
+	TotalRecurrentSynapses int            `json:"total_recurrent_synapses"`
+	TotalSensors           int            `json:"total_sensors"`
+	TotalActuators         int            `json:"total_actuators"`
+	ActivationDistribution map[string]int `json:"activation_distribution"`
+	AggregatorDistribution map[string]int `json:"aggregator_distribution"`
+}
+
+type LineageRecord struct {
+	VersionedRecord
+	GenomeID    string         `json:"genome_id"`
+	ParentID    string         `json:"parent_id"`
+	Generation  int            `json:"generation"`
+	Operation   string         `json:"operation"`
+	Fingerprint string         `json:"fingerprint,omitempty"`
+	Summary     LineageSummary `json:"summary,omitempty"`
+}
+
 type ScapeSummary struct {
 	VersionedRecord
 	Name        string  `json:"name"`

@@ -249,6 +249,57 @@ func TestScapeSummaryCodecRoundTripFixtureEquality(t *testing.T) {
 	}
 }
 
+func TestLineageCodecRoundTrip(t *testing.T) {
+	input := []model.LineageRecord{
+		{
+			VersionedRecord: model.VersionedRecord{SchemaVersion: CurrentSchemaVersion, CodecVersion: CurrentCodecVersion},
+			GenomeID:        "g1",
+			ParentID:        "",
+			Generation:      0,
+			Operation:       "seed",
+			Fingerprint:     "fp1",
+			Summary: model.LineageSummary{
+				TotalNeurons:           3,
+				TotalSynapses:          2,
+				TotalRecurrentSynapses: 0,
+				TotalSensors:           1,
+				TotalActuators:         1,
+				ActivationDistribution: map[string]int{"identity": 2, "sigmoid": 1},
+				AggregatorDistribution: map[string]int{"dot_product": 3},
+			},
+		},
+	}
+
+	encoded, err := EncodeLineage(input)
+	if err != nil {
+		t.Fatalf("encode: %v", err)
+	}
+	decoded, err := DecodeLineage(encoded)
+	if err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if !reflect.DeepEqual(decoded, input) {
+		t.Fatalf("decoded lineage mismatch: got=%+v want=%+v", decoded, input)
+	}
+}
+
+func TestLineageCodecVersionMismatch(t *testing.T) {
+	input := []model.LineageRecord{
+		{
+			VersionedRecord: model.VersionedRecord{SchemaVersion: CurrentSchemaVersion, CodecVersion: CurrentCodecVersion + 1},
+			GenomeID:        "g1",
+		},
+	}
+	encoded, err := EncodeLineage(input)
+	if err != nil {
+		t.Fatalf("encode: %v", err)
+	}
+	_, err = DecodeLineage(encoded)
+	if !errors.Is(err, ErrVersionMismatch) {
+		t.Fatalf("expected ErrVersionMismatch, got: %v", err)
+	}
+}
+
 func TestDecodeGenomeVersionMismatch(t *testing.T) {
 	genome := decodeGenomeFixture(t, "minimal_genome_v1.json")
 	genome.CodecVersion++
