@@ -36,17 +36,25 @@ run_benchmark_and_verify() {
   fi
 
   local artifact_dir="benchmarks/$run_id"
-  for file in config.json fitness_history.json top_genomes.json lineage.json generation_diagnostics.json benchmark_summary.json; do
+  for file in config.json fitness_history.json top_genomes.json lineage.json generation_diagnostics.json species_history.json benchmark_summary.json; do
     if [[ ! -f "$artifact_dir/$file" ]]; then
       echo "[done-check] ERROR: missing artifact $artifact_dir/$file" >&2
       exit 1
     fi
   done
+  if ! grep -q '"speciation_threshold"' "$artifact_dir/generation_diagnostics.json"; then
+    echo "[done-check] ERROR: missing speciation diagnostics fields in $artifact_dir/generation_diagnostics.json" >&2
+    exit 1
+  fi
+  if ! grep -q '"species"' "$artifact_dir/species_history.json"; then
+    echo "[done-check] ERROR: missing species history content in $artifact_dir/species_history.json" >&2
+    exit 1
+  fi
 
   echo "[done-check] Exporting latest run for scape=$scape"
   go run -tags sqlite ./cmd/protogonosctl export --latest >/dev/null
 
-  for file in config.json fitness_history.json top_genomes.json lineage.json generation_diagnostics.json benchmark_summary.json; do
+  for file in config.json fitness_history.json top_genomes.json lineage.json generation_diagnostics.json species_history.json benchmark_summary.json; do
     if [[ ! -f "exports/$run_id/$file" ]]; then
       echo "[done-check] ERROR: missing exported artifact exports/$run_id/$file" >&2
       exit 1
