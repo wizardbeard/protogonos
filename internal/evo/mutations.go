@@ -202,6 +202,80 @@ func (o *RemoveRandomNeuron) Apply(ctx context.Context, genome model.Genome) (mo
 	return RemoveNeuron{ID: target}.Apply(ctx, genome)
 }
 
+// PerturbPlasticityRate mutates the plasticity learning rate when configured.
+type PerturbPlasticityRate struct {
+	Rand     *rand.Rand
+	MaxDelta float64
+}
+
+func (o *PerturbPlasticityRate) Name() string {
+	return "perturb_plasticity_rate"
+}
+
+func (o *PerturbPlasticityRate) Apply(_ context.Context, genome model.Genome) (model.Genome, error) {
+	if o == nil || o.Rand == nil {
+		return model.Genome{}, errors.New("random source is required")
+	}
+	if o.MaxDelta <= 0 {
+		return model.Genome{}, errors.New("max delta must be > 0")
+	}
+	if genome.Plasticity == nil {
+		return cloneGenome(genome), nil
+	}
+	mutated := cloneGenome(genome)
+	delta := (o.Rand.Float64()*2 - 1) * o.MaxDelta
+	mutated.Plasticity.Rate += delta
+	if mutated.Plasticity.Rate < 0 {
+		mutated.Plasticity.Rate = 0
+	}
+	return mutated, nil
+}
+
+// PerturbSubstrateParameter mutates one substrate parameter when configured.
+type PerturbSubstrateParameter struct {
+	Rand     *rand.Rand
+	MaxDelta float64
+	Keys     []string
+}
+
+func (o *PerturbSubstrateParameter) Name() string {
+	return "perturb_substrate_parameter"
+}
+
+func (o *PerturbSubstrateParameter) Apply(_ context.Context, genome model.Genome) (model.Genome, error) {
+	if o == nil || o.Rand == nil {
+		return model.Genome{}, errors.New("random source is required")
+	}
+	if o.MaxDelta <= 0 {
+		return model.Genome{}, errors.New("max delta must be > 0")
+	}
+	if genome.Substrate == nil || len(genome.Substrate.Parameters) == 0 {
+		return cloneGenome(genome), nil
+	}
+
+	keys := append([]string(nil), o.Keys...)
+	if len(keys) == 0 {
+		for key := range genome.Substrate.Parameters {
+			keys = append(keys, key)
+		}
+	}
+	filtered := make([]string, 0, len(keys))
+	for _, key := range keys {
+		if _, ok := genome.Substrate.Parameters[key]; ok {
+			filtered = append(filtered, key)
+		}
+	}
+	if len(filtered) == 0 {
+		return cloneGenome(genome), nil
+	}
+
+	selected := filtered[o.Rand.Intn(len(filtered))]
+	delta := (o.Rand.Float64()*2 - 1) * o.MaxDelta
+	mutated := cloneGenome(genome)
+	mutated.Substrate.Parameters[selected] += delta
+	return mutated, nil
+}
+
 // ChangeActivationAt mutates one neuron's activation function label.
 type ChangeActivationAt struct {
 	Index      int

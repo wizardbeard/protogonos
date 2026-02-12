@@ -303,6 +303,64 @@ func TestRemoveNeuronInvariants(t *testing.T) {
 	}
 }
 
+func TestPerturbPlasticityRateMutation(t *testing.T) {
+	genome := randomGenome(rand.New(rand.NewSource(1)))
+	genome.Plasticity = &model.PlasticityConfig{
+		Rule:            "hebbian",
+		Rate:            0.4,
+		SaturationLimit: 1.0,
+	}
+	op := &PerturbPlasticityRate{
+		Rand:     rand.New(rand.NewSource(2)),
+		MaxDelta: 0.2,
+	}
+	mutated, err := op.Apply(context.Background(), genome)
+	if err != nil {
+		t.Fatalf("apply failed: %v", err)
+	}
+	if mutated.Plasticity == nil {
+		t.Fatal("expected plasticity config on mutated genome")
+	}
+	if mutated.Plasticity.Rate == genome.Plasticity.Rate {
+		t.Fatal("expected plasticity rate to change")
+	}
+	if mutated.Plasticity.Rate < 0 {
+		t.Fatalf("expected non-negative plasticity rate, got=%f", mutated.Plasticity.Rate)
+	}
+}
+
+func TestPerturbSubstrateParameterMutation(t *testing.T) {
+	genome := randomGenome(rand.New(rand.NewSource(3)))
+	genome.Substrate = &model.SubstrateConfig{
+		CPPName:    "set_weight",
+		CEPName:    "delta_weight",
+		Dimensions: []int{2, 2},
+		Parameters: map[string]float64{
+			"scale":  1.0,
+			"offset": 0.5,
+		},
+		WeightCount: 1,
+	}
+	op := &PerturbSubstrateParameter{
+		Rand:     rand.New(rand.NewSource(4)),
+		MaxDelta: 0.5,
+		Keys:     []string{"scale"},
+	}
+	mutated, err := op.Apply(context.Background(), genome)
+	if err != nil {
+		t.Fatalf("apply failed: %v", err)
+	}
+	if mutated.Substrate == nil {
+		t.Fatal("expected substrate config on mutated genome")
+	}
+	if mutated.Substrate.Parameters["scale"] == genome.Substrate.Parameters["scale"] {
+		t.Fatal("expected selected substrate parameter to change")
+	}
+	if mutated.Substrate.Parameters["offset"] != genome.Substrate.Parameters["offset"] {
+		t.Fatal("expected non-selected substrate parameter to remain unchanged")
+	}
+}
+
 func decodeGenomeFixture(t *testing.T, path string) model.Genome {
 	t.Helper()
 

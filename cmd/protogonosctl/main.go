@@ -147,13 +147,15 @@ func runRun(ctx context.Context, args []string) error {
 	wRemoveSynapse := fs.Float64("w-remove-synapse", 0.08, "weight for remove_random_synapse mutation")
 	wAddNeuron := fs.Float64("w-add-neuron", 0.07, "weight for add_random_neuron mutation")
 	wRemoveNeuron := fs.Float64("w-remove-neuron", 0.05, "weight for remove_random_neuron mutation")
+	wPlasticity := fs.Float64("w-plasticity", 0.03, "weight for perturb_plasticity_rate mutation")
+	wSubstrate := fs.Float64("w-substrate", 0.02, "weight for perturb_substrate_parameter mutation")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
-	if *wPerturb < 0 || *wAddSynapse < 0 || *wRemoveSynapse < 0 || *wAddNeuron < 0 || *wRemoveNeuron < 0 {
+	if *wPerturb < 0 || *wAddSynapse < 0 || *wRemoveSynapse < 0 || *wAddNeuron < 0 || *wRemoveNeuron < 0 || *wPlasticity < 0 || *wSubstrate < 0 {
 		return errors.New("mutation weights must be >= 0")
 	}
-	if *wPerturb+*wAddSynapse+*wRemoveSynapse+*wAddNeuron+*wRemoveNeuron <= 0 {
+	if *wPerturb+*wAddSynapse+*wRemoveSynapse+*wAddNeuron+*wRemoveNeuron+*wPlasticity+*wSubstrate <= 0 {
 		return errors.New("at least one mutation weight must be > 0")
 	}
 	selector, err := selectionFromName(*selectionName)
@@ -202,7 +204,18 @@ func runRun(ctx context.Context, args []string) error {
 
 	runEvolution := func(useTuning bool) (platform.EvolutionResult, error) {
 		mutation := &evo.PerturbRandomWeight{Rand: rand.New(rand.NewSource(*seed + 1000)), MaxDelta: 1.0}
-		policy := defaultMutationPolicy(*seed, seedPopulation.InputNeuronIDs, seedPopulation.OutputNeuronIDs, *wPerturb, *wAddSynapse, *wRemoveSynapse, *wAddNeuron, *wRemoveNeuron)
+		policy := defaultMutationPolicy(
+			*seed,
+			seedPopulation.InputNeuronIDs,
+			seedPopulation.OutputNeuronIDs,
+			*wPerturb,
+			*wAddSynapse,
+			*wRemoveSynapse,
+			*wAddNeuron,
+			*wRemoveNeuron,
+			*wPlasticity,
+			*wSubstrate,
+		)
 		var tuner tuning.Tuner
 		var attemptPolicy tuning.AttemptPolicy
 		if useTuning {
@@ -344,6 +357,8 @@ func runRun(ctx context.Context, args []string) error {
 			WeightRemoveSynapse:  *wRemoveSynapse,
 			WeightAddNeuron:      *wAddNeuron,
 			WeightRemoveNeuron:   *wRemoveNeuron,
+			WeightPlasticity:     *wPlasticity,
+			WeightSubstrate:      *wSubstrate,
 		},
 		BestByGeneration:      result.BestByGeneration,
 		GenerationDiagnostics: result.GenerationDiagnostics,
@@ -728,14 +743,16 @@ func runBenchmark(ctx context.Context, args []string) error {
 	wRemoveSynapse := fs.Float64("w-remove-synapse", 0.08, "weight for remove_random_synapse mutation")
 	wAddNeuron := fs.Float64("w-add-neuron", 0.07, "weight for add_random_neuron mutation")
 	wRemoveNeuron := fs.Float64("w-remove-neuron", 0.05, "weight for remove_random_neuron mutation")
+	wPlasticity := fs.Float64("w-plasticity", 0.03, "weight for perturb_plasticity_rate mutation")
+	wSubstrate := fs.Float64("w-substrate", 0.02, "weight for perturb_substrate_parameter mutation")
 	minImprovement := fs.Float64("min-improvement", 0.001, "minimum expected fitness improvement")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
-	if *wPerturb < 0 || *wAddSynapse < 0 || *wRemoveSynapse < 0 || *wAddNeuron < 0 || *wRemoveNeuron < 0 {
+	if *wPerturb < 0 || *wAddSynapse < 0 || *wRemoveSynapse < 0 || *wAddNeuron < 0 || *wRemoveNeuron < 0 || *wPlasticity < 0 || *wSubstrate < 0 {
 		return errors.New("mutation weights must be >= 0")
 	}
-	if *wPerturb+*wAddSynapse+*wRemoveSynapse+*wAddNeuron+*wRemoveNeuron <= 0 {
+	if *wPerturb+*wAddSynapse+*wRemoveSynapse+*wAddNeuron+*wRemoveNeuron+*wPlasticity+*wSubstrate <= 0 {
 		return errors.New("at least one mutation weight must be > 0")
 	}
 
@@ -779,6 +796,8 @@ func runBenchmark(ctx context.Context, args []string) error {
 		WeightRemoveSynapse:  *wRemoveSynapse,
 		WeightAddNeuron:      *wAddNeuron,
 		WeightRemoveNeuron:   *wRemoveNeuron,
+		WeightPlasticity:     *wPlasticity,
+		WeightSubstrate:      *wSubstrate,
 	})
 	if err != nil {
 		return err
@@ -869,7 +888,7 @@ func registerDefaultScapes(p *platform.Polis) error {
 func defaultMutationPolicy(
 	seed int64,
 	inputNeuronIDs, outputNeuronIDs []string,
-	wPerturb, wAddSynapse, wRemoveSynapse, wAddNeuron, wRemoveNeuron float64,
+	wPerturb, wAddSynapse, wRemoveSynapse, wAddNeuron, wRemoveNeuron, wPlasticity, wSubstrate float64,
 ) []evo.WeightedMutation {
 	protected := make(map[string]struct{}, len(inputNeuronIDs)+len(outputNeuronIDs))
 	for _, id := range inputNeuronIDs {
@@ -885,6 +904,8 @@ func defaultMutationPolicy(
 		{Operator: &evo.RemoveRandomSynapse{Rand: rand.New(rand.NewSource(seed + 1002))}, Weight: wRemoveSynapse},
 		{Operator: &evo.AddRandomNeuron{Rand: rand.New(rand.NewSource(seed + 1003))}, Weight: wAddNeuron},
 		{Operator: &evo.RemoveRandomNeuron{Rand: rand.New(rand.NewSource(seed + 1004)), Protected: protected}, Weight: wRemoveNeuron},
+		{Operator: &evo.PerturbPlasticityRate{Rand: rand.New(rand.NewSource(seed + 1005)), MaxDelta: 0.15}, Weight: wPlasticity},
+		{Operator: &evo.PerturbSubstrateParameter{Rand: rand.New(rand.NewSource(seed + 1006)), MaxDelta: 0.15}, Weight: wSubstrate},
 	}
 }
 

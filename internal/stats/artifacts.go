@@ -39,6 +39,8 @@ type RunConfig struct {
 	WeightRemoveSynapse  float64 `json:"weight_remove_synapse"`
 	WeightAddNeuron      float64 `json:"weight_add_neuron"`
 	WeightRemoveNeuron   float64 `json:"weight_remove_neuron"`
+	WeightPlasticity     float64 `json:"weight_plasticity"`
+	WeightSubstrate      float64 `json:"weight_substrate"`
 }
 
 type TopGenome struct {
