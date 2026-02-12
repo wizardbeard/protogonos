@@ -51,6 +51,22 @@ type parityProfileInfo struct {
 	MutationOperatorLen int
 }
 
+type parityProfileResolved struct {
+	ID                  string
+	PopulationSelection string
+	TuningSelection     string
+	ExpectedSelection   string
+	ExpectedTuning      string
+	MutationOperatorLen int
+	WeightPerturb       float64
+	WeightAddSyn        float64
+	WeightRemoveSyn     float64
+	WeightAddNeuro      float64
+	WeightRemoveNeuro   float64
+	WeightPlasticity    float64
+	WeightSubstrate     float64
+}
+
 func loadParityFixture() (parityProfileFixture, error) {
 	path, err := resolveParityFixturePath()
 	if err != nil {
@@ -68,46 +84,68 @@ func loadParityFixture() (parityProfileFixture, error) {
 }
 
 func loadParityPreset(profileID string) (parityPreset, error) {
+	resolved, err := resolveParityProfile(profileID)
+	if err != nil {
+		return parityPreset{}, err
+	}
+	return parityPreset{
+		Selection:         resolved.PopulationSelection,
+		TuneSelection:     resolved.TuningSelection,
+		WeightPerturb:     resolved.WeightPerturb,
+		WeightAddSyn:      resolved.WeightAddSyn,
+		WeightRemoveSyn:   resolved.WeightRemoveSyn,
+		WeightAddNeuro:    resolved.WeightAddNeuro,
+		WeightRemoveNeuro: resolved.WeightRemoveNeuro,
+		WeightPlasticity:  resolved.WeightPlasticity,
+		WeightSubstrate:   resolved.WeightSubstrate,
+	}, nil
+}
+
+func resolveParityProfile(profileID string) (parityProfileResolved, error) {
 	if profileID == "" {
-		return parityPreset{}, fmt.Errorf("profile id is required")
+		return parityProfileResolved{}, fmt.Errorf("profile id is required")
 	}
 	fixture, err := loadParityFixture()
 	if err != nil {
-		return parityPreset{}, err
+		return parityProfileResolved{}, err
 	}
 	for _, profile := range fixture.Profiles {
 		if profile.ID != profileID {
 			continue
 		}
 		constraint := map2rec.ConvertConstraint(profileToConstraintMap(profile))
-		preset := parityPreset{
-			Selection:     mapPopulationSelection(constraint.PopulationSelectionF),
-			TuneSelection: mapTuningSelection(firstOrEmpty(constraint.TuningSelectionFs)),
+		resolved := parityProfileResolved{
+			ID:                  profile.ID,
+			PopulationSelection: mapPopulationSelection(constraint.PopulationSelectionF),
+			TuningSelection:     mapTuningSelection(firstOrEmpty(constraint.TuningSelectionFs)),
+			ExpectedSelection:   profile.ExpectedSelection,
+			ExpectedTuning:      profile.ExpectedTuning,
+			MutationOperatorLen: len(profile.MutationOperators),
 		}
 		for _, op := range constraint.MutationOperators {
 			switch op.Name {
 			case "mutate_weights", "add_bias":
-				preset.WeightPerturb += op.Weight
+				resolved.WeightPerturb += op.Weight
 			case "add_outlink", "add_inlink":
-				preset.WeightAddSyn += op.Weight
+				resolved.WeightAddSyn += op.Weight
 			case "add_neuron", "outsplice", "insplice":
-				preset.WeightAddNeuro += op.Weight
+				resolved.WeightAddNeuro += op.Weight
 			case "remove_outlink", "remove_inlink":
-				preset.WeightRemoveSyn += op.Weight
+				resolved.WeightRemoveSyn += op.Weight
 			case "remove_neuron":
-				preset.WeightRemoveNeuro += op.Weight
+				resolved.WeightRemoveNeuro += op.Weight
 			case "mutate_plasticity_parameters":
-				preset.WeightPlasticity += op.Weight
+				resolved.WeightPlasticity += op.Weight
 			case "add_sensor", "add_sensorlink", "add_actuator", "add_cpp", "add_cep":
-				preset.WeightSubstrate += op.Weight
+				resolved.WeightSubstrate += op.Weight
 			}
 		}
-		if preset.WeightPerturb+preset.WeightAddSyn+preset.WeightRemoveSyn+preset.WeightAddNeuro+preset.WeightRemoveNeuro+preset.WeightPlasticity+preset.WeightSubstrate <= 0 {
-			return parityPreset{}, fmt.Errorf("profile %s has no mapped mutation weights", profileID)
+		if resolved.WeightPerturb+resolved.WeightAddSyn+resolved.WeightRemoveSyn+resolved.WeightAddNeuro+resolved.WeightRemoveNeuro+resolved.WeightPlasticity+resolved.WeightSubstrate <= 0 {
+			return parityProfileResolved{}, fmt.Errorf("profile %s has no mapped mutation weights", profileID)
 		}
-		return preset, nil
+		return resolved, nil
 	}
-	return parityPreset{}, fmt.Errorf("profile not found: %s", profileID)
+	return parityProfileResolved{}, fmt.Errorf("profile not found: %s", profileID)
 }
 
 func profileToConstraintMap(profile parityProfileFixtureProfile) map[string]any {

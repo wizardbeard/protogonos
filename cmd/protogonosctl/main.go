@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
@@ -913,7 +914,7 @@ func runBenchmark(ctx context.Context, args []string) error {
 
 func runProfile(_ context.Context, args []string) error {
 	if len(args) == 0 {
-		return errors.New("profile requires a subcommand: list")
+		return errors.New("profile requires a subcommand: list|show")
 	}
 	switch args[0] {
 	case "list":
@@ -935,6 +936,41 @@ func runProfile(_ context.Context, args []string) error {
 				profile.MutationOperatorLen,
 			)
 		}
+		return nil
+	case "show":
+		fs := flag.NewFlagSet("profile show", flag.ContinueOnError)
+		id := fs.String("id", "", "profile id")
+		asJSON := fs.Bool("json", false, "print resolved profile as JSON")
+		if err := fs.Parse(args[1:]); err != nil {
+			return err
+		}
+		if *id == "" {
+			return errors.New("profile show requires --id")
+		}
+		resolved, err := resolveParityProfile(*id)
+		if err != nil {
+			return err
+		}
+		if *asJSON {
+			enc := json.NewEncoder(os.Stdout)
+			enc.SetIndent("", "  ")
+			return enc.Encode(resolved)
+		}
+		fmt.Printf("id=%s selection=%s expected_selection=%s tune_selection=%s expected_tune_selection=%s mutation_ops=%d w_perturb=%.3f w_add_syn=%.3f w_remove_syn=%.3f w_add_neuron=%.3f w_remove_neuron=%.3f w_plasticity=%.3f w_substrate=%.3f\n",
+			resolved.ID,
+			resolved.PopulationSelection,
+			resolved.ExpectedSelection,
+			resolved.TuningSelection,
+			resolved.ExpectedTuning,
+			resolved.MutationOperatorLen,
+			resolved.WeightPerturb,
+			resolved.WeightAddSyn,
+			resolved.WeightRemoveSyn,
+			resolved.WeightAddNeuro,
+			resolved.WeightRemoveNeuro,
+			resolved.WeightPlasticity,
+			resolved.WeightSubstrate,
+		)
 		return nil
 	default:
 		return fmt.Errorf("unsupported profile subcommand: %s", args[0])

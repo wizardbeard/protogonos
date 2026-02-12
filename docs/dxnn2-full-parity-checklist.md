@@ -68,6 +68,7 @@ Status keys:
 - Added `benchmark --config <json>` map2rec-backed config ingestion path with explicit-flag override behavior.
 - Added `run --config <json>` map2rec-backed config ingestion path with the same explicit-flag override behavior.
 - Added sqlite integration tests for `run --config` and `benchmark --config` map2rec ingestion and flag overrides.
+- Added `profile show` (text + JSON) to inspect resolved map2rec-backed parity profile materialization.
 
 ## Highest-priority remaining gaps to reach strict parity
 

@@ -25,6 +25,22 @@ func TestLoadParityPresetMissing(t *testing.T) {
 	}
 }
 
+func TestResolveParityProfile(t *testing.T) {
+	resolved, err := resolveParityProfile("ref-default-xorandxor")
+	if err != nil {
+		t.Fatalf("resolve profile: %v", err)
+	}
+	if resolved.ID != "ref-default-xorandxor" {
+		t.Fatalf("unexpected id: %s", resolved.ID)
+	}
+	if resolved.PopulationSelection != resolved.ExpectedSelection {
+		t.Fatalf("selection mismatch: got=%s expected=%s", resolved.PopulationSelection, resolved.ExpectedSelection)
+	}
+	if resolved.TuningSelection != resolved.ExpectedTuning {
+		t.Fatalf("tuning mismatch: got=%s expected=%s", resolved.TuningSelection, resolved.ExpectedTuning)
+	}
+}
+
 func TestListParityProfiles(t *testing.T) {
 	profiles, err := listParityProfiles()
 	if err != nil {

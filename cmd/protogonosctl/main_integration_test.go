@@ -971,6 +971,30 @@ func TestProfileListCommand(t *testing.T) {
 	}
 }
 
+func TestProfileShowCommand(t *testing.T) {
+	out, err := captureStdout(func() error {
+		return run(context.Background(), []string{"profile", "show", "--id", "ref-default-xorandxor"})
+	})
+	if err != nil {
+		t.Fatalf("profile show command: %v", err)
+	}
+	if !strings.Contains(out, "id=ref-default-xorandxor") || !strings.Contains(out, "w_add_syn=") {
+		t.Fatalf("unexpected profile show output: %s", out)
+	}
+}
+
+func TestProfileShowCommandJSON(t *testing.T) {
+	out, err := captureStdout(func() error {
+		return run(context.Background(), []string{"profile", "show", "--id", "ref-default-xorandxor", "--json"})
+	})
+	if err != nil {
+		t.Fatalf("profile show json command: %v", err)
+	}
+	if !strings.Contains(out, "\"ID\": \"ref-default-xorandxor\"") || !strings.Contains(out, "\"WeightAddSyn\"") {
+		t.Fatalf("unexpected profile show json output: %s", out)
+	}
+}
+
 func captureStdout(fn func() error) (string, error) {
 	origStdout := os.Stdout
 	r, w, err := os.Pipe()
