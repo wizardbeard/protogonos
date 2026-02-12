@@ -24,3 +24,16 @@ func TestLoadParityPresetMissing(t *testing.T) {
 		t.Fatal("expected missing profile error")
 	}
 }
+
+func TestListParityProfiles(t *testing.T) {
+	profiles, err := listParityProfiles()
+	if err != nil {
+		t.Fatalf("list profiles: %v", err)
+	}
+	if len(profiles) == 0 {
+		t.Fatal("expected at least one profile")
+	}
+	if profiles[0].ID == "" {
+		t.Fatal("expected profile id")
+	}
+}

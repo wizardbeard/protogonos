@@ -47,6 +47,8 @@ func run(ctx context.Context, args []string) error {
 		return runRun(ctx, args[1:])
 	case "benchmark":
 		return runBenchmark(ctx, args[1:])
+	case "profile":
+		return runProfile(ctx, args[1:])
 	case "runs":
 		return runRuns(ctx, args[1:])
 	case "lineage":
@@ -930,6 +932,34 @@ func runBenchmark(ctx context.Context, args []string) error {
 	return nil
 }
 
+func runProfile(_ context.Context, args []string) error {
+	if len(args) == 0 {
+		return errors.New("profile requires a subcommand: list")
+	}
+	switch args[0] {
+	case "list":
+		profiles, err := listParityProfiles()
+		if err != nil {
+			return err
+		}
+		if len(profiles) == 0 {
+			fmt.Println("no profiles")
+			return nil
+		}
+		for _, profile := range profiles {
+			fmt.Printf("id=%s selection=%s tune_selection=%s mutation_ops=%d\n",
+				profile.ID,
+				profile.PopulationSelection,
+				profile.TuningSelection,
+				profile.MutationOperatorLen,
+			)
+		}
+		return nil
+	default:
+		return fmt.Errorf("unsupported profile subcommand: %s", args[0])
+	}
+}
+
 func runExport(_ context.Context, args []string) error {
 	fs := flag.NewFlagSet("export", flag.ContinueOnError)
 	runID := fs.String("run-id", "", "run id")
@@ -1011,7 +1041,7 @@ func defaultMutationPolicy(
 }
 
 func usageError(msg string) error {
-	return fmt.Errorf("%s\nusage: protogonosctl <init|start|run|benchmark|runs|lineage|fitness|diagnostics|species|top|scape-summary|export> [flags]", msg)
+	return fmt.Errorf("%s\nusage: protogonosctl <init|start|run|benchmark|profile|runs|lineage|fitness|diagnostics|species|top|scape-summary|export> [flags]", msg)
 }
 
 func selectionFromName(name string) (evo.Selector, error) {

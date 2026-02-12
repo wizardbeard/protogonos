@@ -782,6 +782,18 @@ func TestBenchmarkCommandWritesSummaryFXStable(t *testing.T) {
 	}
 }
 
+func TestProfileListCommand(t *testing.T) {
+	out, err := captureStdout(func() error {
+		return run(context.Background(), []string{"profile", "list"})
+	})
+	if err != nil {
+		t.Fatalf("profile list command: %v", err)
+	}
+	if !strings.Contains(out, "id=ref-default-xorandxor") {
+		t.Fatalf("unexpected profile list output: %s", out)
+	}
+}
+
 func captureStdout(fn func() error) (string, error) {
 	origStdout := os.Stdout
 	r, w, err := os.Pipe()

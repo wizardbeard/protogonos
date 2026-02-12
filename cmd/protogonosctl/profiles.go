@@ -35,20 +35,35 @@ type parityProfileFixture struct {
 	} `json:"profiles"`
 }
 
+type parityProfileInfo struct {
+	ID                  string
+	PopulationSelection string
+	TuningSelection     string
+	MutationOperatorLen int
+}
+
+func loadParityFixture() (parityProfileFixture, error) {
+	path, err := resolveParityFixturePath()
+	if err != nil {
+		return parityProfileFixture{}, err
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return parityProfileFixture{}, err
+	}
+	var fixture parityProfileFixture
+	if err := json.Unmarshal(data, &fixture); err != nil {
+		return parityProfileFixture{}, err
+	}
+	return fixture, nil
+}
+
 func loadParityPreset(profileID string) (parityPreset, error) {
 	if profileID == "" {
 		return parityPreset{}, fmt.Errorf("profile id is required")
 	}
-	path, err := resolveParityFixturePath()
+	fixture, err := loadParityFixture()
 	if err != nil {
-		return parityPreset{}, err
-	}
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return parityPreset{}, err
-	}
-	var fixture parityProfileFixture
-	if err := json.Unmarshal(data, &fixture); err != nil {
 		return parityPreset{}, err
 	}
 	for _, profile := range fixture.Profiles {
@@ -83,6 +98,23 @@ func loadParityPreset(profileID string) (parityPreset, error) {
 		return preset, nil
 	}
 	return parityPreset{}, fmt.Errorf("profile not found: %s", profileID)
+}
+
+func listParityProfiles() ([]parityProfileInfo, error) {
+	fixture, err := loadParityFixture()
+	if err != nil {
+		return nil, err
+	}
+	out := make([]parityProfileInfo, 0, len(fixture.Profiles))
+	for _, profile := range fixture.Profiles {
+		out = append(out, parityProfileInfo{
+			ID:                  profile.ID,
+			PopulationSelection: mapPopulationSelection(profile.PopulationSelection),
+			TuningSelection:     mapTuningSelection(profile.TuningSelection),
+			MutationOperatorLen: len(profile.MutationOperators),
+		})
+	}
+	return out, nil
 }
 
 func resolveParityFixturePath() (string, error) {
