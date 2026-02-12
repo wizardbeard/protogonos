@@ -49,6 +49,30 @@ func TestConvertDispatchesSensorAndActuatorKinds(t *testing.T) {
 	if !ok || agent.EncodingType != "neural" {
 		t.Fatalf("unexpected agent dispatch result: %#v", gotAgent)
 	}
+
+	gotCortex, err := Convert("cortex", map[string]any{"id": "c1"})
+	if err != nil {
+		t.Fatalf("convert cortex: %v", err)
+	}
+	if cortex, ok := gotCortex.(CortexRecord); !ok || cortex.ID != "c1" {
+		t.Fatalf("unexpected cortex dispatch result: %#v", gotCortex)
+	}
+
+	gotSpecie, err := Convert("specie", map[string]any{"id": "sp1"})
+	if err != nil {
+		t.Fatalf("convert specie: %v", err)
+	}
+	if specie, ok := gotSpecie.(SpecieRecord); !ok || specie.ID != "sp1" {
+		t.Fatalf("unexpected specie dispatch result: %#v", gotSpecie)
+	}
+
+	gotPopulation, err := Convert("population", map[string]any{"id": "pop1"})
+	if err != nil {
+		t.Fatalf("convert population: %v", err)
+	}
+	if population, ok := gotPopulation.(PopulationRecord); !ok || population.ID != "pop1" {
+		t.Fatalf("unexpected population dispatch result: %#v", gotPopulation)
+	}
 }
 
 func TestConvertConstraintOverridesKnownFieldsAndIgnoresUnknown(t *testing.T) {
@@ -263,5 +287,75 @@ func TestConvertAgentMalformedKnownFieldKeepsDefault(t *testing.T) {
 	}
 	if out.FS != 1 {
 		t.Fatalf("expected default fs=1, got %f", out.FS)
+	}
+}
+
+func TestConvertCortexMapsFields(t *testing.T) {
+	in := map[string]any{
+		"id":           "cx-1",
+		"agent_id":     "a-1",
+		"neuron_ids":   []any{"n1", "n2"},
+		"sensor_ids":   []any{"s1"},
+		"actuator_ids": []any{"ac1"},
+	}
+	out := ConvertCortex(in)
+	if out.ID != "cx-1" || out.AgentID != "a-1" {
+		t.Fatalf("unexpected cortex conversion: %+v", out)
+	}
+	if len(out.NeuronIDs) != 2 || len(out.SensorIDs) != 1 || len(out.ActuatorIDs) != 1 {
+		t.Fatalf("unexpected cortex lists: %+v", out)
+	}
+}
+
+func TestConvertSpecieMapsFields(t *testing.T) {
+	in := map[string]any{
+		"id":                    "sp-1",
+		"population_id":         "pop-1",
+		"fingerprint":           "fp-1",
+		"constraint":            map[string]any{"morphology": "xor"},
+		"all_agent_ids":         []any{"a1", "a2"},
+		"agent_ids":             []any{"a2"},
+		"dead_pool":             []any{"a0"},
+		"champion_ids":          []any{"a2"},
+		"fitness":               0.8,
+		"innovation_factor":     []any{1, 2},
+		"stats":                 []any{"st"},
+		"seed_agent_ids":        []any{"a1"},
+		"hof_distinguishers":    []any{"tot_n"},
+		"specie_distinguishers": []any{"pattern"},
+		"hall_of_fame":          []any{"champ"},
+	}
+	out := ConvertSpecie(in)
+	if out.ID != "sp-1" || out.PopulationID != "pop-1" {
+		t.Fatalf("unexpected specie conversion: %+v", out)
+	}
+	if len(out.AllAgentIDs) != 2 || len(out.HallOfFame) != 1 {
+		t.Fatalf("unexpected specie collections: %+v", out)
+	}
+}
+
+func TestConvertPopulationMapsFields(t *testing.T) {
+	in := map[string]any{
+		"id":                      "pop-1",
+		"polis_id":                "polis-1",
+		"specie_ids":              []any{"sp1"},
+		"morphologies":            []any{"xor"},
+		"innovation_factor":       []any{1, 2},
+		"evo_alg_f":               "generational",
+		"fitness_postprocessor_f": "size_proportional",
+		"selection_f":             "hof_competition",
+		"trace":                   map[string]any{"tot_evaluations": 10},
+		"seed_agent_ids":          []any{"a1"},
+		"seed_specie_ids":         []any{"sp1"},
+	}
+	out := ConvertPopulation(in)
+	if out.ID != "pop-1" || out.PolisID != "polis-1" {
+		t.Fatalf("unexpected population conversion: %+v", out)
+	}
+	if out.EvoAlgF != "generational" || out.SelectionF != "hof_competition" {
+		t.Fatalf("unexpected population policies: %+v", out)
+	}
+	if len(out.SeedAgentIDs) != 1 || len(out.SeedSpecieIDs) != 1 {
+		t.Fatalf("unexpected population seeds: %+v", out)
 	}
 }

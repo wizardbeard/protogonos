@@ -16,6 +16,12 @@ func Convert(kind string, in map[string]any) (any, error) {
 		return ConvertNeuron(in), nil
 	case "agent":
 		return ConvertAgent(in), nil
+	case "cortex":
+		return ConvertCortex(in), nil
+	case "specie":
+		return ConvertSpecie(in), nil
+	case "population":
+		return ConvertPopulation(in), nil
 	default:
 		return nil, ErrUnsupportedKind
 	}
@@ -428,6 +434,133 @@ func ConvertAgent(in map[string]any) AgentRecord {
 		case "main_fitness":
 			if f, ok := asFloat64(val); ok {
 				out.MainFitness = f
+			}
+		}
+	}
+	return out
+}
+
+func ConvertCortex(in map[string]any) CortexRecord {
+	out := defaultCortexRecord()
+	for key, val := range in {
+		switch key {
+		case "id":
+			out.ID = val
+		case "agent_id":
+			out.AgentID = val
+		case "neuron_ids":
+			if xs, ok := asAnySlice(val); ok {
+				out.NeuronIDs = xs
+			}
+		case "sensor_ids":
+			if xs, ok := asAnySlice(val); ok {
+				out.SensorIDs = xs
+			}
+		case "actuator_ids":
+			if xs, ok := asAnySlice(val); ok {
+				out.ActuatorIDs = xs
+			}
+		}
+	}
+	return out
+}
+
+func ConvertSpecie(in map[string]any) SpecieRecord {
+	out := defaultSpecieRecord()
+	for key, val := range in {
+		switch key {
+		case "id":
+			out.ID = val
+		case "population_id":
+			out.PopulationID = val
+		case "fingerprint":
+			out.Fingerprint = val
+		case "constraint":
+			out.Constraint = val
+		case "all_agent_ids":
+			if xs, ok := asAnySlice(val); ok {
+				out.AllAgentIDs = xs
+			}
+		case "agent_ids":
+			if xs, ok := asAnySlice(val); ok {
+				out.AgentIDs = xs
+			}
+		case "dead_pool":
+			if xs, ok := asAnySlice(val); ok {
+				out.DeadPool = xs
+			}
+		case "champion_ids":
+			if xs, ok := asAnySlice(val); ok {
+				out.ChampionIDs = xs
+			}
+		case "fitness":
+			out.Fitness = val
+		case "innovation_factor":
+			out.InnovationFactor = val
+		case "stats":
+			if xs, ok := asAnySlice(val); ok {
+				out.Stats = xs
+			}
+		case "seed_agent_ids":
+			if xs, ok := asAnySlice(val); ok {
+				out.SeedAgentIDs = xs
+			}
+		case "hof_distinguishers":
+			if xs, ok := asAnySlice(val); ok {
+				out.HOFDistinguishers = xs
+			}
+		case "specie_distinguishers":
+			if xs, ok := asAnySlice(val); ok {
+				out.SpecieDistinguish = xs
+			}
+		case "hall_of_fame":
+			if xs, ok := asAnySlice(val); ok {
+				out.HallOfFame = xs
+			}
+		}
+	}
+	return out
+}
+
+func ConvertPopulation(in map[string]any) PopulationRecord {
+	out := defaultPopulationRecord()
+	for key, val := range in {
+		switch key {
+		case "id":
+			out.ID = val
+		case "polis_id":
+			out.PolisID = val
+		case "specie_ids":
+			if xs, ok := asAnySlice(val); ok {
+				out.SpecieIDs = xs
+			}
+		case "morphologies":
+			if xs, ok := asAnySlice(val); ok {
+				out.Morphologies = xs
+			}
+		case "innovation_factor":
+			out.InnovationFactor = val
+		case "evo_alg_f":
+			if s, ok := asString(val); ok {
+				out.EvoAlgF = s
+			}
+		case "fitness_postprocessor_f":
+			if s, ok := asString(val); ok {
+				out.FitnessPostprocF = s
+			}
+		case "selection_f":
+			if s, ok := asString(val); ok {
+				out.SelectionF = s
+			}
+		case "trace":
+			out.Trace = val
+		case "seed_agent_ids":
+			if xs, ok := asAnySlice(val); ok {
+				out.SeedAgentIDs = xs
+			}
+		case "seed_specie_ids":
+			if xs, ok := asAnySlice(val); ok {
+				out.SeedSpecieIDs = xs
 			}
 		}
 	}

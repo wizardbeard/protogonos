@@ -140,6 +140,46 @@ type AgentRecord struct {
 	MainFitness        float64
 }
 
+type CortexRecord struct {
+	ID          any
+	AgentID     any
+	NeuronIDs   []any
+	SensorIDs   []any
+	ActuatorIDs []any
+}
+
+type SpecieRecord struct {
+	ID                any
+	PopulationID      any
+	Fingerprint       any
+	Constraint        any
+	AllAgentIDs       []any
+	AgentIDs          []any
+	DeadPool          []any
+	ChampionIDs       []any
+	Fitness           any
+	InnovationFactor  any
+	Stats             []any
+	SeedAgentIDs      []any
+	HOFDistinguishers []any
+	SpecieDistinguish []any
+	HallOfFame        []any
+}
+
+type PopulationRecord struct {
+	ID               any
+	PolisID          any
+	SpecieIDs        []any
+	Morphologies     []any
+	InnovationFactor any
+	EvoAlgF          string
+	FitnessPostprocF string
+	SelectionF       string
+	Trace            any
+	SeedAgentIDs     []any
+	SeedSpecieIDs    []any
+}
+
 func defaultConstraintRecord() ConstraintRecord {
 	return ConstraintRecord{
 		Morphology:             "xor_mimic",
@@ -221,5 +261,36 @@ func defaultAgentRecord() AgentRecord {
 		ParentIDs:         []any{},
 		ChampionFlag:      []any{false},
 		FS:                1,
+	}
+}
+
+func defaultCortexRecord() CortexRecord {
+	return CortexRecord{
+		NeuronIDs:   []any{},
+		SensorIDs:   []any{},
+		ActuatorIDs: []any{},
+	}
+}
+
+func defaultSpecieRecord() SpecieRecord {
+	return SpecieRecord{
+		AllAgentIDs:       []any{},
+		AgentIDs:          []any{},
+		DeadPool:          []any{},
+		ChampionIDs:       []any{},
+		Stats:             []any{},
+		SeedAgentIDs:      []any{},
+		HOFDistinguishers: []any{"tot_n"},
+		SpecieDistinguish: []any{"tot_n"},
+		HallOfFame:        []any{},
+	}
+}
+
+func defaultPopulationRecord() PopulationRecord {
+	return PopulationRecord{
+		SpecieIDs:     []any{},
+		Morphologies:  []any{},
+		SeedAgentIDs:  []any{},
+		SeedSpecieIDs: []any{},
 	}
 }
