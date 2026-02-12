@@ -25,6 +25,8 @@ type AdaptiveSpeciation struct {
 	MinThreshold       float64
 	MaxThreshold       float64
 	AdjustStep         float64
+	representatives    map[string]model.Genome
+	nextSpeciesID      int
 }
 
 func NewAdaptiveSpeciation(populationSize int) *AdaptiveSpeciation {
@@ -38,6 +40,8 @@ func NewAdaptiveSpeciation(populationSize int) *AdaptiveSpeciation {
 		MinThreshold:       0.05,
 		MaxThreshold:       8.0,
 		AdjustStep:         0.1,
+		representatives:    map[string]model.Genome{},
+		nextSpeciesID:      1,
 	}
 }
 
@@ -49,61 +53,101 @@ func (s *AdaptiveSpeciation) Assign(genomes []model.Genome) (map[string][]model.
 		}
 	}
 
-	type speciesGroup struct {
-		key            string
-		representative model.Genome
-		members        []model.Genome
-	}
-	groups := make([]*speciesGroup, 0, len(genomes))
+	ordered := append([]model.Genome(nil), genomes...)
+	sort.Slice(ordered, func(i, j int) bool { return ordered[i].ID < ordered[j].ID })
 
-	for _, genome := range genomes {
-		bestIdx := -1
+	if s.representatives == nil {
+		s.representatives = map[string]model.Genome{}
+	}
+	speciesByKey := make(map[string][]model.Genome, len(ordered))
+
+	repKeys := make([]string, 0, len(s.representatives))
+	for key := range s.representatives {
+		repKeys = append(repKeys, key)
+	}
+	sort.Strings(repKeys)
+
+	for _, genome := range ordered {
+		bestKey := ""
 		bestDistance := math.MaxFloat64
-		for i, grp := range groups {
-			dist := GenomeCompatibilityDistance(genome, grp.representative)
+		for _, key := range repKeys {
+			rep := s.representatives[key]
+			dist := GenomeCompatibilityDistance(genome, rep)
 			if dist < bestDistance {
 				bestDistance = dist
-				bestIdx = i
+				bestKey = key
 			}
 		}
-		if bestIdx == -1 || bestDistance > s.Threshold {
-			key := fmt.Sprintf("sp-%03d", len(groups)+1)
-			groups = append(groups, &speciesGroup{
-				key:            key,
-				representative: genome,
-				members:        []model.Genome{genome},
-			})
-			continue
+		if bestKey == "" || bestDistance > s.Threshold {
+			bestKey = s.nextSpeciesKey()
+			repKeys = append(repKeys, bestKey)
+			sort.Strings(repKeys)
+			s.representatives[bestKey] = genome
 		}
-		groups[bestIdx].members = append(groups[bestIdx].members, genome)
+		speciesByKey[bestKey] = append(speciesByKey[bestKey], genome)
 	}
 
-	if len(groups) > s.TargetSpeciesCount {
+	if len(speciesByKey) > s.TargetSpeciesCount {
 		s.Threshold = math.Min(s.MaxThreshold, s.Threshold+s.AdjustStep)
-	} else if len(groups) < s.TargetSpeciesCount {
+	} else if len(speciesByKey) < s.TargetSpeciesCount {
 		s.Threshold = math.Max(s.MinThreshold, s.Threshold-s.AdjustStep)
 	}
 
-	speciesByKey := make(map[string][]model.Genome, len(groups))
+	updatedRepresentatives := map[string]model.Genome{}
+	activeKeys := make([]string, 0, len(speciesByKey))
+	for key := range speciesByKey {
+		activeKeys = append(activeKeys, key)
+	}
+	sort.Strings(activeKeys)
 	totalMembers := 0
 	largest := 0
-	for _, group := range groups {
-		members := append([]model.Genome(nil), group.members...)
-		speciesByKey[group.key] = members
+	for _, key := range activeKeys {
+		members := speciesByKey[key]
+		speciesByKey[key] = append([]model.Genome(nil), members...)
+		updatedRepresentatives[key] = chooseRepresentative(members)
 		totalMembers += len(members)
 		if len(members) > largest {
 			largest = len(members)
 		}
 	}
+	s.representatives = updatedRepresentatives
 
 	stats := SpeciationStats{
-		SpeciesCount:       len(groups),
+		SpeciesCount:       len(speciesByKey),
 		TargetSpeciesCount: s.TargetSpeciesCount,
 		Threshold:          s.Threshold,
-		MeanSpeciesSize:    float64(totalMembers) / float64(len(groups)),
+		MeanSpeciesSize:    float64(totalMembers) / float64(len(speciesByKey)),
 		LargestSpeciesSize: largest,
 	}
 	return speciesByKey, stats
+}
+
+func (s *AdaptiveSpeciation) nextSpeciesKey() string {
+	key := fmt.Sprintf("sp-%03d", s.nextSpeciesID)
+	s.nextSpeciesID++
+	return key
+}
+
+func chooseRepresentative(members []model.Genome) model.Genome {
+	if len(members) == 0 {
+		return model.Genome{}
+	}
+	bestIdx := 0
+	bestScore := math.MaxFloat64
+	for i := range members {
+		sum := 0.0
+		for j := range members {
+			if i == j {
+				continue
+			}
+			sum += GenomeCompatibilityDistance(members[i], members[j])
+		}
+		if sum < bestScore {
+			bestScore = sum
+			bestIdx = i
+		}
+	}
+	return members[bestIdx]
 }
 
 // GenomeCompatibilityDistance provides a coarse, deterministic compatibility
