@@ -190,3 +190,34 @@ func TestClientRunAcceptsReferenceStrategyAliases(t *testing.T) {
 		t.Fatalf("run with aliases: %v", err)
 	}
 }
+
+func TestClientRunRejectsNegativeNumericConfig(t *testing.T) {
+	client, err := New(Options{StoreKind: "memory", BenchmarksDir: t.TempDir(), ExportsDir: t.TempDir()})
+	if err != nil {
+		t.Fatalf("new client: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = client.Close()
+	})
+
+	_, err = client.Run(context.Background(), RunRequest{
+		Scape:       "xor",
+		Population:  -1,
+		Generations: 2,
+	})
+	if err == nil {
+		t.Fatal("expected population validation error")
+	}
+
+	_, err = client.Run(context.Background(), RunRequest{
+		Scape:             "xor",
+		Population:        6,
+		Generations:       2,
+		TuneStepSize:      -0.1,
+		EnableTuning:      true,
+		TuneDurationParam: 1,
+	})
+	if err == nil {
+		t.Fatal("expected tune step size validation error")
+	}
+}

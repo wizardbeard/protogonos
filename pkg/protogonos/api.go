@@ -84,6 +84,14 @@ type RunSummary struct {
 	Compare          *CompareSummary
 }
 
+type materializedRunConfig struct {
+	Request           RunRequest
+	Selector          evo.Selector
+	Postprocessor     evo.FitnessPostprocessor
+	TopologicalPolicy evo.TopologicalMutationPolicy
+	TuneAttemptPolicy tuning.AttemptPolicy
+}
+
 type RunsRequest struct {
 	Limit       int
 	ShowCompare bool
@@ -235,82 +243,11 @@ func (c *Client) Start(ctx context.Context) error {
 }
 
 func (c *Client) Run(ctx context.Context, req RunRequest) (RunSummary, error) {
-	if req.Scape == "" {
-		req.Scape = "xor"
-	}
-	if req.Population <= 0 {
-		req.Population = 50
-	}
-	if req.Generations <= 0 {
-		req.Generations = 100
-	}
-	if req.Workers <= 0 {
-		req.Workers = 4
-	}
-	if req.Selection == "" {
-		req.Selection = "elite"
-	}
-	if req.FitnessPostprocessor == "" {
-		req.FitnessPostprocessor = "none"
-	}
-	if req.TopologicalPolicy == "" {
-		req.TopologicalPolicy = "const"
-	}
-	if req.TopologicalCount <= 0 {
-		req.TopologicalCount = 1
-	}
-	if req.TopologicalParam <= 0 {
-		req.TopologicalParam = 0.5
-	}
-	if req.TopologicalMax == 0 {
-		req.TopologicalMax = 8
-	}
-	if req.TuneAttempts <= 0 {
-		req.TuneAttempts = 4
-	}
-	if req.TuneSelection == "" {
-		req.TuneSelection = tuning.CandidateSelectBestSoFar
-	}
-	req.TuneSelection = normalizeTuneSelection(req.TuneSelection)
-	if req.TuneDurationPolicy == "" {
-		req.TuneDurationPolicy = "fixed"
-	}
-	if req.TuneDurationParam <= 0 {
-		req.TuneDurationParam = 1.0
-	}
-	if req.TuneSteps <= 0 {
-		req.TuneSteps = 6
-	}
-	if req.TuneStepSize <= 0 {
-		req.TuneStepSize = 0.35
-	}
-	if req.WeightPerturb == 0 && req.WeightAddSynapse == 0 && req.WeightRemoveSynapse == 0 && req.WeightAddNeuron == 0 && req.WeightRemoveNeuron == 0 && req.WeightPlasticity == 0 && req.WeightSubstrate == 0 {
-		req.WeightPerturb = 0.70
-		req.WeightAddSynapse = 0.10
-		req.WeightRemoveSynapse = 0.08
-		req.WeightAddNeuron = 0.07
-		req.WeightRemoveNeuron = 0.05
-		req.WeightPlasticity = 0.03
-		req.WeightSubstrate = 0.02
-	}
-	if req.WeightPerturb < 0 || req.WeightAddSynapse < 0 || req.WeightRemoveSynapse < 0 || req.WeightAddNeuron < 0 || req.WeightRemoveNeuron < 0 || req.WeightPlasticity < 0 || req.WeightSubstrate < 0 {
-		return RunSummary{}, errors.New("mutation weights must be >= 0")
-	}
-	if req.WeightPerturb+req.WeightAddSynapse+req.WeightRemoveSynapse+req.WeightAddNeuron+req.WeightRemoveNeuron+req.WeightPlasticity+req.WeightSubstrate <= 0 {
-		return RunSummary{}, errors.New("at least one mutation weight must be > 0")
-	}
-	selector, err := selectionFromName(req.Selection)
+	cfg, err := materializeRunConfigFromRequest(req)
 	if err != nil {
 		return RunSummary{}, err
 	}
-	postprocessor, err := postprocessorFromName(req.FitnessPostprocessor)
-	if err != nil {
-		return RunSummary{}, err
-	}
-	topologicalPolicy, err := topologicalPolicyFromConfig(req.TopologicalPolicy, req.TopologicalCount, req.TopologicalParam, req.TopologicalMax)
-	if err != nil {
-		return RunSummary{}, err
-	}
+	req = cfg.Request
 
 	p, err := c.ensurePolis(ctx)
 	if err != nil {
@@ -341,11 +278,7 @@ func (c *Client) Run(ctx context.Context, req RunRequest) (RunSummary, error) {
 		var tuner tuning.Tuner
 		var attemptPolicy tuning.AttemptPolicy
 		if useTuning {
-			var err error
-			attemptPolicy, err = tuning.AttemptPolicyFromConfig(req.TuneDurationPolicy, req.TuneDurationParam)
-			if err != nil {
-				return platform.EvolutionResult{}, err
-			}
+			attemptPolicy = cfg.TuneAttemptPolicy
 			tuner = &tuning.Exoself{
 				Rand:               rand.New(rand.NewSource(req.Seed + 2000)),
 				Steps:              req.TuneSteps,
@@ -365,9 +298,9 @@ func (c *Client) Run(ctx context.Context, req RunRequest) (RunSummary, error) {
 			OutputNeuronIDs:      seedPopulation.OutputNeuronIDs,
 			Mutation:             mutation,
 			MutationPolicy:       policy,
-			Selector:             selector,
-			Postprocessor:        postprocessor,
-			TopologicalMutations: topologicalPolicy,
+			Selector:             cfg.Selector,
+			Postprocessor:        cfg.Postprocessor,
+			TopologicalMutations: cfg.TopologicalPolicy,
 			Tuner:                tuner,
 			TuneAttempts:         req.TuneAttempts,
 			TuneAttemptPolicy:    attemptPolicy,
@@ -987,6 +920,129 @@ func registerDefaultScapes(p *platform.Polis) error {
 		return err
 	}
 	return nil
+}
+
+func materializeRunConfigFromRequest(req RunRequest) (materializedRunConfig, error) {
+	if req.Scape == "" {
+		req.Scape = "xor"
+	}
+	if req.Population < 0 {
+		return materializedRunConfig{}, errors.New("population must be >= 0")
+	}
+	if req.Population == 0 {
+		req.Population = 50
+	}
+	if req.Generations < 0 {
+		return materializedRunConfig{}, errors.New("generations must be >= 0")
+	}
+	if req.Generations == 0 {
+		req.Generations = 100
+	}
+	if req.Workers < 0 {
+		return materializedRunConfig{}, errors.New("workers must be >= 0")
+	}
+	if req.Workers == 0 {
+		req.Workers = 4
+	}
+	if req.Selection == "" {
+		req.Selection = "elite"
+	}
+	if req.FitnessPostprocessor == "" {
+		req.FitnessPostprocessor = "none"
+	}
+	if req.TopologicalPolicy == "" {
+		req.TopologicalPolicy = "const"
+	}
+	if req.TopologicalCount < 0 {
+		return materializedRunConfig{}, errors.New("topological count must be >= 0")
+	}
+	if req.TopologicalCount == 0 {
+		req.TopologicalCount = 1
+	}
+	if req.TopologicalParam < 0 {
+		return materializedRunConfig{}, errors.New("topological param must be >= 0")
+	}
+	if req.TopologicalParam == 0 {
+		req.TopologicalParam = 0.5
+	}
+	if req.TopologicalMax == 0 {
+		req.TopologicalMax = 8
+	}
+	if req.TuneAttempts < 0 {
+		return materializedRunConfig{}, errors.New("tune attempts must be >= 0")
+	}
+	if req.TuneAttempts == 0 {
+		req.TuneAttempts = 4
+	}
+	if req.TuneSelection == "" {
+		req.TuneSelection = tuning.CandidateSelectBestSoFar
+	}
+	req.TuneSelection = normalizeTuneSelection(req.TuneSelection)
+	if req.TuneDurationPolicy == "" {
+		req.TuneDurationPolicy = "fixed"
+	}
+	if req.TuneDurationParam < 0 {
+		return materializedRunConfig{}, errors.New("tune duration param must be >= 0")
+	}
+	if req.TuneDurationParam == 0 {
+		req.TuneDurationParam = 1.0
+	}
+	if req.TuneSteps < 0 {
+		return materializedRunConfig{}, errors.New("tune steps must be >= 0")
+	}
+	if req.TuneSteps == 0 {
+		req.TuneSteps = 6
+	}
+	if req.TuneStepSize < 0 {
+		return materializedRunConfig{}, errors.New("tune step size must be >= 0")
+	}
+	if req.TuneStepSize == 0 {
+		req.TuneStepSize = 0.35
+	}
+	if req.WeightPerturb == 0 && req.WeightAddSynapse == 0 && req.WeightRemoveSynapse == 0 && req.WeightAddNeuron == 0 && req.WeightRemoveNeuron == 0 && req.WeightPlasticity == 0 && req.WeightSubstrate == 0 {
+		req.WeightPerturb = 0.70
+		req.WeightAddSynapse = 0.10
+		req.WeightRemoveSynapse = 0.08
+		req.WeightAddNeuron = 0.07
+		req.WeightRemoveNeuron = 0.05
+		req.WeightPlasticity = 0.03
+		req.WeightSubstrate = 0.02
+	}
+	if req.WeightPerturb < 0 || req.WeightAddSynapse < 0 || req.WeightRemoveSynapse < 0 || req.WeightAddNeuron < 0 || req.WeightRemoveNeuron < 0 || req.WeightPlasticity < 0 || req.WeightSubstrate < 0 {
+		return materializedRunConfig{}, errors.New("mutation weights must be >= 0")
+	}
+	if req.WeightPerturb+req.WeightAddSynapse+req.WeightRemoveSynapse+req.WeightAddNeuron+req.WeightRemoveNeuron+req.WeightPlasticity+req.WeightSubstrate <= 0 {
+		return materializedRunConfig{}, errors.New("at least one mutation weight must be > 0")
+	}
+
+	selector, err := selectionFromName(req.Selection)
+	if err != nil {
+		return materializedRunConfig{}, err
+	}
+	postprocessor, err := postprocessorFromName(req.FitnessPostprocessor)
+	if err != nil {
+		return materializedRunConfig{}, err
+	}
+	topologicalPolicy, err := topologicalPolicyFromConfig(req.TopologicalPolicy, req.TopologicalCount, req.TopologicalParam, req.TopologicalMax)
+	if err != nil {
+		return materializedRunConfig{}, err
+	}
+
+	var attemptPolicy tuning.AttemptPolicy
+	if req.EnableTuning || req.CompareTuning {
+		attemptPolicy, err = tuning.AttemptPolicyFromConfig(req.TuneDurationPolicy, req.TuneDurationParam)
+		if err != nil {
+			return materializedRunConfig{}, err
+		}
+	}
+
+	return materializedRunConfig{
+		Request:           req,
+		Selector:          selector,
+		Postprocessor:     postprocessor,
+		TopologicalPolicy: topologicalPolicy,
+		TuneAttemptPolicy: attemptPolicy,
+	}, nil
 }
 
 func defaultMutationPolicy(seed int64, inputNeuronIDs, outputNeuronIDs []string, req RunRequest) []evo.WeightedMutation {
