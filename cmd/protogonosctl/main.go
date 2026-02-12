@@ -142,7 +142,7 @@ func runRun(ctx context.Context, args []string) error {
 	tuneAttempts := fs.Int("attempts", 4, "tuning attempts per agent evaluation")
 	tuneSteps := fs.Int("tune-steps", 6, "tuning perturbation steps per attempt")
 	tuneStepSize := fs.Float64("tune-step-size", 0.35, "tuning perturbation magnitude")
-	tuneSelection := fs.String("tune-selection", tuning.CandidateSelectBestSoFar, "tuner candidate selection: best_so_far|original")
+	tuneSelection := fs.String("tune-selection", tuning.CandidateSelectBestSoFar, "tuner candidate selection: best_so_far|original|dynamic_random")
 	tuneDurationPolicy := fs.String("tune-duration-policy", "fixed", "tuning attempt policy: fixed|linear_decay|topology_scaled")
 	tuneDurationParam := fs.Float64("tune-duration-param", 1.0, "tuning attempt policy parameter")
 	wPerturb := fs.Float64("w-perturb", 0.70, "weight for perturb_random_weight mutation")
@@ -170,6 +170,7 @@ func runRun(ctx context.Context, args []string) error {
 		*wPlasticity = preset.WeightPlasticity
 		*wSubstrate = preset.WeightSubstrate
 	}
+	*tuneSelection = normalizeTuneSelection(*tuneSelection)
 	if *wPerturb < 0 || *wAddSynapse < 0 || *wRemoveSynapse < 0 || *wAddNeuron < 0 || *wRemoveNeuron < 0 || *wPlasticity < 0 || *wSubstrate < 0 {
 		return errors.New("mutation weights must be >= 0")
 	}
@@ -810,7 +811,7 @@ func runBenchmark(ctx context.Context, args []string) error {
 	tuneAttempts := fs.Int("attempts", 4, "tuning attempts per agent evaluation")
 	tuneSteps := fs.Int("tune-steps", 6, "tuning perturbation steps per attempt")
 	tuneStepSize := fs.Float64("tune-step-size", 0.35, "tuning perturbation magnitude")
-	tuneSelection := fs.String("tune-selection", tuning.CandidateSelectBestSoFar, "tuner candidate selection: best_so_far|original")
+	tuneSelection := fs.String("tune-selection", tuning.CandidateSelectBestSoFar, "tuner candidate selection: best_so_far|original|dynamic_random")
 	tuneDurationPolicy := fs.String("tune-duration-policy", "fixed", "tuning attempt policy: fixed|linear_decay|topology_scaled")
 	tuneDurationParam := fs.Float64("tune-duration-param", 1.0, "tuning attempt policy parameter")
 	wPerturb := fs.Float64("w-perturb", 0.70, "weight for perturb_random_weight mutation")
@@ -839,6 +840,7 @@ func runBenchmark(ctx context.Context, args []string) error {
 		*wPlasticity = preset.WeightPlasticity
 		*wSubstrate = preset.WeightSubstrate
 	}
+	*tuneSelection = normalizeTuneSelection(*tuneSelection)
 	if *wPerturb < 0 || *wAddSynapse < 0 || *wRemoveSynapse < 0 || *wAddNeuron < 0 || *wRemoveNeuron < 0 || *wPlasticity < 0 || *wSubstrate < 0 {
 		return errors.New("mutation weights must be >= 0")
 	}
@@ -1027,8 +1029,28 @@ func selectionFromName(name string) (evo.Selector, error) {
 			PoolSize:       0,
 			TournamentSize: 3,
 		}, nil
+	case "hof_competition":
+		return &evo.SpeciesSharedTournamentSelector{
+			Identifier:            evo.TopologySpecieIdentifier{},
+			PoolSize:              0,
+			TournamentSize:        3,
+			StagnationGenerations: 2,
+		}, nil
 	default:
 		return nil, fmt.Errorf("unsupported selection strategy: %s", name)
+	}
+}
+
+func normalizeTuneSelection(name string) string {
+	switch name {
+	case "", tuning.CandidateSelectBestSoFar:
+		return tuning.CandidateSelectBestSoFar
+	case tuning.CandidateSelectOriginal:
+		return tuning.CandidateSelectOriginal
+	case "dynamic_random":
+		return tuning.CandidateSelectBestSoFar
+	default:
+		return name
 	}
 }
 

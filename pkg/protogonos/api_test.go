@@ -148,3 +148,35 @@ func TestClientRunRejectsUnknownSelectionAndPostprocessor(t *testing.T) {
 		t.Fatal("expected topological policy validation error")
 	}
 }
+
+func TestClientRunAcceptsReferenceStrategyAliases(t *testing.T) {
+	base := t.TempDir()
+	client, err := New(Options{
+		StoreKind:     "memory",
+		BenchmarksDir: filepath.Join(base, "benchmarks"),
+		ExportsDir:    filepath.Join(base, "exports"),
+	})
+	if err != nil {
+		t.Fatalf("new client: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = client.Close()
+	})
+
+	_, err = client.Run(context.Background(), RunRequest{
+		Scape:           "xor",
+		Population:      8,
+		Generations:     2,
+		Selection:       "hof_competition",
+		EnableTuning:    true,
+		TuneSelection:   "dynamic_random",
+		TuneAttempts:    2,
+		TuneSteps:       3,
+		TuneStepSize:    0.25,
+		WeightPerturb:   1,
+		WeightAddNeuron: 0.2,
+	})
+	if err != nil {
+		t.Fatalf("run with aliases: %v", err)
+	}
+}

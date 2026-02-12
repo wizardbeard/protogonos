@@ -240,6 +240,7 @@ func (c *Client) Run(ctx context.Context, req RunRequest) (RunSummary, error) {
 	if req.TuneSelection == "" {
 		req.TuneSelection = tuning.CandidateSelectBestSoFar
 	}
+	req.TuneSelection = normalizeTuneSelection(req.TuneSelection)
 	if req.TuneDurationPolicy == "" {
 		req.TuneDurationPolicy = "fixed"
 	}
@@ -880,8 +881,28 @@ func selectionFromName(name string) (evo.Selector, error) {
 			PoolSize:       0,
 			TournamentSize: 3,
 		}, nil
+	case "hof_competition":
+		return &evo.SpeciesSharedTournamentSelector{
+			Identifier:            evo.TopologySpecieIdentifier{},
+			PoolSize:              0,
+			TournamentSize:        3,
+			StagnationGenerations: 2,
+		}, nil
 	default:
 		return nil, fmt.Errorf("unsupported selection strategy: %s", name)
+	}
+}
+
+func normalizeTuneSelection(name string) string {
+	switch name {
+	case "", tuning.CandidateSelectBestSoFar:
+		return tuning.CandidateSelectBestSoFar
+	case tuning.CandidateSelectOriginal:
+		return tuning.CandidateSelectOriginal
+	case "dynamic_random":
+		return tuning.CandidateSelectBestSoFar
+	default:
+		return name
 	}
 }
 
