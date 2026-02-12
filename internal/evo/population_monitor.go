@@ -2,7 +2,9 @@ package evo
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"math"
 	"math/rand"
 	"sort"
 	"strings"
@@ -427,67 +429,218 @@ func (m *PopulationMonitor) nextGeneration(ctx context.Context, ranked []ScoredG
 		})
 	}
 
+	remaining := m.cfg.PopulationSize - len(next)
+	offspringPlan := buildSpeciesOffspringPlan(ranked, speciesByGenomeID, remaining)
+	for _, item := range offspringPlan {
+		if len(next) >= m.cfg.PopulationSize {
+			break
+		}
+		speciesRanked := filterRankedBySpecies(ranked, speciesByGenomeID, item.SpeciesKey)
+		if len(speciesRanked) == 0 {
+			continue
+		}
+		for i := 0; i < item.Count; i++ {
+			if len(next) >= m.cfg.PopulationSize {
+				break
+			}
+			if err := ctx.Err(); err != nil {
+				return nil, nil, err
+			}
+
+			parent, err := m.pickParentForSpecies(ranked, speciesRanked, speciesByGenomeID, generation)
+			if err != nil {
+				return nil, nil, err
+			}
+			child, record, err := m.mutateFromParent(ctx, parent, generation, len(next))
+			if err != nil {
+				return nil, nil, err
+			}
+			next = append(next, child)
+			lineage = append(lineage, record)
+		}
+	}
+
 	for len(next) < m.cfg.PopulationSize {
 		if err := ctx.Err(); err != nil {
 			return nil, nil, err
 		}
 
-		var (
-			parent model.Genome
-			err    error
-		)
-		if speciesAware, ok := m.cfg.Selector.(SpeciesAwareGenerationSelector); ok {
-			parent, err = speciesAware.PickParentForGenerationWithSpecies(m.rng, ranked, m.cfg.EliteCount, generation, speciesByGenomeID)
-		} else if generationAware, ok := m.cfg.Selector.(GenerationAwareSelector); ok {
-			parent, err = generationAware.PickParentForGeneration(m.rng, ranked, m.cfg.EliteCount, generation)
-		} else {
-			parent, err = m.cfg.Selector.PickParent(m.rng, ranked, m.cfg.EliteCount)
-		}
+		parent, err := m.pickParentForSpecies(ranked, ranked, speciesByGenomeID, generation)
 		if err != nil {
 			return nil, nil, err
 		}
-		child := genotype.CloneAgent(parent, fmt.Sprintf("%s-g%d-i%d", parent.ID, generation+1, len(next)))
-
-		mutationCount, err := m.cfg.TopologicalMutations.MutationCount(parent, generation, m.rng)
+		child, record, err := m.mutateFromParent(ctx, parent, generation, len(next))
 		if err != nil {
 			return nil, nil, err
 		}
-		if mutationCount <= 0 {
-			return nil, nil, fmt.Errorf("invalid mutation count from policy: %d", mutationCount)
-		}
-
-		mutated := child
-		operationNames := make([]string, 0, mutationCount)
-		for step := 0; step < mutationCount; step++ {
-			operator := m.chooseMutation()
-			next, opErr := operator.Apply(ctx, mutated)
-			operationName := operator.Name()
-			if opErr != nil {
-				if m.cfg.Mutation != nil && operator != m.cfg.Mutation {
-					next, opErr = m.cfg.Mutation.Apply(ctx, mutated)
-					operationName = m.cfg.Mutation.Name() + "(fallback)"
-				}
-			}
-			if opErr != nil {
-				return nil, nil, opErr
-			}
-			mutated = next
-			operationNames = append(operationNames, operationName)
-		}
-
-		next = append(next, mutated)
-		sig := ComputeGenomeSignature(mutated)
-		lineage = append(lineage, LineageRecord{
-			GenomeID:    mutated.ID,
-			ParentID:    parent.ID,
-			Generation:  nextGeneration,
-			Operation:   strings.Join(operationNames, "+"),
-			Fingerprint: sig.Fingerprint,
-			Summary:     sig.Summary,
-		})
+		next = append(next, child)
+		lineage = append(lineage, record)
 	}
 
 	return next, lineage, nil
+}
+
+func (m *PopulationMonitor) pickParentForSpecies(allRanked, speciesRanked []ScoredGenome, speciesByGenomeID map[string]string, generation int) (model.Genome, error) {
+	eliteCount := m.cfg.EliteCount
+	if eliteCount > len(speciesRanked) {
+		eliteCount = len(speciesRanked)
+	}
+	if eliteCount <= 0 {
+		eliteCount = 1
+	}
+	if speciesAware, ok := m.cfg.Selector.(SpeciesAwareGenerationSelector); ok {
+		return speciesAware.PickParentForGenerationWithSpecies(m.rng, speciesRanked, eliteCount, generation, speciesByGenomeID)
+	}
+	if generationAware, ok := m.cfg.Selector.(GenerationAwareSelector); ok {
+		return generationAware.PickParentForGeneration(m.rng, speciesRanked, eliteCount, generation)
+	}
+	return m.cfg.Selector.PickParent(m.rng, speciesRanked, eliteCount)
+}
+
+func (m *PopulationMonitor) mutateFromParent(ctx context.Context, parent model.Genome, generation, nextIndex int) (model.Genome, LineageRecord, error) {
+	child := genotype.CloneAgent(parent, fmt.Sprintf("%s-g%d-i%d", parent.ID, generation+1, nextIndex))
+	mutationCount, err := m.cfg.TopologicalMutations.MutationCount(parent, generation, m.rng)
+	if err != nil {
+		return model.Genome{}, LineageRecord{}, err
+	}
+	if mutationCount <= 0 {
+		return model.Genome{}, LineageRecord{}, fmt.Errorf("invalid mutation count from policy: %d", mutationCount)
+	}
+
+	mutated := child
+	operationNames := make([]string, 0, mutationCount)
+	for step := 0; step < mutationCount; step++ {
+		operator := m.chooseMutation()
+		next, opErr := operator.Apply(ctx, mutated)
+		operationName := operator.Name()
+		if opErr != nil {
+			if m.cfg.Mutation != nil && operator != m.cfg.Mutation {
+				next, opErr = m.cfg.Mutation.Apply(ctx, mutated)
+				operationName = m.cfg.Mutation.Name() + "(fallback)"
+			}
+		}
+		if opErr != nil {
+			if errors.Is(opErr, ErrNoSynapses) {
+				operationNames = append(operationNames, "noop(no_synapses)")
+				continue
+			}
+			return model.Genome{}, LineageRecord{}, opErr
+		}
+		mutated = next
+		operationNames = append(operationNames, operationName)
+	}
+
+	sig := ComputeGenomeSignature(mutated)
+	return mutated, LineageRecord{
+		GenomeID:    mutated.ID,
+		ParentID:    parent.ID,
+		Generation:  generation + 1,
+		Operation:   strings.Join(operationNames, "+"),
+		Fingerprint: sig.Fingerprint,
+		Summary:     sig.Summary,
+	}, nil
+}
+
+type speciesQuota struct {
+	SpeciesKey string
+	Count      int
+}
+
+func buildSpeciesOffspringPlan(ranked []ScoredGenome, speciesByGenomeID map[string]string, totalOffspring int) []speciesQuota {
+	if totalOffspring <= 0 || len(ranked) == 0 {
+		return nil
+	}
+	type agg struct {
+		key   string
+		sum   float64
+		size  int
+		score float64
+	}
+	byKey := map[string]*agg{}
+	for _, item := range ranked {
+		key := speciesByGenomeID[item.Genome.ID]
+		if key == "" {
+			key = "species:unknown"
+		}
+		if byKey[key] == nil {
+			byKey[key] = &agg{key: key}
+		}
+		byKey[key].sum += item.Fitness
+		byKey[key].size++
+	}
+	keys := make([]string, 0, len(byKey))
+	minMean := 0.0
+	for key, bucket := range byKey {
+		bucket.score = bucket.sum / float64(bucket.size)
+		if len(keys) == 0 || bucket.score < minMean {
+			minMean = bucket.score
+		}
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	shift := 0.0
+	if minMean <= 0 {
+		shift = -minMean + 1e-9
+	}
+	totalScore := 0.0
+	for _, key := range keys {
+		byKey[key].score += shift
+		totalScore += byKey[key].score
+	}
+	if totalScore <= 0 {
+		for _, key := range keys {
+			byKey[key].score = 1.0
+		}
+		totalScore = float64(len(keys))
+	}
+
+	type alloc struct {
+		key       string
+		count     int
+		remainder float64
+	}
+	allocs := make([]alloc, 0, len(keys))
+	assigned := 0
+	for _, key := range keys {
+		share := byKey[key].score / totalScore * float64(totalOffspring)
+		base := int(math.Floor(share))
+		allocs = append(allocs, alloc{
+			key:       key,
+			count:     base,
+			remainder: share - float64(base),
+		})
+		assigned += base
+	}
+	left := totalOffspring - assigned
+	sort.Slice(allocs, func(i, j int) bool {
+		if allocs[i].remainder == allocs[j].remainder {
+			return allocs[i].key < allocs[j].key
+		}
+		return allocs[i].remainder > allocs[j].remainder
+	})
+	for i := 0; i < left; i++ {
+		allocs[i%len(allocs)].count++
+	}
+	sort.Slice(allocs, func(i, j int) bool { return allocs[i].key < allocs[j].key })
+
+	out := make([]speciesQuota, 0, len(allocs))
+	for _, item := range allocs {
+		if item.count <= 0 {
+			continue
+		}
+		out = append(out, speciesQuota{SpeciesKey: item.key, Count: item.count})
+	}
+	return out
+}
+
+func filterRankedBySpecies(ranked []ScoredGenome, speciesByGenomeID map[string]string, speciesKey string) []ScoredGenome {
+	out := make([]ScoredGenome, 0, len(ranked))
+	for _, item := range ranked {
+		if speciesByGenomeID[item.Genome.ID] == speciesKey {
+			out = append(out, item)
+		}
+	}
+	return out
 }
 
 func (m *PopulationMonitor) chooseMutation() Operator {

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"math/rand"
+	"strings"
 	"testing"
 
 	protoio "protogonos/internal/io"
@@ -537,6 +538,116 @@ func TestPopulationMonitorPassesAdaptiveSpeciesAssignmentsToSelector(t *testing.
 	}
 	if len(selector.gotSpeciesByGenomeID) != len(initial) {
 		t.Fatalf("expected species assignments for all genomes, got=%d want=%d", len(selector.gotSpeciesByGenomeID), len(initial))
+	}
+}
+
+func TestBuildSpeciesOffspringPlanAllocatesBySharedFitness(t *testing.T) {
+	ranked := []ScoredGenome{
+		{Genome: newLinearGenome("a0", 1), Fitness: 0.90},
+		{Genome: newLinearGenome("a1", 1), Fitness: 0.80},
+		{Genome: newComplexLinearGenome("b0", 1), Fitness: 0.20},
+		{Genome: newComplexLinearGenome("b1", 1), Fitness: 0.10},
+	}
+	speciesByGenomeID := map[string]string{
+		"a0": "sp-a",
+		"a1": "sp-a",
+		"b0": "sp-b",
+		"b1": "sp-b",
+	}
+
+	plan := buildSpeciesOffspringPlan(ranked, speciesByGenomeID, 6)
+	got := map[string]int{}
+	total := 0
+	for _, item := range plan {
+		got[item.SpeciesKey] = item.Count
+		total += item.Count
+	}
+	if total != 6 {
+		t.Fatalf("expected total offspring=6, got=%d", total)
+	}
+	if got["sp-a"] <= got["sp-b"] {
+		t.Fatalf("expected fitter species to receive more offspring, got sp-a=%d sp-b=%d", got["sp-a"], got["sp-b"])
+	}
+}
+
+func TestNextGenerationRespectsSpeciesOffspringPlan(t *testing.T) {
+	ranked := []ScoredGenome{
+		{Genome: newLinearGenome("a0", 1), Fitness: 0.95},
+		{Genome: newLinearGenome("a1", 1), Fitness: 0.85},
+		{Genome: newComplexLinearGenome("b0", 1), Fitness: 0.20},
+		{Genome: newComplexLinearGenome("b1", 1), Fitness: 0.10},
+	}
+	speciesByGenomeID := map[string]string{
+		"a0": "sp-a",
+		"a1": "sp-a",
+		"b0": "sp-b",
+		"b1": "sp-b",
+	}
+	monitor, err := NewPopulationMonitor(MonitorConfig{
+		Scape:           oneDimScape{},
+		Mutation:        namedNoopMutation{name: "noop"},
+		PopulationSize:  4,
+		EliteCount:      1,
+		Generations:     1,
+		Workers:         1,
+		Seed:            9,
+		InputNeuronIDs:  []string{"i"},
+		OutputNeuronIDs: []string{"o"},
+	})
+	if err != nil {
+		t.Fatalf("new monitor: %v", err)
+	}
+
+	next, _, err := monitor.nextGeneration(context.Background(), ranked, speciesByGenomeID, 0)
+	if err != nil {
+		t.Fatalf("next generation: %v", err)
+	}
+	if len(next) != 4 {
+		t.Fatalf("expected population size 4, got=%d", len(next))
+	}
+
+	fromA := 0
+	fromB := 0
+	for _, genome := range next {
+		if strings.HasPrefix(genome.ID, "a") {
+			fromA++
+		}
+		if strings.HasPrefix(genome.ID, "b") {
+			fromB++
+		}
+	}
+	if fromA <= fromB {
+		t.Fatalf("expected more offspring from fitter species, got fromA=%d fromB=%d", fromA, fromB)
+	}
+}
+
+func TestPopulationMonitorSkipsNoSynapseMutationError(t *testing.T) {
+	initial := []model.Genome{
+		{
+			VersionedRecord: model.VersionedRecord{SchemaVersion: 1, CodecVersion: 1},
+			ID:              "g0",
+			Neurons: []model.Neuron{
+				{ID: "i", Activation: "identity"},
+				{ID: "o", Activation: "identity"},
+			},
+		},
+	}
+	monitor, err := NewPopulationMonitor(MonitorConfig{
+		Scape:           oneDimScape{},
+		Mutation:        &PerturbRandomWeight{Rand: rand.New(rand.NewSource(1)), MaxDelta: 1.0},
+		PopulationSize:  1,
+		EliteCount:      1,
+		Generations:     1,
+		Workers:         1,
+		Seed:            1,
+		InputNeuronIDs:  []string{"i"},
+		OutputNeuronIDs: []string{"o"},
+	})
+	if err != nil {
+		t.Fatalf("new monitor: %v", err)
+	}
+	if _, err := monitor.Run(context.Background(), initial); err != nil {
+		t.Fatalf("run should not fail on ErrNoSynapses, got: %v", err)
 	}
 }
 
