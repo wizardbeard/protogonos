@@ -623,6 +623,112 @@ func TestBenchmarkCommandWritesSummaryCartPoleLite(t *testing.T) {
 	}
 }
 
+func TestBenchmarkCommandWritesSummaryFlatlandStable(t *testing.T) {
+	origWD, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("getwd: %v", err)
+	}
+	workdir := t.TempDir()
+	if err := os.Chdir(workdir); err != nil {
+		t.Fatalf("chdir tempdir: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = os.Chdir(origWD)
+	})
+
+	dbPath := filepath.Join(workdir, "protogonos.db")
+	args := []string{
+		"benchmark",
+		"--store", "sqlite",
+		"--db-path", dbPath,
+		"--scape", "flatland",
+		"--pop", "10",
+		"--gens", "4",
+		"--seed", "1301",
+		"--workers", "2",
+		"--min-improvement", "-0.2",
+	}
+	if err := run(context.Background(), args); err != nil {
+		t.Fatalf("benchmark command: %v", err)
+	}
+
+	entries, err := stats.ListRunIndex("benchmarks")
+	if err != nil {
+		t.Fatalf("list run index: %v", err)
+	}
+	if len(entries) == 0 {
+		t.Fatal("expected at least one indexed run")
+	}
+	runID := entries[0].RunID
+	data, err := os.ReadFile(filepath.Join("benchmarks", runID, "benchmark_summary.json"))
+	if err != nil {
+		t.Fatalf("read benchmark summary: %v", err)
+	}
+	var summary stats.BenchmarkSummary
+	if err := json.Unmarshal(data, &summary); err != nil {
+		t.Fatalf("decode benchmark summary: %v", err)
+	}
+	if summary.Scape != "flatland" {
+		t.Fatalf("unexpected scape in summary: %s", summary.Scape)
+	}
+	if summary.Improvement < -0.2 {
+		t.Fatalf("expected bounded stability, got improvement=%f", summary.Improvement)
+	}
+}
+
+func TestBenchmarkCommandWritesSummaryGTSAStable(t *testing.T) {
+	origWD, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("getwd: %v", err)
+	}
+	workdir := t.TempDir()
+	if err := os.Chdir(workdir); err != nil {
+		t.Fatalf("chdir tempdir: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = os.Chdir(origWD)
+	})
+
+	dbPath := filepath.Join(workdir, "protogonos.db")
+	args := []string{
+		"benchmark",
+		"--store", "sqlite",
+		"--db-path", dbPath,
+		"--scape", "gtsa",
+		"--pop", "10",
+		"--gens", "4",
+		"--seed", "1302",
+		"--workers", "2",
+		"--min-improvement", "-0.2",
+	}
+	if err := run(context.Background(), args); err != nil {
+		t.Fatalf("benchmark command: %v", err)
+	}
+
+	entries, err := stats.ListRunIndex("benchmarks")
+	if err != nil {
+		t.Fatalf("list run index: %v", err)
+	}
+	if len(entries) == 0 {
+		t.Fatal("expected at least one indexed run")
+	}
+	runID := entries[0].RunID
+	data, err := os.ReadFile(filepath.Join("benchmarks", runID, "benchmark_summary.json"))
+	if err != nil {
+		t.Fatalf("read benchmark summary: %v", err)
+	}
+	var summary stats.BenchmarkSummary
+	if err := json.Unmarshal(data, &summary); err != nil {
+		t.Fatalf("decode benchmark summary: %v", err)
+	}
+	if summary.Scape != "gtsa" {
+		t.Fatalf("unexpected scape in summary: %s", summary.Scape)
+	}
+	if summary.Improvement < -0.2 {
+		t.Fatalf("expected bounded stability, got improvement=%f", summary.Improvement)
+	}
+}
+
 func captureStdout(fn func() error) (string, error) {
 	origStdout := os.Stdout
 	r, w, err := os.Pipe()
