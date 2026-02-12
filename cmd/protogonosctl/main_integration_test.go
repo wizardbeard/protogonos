@@ -321,6 +321,51 @@ func TestDiagnosticsCommandSQLiteReadsPersistedDiagnostics(t *testing.T) {
 	}
 }
 
+func TestSpeciesCommandSQLiteReadsPersistedSpeciesHistory(t *testing.T) {
+	origWD, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("getwd: %v", err)
+	}
+	workdir := t.TempDir()
+	if err := os.Chdir(workdir); err != nil {
+		t.Fatalf("chdir tempdir: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = os.Chdir(origWD)
+	})
+
+	dbPath := filepath.Join(workdir, "protogonos.db")
+	runArgs := []string{
+		"run",
+		"--store", "sqlite",
+		"--db-path", dbPath,
+		"--scape", "xor",
+		"--pop", "6",
+		"--gens", "2",
+		"--seed", "430",
+		"--workers", "2",
+	}
+	if err := run(context.Background(), runArgs); err != nil {
+		t.Fatalf("run command: %v", err)
+	}
+
+	out, err := captureStdout(func() error {
+		return run(context.Background(), []string{
+			"species",
+			"--store", "sqlite",
+			"--db-path", dbPath,
+			"--latest",
+			"--limit", "1",
+		})
+	})
+	if err != nil {
+		t.Fatalf("species command: %v", err)
+	}
+	if !strings.Contains(out, "generation=1") || !strings.Contains(out, "species_key=") {
+		t.Fatalf("unexpected species output: %s", out)
+	}
+}
+
 func TestTopCommandSQLiteReadsPersistedTopGenomes(t *testing.T) {
 	origWD, err := os.Getwd()
 	if err != nil {
