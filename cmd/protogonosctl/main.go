@@ -59,6 +59,8 @@ func run(ctx context.Context, args []string) error {
 		return runDiagnostics(ctx, args[1:])
 	case "species":
 		return runSpecies(ctx, args[1:])
+	case "species-diff":
+		return runSpeciesDiff(ctx, args[1:])
 	case "top":
 		return runTop(ctx, args[1:])
 	case "scape-summary":
@@ -756,6 +758,79 @@ func runSpecies(ctx context.Context, args []string) error {
 	return nil
 }
 
+func runSpeciesDiff(ctx context.Context, args []string) error {
+	fs := flag.NewFlagSet("species-diff", flag.ContinueOnError)
+	runID := fs.String("run-id", "", "run id")
+	latest := fs.Bool("latest", false, "diff species history for the most recent run from run index")
+	fromGen := fs.Int("from-gen", 0, "from generation (default: previous generation)")
+	toGen := fs.Int("to-gen", 0, "to generation (default: latest generation)")
+	storeKind := fs.String("store", storage.DefaultStoreKind(), "store backend: memory|sqlite")
+	dbPath := fs.String("db-path", "protogonos.db", "sqlite database path")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	if *runID != "" && *latest {
+		return errors.New("use either --run-id or --latest, not both")
+	}
+	if *runID == "" && !*latest {
+		return errors.New("species-diff requires --run-id or --latest")
+	}
+
+	client, err := protoapi.New(protoapi.Options{
+		StoreKind:     *storeKind,
+		DBPath:        *dbPath,
+		BenchmarksDir: benchmarksDir,
+		ExportsDir:    exportsDir,
+	})
+	if err != nil {
+		return err
+	}
+	defer func() {
+		_ = client.Close()
+	}()
+
+	diff, err := client.SpeciesDiff(ctx, protoapi.SpeciesDiffRequest{
+		RunID:          *runID,
+		Latest:         *latest,
+		FromGeneration: *fromGen,
+		ToGeneration:   *toGen,
+	})
+	if err != nil {
+		return err
+	}
+
+	fmt.Printf("run_id=%s from=%d to=%d added=%d removed=%d changed=%d unchanged=%d\n",
+		diff.RunID,
+		diff.FromGeneration,
+		diff.ToGeneration,
+		len(diff.Added),
+		len(diff.Removed),
+		len(diff.Changed),
+		diff.UnchangedCount,
+	)
+	for _, item := range diff.Added {
+		fmt.Printf("added species_key=%s size=%d mean=%.6f best=%.6f\n", item.Key, item.Size, item.MeanFitness, item.BestFitness)
+	}
+	for _, item := range diff.Removed {
+		fmt.Printf("removed species_key=%s size=%d mean=%.6f best=%.6f\n", item.Key, item.Size, item.MeanFitness, item.BestFitness)
+	}
+	for _, item := range diff.Changed {
+		fmt.Printf("changed species_key=%s size=%d->%d delta=%+d mean=%.6f->%.6f delta=%+.6f best=%.6f->%.6f delta=%+.6f\n",
+			item.Key,
+			item.FromSize,
+			item.ToSize,
+			item.SizeDelta,
+			item.FromMeanFitness,
+			item.ToMeanFitness,
+			item.MeanDelta,
+			item.FromBestFitness,
+			item.ToBestFitness,
+			item.BestDelta,
+		)
+	}
+	return nil
+}
+
 func runScapeSummary(ctx context.Context, args []string) error {
 	fs := flag.NewFlagSet("scape-summary", flag.ContinueOnError)
 	scapeName := fs.String("scape", "", "scape name")
@@ -1043,7 +1118,7 @@ func defaultMutationPolicy(
 }
 
 func usageError(msg string) error {
-	return fmt.Errorf("%s\nusage: protogonosctl <init|start|run|benchmark|profile|runs|lineage|fitness|diagnostics|species|top|scape-summary|export> [flags]", msg)
+	return fmt.Errorf("%s\nusage: protogonosctl <init|start|run|benchmark|profile|runs|lineage|fitness|diagnostics|species|species-diff|top|scape-summary|export> [flags]", msg)
 }
 
 func selectionFromName(name string) (evo.Selector, error) {

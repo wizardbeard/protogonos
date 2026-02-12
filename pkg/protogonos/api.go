@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"math/rand"
 	"path/filepath"
+	"sort"
 	"time"
 
 	"protogonos/internal/evo"
@@ -142,6 +143,36 @@ type SpeciesHistoryRequest struct {
 	RunID  string
 	Latest bool
 	Limit  int
+}
+
+type SpeciesDiffRequest struct {
+	RunID          string
+	Latest         bool
+	FromGeneration int
+	ToGeneration   int
+}
+
+type SpeciesDelta struct {
+	Key             string
+	FromSize        int
+	ToSize          int
+	SizeDelta       int
+	FromMeanFitness float64
+	ToMeanFitness   float64
+	MeanDelta       float64
+	FromBestFitness float64
+	ToBestFitness   float64
+	BestDelta       float64
+}
+
+type SpeciesDiff struct {
+	RunID          string
+	FromGeneration int
+	ToGeneration   int
+	Added          []model.SpeciesMetrics
+	Removed        []model.SpeciesMetrics
+	Changed        []SpeciesDelta
+	UnchangedCount int
 }
 
 type TopGenomesRequest struct {
@@ -748,6 +779,118 @@ func (c *Client) SpeciesHistory(ctx context.Context, req SpeciesHistoryRequest) 
 		})
 	}
 	return out, nil
+}
+
+func (c *Client) SpeciesDiff(ctx context.Context, req SpeciesDiffRequest) (SpeciesDiff, error) {
+	if req.RunID != "" && req.Latest {
+		return SpeciesDiff{}, errors.New("use either run id or latest")
+	}
+	if (req.FromGeneration > 0 && req.ToGeneration <= 0) || (req.FromGeneration <= 0 && req.ToGeneration > 0) {
+		return SpeciesDiff{}, errors.New("from and to generations must both be set")
+	}
+	if req.FromGeneration > 0 && req.ToGeneration > 0 && req.FromGeneration == req.ToGeneration {
+		return SpeciesDiff{}, errors.New("from and to generations must differ")
+	}
+
+	runID := req.RunID
+	if req.Latest {
+		entries, err := stats.ListRunIndex(c.benchmarksDir)
+		if err != nil {
+			return SpeciesDiff{}, err
+		}
+		if len(entries) == 0 {
+			return SpeciesDiff{}, errors.New("no runs available")
+		}
+		runID = entries[0].RunID
+	}
+	if runID == "" {
+		return SpeciesDiff{}, errors.New("species diff requires run id or latest")
+	}
+
+	if _, err := c.ensurePolis(ctx); err != nil {
+		return SpeciesDiff{}, err
+	}
+	history, ok, err := c.store.GetSpeciesHistory(ctx, runID)
+	if err != nil {
+		return SpeciesDiff{}, err
+	}
+	if !ok {
+		return SpeciesDiff{}, fmt.Errorf("species history not found for run id: %s", runID)
+	}
+	if len(history) < 2 {
+		return SpeciesDiff{}, fmt.Errorf("species history for run id %s has fewer than 2 generations", runID)
+	}
+
+	fromGen := req.FromGeneration
+	toGen := req.ToGeneration
+	if fromGen <= 0 && toGen <= 0 {
+		fromGen = history[len(history)-2].Generation
+		toGen = history[len(history)-1].Generation
+	}
+
+	byGeneration := make(map[int]model.SpeciesGeneration, len(history))
+	for _, generation := range history {
+		byGeneration[generation.Generation] = generation
+	}
+	fromHistory, ok := byGeneration[fromGen]
+	if !ok {
+		return SpeciesDiff{}, fmt.Errorf("species generation not found: %d", fromGen)
+	}
+	toHistory, ok := byGeneration[toGen]
+	if !ok {
+		return SpeciesDiff{}, fmt.Errorf("species generation not found: %d", toGen)
+	}
+
+	fromByKey := make(map[string]model.SpeciesMetrics, len(fromHistory.Species))
+	for _, item := range fromHistory.Species {
+		fromByKey[item.Key] = item
+	}
+	toByKey := make(map[string]model.SpeciesMetrics, len(toHistory.Species))
+	for _, item := range toHistory.Species {
+		toByKey[item.Key] = item
+	}
+
+	diff := SpeciesDiff{
+		RunID:          runID,
+		FromGeneration: fromGen,
+		ToGeneration:   toGen,
+	}
+	for key, from := range fromByKey {
+		to, ok := toByKey[key]
+		if !ok {
+			diff.Removed = append(diff.Removed, from)
+			continue
+		}
+		sizeChanged := from.Size != to.Size
+		meanChanged := from.MeanFitness != to.MeanFitness
+		bestChanged := from.BestFitness != to.BestFitness
+		if sizeChanged || meanChanged || bestChanged {
+			diff.Changed = append(diff.Changed, SpeciesDelta{
+				Key:             key,
+				FromSize:        from.Size,
+				ToSize:          to.Size,
+				SizeDelta:       to.Size - from.Size,
+				FromMeanFitness: from.MeanFitness,
+				ToMeanFitness:   to.MeanFitness,
+				MeanDelta:       to.MeanFitness - from.MeanFitness,
+				FromBestFitness: from.BestFitness,
+				ToBestFitness:   to.BestFitness,
+				BestDelta:       to.BestFitness - from.BestFitness,
+			})
+		} else {
+			diff.UnchangedCount++
+		}
+	}
+	for key, to := range toByKey {
+		if _, ok := fromByKey[key]; !ok {
+			diff.Added = append(diff.Added, to)
+		}
+	}
+
+	sort.Slice(diff.Added, func(i, j int) bool { return diff.Added[i].Key < diff.Added[j].Key })
+	sort.Slice(diff.Removed, func(i, j int) bool { return diff.Removed[i].Key < diff.Removed[j].Key })
+	sort.Slice(diff.Changed, func(i, j int) bool { return diff.Changed[i].Key < diff.Changed[j].Key })
+	return diff, nil
 }
 
 func (c *Client) TopGenomes(ctx context.Context, req TopGenomesRequest) ([]model.TopGenomeRecord, error) {

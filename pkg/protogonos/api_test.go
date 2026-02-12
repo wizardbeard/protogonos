@@ -77,6 +77,16 @@ func TestClientRunRunsAndExport(t *testing.T) {
 	if len(speciesHistory) == 0 {
 		t.Fatal("expected non-empty species history")
 	}
+	speciesDiff, err := client.SpeciesDiff(context.Background(), SpeciesDiffRequest{RunID: summary.RunID})
+	if err != nil {
+		t.Fatalf("species diff: %v", err)
+	}
+	if speciesDiff.RunID != summary.RunID {
+		t.Fatalf("species diff run mismatch: got=%s want=%s", speciesDiff.RunID, summary.RunID)
+	}
+	if speciesDiff.FromGeneration <= 0 || speciesDiff.ToGeneration <= speciesDiff.FromGeneration {
+		t.Fatalf("unexpected species diff generations: from=%d to=%d", speciesDiff.FromGeneration, speciesDiff.ToGeneration)
+	}
 	top, err := client.TopGenomes(context.Background(), TopGenomesRequest{RunID: summary.RunID, Limit: 5})
 	if err != nil {
 		t.Fatalf("top genomes: %v", err)
