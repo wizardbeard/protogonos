@@ -91,6 +91,55 @@ type ActuatorRecord struct {
 	PostF        string
 }
 
+type NeuronRecord struct {
+	ID                 any
+	Generation         int
+	CortexID           any
+	PreProcessor       string
+	SignalIntegrator   string
+	ActivationFunction string
+	PostProcessor      string
+	PlasticityFunction any
+	AggregatorFunction string
+	InputIDPs          []any
+	InputIDPsMod       []any
+	OutputIDs          []any
+	RecurrentOutputIDs []any
+}
+
+type AgentRecord struct {
+	ID                 any
+	EncodingType       string
+	Generation         int
+	PopulationID       any
+	SpecieID           any
+	CortexID           any
+	Fingerprint        any
+	Constraint         any
+	EvoHist            []any
+	Fitness            float64
+	InnovationFactor   any
+	Pattern            []any
+	TuningSelectionF   string
+	AnnealingParameter any
+	TuningDurationF    any
+	PerturbationRange  any
+	MutationOperators  []any
+	TotTopologicalMutF any
+	HeredityType       string
+	SubstrateID        any
+	OffspringIDs       []any
+	ParentIDs          []any
+	ChampionFlag       []any
+	Evolvability       float64
+	Brittleness        float64
+	Robustness         float64
+	EvolutionaryCap    float64
+	BehavioralTrace    any
+	FS                 float64
+	MainFitness        float64
+}
+
 func defaultConstraintRecord() ConstraintRecord {
 	return ConstraintRecord{
 		Morphology:             "xor_mimic",
@@ -151,5 +200,26 @@ func defaultSensorRecord() SensorRecord {
 func defaultActuatorRecord() ActuatorRecord {
 	return ActuatorRecord{
 		FaninIDs: []any{},
+	}
+}
+
+func defaultNeuronRecord() NeuronRecord {
+	return NeuronRecord{
+		InputIDPs:          []any{},
+		InputIDPsMod:       []any{},
+		OutputIDs:          []any{},
+		RecurrentOutputIDs: []any{},
+	}
+}
+
+func defaultAgentRecord() AgentRecord {
+	return AgentRecord{
+		EvoHist:           []any{},
+		Pattern:           []any{},
+		MutationOperators: []any{},
+		OffspringIDs:      []any{},
+		ParentIDs:         []any{},
+		ChampionFlag:      []any{false},
+		FS:                1,
 	}
 }

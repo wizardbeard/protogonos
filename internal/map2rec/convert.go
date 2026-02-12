@@ -12,6 +12,10 @@ func Convert(kind string, in map[string]any) (any, error) {
 		return ConvertSensor(in), nil
 	case "actuator":
 		return ConvertActuator(in), nil
+	case "neuron":
+		return ConvertNeuron(in), nil
+	case "agent":
+		return ConvertAgent(in), nil
 	default:
 		return nil, ErrUnsupportedKind
 	}
@@ -266,6 +270,164 @@ func ConvertActuator(in map[string]any) ActuatorRecord {
 		case "post_f":
 			if s, ok := asString(val); ok {
 				out.PostF = s
+			}
+		}
+	}
+	return out
+}
+
+func ConvertNeuron(in map[string]any) NeuronRecord {
+	out := defaultNeuronRecord()
+	for key, val := range in {
+		switch key {
+		case "id":
+			out.ID = val
+		case "generation":
+			if n, ok := asInt(val); ok {
+				out.Generation = n
+			}
+		case "cx_id":
+			out.CortexID = val
+		case "pre_processor":
+			if s, ok := asString(val); ok {
+				out.PreProcessor = s
+			}
+		case "signal_integrator":
+			if s, ok := asString(val); ok {
+				out.SignalIntegrator = s
+			}
+		case "af":
+			if s, ok := asString(val); ok {
+				out.ActivationFunction = s
+			}
+		case "post_processor":
+			if s, ok := asString(val); ok {
+				out.PostProcessor = s
+			}
+		case "pf":
+			out.PlasticityFunction = val
+		case "aggr_f":
+			if s, ok := asString(val); ok {
+				out.AggregatorFunction = s
+			}
+		case "input_idps":
+			if xs, ok := asAnySlice(val); ok {
+				out.InputIDPs = xs
+			}
+		case "input_idps_modulation":
+			if xs, ok := asAnySlice(val); ok {
+				out.InputIDPsMod = xs
+			}
+		case "output_ids":
+			if xs, ok := asAnySlice(val); ok {
+				out.OutputIDs = xs
+			}
+		case "ro_ids":
+			if xs, ok := asAnySlice(val); ok {
+				out.RecurrentOutputIDs = xs
+			}
+		}
+	}
+	return out
+}
+
+func ConvertAgent(in map[string]any) AgentRecord {
+	out := defaultAgentRecord()
+	for key, val := range in {
+		switch key {
+		case "id":
+			out.ID = val
+		case "encoding_type":
+			if s, ok := asString(val); ok {
+				out.EncodingType = s
+			}
+		case "generation":
+			if n, ok := asInt(val); ok {
+				out.Generation = n
+			}
+		case "population_id":
+			out.PopulationID = val
+		case "specie_id":
+			out.SpecieID = val
+		case "cx_id":
+			out.CortexID = val
+		case "fingerprint":
+			out.Fingerprint = val
+		case "constraint":
+			out.Constraint = val
+		case "evo_hist":
+			if xs, ok := asAnySlice(val); ok {
+				out.EvoHist = xs
+			}
+		case "fitness":
+			if f, ok := asFloat64(val); ok {
+				out.Fitness = f
+			}
+		case "innovation_factor":
+			out.InnovationFactor = val
+		case "pattern":
+			if xs, ok := asAnySlice(val); ok {
+				out.Pattern = xs
+			}
+		case "tuning_selection_f":
+			if s, ok := asString(val); ok {
+				out.TuningSelectionF = s
+			}
+		case "annealing_parameter":
+			out.AnnealingParameter = val
+		case "tuning_duration_f":
+			out.TuningDurationF = val
+		case "perturbation_range":
+			out.PerturbationRange = val
+		case "mutation_operators":
+			if xs, ok := asAnySlice(val); ok {
+				out.MutationOperators = xs
+			}
+		case "tot_topological_mutations_f":
+			out.TotTopologicalMutF = val
+		case "heredity_type":
+			if s, ok := asString(val); ok {
+				out.HeredityType = s
+			}
+		case "substrate_id":
+			out.SubstrateID = val
+		case "offspring_ids":
+			if xs, ok := asAnySlice(val); ok {
+				out.OffspringIDs = xs
+			}
+		case "parent_ids":
+			if xs, ok := asAnySlice(val); ok {
+				out.ParentIDs = xs
+			}
+		case "champion_flag":
+			if xs, ok := asAnySlice(val); ok {
+				out.ChampionFlag = xs
+			}
+		case "evolvability":
+			if f, ok := asFloat64(val); ok {
+				out.Evolvability = f
+			}
+		case "brittleness":
+			if f, ok := asFloat64(val); ok {
+				out.Brittleness = f
+			}
+		case "robustness":
+			if f, ok := asFloat64(val); ok {
+				out.Robustness = f
+			}
+		case "evolutionary_capacitance":
+			if f, ok := asFloat64(val); ok {
+				out.EvolutionaryCap = f
+			}
+		case "behavioral_trace":
+			out.BehavioralTrace = val
+		case "fs":
+			if f, ok := asFloat64(val); ok {
+				out.FS = f
+			}
+		case "main_fitness":
+			if f, ok := asFloat64(val); ok {
+				out.MainFitness = f
 			}
 		}
 	}

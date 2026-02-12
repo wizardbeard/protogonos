@@ -31,6 +31,24 @@ func TestConvertDispatchesSensorAndActuatorKinds(t *testing.T) {
 	if !ok || actuator.Name != "a" {
 		t.Fatalf("unexpected actuator dispatch result: %#v", gotActuator)
 	}
+
+	gotNeuron, err := Convert("neuron", map[string]any{"af": "tanh"})
+	if err != nil {
+		t.Fatalf("convert neuron: %v", err)
+	}
+	neuron, ok := gotNeuron.(NeuronRecord)
+	if !ok || neuron.ActivationFunction != "tanh" {
+		t.Fatalf("unexpected neuron dispatch result: %#v", gotNeuron)
+	}
+
+	gotAgent, err := Convert("agent", map[string]any{"encoding_type": "neural"})
+	if err != nil {
+		t.Fatalf("convert agent: %v", err)
+	}
+	agent, ok := gotAgent.(AgentRecord)
+	if !ok || agent.EncodingType != "neural" {
+		t.Fatalf("unexpected agent dispatch result: %#v", gotAgent)
+	}
 }
 
 func TestConvertConstraintOverridesKnownFieldsAndIgnoresUnknown(t *testing.T) {
@@ -161,5 +179,89 @@ func TestConvertActuatorMalformedKnownFieldKeepsDefault(t *testing.T) {
 	out := ConvertActuator(map[string]any{"fanin_ids": map[string]any{"x": 1}})
 	if len(out.FaninIDs) != 0 {
 		t.Fatalf("expected default empty fanin IDs, got %+v", out.FaninIDs)
+	}
+}
+
+func TestConvertNeuronMapsFields(t *testing.T) {
+	in := map[string]any{
+		"id":                    "n-1",
+		"generation":            2,
+		"cx_id":                 "cx-1",
+		"pre_processor":         "identity",
+		"signal_integrator":     "sum",
+		"af":                    "tanh",
+		"post_processor":        "identity",
+		"pf":                    []any{"hebbian", 0.1},
+		"aggr_f":                "dot_product",
+		"input_idps":            []any{"a", "b"},
+		"input_idps_modulation": []any{"m"},
+		"output_ids":            []any{"o1"},
+		"ro_ids":                []any{"r1"},
+	}
+	out := ConvertNeuron(in)
+	if out.ActivationFunction != "tanh" || out.SignalIntegrator != "sum" {
+		t.Fatalf("unexpected neuron conversion: %+v", out)
+	}
+	if len(out.InputIDPs) != 2 || len(out.RecurrentOutputIDs) != 1 {
+		t.Fatalf("unexpected neuron io conversion: %+v", out)
+	}
+}
+
+func TestConvertNeuronMalformedKnownFieldKeepsDefault(t *testing.T) {
+	out := ConvertNeuron(map[string]any{"output_ids": "bad"})
+	if len(out.OutputIDs) != 0 {
+		t.Fatalf("expected default output IDs, got %+v", out.OutputIDs)
+	}
+}
+
+func TestConvertAgentMapsFields(t *testing.T) {
+	in := map[string]any{
+		"id":                          "a-1",
+		"encoding_type":               "neural",
+		"generation":                  4,
+		"population_id":               "pop-1",
+		"specie_id":                   "sp-1",
+		"cx_id":                       "cx-1",
+		"fingerprint":                 "fp-1",
+		"constraint":                  map[string]any{"morphology": "xor"},
+		"evo_hist":                    []any{"m1"},
+		"fitness":                     0.9,
+		"innovation_factor":           []any{0, 1},
+		"pattern":                     []any{"p1"},
+		"tuning_selection_f":          "dynamic_random",
+		"annealing_parameter":         0.5,
+		"tuning_duration_f":           []any{"const", 10},
+		"perturbation_range":          1.0,
+		"mutation_operators":          []any{[]any{"add_neuron", 10}},
+		"tot_topological_mutations_f": []any{"ncount_exponential", 0.5},
+		"heredity_type":               "darwinian",
+		"substrate_id":                "sub-1",
+		"offspring_ids":               []any{"a-2"},
+		"parent_ids":                  []any{"a-0"},
+		"champion_flag":               []any{true},
+		"evolvability":                0.2,
+		"brittleness":                 0.1,
+		"robustness":                  0.3,
+		"evolutionary_capacitance":    0.4,
+		"behavioral_trace":            map[string]any{"steps": 100},
+		"fs":                          1.5,
+		"main_fitness":                0.8,
+	}
+	out := ConvertAgent(in)
+	if out.EncodingType != "neural" || out.Generation != 4 || out.TuningSelectionF != "dynamic_random" {
+		t.Fatalf("unexpected agent conversion: %+v", out)
+	}
+	if len(out.OffspringIDs) != 1 || len(out.ParentIDs) != 1 || out.MainFitness != 0.8 {
+		t.Fatalf("unexpected agent lineage conversion: %+v", out)
+	}
+}
+
+func TestConvertAgentMalformedKnownFieldKeepsDefault(t *testing.T) {
+	out := ConvertAgent(map[string]any{"offspring_ids": "bad", "fs": "bad"})
+	if len(out.OffspringIDs) != 0 {
+		t.Fatalf("expected default offspring IDs, got %+v", out.OffspringIDs)
+	}
+	if out.FS != 1 {
+		t.Fatalf("expected default fs=1, got %f", out.FS)
 	}
 }
