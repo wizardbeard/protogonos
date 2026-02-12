@@ -4,11 +4,13 @@
     {
       "id": "ref-default-xorandxor",
       "population_selection": "hof_competition",
+      "expected_selection": "species_shared_tournament",
       "population_evolution": "generational",
       "morphology": "xorAndXor",
       "connection_architecture": "recurrent",
       "neural_activations": ["tanh"],
       "tuning_selection": "dynamic_random",
+      "expected_tuning_selection": "best_so_far",
       "mutation_operators": [
         {"name": "add_bias", "weight": 10},
         {"name": "add_outlink", "weight": 40},
@@ -21,7 +23,45 @@
         {"name": "add_cpp", "weight": 1},
         {"name": "add_cep", "weight": 1}
       ]
+    },
+    {
+      "id": "ref-flatland-bias",
+      "population_selection": "hof_competition",
+      "expected_selection": "species_shared_tournament",
+      "population_evolution": "generational",
+      "morphology": "flatland_v1",
+      "connection_architecture": "recurrent",
+      "neural_activations": ["tanh"],
+      "tuning_selection": "dynamic_random",
+      "expected_tuning_selection": "best_so_far",
+      "mutation_operators": [
+        {"name": "add_bias", "weight": 20},
+        {"name": "add_outlink", "weight": 30},
+        {"name": "add_inlink", "weight": 20},
+        {"name": "add_neuron", "weight": 20},
+        {"name": "add_sensor", "weight": 2},
+        {"name": "add_actuator", "weight": 2},
+        {"name": "add_cpp", "weight": 2},
+        {"name": "add_cep", "weight": 2}
+      ]
+    },
+    {
+      "id": "ref-time-series-gtsa",
+      "population_selection": "hof_competition",
+      "expected_selection": "species_shared_tournament",
+      "population_evolution": "generational",
+      "morphology": "gtsa_v1",
+      "connection_architecture": "recurrent",
+      "neural_activations": ["tanh"],
+      "tuning_selection": "dynamic_random",
+      "expected_tuning_selection": "best_so_far",
+      "mutation_operators": [
+        {"name": "mutate_weights", "weight": 60},
+        {"name": "add_outlink", "weight": 15},
+        {"name": "add_inlink", "weight": 15},
+        {"name": "add_neuron", "weight": 10},
+        {"name": "mutate_plasticity_parameters", "weight": 5}
+      ]
     }
   ]
 }
-

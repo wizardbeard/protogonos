@@ -947,10 +947,12 @@ func runProfile(_ context.Context, args []string) error {
 			return nil
 		}
 		for _, profile := range profiles {
-			fmt.Printf("id=%s selection=%s tune_selection=%s mutation_ops=%d\n",
+			fmt.Printf("id=%s selection=%s expected_selection=%s tune_selection=%s expected_tune_selection=%s mutation_ops=%d\n",
 				profile.ID,
 				profile.PopulationSelection,
+				profile.ExpectedSelection,
 				profile.TuningSelection,
+				profile.ExpectedTuning,
 				profile.MutationOperatorLen,
 			)
 		}

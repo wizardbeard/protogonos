@@ -27,7 +27,9 @@ type parityProfileFixture struct {
 	Profiles []struct {
 		ID                  string `json:"id"`
 		PopulationSelection string `json:"population_selection"`
+		ExpectedSelection   string `json:"expected_selection"`
 		TuningSelection     string `json:"tuning_selection"`
+		ExpectedTuning      string `json:"expected_tuning_selection"`
 		MutationOperators   []struct {
 			Name   string `json:"name"`
 			Weight int    `json:"weight"`
@@ -39,6 +41,8 @@ type parityProfileInfo struct {
 	ID                  string
 	PopulationSelection string
 	TuningSelection     string
+	ExpectedSelection   string
+	ExpectedTuning      string
 	MutationOperatorLen int
 }
 
@@ -111,6 +115,8 @@ func listParityProfiles() ([]parityProfileInfo, error) {
 			ID:                  profile.ID,
 			PopulationSelection: mapPopulationSelection(profile.PopulationSelection),
 			TuningSelection:     mapTuningSelection(profile.TuningSelection),
+			ExpectedSelection:   profile.ExpectedSelection,
+			ExpectedTuning:      profile.ExpectedTuning,
 			MutationOperatorLen: len(profile.MutationOperators),
 		})
 	}

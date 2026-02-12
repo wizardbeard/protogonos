@@ -36,4 +36,15 @@ func TestListParityProfiles(t *testing.T) {
 	if profiles[0].ID == "" {
 		t.Fatal("expected profile id")
 	}
+	for _, profile := range profiles {
+		if profile.ExpectedSelection == "" || profile.ExpectedTuning == "" {
+			t.Fatalf("expected mapping metadata for profile %s", profile.ID)
+		}
+		if profile.PopulationSelection != profile.ExpectedSelection {
+			t.Fatalf("selection mapping mismatch for %s: got=%s expected=%s", profile.ID, profile.PopulationSelection, profile.ExpectedSelection)
+		}
+		if profile.TuningSelection != profile.ExpectedTuning {
+			t.Fatalf("tuning mapping mismatch for %s: got=%s expected=%s", profile.ID, profile.TuningSelection, profile.ExpectedTuning)
+		}
+	}
 }
