@@ -16,7 +16,7 @@ Status keys:
 | `population_monitor.erl` | `partial` | Generation loop, species-aware selection, quotas, diagnostics, lineage implemented; remaining fine-grained lifecycle parity pending. |
 | `genotype.erl` | `partial` | Seed/clone/lifecycle/store flows implemented; full reference operation surface still broader. |
 | `records.hrl` | `partial` | Core record equivalents implemented with versioned codecs; full field-level parity still pending. |
-| `map2rec.erl` | `partial` | Baseline `constraint`/`pmp` map-to-record conversion layer implemented in `internal/map2rec`; broader record coverage still pending. |
+| `map2rec.erl` | `partial` | Baseline `constraint`/`pmp`/`sensor`/`actuator` map-to-record conversion layer implemented in `internal/map2rec`; broader record coverage still pending. |
 | `genome_mutator.erl` | `partial` | Core topology/weight operators plus plasticity/substrate parameter mutations implemented; full operator breadth pending. |
 | `selection_algorithm.erl` | `partial` | Elite/tournament/species/shared species + `hof_competition` alias implemented; additional reference strategies pending. |
 | `fitness_postprocessor.erl` | `partial` | None/size/novelty postprocessors implemented; full policy breadth pending. |
@@ -60,6 +60,7 @@ Status keys:
 - Centralized typed run-config materialization with stricter validation in API.
 - Implemented true `dynamic_random` exoself candidate-selection semantics.
 - Added baseline `map2rec` package for permissive `constraint`/`pmp` record materialization.
+- Expanded `map2rec` parity with permissive `sensor`/`actuator` record materialization and tests.
 
 ## Highest-priority remaining gaps to reach strict parity
 

@@ -55,6 +55,42 @@ type PMPRecord struct {
 	CommitteePID       string
 }
 
+type SensorRecord struct {
+	ID           any
+	Name         string
+	Type         string
+	CortexID     any
+	Scape        any
+	VL           int
+	FanoutIDs    []any
+	Generation   int
+	Format       any
+	Parameters   any
+	GTParameters any
+	PhysRep      any
+	VisRep       any
+	PreF         string
+	PostF        string
+}
+
+type ActuatorRecord struct {
+	ID           any
+	Name         string
+	Type         string
+	CortexID     any
+	Scape        any
+	VL           int
+	FaninIDs     []any
+	Generation   int
+	Format       any
+	Parameters   any
+	GTParameters any
+	PhysRep      any
+	VisRep       any
+	PreF         string
+	PostF        string
+}
+
 func defaultConstraintRecord() ConstraintRecord {
 	return ConstraintRecord{
 		Morphology:             "xor_mimic",
@@ -103,5 +139,17 @@ func defaultPMPRecord() PMPRecord {
 		GenerationLimit:    100,
 		EvaluationsLimit:   100000,
 		FitnessGoal:        math.Inf(1),
+	}
+}
+
+func defaultSensorRecord() SensorRecord {
+	return SensorRecord{
+		FanoutIDs: []any{},
+	}
+}
+
+func defaultActuatorRecord() ActuatorRecord {
+	return ActuatorRecord{
+		FaninIDs: []any{},
 	}
 }

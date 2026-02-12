@@ -8,6 +8,10 @@ func Convert(kind string, in map[string]any) (any, error) {
 		return ConvertConstraint(in), nil
 	case "pmp":
 		return ConvertPMP(in), nil
+	case "sensor":
+		return ConvertSensor(in), nil
+	case "actuator":
+		return ConvertActuator(in), nil
 	default:
 		return nil, ErrUnsupportedKind
 	}
@@ -156,6 +160,112 @@ func ConvertPMP(in map[string]any) PMPRecord {
 		case "committee_pid":
 			if s, ok := asString(val); ok {
 				out.CommitteePID = s
+			}
+		}
+	}
+	return out
+}
+
+func ConvertSensor(in map[string]any) SensorRecord {
+	out := defaultSensorRecord()
+	for key, val := range in {
+		switch key {
+		case "id":
+			out.ID = val
+		case "name":
+			if s, ok := asString(val); ok {
+				out.Name = s
+			}
+		case "type":
+			if s, ok := asString(val); ok {
+				out.Type = s
+			}
+		case "cx_id":
+			out.CortexID = val
+		case "scape":
+			out.Scape = val
+		case "vl":
+			if n, ok := asInt(val); ok {
+				out.VL = n
+			}
+		case "fanout_ids":
+			if xs, ok := asAnySlice(val); ok {
+				out.FanoutIDs = xs
+			}
+		case "generation":
+			if n, ok := asInt(val); ok {
+				out.Generation = n
+			}
+		case "format":
+			out.Format = val
+		case "parameters":
+			out.Parameters = val
+		case "gt_parameters":
+			out.GTParameters = val
+		case "phys_rep":
+			out.PhysRep = val
+		case "vis_rep":
+			out.VisRep = val
+		case "pre_f":
+			if s, ok := asString(val); ok {
+				out.PreF = s
+			}
+		case "post_f":
+			if s, ok := asString(val); ok {
+				out.PostF = s
+			}
+		}
+	}
+	return out
+}
+
+func ConvertActuator(in map[string]any) ActuatorRecord {
+	out := defaultActuatorRecord()
+	for key, val := range in {
+		switch key {
+		case "id":
+			out.ID = val
+		case "name":
+			if s, ok := asString(val); ok {
+				out.Name = s
+			}
+		case "type":
+			if s, ok := asString(val); ok {
+				out.Type = s
+			}
+		case "cx_id":
+			out.CortexID = val
+		case "scape":
+			out.Scape = val
+		case "vl":
+			if n, ok := asInt(val); ok {
+				out.VL = n
+			}
+		case "fanin_ids":
+			if xs, ok := asAnySlice(val); ok {
+				out.FaninIDs = xs
+			}
+		case "generation":
+			if n, ok := asInt(val); ok {
+				out.Generation = n
+			}
+		case "format":
+			out.Format = val
+		case "parameters":
+			out.Parameters = val
+		case "gt_parameters":
+			out.GTParameters = val
+		case "phys_rep":
+			out.PhysRep = val
+		case "vis_rep":
+			out.VisRep = val
+		case "pre_f":
+			if s, ok := asString(val); ok {
+				out.PreF = s
+			}
+		case "post_f":
+			if s, ok := asString(val); ok {
+				out.PostF = s
 			}
 		}
 	}

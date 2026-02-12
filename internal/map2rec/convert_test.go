@@ -13,6 +13,26 @@ func TestConvertUnsupportedKind(t *testing.T) {
 	}
 }
 
+func TestConvertDispatchesSensorAndActuatorKinds(t *testing.T) {
+	gotSensor, err := Convert("sensor", map[string]any{"name": "s"})
+	if err != nil {
+		t.Fatalf("convert sensor: %v", err)
+	}
+	sensor, ok := gotSensor.(SensorRecord)
+	if !ok || sensor.Name != "s" {
+		t.Fatalf("unexpected sensor dispatch result: %#v", gotSensor)
+	}
+
+	gotActuator, err := Convert("actuator", map[string]any{"name": "a"})
+	if err != nil {
+		t.Fatalf("convert actuator: %v", err)
+	}
+	actuator, ok := gotActuator.(ActuatorRecord)
+	if !ok || actuator.Name != "a" {
+		t.Fatalf("unexpected actuator dispatch result: %#v", gotActuator)
+	}
+}
+
 func TestConvertConstraintOverridesKnownFieldsAndIgnoresUnknown(t *testing.T) {
 	in := map[string]any{
 		"morphology":             "gtsa_v1",
@@ -73,5 +93,73 @@ func TestConvertPMPMapsFields(t *testing.T) {
 	}
 	if !math.IsInf(out.FitnessGoal, 1) {
 		t.Fatalf("expected infinite fitness goal, got %f", out.FitnessGoal)
+	}
+}
+
+func TestConvertSensorMapsFields(t *testing.T) {
+	in := map[string]any{
+		"id":            "sensor-1",
+		"name":          "rangefinder",
+		"type":          "distance",
+		"cx_id":         "cx-1",
+		"scape":         []any{"public", "flatland"},
+		"vl":            9,
+		"fanout_ids":    []any{"n-1", "n-2"},
+		"generation":    3,
+		"format":        map[string]any{"kind": "geo"},
+		"parameters":    []any{1, 2},
+		"gt_parameters": map[string]any{"noise": 0.1},
+		"phys_rep":      map[string]any{"radius": 1.2},
+		"vis_rep":       map[string]any{"color": "green"},
+		"pre_f":         "identity",
+		"post_f":        "clip",
+	}
+	out := ConvertSensor(in)
+	if out.Name != "rangefinder" || out.Type != "distance" || out.VL != 9 {
+		t.Fatalf("unexpected sensor map2rec output: %+v", out)
+	}
+	if len(out.FanoutIDs) != 2 || out.PreF != "identity" || out.PostF != "clip" {
+		t.Fatalf("unexpected sensor io fields: %+v", out)
+	}
+}
+
+func TestConvertSensorMalformedKnownFieldKeepsDefault(t *testing.T) {
+	out := ConvertSensor(map[string]any{"fanout_ids": "bad"})
+	if len(out.FanoutIDs) != 0 {
+		t.Fatalf("expected default empty fanout IDs, got %+v", out.FanoutIDs)
+	}
+}
+
+func TestConvertActuatorMapsFields(t *testing.T) {
+	in := map[string]any{
+		"id":            "act-1",
+		"name":          "thrust",
+		"type":          "scalar",
+		"cx_id":         "cx-2",
+		"scape":         []any{"private", "cart-pole-lite"},
+		"vl":            1,
+		"fanin_ids":     []any{"n-3"},
+		"generation":    4,
+		"format":        map[string]any{"kind": "raw"},
+		"parameters":    map[string]any{"limit": 1.0},
+		"gt_parameters": []any{0.2, 0.4},
+		"phys_rep":      "none",
+		"vis_rep":       map[string]any{"shape": "bar"},
+		"pre_f":         "scale",
+		"post_f":        "identity",
+	}
+	out := ConvertActuator(in)
+	if out.Name != "thrust" || out.Type != "scalar" || out.VL != 1 {
+		t.Fatalf("unexpected actuator map2rec output: %+v", out)
+	}
+	if len(out.FaninIDs) != 1 || out.PreF != "scale" || out.PostF != "identity" {
+		t.Fatalf("unexpected actuator io fields: %+v", out)
+	}
+}
+
+func TestConvertActuatorMalformedKnownFieldKeepsDefault(t *testing.T) {
+	out := ConvertActuator(map[string]any{"fanin_ids": map[string]any{"x": 1}})
+	if len(out.FaninIDs) != 0 {
+		t.Fatalf("expected default empty fanin IDs, got %+v", out.FaninIDs)
 	}
 }

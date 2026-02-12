@@ -93,6 +93,33 @@ func asFloat64s(v any) ([]float64, bool) {
 	}
 }
 
+func asAnySlice(v any) ([]any, bool) {
+	switch xs := v.(type) {
+	case []any:
+		return append([]any(nil), xs...), true
+	case []string:
+		out := make([]any, 0, len(xs))
+		for _, item := range xs {
+			out = append(out, item)
+		}
+		return out, true
+	case []int:
+		out := make([]any, 0, len(xs))
+		for _, item := range xs {
+			out = append(out, item)
+		}
+		return out, true
+	case []float64:
+		out := make([]any, 0, len(xs))
+		for _, item := range xs {
+			out = append(out, item)
+		}
+		return out, true
+	default:
+		return nil, false
+	}
+}
+
 func asDurationSpec(v any) (DurationSpec, bool) {
 	switch x := v.(type) {
 	case map[string]any:
