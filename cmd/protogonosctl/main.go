@@ -132,6 +132,7 @@ func runRun(ctx context.Context, args []string) error {
 	dbPath := fs.String("db-path", "protogonos.db", "sqlite database path")
 	enableTuning := fs.Bool("tuning", false, "enable exoself tuning")
 	compareTuning := fs.Bool("compare-tuning", false, "run with and without tuning and emit side-by-side metrics")
+	profileName := fs.String("profile", "", "optional parity profile id (from testdata/fixtures/parity/ref_benchmarker_profiles.json)")
 	selectionName := fs.String("selection", "elite", "parent selection strategy: elite|tournament|species_tournament|species_shared_tournament")
 	postprocessorName := fs.String("fitness-postprocessor", "none", "fitness postprocessor: none|size_proportional|novelty_proportional")
 	topoPolicyName := fs.String("topo-policy", "const", "topological mutation count policy: const|ncount_linear|ncount_exponential")
@@ -153,6 +154,21 @@ func runRun(ctx context.Context, args []string) error {
 	wSubstrate := fs.Float64("w-substrate", 0.02, "weight for perturb_substrate_parameter mutation")
 	if err := fs.Parse(args); err != nil {
 		return err
+	}
+	if *profileName != "" {
+		preset, err := loadParityPreset(*profileName)
+		if err != nil {
+			return err
+		}
+		*selectionName = preset.Selection
+		*tuneSelection = preset.TuneSelection
+		*wPerturb = preset.WeightPerturb
+		*wAddSynapse = preset.WeightAddSyn
+		*wRemoveSynapse = preset.WeightRemoveSyn
+		*wAddNeuron = preset.WeightAddNeuro
+		*wRemoveNeuron = preset.WeightRemoveNeuro
+		*wPlasticity = preset.WeightPlasticity
+		*wSubstrate = preset.WeightSubstrate
 	}
 	if *wPerturb < 0 || *wAddSynapse < 0 || *wRemoveSynapse < 0 || *wAddNeuron < 0 || *wRemoveNeuron < 0 || *wPlasticity < 0 || *wSubstrate < 0 {
 		return errors.New("mutation weights must be >= 0")
@@ -784,6 +800,7 @@ func runBenchmark(ctx context.Context, args []string) error {
 	storeKind := fs.String("store", storage.DefaultStoreKind(), "store backend: memory|sqlite")
 	dbPath := fs.String("db-path", "protogonos.db", "sqlite database path")
 	enableTuning := fs.Bool("tuning", false, "enable exoself tuning")
+	profileName := fs.String("profile", "", "optional parity profile id (from testdata/fixtures/parity/ref_benchmarker_profiles.json)")
 	selectionName := fs.String("selection", "elite", "parent selection strategy: elite|tournament|species_tournament|species_shared_tournament")
 	postprocessorName := fs.String("fitness-postprocessor", "none", "fitness postprocessor: none|size_proportional|novelty_proportional")
 	topoPolicyName := fs.String("topo-policy", "const", "topological mutation count policy: const|ncount_linear|ncount_exponential")
@@ -806,6 +823,21 @@ func runBenchmark(ctx context.Context, args []string) error {
 	minImprovement := fs.Float64("min-improvement", 0.001, "minimum expected fitness improvement")
 	if err := fs.Parse(args); err != nil {
 		return err
+	}
+	if *profileName != "" {
+		preset, err := loadParityPreset(*profileName)
+		if err != nil {
+			return err
+		}
+		*selectionName = preset.Selection
+		*tuneSelection = preset.TuneSelection
+		*wPerturb = preset.WeightPerturb
+		*wAddSynapse = preset.WeightAddSyn
+		*wRemoveSynapse = preset.WeightRemoveSyn
+		*wAddNeuron = preset.WeightAddNeuro
+		*wRemoveNeuron = preset.WeightRemoveNeuro
+		*wPlasticity = preset.WeightPlasticity
+		*wSubstrate = preset.WeightSubstrate
 	}
 	if *wPerturb < 0 || *wAddSynapse < 0 || *wRemoveSynapse < 0 || *wAddNeuron < 0 || *wRemoveNeuron < 0 || *wPlasticity < 0 || *wSubstrate < 0 {
 		return errors.New("mutation weights must be >= 0")
