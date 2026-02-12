@@ -15,6 +15,14 @@ var (
 	ErrNoNeurons  = errors.New("genome has no neurons")
 )
 
+// ContextualOperator can declare whether it is applicable to a genome under a
+// specific scape context. PopulationMonitor uses this to avoid selecting
+// incompatible operators.
+type ContextualOperator interface {
+	Operator
+	Applicable(genome model.Genome, scapeName string) bool
+}
+
 var (
 	ErrSynapseExists   = errors.New("synapse already exists")
 	ErrSynapseNotFound = errors.New("synapse not found")
@@ -56,6 +64,10 @@ func (o *PerturbRandomWeight) Name() string {
 	return "perturb_random_weight"
 }
 
+func (o *PerturbRandomWeight) Applicable(genome model.Genome, _ string) bool {
+	return len(genome.Synapses) > 0
+}
+
 func (o *PerturbRandomWeight) Apply(_ context.Context, genome model.Genome) (model.Genome, error) {
 	if len(genome.Synapses) == 0 {
 		return model.Genome{}, ErrNoSynapses
@@ -83,6 +95,10 @@ type AddRandomSynapse struct {
 
 func (o *AddRandomSynapse) Name() string {
 	return "add_random_synapse"
+}
+
+func (o *AddRandomSynapse) Applicable(genome model.Genome, _ string) bool {
+	return len(genome.Neurons) > 0
 }
 
 func (o *AddRandomSynapse) Apply(_ context.Context, genome model.Genome) (model.Genome, error) {
@@ -122,6 +138,10 @@ func (o *RemoveRandomSynapse) Name() string {
 	return "remove_random_synapse"
 }
 
+func (o *RemoveRandomSynapse) Applicable(genome model.Genome, _ string) bool {
+	return len(genome.Synapses) > 0
+}
+
 func (o *RemoveRandomSynapse) Apply(_ context.Context, genome model.Genome) (model.Genome, error) {
 	if o == nil || o.Rand == nil {
 		return model.Genome{}, errors.New("random source is required")
@@ -144,6 +164,10 @@ type AddRandomNeuron struct {
 
 func (o *AddRandomNeuron) Name() string {
 	return "add_random_neuron"
+}
+
+func (o *AddRandomNeuron) Applicable(genome model.Genome, _ string) bool {
+	return len(genome.Synapses) > 0
 }
 
 func (o *AddRandomNeuron) Apply(ctx context.Context, genome model.Genome) (model.Genome, error) {
@@ -179,6 +203,18 @@ func (o *RemoveRandomNeuron) Name() string {
 	return "remove_random_neuron"
 }
 
+func (o *RemoveRandomNeuron) Applicable(genome model.Genome, _ string) bool {
+	if len(genome.Neurons) == 0 {
+		return false
+	}
+	for _, neuron := range genome.Neurons {
+		if _, protected := o.Protected[neuron.ID]; !protected {
+			return true
+		}
+	}
+	return false
+}
+
 func (o *RemoveRandomNeuron) Apply(ctx context.Context, genome model.Genome) (model.Genome, error) {
 	if o == nil || o.Rand == nil {
 		return model.Genome{}, errors.New("random source is required")
@@ -212,6 +248,10 @@ func (o *PerturbPlasticityRate) Name() string {
 	return "perturb_plasticity_rate"
 }
 
+func (o *PerturbPlasticityRate) Applicable(genome model.Genome, _ string) bool {
+	return genome.Plasticity != nil
+}
+
 func (o *PerturbPlasticityRate) Apply(_ context.Context, genome model.Genome) (model.Genome, error) {
 	if o == nil || o.Rand == nil {
 		return model.Genome{}, errors.New("random source is required")
@@ -240,6 +280,10 @@ type PerturbSubstrateParameter struct {
 
 func (o *PerturbSubstrateParameter) Name() string {
 	return "perturb_substrate_parameter"
+}
+
+func (o *PerturbSubstrateParameter) Applicable(genome model.Genome, _ string) bool {
+	return genome.Substrate != nil && len(genome.Substrate.Parameters) > 0
 }
 
 func (o *PerturbSubstrateParameter) Apply(_ context.Context, genome model.Genome) (model.Genome, error) {

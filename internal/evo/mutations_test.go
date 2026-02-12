@@ -361,6 +361,29 @@ func TestPerturbSubstrateParameterMutation(t *testing.T) {
 	}
 }
 
+func TestContextualOperatorApplicability(t *testing.T) {
+	genome := randomGenome(rand.New(rand.NewSource(7)))
+	if (&PerturbPlasticityRate{}).Applicable(genome, "xor") {
+		t.Fatal("expected plasticity operator to be inapplicable without plasticity config")
+	}
+	if (&PerturbSubstrateParameter{}).Applicable(genome, "xor") {
+		t.Fatal("expected substrate operator to be inapplicable without substrate config")
+	}
+
+	genome.Plasticity = &model.PlasticityConfig{Rule: "hebbian", Rate: 0.1}
+	genome.Substrate = &model.SubstrateConfig{
+		CPPName:    "set_weight",
+		CEPName:    "delta_weight",
+		Parameters: map[string]float64{"scale": 1.0},
+	}
+	if !(&PerturbPlasticityRate{}).Applicable(genome, "xor") {
+		t.Fatal("expected plasticity operator to be applicable with plasticity config")
+	}
+	if !(&PerturbSubstrateParameter{}).Applicable(genome, "xor") {
+		t.Fatal("expected substrate operator to be applicable with substrate config")
+	}
+}
+
 func decodeGenomeFixture(t *testing.T, path string) model.Genome {
 	t.Helper()
 

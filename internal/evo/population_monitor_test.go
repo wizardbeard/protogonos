@@ -657,6 +657,43 @@ func TestPopulationMonitorSkipsNoSynapseMutationError(t *testing.T) {
 	}
 }
 
+func TestPopulationMonitorGatesIncompatibleContextualMutations(t *testing.T) {
+	initial := []model.Genome{
+		newLinearGenome("g0", -1.0),
+		newLinearGenome("g1", -0.8),
+		newLinearGenome("g2", -0.6),
+		newLinearGenome("g3", -0.4),
+	}
+	monitor, err := NewPopulationMonitor(MonitorConfig{
+		Scape:    oneDimScape{},
+		Mutation: namedNoopMutation{name: "noop"},
+		MutationPolicy: []WeightedMutation{
+			{Operator: &PerturbPlasticityRate{Rand: rand.New(rand.NewSource(1)), MaxDelta: 0.2}, Weight: 10},
+			{Operator: &PerturbSubstrateParameter{Rand: rand.New(rand.NewSource(2)), MaxDelta: 0.2}, Weight: 10},
+			{Operator: namedNoopMutation{name: "noop"}, Weight: 1},
+		},
+		PopulationSize:  len(initial),
+		EliteCount:      1,
+		Generations:     2,
+		Workers:         1,
+		Seed:            99,
+		InputNeuronIDs:  []string{"i"},
+		OutputNeuronIDs: []string{"o"},
+	})
+	if err != nil {
+		t.Fatalf("new monitor: %v", err)
+	}
+	result, err := monitor.Run(context.Background(), initial)
+	if err != nil {
+		t.Fatalf("run: %v", err)
+	}
+	for _, rec := range result.Lineage {
+		if strings.Contains(rec.Operation, "perturb_plasticity_rate") || strings.Contains(rec.Operation, "perturb_substrate_parameter") {
+			t.Fatalf("expected incompatible contextual operators to be gated, got operation %q", rec.Operation)
+		}
+	}
+}
+
 func TestNoveltyPostprocessorBoostsTopologyOutlier(t *testing.T) {
 	scored := []ScoredGenome{
 		{Genome: newLinearGenome("a", 1), Fitness: 1},

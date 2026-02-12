@@ -531,7 +531,7 @@ func (m *PopulationMonitor) mutateFromParent(ctx context.Context, parent model.G
 	mutated := child
 	operationNames := make([]string, 0, mutationCount)
 	for step := 0; step < mutationCount; step++ {
-		operator := m.chooseMutation()
+		operator := m.chooseMutation(mutated)
 		next, opErr := operator.Apply(ctx, mutated)
 		operationName := operator.Name()
 		if opErr != nil {
@@ -729,25 +729,44 @@ func summarizeSpeciesGeneration(ranked []ScoredGenome, speciesByGenomeID map[str
 	}, currentSet
 }
 
-func (m *PopulationMonitor) chooseMutation() Operator {
+func (m *PopulationMonitor) chooseMutation(genome model.Genome) Operator {
 	if len(m.cfg.MutationPolicy) == 0 {
 		return m.cfg.Mutation
 	}
 
 	total := 0.0
+	candidates := make([]WeightedMutation, 0, len(m.cfg.MutationPolicy))
 	for _, item := range m.cfg.MutationPolicy {
+		if !m.isOperatorApplicable(item.Operator, genome) {
+			continue
+		}
+		candidates = append(candidates, item)
 		total += item.Weight
 	}
 	if total <= 0 {
-		return m.cfg.Mutation
+		if m.isOperatorApplicable(m.cfg.Mutation, genome) {
+			return m.cfg.Mutation
+		}
+		// No compatible operator; fall back to legacy behavior.
+		return m.cfg.MutationPolicy[len(m.cfg.MutationPolicy)-1].Operator
 	}
 	pick := m.rng.Float64() * total
 	acc := 0.0
-	for _, item := range m.cfg.MutationPolicy {
+	for _, item := range candidates {
 		acc += item.Weight
 		if pick <= acc {
 			return item.Operator
 		}
 	}
-	return m.cfg.MutationPolicy[len(m.cfg.MutationPolicy)-1].Operator
+	return candidates[len(candidates)-1].Operator
+}
+
+func (m *PopulationMonitor) isOperatorApplicable(operator Operator, genome model.Genome) bool {
+	if operator == nil {
+		return false
+	}
+	if contextual, ok := operator.(ContextualOperator); ok {
+		return contextual.Applicable(genome, m.cfg.Scape.Name())
+	}
+	return true
 }
