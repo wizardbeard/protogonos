@@ -137,7 +137,7 @@ func runRun(ctx context.Context, args []string) error {
 	enableTuning := fs.Bool("tuning", false, "enable exoself tuning")
 	compareTuning := fs.Bool("compare-tuning", false, "run with and without tuning and emit side-by-side metrics")
 	profileName := fs.String("profile", "", "optional parity profile id (from testdata/fixtures/parity/ref_benchmarker_profiles.json)")
-	selectionName := fs.String("selection", "elite", "parent selection strategy: elite|tournament|species_tournament|species_shared_tournament")
+	selectionName := fs.String("selection", "elite", "parent selection strategy: elite|tournament|species_tournament|species_shared_tournament|hof_competition|competition|top3")
 	postprocessorName := fs.String("fitness-postprocessor", "none", "fitness postprocessor: none|size_proportional|novelty_proportional")
 	topoPolicyName := fs.String("topo-policy", "const", "topological mutation count policy: const|ncount_linear|ncount_exponential")
 	topoCount := fs.Int("topo-count", 1, "mutation count for topo-policy=const")
@@ -740,7 +740,7 @@ func runBenchmark(ctx context.Context, args []string) error {
 	dbPath := fs.String("db-path", "protogonos.db", "sqlite database path")
 	enableTuning := fs.Bool("tuning", false, "enable exoself tuning")
 	profileName := fs.String("profile", "", "optional parity profile id (from testdata/fixtures/parity/ref_benchmarker_profiles.json)")
-	selectionName := fs.String("selection", "elite", "parent selection strategy: elite|tournament|species_tournament|species_shared_tournament")
+	selectionName := fs.String("selection", "elite", "parent selection strategy: elite|tournament|species_tournament|species_shared_tournament|hof_competition|competition|top3")
 	postprocessorName := fs.String("fitness-postprocessor", "none", "fitness postprocessor: none|size_proportional|novelty_proportional")
 	topoPolicyName := fs.String("topo-policy", "const", "topological mutation count policy: const|ncount_linear|ncount_exponential")
 	topoCount := fs.Int("topo-count", 1, "mutation count for topo-policy=const")
@@ -1086,6 +1086,14 @@ func selectionFromName(name string) (evo.Selector, error) {
 			TournamentSize:        3,
 			StagnationGenerations: 2,
 		}, nil
+	case "competition":
+		return &evo.SpeciesSharedTournamentSelector{
+			Identifier:     evo.TopologySpecieIdentifier{},
+			PoolSize:       0,
+			TournamentSize: 3,
+		}, nil
+	case "top3":
+		return evo.EliteSelector{}, nil
 	default:
 		return nil, fmt.Errorf("unsupported selection strategy: %s", name)
 	}

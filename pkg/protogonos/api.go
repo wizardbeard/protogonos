@@ -1090,6 +1090,14 @@ func selectionFromName(name string) (evo.Selector, error) {
 			TournamentSize:        3,
 			StagnationGenerations: 2,
 		}, nil
+	case "competition":
+		return &evo.SpeciesSharedTournamentSelector{
+			Identifier:     evo.TopologySpecieIdentifier{},
+			PoolSize:       0,
+			TournamentSize: 3,
+		}, nil
+	case "top3":
+		return evo.EliteSelector{}, nil
 	default:
 		return nil, fmt.Errorf("unsupported selection strategy: %s", name)
 	}

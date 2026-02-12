@@ -173,21 +173,23 @@ func TestClientRunAcceptsReferenceStrategyAliases(t *testing.T) {
 		_ = client.Close()
 	})
 
-	_, err = client.Run(context.Background(), RunRequest{
-		Scape:           "xor",
-		Population:      8,
-		Generations:     2,
-		Selection:       "hof_competition",
-		EnableTuning:    true,
-		TuneSelection:   "dynamic_random",
-		TuneAttempts:    2,
-		TuneSteps:       3,
-		TuneStepSize:    0.25,
-		WeightPerturb:   1,
-		WeightAddNeuron: 0.2,
-	})
-	if err != nil {
-		t.Fatalf("run with aliases: %v", err)
+	for _, selection := range []string{"hof_competition", "competition", "top3"} {
+		_, err = client.Run(context.Background(), RunRequest{
+			Scape:           "xor",
+			Population:      8,
+			Generations:     2,
+			Selection:       selection,
+			EnableTuning:    true,
+			TuneSelection:   "dynamic_random",
+			TuneAttempts:    2,
+			TuneSteps:       3,
+			TuneStepSize:    0.25,
+			WeightPerturb:   1,
+			WeightAddNeuron: 0.2,
+		})
+		if err != nil {
+			t.Fatalf("run with alias %s: %v", selection, err)
+		}
 	}
 }
 
