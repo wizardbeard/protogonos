@@ -67,6 +67,7 @@ Status keys:
 - Wired `map2rec` into parity profile ingestion so profile-to-runtime mapping uses record materialization semantics.
 - Added `benchmark --config <json>` map2rec-backed config ingestion path with explicit-flag override behavior.
 - Added `run --config <json>` map2rec-backed config ingestion path with the same explicit-flag override behavior.
+- Added sqlite integration tests for `run --config` and `benchmark --config` map2rec ingestion and flag overrides.
 
 ## Highest-priority remaining gaps to reach strict parity
 

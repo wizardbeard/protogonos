@@ -621,6 +621,73 @@ func TestBenchmarkCommandWritesSummary(t *testing.T) {
 	}
 }
 
+func TestBenchmarkCommandConfigLoadsMap2RecAndAllowsFlagOverrides(t *testing.T) {
+	origWD, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("getwd: %v", err)
+	}
+	workdir := t.TempDir()
+	if err := os.Chdir(workdir); err != nil {
+		t.Fatalf("chdir tempdir: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = os.Chdir(origWD)
+	})
+
+	configPath := filepath.Join(workdir, "benchmark_config.json")
+	cfg := map[string]any{
+		"scape": "xor",
+		"seed":  515,
+		"pmp": map[string]any{
+			"init_specie_size": 9,
+			"generation_limit": 6,
+		},
+		"constraint": map[string]any{
+			"population_selection_f": "hof_competition",
+			"tuning_selection_fs":    []any{"dynamic_random"},
+			"mutation_operators": []any{
+				[]any{"add_bias", 1},
+				[]any{"add_outlink", 1},
+				[]any{"add_neuron", 1},
+			},
+		},
+	}
+	data, err := json.Marshal(cfg)
+	if err != nil {
+		t.Fatalf("marshal config: %v", err)
+	}
+	if err := os.WriteFile(configPath, data, 0o644); err != nil {
+		t.Fatalf("write config: %v", err)
+	}
+
+	dbPath := filepath.Join(workdir, "protogonos.db")
+	args := []string{
+		"benchmark",
+		"--store", "sqlite",
+		"--db-path", dbPath,
+		"--config", configPath,
+		"--gens", "2",
+		"--min-improvement", "-0.2",
+	}
+	if err := run(context.Background(), args); err != nil {
+		t.Fatalf("benchmark command with config: %v", err)
+	}
+
+	entries, err := stats.ListRunIndex("benchmarks")
+	if err != nil {
+		t.Fatalf("list run index: %v", err)
+	}
+	if len(entries) == 0 {
+		t.Fatal("expected at least one indexed run")
+	}
+	if entries[0].PopulationSize != 9 {
+		t.Fatalf("expected pmp-derived population size 9, got %d", entries[0].PopulationSize)
+	}
+	if entries[0].Generations != 2 {
+		t.Fatalf("expected --gens override to 2, got %d", entries[0].Generations)
+	}
+}
+
 func TestBenchmarkCommandWritesSummaryRegressionMimic(t *testing.T) {
 	origWD, err := os.Getwd()
 	if err != nil {
