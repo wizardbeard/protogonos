@@ -870,6 +870,7 @@ func runScapeSummary(ctx context.Context, args []string) error {
 
 func runBenchmark(ctx context.Context, args []string) error {
 	fs := flag.NewFlagSet("benchmark", flag.ContinueOnError)
+	configPath := fs.String("config", "", "optional run config JSON path (map2rec-backed)")
 	scapeName := fs.String("scape", "xor", "scape name")
 	population := fs.Int("pop", 50, "population size")
 	generations := fs.Int("gens", 100, "generation count")
@@ -902,26 +903,96 @@ func runBenchmark(ctx context.Context, args []string) error {
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
+	setFlags := make(map[string]bool)
+	fs.Visit(func(f *flag.Flag) {
+		setFlags[f.Name] = true
+	})
+
+	req, err := loadOrDefaultRunRequest(*configPath)
+	if err != nil {
+		return err
+	}
+	if *configPath == "" {
+		req = protoapi.RunRequest{
+			Scape:                *scapeName,
+			Population:           *population,
+			Generations:          *generations,
+			Seed:                 *seed,
+			Workers:              *workers,
+			Selection:            *selectionName,
+			FitnessPostprocessor: *postprocessorName,
+			TopologicalPolicy:    *topoPolicyName,
+			TopologicalCount:     *topoCount,
+			TopologicalParam:     *topoParam,
+			TopologicalMax:       *topoMax,
+			EnableTuning:         *enableTuning,
+			TuneSelection:        *tuneSelection,
+			TuneDurationPolicy:   *tuneDurationPolicy,
+			TuneDurationParam:    *tuneDurationParam,
+			TuneAttempts:         *tuneAttempts,
+			TuneSteps:            *tuneSteps,
+			TuneStepSize:         *tuneStepSize,
+			WeightPerturb:        *wPerturb,
+			WeightAddSynapse:     *wAddSynapse,
+			WeightRemoveSynapse:  *wRemoveSynapse,
+			WeightAddNeuron:      *wAddNeuron,
+			WeightRemoveNeuron:   *wRemoveNeuron,
+			WeightPlasticity:     *wPlasticity,
+			WeightSubstrate:      *wSubstrate,
+		}
+	} else {
+		err := overrideFromFlags(&req, setFlags, map[string]any{
+			"scape":                 *scapeName,
+			"pop":                   *population,
+			"gens":                  *generations,
+			"seed":                  *seed,
+			"workers":               *workers,
+			"tuning":                *enableTuning,
+			"selection":             *selectionName,
+			"fitness-postprocessor": *postprocessorName,
+			"topo-policy":           *topoPolicyName,
+			"topo-count":            *topoCount,
+			"topo-param":            *topoParam,
+			"topo-max":              *topoMax,
+			"attempts":              *tuneAttempts,
+			"tune-steps":            *tuneSteps,
+			"tune-step-size":        *tuneStepSize,
+			"tune-selection":        *tuneSelection,
+			"tune-duration-policy":  *tuneDurationPolicy,
+			"tune-duration-param":   *tuneDurationParam,
+			"w-perturb":             *wPerturb,
+			"w-add-synapse":         *wAddSynapse,
+			"w-remove-synapse":      *wRemoveSynapse,
+			"w-add-neuron":          *wAddNeuron,
+			"w-remove-neuron":       *wRemoveNeuron,
+			"w-plasticity":          *wPlasticity,
+			"w-substrate":           *wSubstrate,
+		})
+		if err != nil {
+			return err
+		}
+	}
 	if *profileName != "" {
 		preset, err := loadParityPreset(*profileName)
 		if err != nil {
 			return err
 		}
-		*selectionName = preset.Selection
-		*tuneSelection = preset.TuneSelection
-		*wPerturb = preset.WeightPerturb
-		*wAddSynapse = preset.WeightAddSyn
-		*wRemoveSynapse = preset.WeightRemoveSyn
-		*wAddNeuron = preset.WeightAddNeuro
-		*wRemoveNeuron = preset.WeightRemoveNeuro
-		*wPlasticity = preset.WeightPlasticity
-		*wSubstrate = preset.WeightSubstrate
+		req.Selection = preset.Selection
+		req.TuneSelection = preset.TuneSelection
+		req.WeightPerturb = preset.WeightPerturb
+		req.WeightAddSynapse = preset.WeightAddSyn
+		req.WeightRemoveSynapse = preset.WeightRemoveSyn
+		req.WeightAddNeuron = preset.WeightAddNeuro
+		req.WeightRemoveNeuron = preset.WeightRemoveNeuro
+		req.WeightPlasticity = preset.WeightPlasticity
+		req.WeightSubstrate = preset.WeightSubstrate
 	}
-	*tuneSelection = normalizeTuneSelection(*tuneSelection)
-	if *wPerturb < 0 || *wAddSynapse < 0 || *wRemoveSynapse < 0 || *wAddNeuron < 0 || *wRemoveNeuron < 0 || *wPlasticity < 0 || *wSubstrate < 0 {
+	req.TuneSelection = normalizeTuneSelection(req.TuneSelection)
+	if req.WeightPerturb < 0 || req.WeightAddSynapse < 0 || req.WeightRemoveSynapse < 0 || req.WeightAddNeuron < 0 || req.WeightRemoveNeuron < 0 || req.WeightPlasticity < 0 || req.WeightSubstrate < 0 {
 		return errors.New("mutation weights must be >= 0")
 	}
-	if *wPerturb+*wAddSynapse+*wRemoveSynapse+*wAddNeuron+*wRemoveNeuron+*wPlasticity+*wSubstrate <= 0 {
+	weightSum := req.WeightPerturb + req.WeightAddSynapse + req.WeightRemoveSynapse + req.WeightAddNeuron + req.WeightRemoveNeuron + req.WeightPlasticity + req.WeightSubstrate
+	if weightSum <= 0 && (*configPath == "" || *profileName != "" || hasAnyWeightOverrideFlag(setFlags)) {
 		return errors.New("at least one mutation weight must be > 0")
 	}
 
@@ -937,37 +1008,11 @@ func runBenchmark(ctx context.Context, args []string) error {
 	defer func() {
 		_ = client.Close()
 	}()
-	if err := morphology.EnsureScapeCompatibility(*scapeName); err != nil {
+	if err := morphology.EnsureScapeCompatibility(req.Scape); err != nil {
 		return err
 	}
 
-	runSummary, err := client.Run(ctx, protoapi.RunRequest{
-		Scape:                *scapeName,
-		Population:           *population,
-		Generations:          *generations,
-		Seed:                 *seed,
-		Workers:              *workers,
-		Selection:            *selectionName,
-		FitnessPostprocessor: *postprocessorName,
-		TopologicalPolicy:    *topoPolicyName,
-		TopologicalCount:     *topoCount,
-		TopologicalParam:     *topoParam,
-		TopologicalMax:       *topoMax,
-		EnableTuning:         *enableTuning,
-		TuneSelection:        *tuneSelection,
-		TuneDurationPolicy:   *tuneDurationPolicy,
-		TuneDurationParam:    *tuneDurationParam,
-		TuneAttempts:         *tuneAttempts,
-		TuneSteps:            *tuneSteps,
-		TuneStepSize:         *tuneStepSize,
-		WeightPerturb:        *wPerturb,
-		WeightAddSynapse:     *wAddSynapse,
-		WeightRemoveSynapse:  *wRemoveSynapse,
-		WeightAddNeuron:      *wAddNeuron,
-		WeightRemoveNeuron:   *wRemoveNeuron,
-		WeightPlasticity:     *wPlasticity,
-		WeightSubstrate:      *wSubstrate,
-	})
+	runSummary, err := client.Run(ctx, req)
 	if err != nil {
 		return err
 	}
@@ -980,10 +1025,10 @@ func runBenchmark(ctx context.Context, args []string) error {
 	passed := improvement >= *minImprovement
 	report := stats.BenchmarkSummary{
 		RunID:          runSummary.RunID,
-		Scape:          *scapeName,
-		PopulationSize: *population,
-		Generations:    *generations,
-		Seed:           *seed,
+		Scape:          req.Scape,
+		PopulationSize: req.Population,
+		Generations:    req.Generations,
+		Seed:           req.Seed,
 		InitialBest:    initialBest,
 		FinalBest:      runSummary.FinalBestFitness,
 		Improvement:    improvement,
@@ -996,7 +1041,7 @@ func runBenchmark(ctx context.Context, args []string) error {
 
 	fmt.Printf("benchmark run_id=%s scape=%s initial_best=%.6f final_best=%.6f improvement=%.6f threshold=%.6f passed=%t\n",
 		runSummary.RunID,
-		*scapeName,
+		req.Scape,
 		initialBest,
 		runSummary.FinalBestFitness,
 		improvement,

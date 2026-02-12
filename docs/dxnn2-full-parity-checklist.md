@@ -65,6 +65,7 @@ Status keys:
 - Added permissive `map2rec` materialization for `cortex`, `specie`, and `population` records with mapping tests.
 - Added permissive `map2rec` materialization for `trace`, `stat`, `topology_summary`, `signature`, and `champion` records with mapping tests.
 - Wired `map2rec` into parity profile ingestion so profile-to-runtime mapping uses record materialization semantics.
+- Added `benchmark --config <json>` map2rec-backed config ingestion path with explicit-flag override behavior.
 
 ## Highest-priority remaining gaps to reach strict parity
 
