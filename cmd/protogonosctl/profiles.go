@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"protogonos/internal/map2rec"
 	"protogonos/internal/tuning"
 )
 
@@ -24,17 +25,21 @@ type parityPreset struct {
 }
 
 type parityProfileFixture struct {
-	Profiles []struct {
-		ID                  string `json:"id"`
-		PopulationSelection string `json:"population_selection"`
-		ExpectedSelection   string `json:"expected_selection"`
-		TuningSelection     string `json:"tuning_selection"`
-		ExpectedTuning      string `json:"expected_tuning_selection"`
-		MutationOperators   []struct {
-			Name   string `json:"name"`
-			Weight int    `json:"weight"`
-		} `json:"mutation_operators"`
-	} `json:"profiles"`
+	Profiles []parityProfileFixtureProfile `json:"profiles"`
+}
+
+type parityProfileFixtureProfile struct {
+	ID                  string                   `json:"id"`
+	PopulationSelection string                   `json:"population_selection"`
+	ExpectedSelection   string                   `json:"expected_selection"`
+	TuningSelection     string                   `json:"tuning_selection"`
+	ExpectedTuning      string                   `json:"expected_tuning_selection"`
+	MutationOperators   []parityMutationOperator `json:"mutation_operators"`
+}
+
+type parityMutationOperator struct {
+	Name   string `json:"name"`
+	Weight int    `json:"weight"`
 }
 
 type parityProfileInfo struct {
@@ -74,26 +79,27 @@ func loadParityPreset(profileID string) (parityPreset, error) {
 		if profile.ID != profileID {
 			continue
 		}
+		constraint := map2rec.ConvertConstraint(profileToConstraintMap(profile))
 		preset := parityPreset{
-			Selection:     mapPopulationSelection(profile.PopulationSelection),
-			TuneSelection: mapTuningSelection(profile.TuningSelection),
+			Selection:     mapPopulationSelection(constraint.PopulationSelectionF),
+			TuneSelection: mapTuningSelection(firstOrEmpty(constraint.TuningSelectionFs)),
 		}
-		for _, op := range profile.MutationOperators {
+		for _, op := range constraint.MutationOperators {
 			switch op.Name {
 			case "mutate_weights", "add_bias":
-				preset.WeightPerturb += float64(op.Weight)
+				preset.WeightPerturb += op.Weight
 			case "add_outlink", "add_inlink":
-				preset.WeightAddSyn += float64(op.Weight)
+				preset.WeightAddSyn += op.Weight
 			case "add_neuron", "outsplice", "insplice":
-				preset.WeightAddNeuro += float64(op.Weight)
+				preset.WeightAddNeuro += op.Weight
 			case "remove_outlink", "remove_inlink":
-				preset.WeightRemoveSyn += float64(op.Weight)
+				preset.WeightRemoveSyn += op.Weight
 			case "remove_neuron":
-				preset.WeightRemoveNeuro += float64(op.Weight)
+				preset.WeightRemoveNeuro += op.Weight
 			case "mutate_plasticity_parameters":
-				preset.WeightPlasticity += float64(op.Weight)
+				preset.WeightPlasticity += op.Weight
 			case "add_sensor", "add_sensorlink", "add_actuator", "add_cpp", "add_cep":
-				preset.WeightSubstrate += float64(op.Weight)
+				preset.WeightSubstrate += op.Weight
 			}
 		}
 		if preset.WeightPerturb+preset.WeightAddSyn+preset.WeightRemoveSyn+preset.WeightAddNeuro+preset.WeightRemoveNeuro+preset.WeightPlasticity+preset.WeightSubstrate <= 0 {
@@ -102,6 +108,28 @@ func loadParityPreset(profileID string) (parityPreset, error) {
 		return preset, nil
 	}
 	return parityPreset{}, fmt.Errorf("profile not found: %s", profileID)
+}
+
+func profileToConstraintMap(profile parityProfileFixtureProfile) map[string]any {
+	ops := make([]any, 0, len(profile.MutationOperators))
+	for _, op := range profile.MutationOperators {
+		ops = append(ops, map[string]any{
+			"name":   op.Name,
+			"weight": op.Weight,
+		})
+	}
+	return map[string]any{
+		"population_selection_f": profile.PopulationSelection,
+		"tuning_selection_fs":    []any{profile.TuningSelection},
+		"mutation_operators":     ops,
+	}
+}
+
+func firstOrEmpty(xs []string) string {
+	if len(xs) == 0 {
+		return ""
+	}
+	return xs[0]
 }
 
 func listParityProfiles() ([]parityProfileInfo, error) {
