@@ -8,10 +8,8 @@ import (
 	"math/rand"
 	"os"
 	"path/filepath"
-	"time"
 
 	"protogonos/internal/evo"
-	"protogonos/internal/genotype"
 	"protogonos/internal/morphology"
 	"protogonos/internal/platform"
 	"protogonos/internal/scape"
@@ -127,6 +125,7 @@ func runStart(ctx context.Context, args []string) error {
 
 func runRun(ctx context.Context, args []string) error {
 	fs := flag.NewFlagSet("run", flag.ContinueOnError)
+	configPath := fs.String("config", "", "optional run config JSON path (map2rec-backed)")
 	scapeName := fs.String("scape", "xor", "scape name")
 	population := fs.Int("pop", 50, "population size")
 	generations := fs.Int("gens", 100, "generation count")
@@ -159,216 +158,30 @@ func runRun(ctx context.Context, args []string) error {
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
-	if *profileName != "" {
-		preset, err := loadParityPreset(*profileName)
-		if err != nil {
-			return err
-		}
-		*selectionName = preset.Selection
-		*tuneSelection = preset.TuneSelection
-		*wPerturb = preset.WeightPerturb
-		*wAddSynapse = preset.WeightAddSyn
-		*wRemoveSynapse = preset.WeightRemoveSyn
-		*wAddNeuron = preset.WeightAddNeuro
-		*wRemoveNeuron = preset.WeightRemoveNeuro
-		*wPlasticity = preset.WeightPlasticity
-		*wSubstrate = preset.WeightSubstrate
-	}
-	*tuneSelection = normalizeTuneSelection(*tuneSelection)
-	if *wPerturb < 0 || *wAddSynapse < 0 || *wRemoveSynapse < 0 || *wAddNeuron < 0 || *wRemoveNeuron < 0 || *wPlasticity < 0 || *wSubstrate < 0 {
-		return errors.New("mutation weights must be >= 0")
-	}
-	if *wPerturb+*wAddSynapse+*wRemoveSynapse+*wAddNeuron+*wRemoveNeuron+*wPlasticity+*wSubstrate <= 0 {
-		return errors.New("at least one mutation weight must be > 0")
-	}
-	selector, err := selectionFromName(*selectionName)
+	setFlags := make(map[string]bool)
+	fs.Visit(func(f *flag.Flag) {
+		setFlags[f.Name] = true
+	})
+
+	req, err := loadOrDefaultRunRequest(*configPath)
 	if err != nil {
 		return err
 	}
-	postprocessor, err := postprocessorFromName(*postprocessorName)
-	if err != nil {
-		return err
-	}
-	topoPolicy, err := topologicalPolicyFromConfig(*topoPolicyName, *topoCount, *topoParam, *topoMax)
-	if err != nil {
-		return err
-	}
-
-	store, err := storage.NewStore(*storeKind, *dbPath)
-	if err != nil {
-		return err
-	}
-	defer func() {
-		_ = storage.CloseIfSupported(store)
-	}()
-
-	polis := platform.NewPolis(platform.Config{Store: store})
-	if err := polis.Init(ctx); err != nil {
-		return err
-	}
-	if err := registerDefaultScapes(polis); err != nil {
-		return err
-	}
-
-	seedPopulation, err := genotype.ConstructSeedPopulation(*scapeName, *population, *seed)
-	if err != nil {
-		return err
-	}
-	if err := morphology.EnsureScapeCompatibility(*scapeName); err != nil {
-		return err
-	}
-
-	eliteCount := *population / 5
-	if eliteCount < 1 {
-		eliteCount = 1
-	}
-	now := time.Now().UTC()
-	runID := fmt.Sprintf("%s-%d-%d", *scapeName, *seed, now.Unix())
-
-	runEvolution := func(useTuning bool) (platform.EvolutionResult, error) {
-		mutation := &evo.PerturbRandomWeight{Rand: rand.New(rand.NewSource(*seed + 1000)), MaxDelta: 1.0}
-		policy := defaultMutationPolicy(
-			*seed,
-			seedPopulation.InputNeuronIDs,
-			seedPopulation.OutputNeuronIDs,
-			*wPerturb,
-			*wAddSynapse,
-			*wRemoveSynapse,
-			*wAddNeuron,
-			*wRemoveNeuron,
-			*wPlasticity,
-			*wSubstrate,
-		)
-		var tuner tuning.Tuner
-		var attemptPolicy tuning.AttemptPolicy
-		if useTuning {
-			var err error
-			attemptPolicy, err = tuning.AttemptPolicyFromConfig(*tuneDurationPolicy, *tuneDurationParam)
-			if err != nil {
-				return platform.EvolutionResult{}, err
-			}
-			tuner = &tuning.Exoself{
-				Rand:               rand.New(rand.NewSource(*seed + 2000)),
-				Steps:              *tuneSteps,
-				StepSize:           *tuneStepSize,
-				CandidateSelection: *tuneSelection,
-			}
-		}
-		return polis.RunEvolution(ctx, platform.EvolutionConfig{
-			RunID:                runID,
-			ScapeName:            *scapeName,
-			PopulationSize:       *population,
-			Generations:          *generations,
-			EliteCount:           eliteCount,
-			Workers:              *workers,
-			Seed:                 *seed,
-			InputNeuronIDs:       seedPopulation.InputNeuronIDs,
-			OutputNeuronIDs:      seedPopulation.OutputNeuronIDs,
-			Mutation:             mutation,
-			MutationPolicy:       policy,
-			Selector:             selector,
-			Postprocessor:        postprocessor,
-			TopologicalMutations: topoPolicy,
-			Tuner:                tuner,
-			TuneAttempts:         *tuneAttempts,
-			TuneAttemptPolicy:    attemptPolicy,
-			Initial:              seedPopulation.Genomes,
-		})
-	}
-
-	var result platform.EvolutionResult
-	var compareReport *stats.TuningComparison
-	if *compareTuning {
-		if *enableTuning {
-			withoutTuning, err := runEvolution(false)
-			if err != nil {
-				return err
-			}
-			withTuning, err := runEvolution(true)
-			if err != nil {
-				return err
-			}
-			compareReport = &stats.TuningComparison{
-				Scape:             *scapeName,
-				PopulationSize:    *population,
-				Generations:       *generations,
-				Seed:              *seed,
-				WithoutTuningBest: withoutTuning.BestByGeneration,
-				WithTuningBest:    withTuning.BestByGeneration,
-				WithoutFinalBest:  withoutTuning.BestFinalFitness,
-				WithFinalBest:     withTuning.BestFinalFitness,
-				FinalImprovement:  withTuning.BestFinalFitness - withoutTuning.BestFinalFitness,
-			}
-			result = withTuning
-		} else {
-			withTuning, err := runEvolution(true)
-			if err != nil {
-				return err
-			}
-			withoutTuning, err := runEvolution(false)
-			if err != nil {
-				return err
-			}
-			compareReport = &stats.TuningComparison{
-				Scape:             *scapeName,
-				PopulationSize:    *population,
-				Generations:       *generations,
-				Seed:              *seed,
-				WithoutTuningBest: withoutTuning.BestByGeneration,
-				WithTuningBest:    withTuning.BestByGeneration,
-				WithoutFinalBest:  withoutTuning.BestFinalFitness,
-				WithFinalBest:     withTuning.BestFinalFitness,
-				FinalImprovement:  withTuning.BestFinalFitness - withoutTuning.BestFinalFitness,
-			}
-			result = withoutTuning
-		}
-	} else {
-		result, err = runEvolution(*enableTuning)
-		if err != nil {
-			return err
-		}
-	}
-
-	top := make([]stats.TopGenome, 0, len(result.TopFinal))
-	for i, scored := range result.TopFinal {
-		top = append(top, stats.TopGenome{Rank: i + 1, Fitness: scored.Fitness, Genome: scored.Genome})
-	}
-	lineage := make([]stats.LineageEntry, 0, len(result.Lineage))
-	for _, record := range result.Lineage {
-		lineage = append(lineage, stats.LineageEntry{
-			GenomeID:    record.GenomeID,
-			ParentID:    record.ParentID,
-			Generation:  record.Generation,
-			Operation:   record.Operation,
-			Fingerprint: record.Fingerprint,
-			Summary: map[string]any{
-				"total_neurons":            record.Summary.TotalNeurons,
-				"total_synapses":           record.Summary.TotalSynapses,
-				"total_recurrent_synapses": record.Summary.TotalRecurrentSynapses,
-				"total_sensors":            record.Summary.TotalSensors,
-				"total_actuators":          record.Summary.TotalActuators,
-				"activation_distribution":  record.Summary.ActivationDistribution,
-				"aggregator_distribution":  record.Summary.AggregatorDistribution,
-			},
-		})
-	}
-
-	runDir, err := stats.WriteRunArtifacts(benchmarksDir, stats.RunArtifacts{
-		Config: stats.RunConfig{
-			RunID:                runID,
+	if *configPath == "" {
+		req = protoapi.RunRequest{
 			Scape:                *scapeName,
-			PopulationSize:       *population,
+			Population:           *population,
 			Generations:          *generations,
 			Seed:                 *seed,
 			Workers:              *workers,
-			EliteCount:           eliteCount,
 			Selection:            *selectionName,
 			FitnessPostprocessor: *postprocessorName,
 			TopologicalPolicy:    *topoPolicyName,
 			TopologicalCount:     *topoCount,
 			TopologicalParam:     *topoParam,
 			TopologicalMax:       *topoMax,
-			TuningEnabled:        *enableTuning,
+			EnableTuning:         *enableTuning,
+			CompareTuning:        *compareTuning,
 			TuneSelection:        *tuneSelection,
 			TuneDurationPolicy:   *tuneDurationPolicy,
 			TuneDurationParam:    *tuneDurationParam,
@@ -382,51 +195,97 @@ func runRun(ctx context.Context, args []string) error {
 			WeightRemoveNeuron:   *wRemoveNeuron,
 			WeightPlasticity:     *wPlasticity,
 			WeightSubstrate:      *wSubstrate,
-		},
-		BestByGeneration:      result.BestByGeneration,
-		GenerationDiagnostics: result.GenerationDiagnostics,
-		SpeciesHistory:        result.SpeciesHistory,
-		FinalBestFitness:      result.BestFinalFitness,
-		TopGenomes:            top,
-		Lineage:               lineage,
+		}
+	} else {
+		err := overrideFromFlags(&req, setFlags, map[string]any{
+			"scape":                 *scapeName,
+			"pop":                   *population,
+			"gens":                  *generations,
+			"seed":                  *seed,
+			"workers":               *workers,
+			"tuning":                *enableTuning,
+			"compare-tuning":        *compareTuning,
+			"selection":             *selectionName,
+			"fitness-postprocessor": *postprocessorName,
+			"topo-policy":           *topoPolicyName,
+			"topo-count":            *topoCount,
+			"topo-param":            *topoParam,
+			"topo-max":              *topoMax,
+			"attempts":              *tuneAttempts,
+			"tune-steps":            *tuneSteps,
+			"tune-step-size":        *tuneStepSize,
+			"tune-selection":        *tuneSelection,
+			"tune-duration-policy":  *tuneDurationPolicy,
+			"tune-duration-param":   *tuneDurationParam,
+			"w-perturb":             *wPerturb,
+			"w-add-synapse":         *wAddSynapse,
+			"w-remove-synapse":      *wRemoveSynapse,
+			"w-add-neuron":          *wAddNeuron,
+			"w-remove-neuron":       *wRemoveNeuron,
+			"w-plasticity":          *wPlasticity,
+			"w-substrate":           *wSubstrate,
+		})
+		if err != nil {
+			return err
+		}
+	}
+	if *profileName != "" {
+		preset, err := loadParityPreset(*profileName)
+		if err != nil {
+			return err
+		}
+		req.Selection = preset.Selection
+		req.TuneSelection = preset.TuneSelection
+		req.WeightPerturb = preset.WeightPerturb
+		req.WeightAddSynapse = preset.WeightAddSyn
+		req.WeightRemoveSynapse = preset.WeightRemoveSyn
+		req.WeightAddNeuron = preset.WeightAddNeuro
+		req.WeightRemoveNeuron = preset.WeightRemoveNeuro
+		req.WeightPlasticity = preset.WeightPlasticity
+		req.WeightSubstrate = preset.WeightSubstrate
+	}
+	req.TuneSelection = normalizeTuneSelection(req.TuneSelection)
+	if req.WeightPerturb < 0 || req.WeightAddSynapse < 0 || req.WeightRemoveSynapse < 0 || req.WeightAddNeuron < 0 || req.WeightRemoveNeuron < 0 || req.WeightPlasticity < 0 || req.WeightSubstrate < 0 {
+		return errors.New("mutation weights must be >= 0")
+	}
+	weightSum := req.WeightPerturb + req.WeightAddSynapse + req.WeightRemoveSynapse + req.WeightAddNeuron + req.WeightRemoveNeuron + req.WeightPlasticity + req.WeightSubstrate
+	if weightSum <= 0 && (*configPath == "" || *profileName != "" || hasAnyWeightOverrideFlag(setFlags)) {
+		return errors.New("at least one mutation weight must be > 0")
+	}
+
+	client, err := protoapi.New(protoapi.Options{
+		StoreKind:     *storeKind,
+		DBPath:        *dbPath,
+		BenchmarksDir: benchmarksDir,
+		ExportsDir:    exportsDir,
 	})
 	if err != nil {
 		return err
 	}
-
-	if err := stats.AppendRunIndex(benchmarksDir, stats.RunIndexEntry{
-		RunID:            runID,
-		Scape:            *scapeName,
-		PopulationSize:   *population,
-		Generations:      *generations,
-		Seed:             *seed,
-		Workers:          *workers,
-		EliteCount:       eliteCount,
-		TuningEnabled:    *enableTuning,
-		FinalBestFitness: result.BestFinalFitness,
-		CreatedAtUTC:     now.Format(time.RFC3339Nano),
-	}); err != nil {
+	defer func() {
+		_ = client.Close()
+	}()
+	if err := morphology.EnsureScapeCompatibility(req.Scape); err != nil {
 		return err
 	}
-	if compareReport != nil {
-		if err := stats.WriteTuningComparison(runDir, *compareReport); err != nil {
-			return err
-		}
-	}
 
-	fmt.Printf("run completed run_id=%s scape=%s pop=%d gens=%d seed=%d\n", runID, *scapeName, *population, *generations, *seed)
-	for i, best := range result.BestByGeneration {
+	runSummary, err := client.Run(ctx, req)
+	if err != nil {
+		return err
+	}
+	fmt.Printf("run completed run_id=%s scape=%s pop=%d gens=%d seed=%d\n", runSummary.RunID, req.Scape, req.Population, req.Generations, req.Seed)
+	for i, best := range runSummary.BestByGeneration {
 		fmt.Printf("generation=%d best_fitness=%.6f\n", i+1, best)
 	}
-	fmt.Printf("final_best_fitness=%.6f\n", result.BestFinalFitness)
-	if compareReport != nil {
+	fmt.Printf("final_best_fitness=%.6f\n", runSummary.FinalBestFitness)
+	if runSummary.Compare != nil {
 		fmt.Printf("compare_tuning without_final=%.6f with_final=%.6f improvement=%.6f\n",
-			compareReport.WithoutFinalBest,
-			compareReport.WithFinalBest,
-			compareReport.FinalImprovement,
+			runSummary.Compare.WithoutFinalBest,
+			runSummary.Compare.WithFinalBest,
+			runSummary.Compare.FinalImprovement,
 		)
 	}
-	fmt.Printf("artifacts_dir=%s\n", filepath.Clean(runDir))
+	fmt.Printf("artifacts_dir=%s\n", filepath.Clean(runSummary.ArtifactsDir))
 	return nil
 }
 

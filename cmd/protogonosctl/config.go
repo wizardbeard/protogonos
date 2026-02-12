@@ -173,6 +173,8 @@ func overrideFromFlags(req *protoapi.RunRequest, set map[string]bool, flagValue 
 			req.Workers = v.(int)
 		case "tuning":
 			req.EnableTuning = v.(bool)
+		case "compare-tuning":
+			req.CompareTuning = v.(bool)
 		case "selection":
 			req.Selection = v.(string)
 		case "fitness-postprocessor":

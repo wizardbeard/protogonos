@@ -84,6 +84,72 @@ func TestRunCommandSQLiteCreatesArtifacts(t *testing.T) {
 	}
 }
 
+func TestRunCommandSQLiteConfigLoadsMap2RecAndAllowsFlagOverrides(t *testing.T) {
+	origWD, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("getwd: %v", err)
+	}
+	workdir := t.TempDir()
+	if err := os.Chdir(workdir); err != nil {
+		t.Fatalf("chdir tempdir: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = os.Chdir(origWD)
+	})
+
+	configPath := filepath.Join(workdir, "run_config.json")
+	cfg := map[string]any{
+		"scape": "xor",
+		"seed":  71,
+		"pmp": map[string]any{
+			"init_specie_size": 8,
+			"generation_limit": 5,
+		},
+		"constraint": map[string]any{
+			"population_selection_f": "hof_competition",
+			"tuning_selection_fs":    []any{"dynamic_random"},
+			"mutation_operators": []any{
+				[]any{"add_bias", 1},
+				[]any{"add_outlink", 1},
+				[]any{"add_neuron", 1},
+			},
+		},
+	}
+	data, err := json.Marshal(cfg)
+	if err != nil {
+		t.Fatalf("marshal config: %v", err)
+	}
+	if err := os.WriteFile(configPath, data, 0o644); err != nil {
+		t.Fatalf("write config: %v", err)
+	}
+
+	dbPath := filepath.Join(workdir, "protogonos.db")
+	args := []string{
+		"run",
+		"--store", "sqlite",
+		"--db-path", dbPath,
+		"--config", configPath,
+		"--gens", "2",
+	}
+	if err := run(context.Background(), args); err != nil {
+		t.Fatalf("run command with config: %v", err)
+	}
+
+	entries, err := stats.ListRunIndex("benchmarks")
+	if err != nil {
+		t.Fatalf("list run index: %v", err)
+	}
+	if len(entries) == 0 {
+		t.Fatal("expected run index entry")
+	}
+	if entries[0].PopulationSize != 8 {
+		t.Fatalf("expected pmp-derived population size 8, got %d", entries[0].PopulationSize)
+	}
+	if entries[0].Generations != 2 {
+		t.Fatalf("expected --gens override to 2, got %d", entries[0].Generations)
+	}
+}
+
 func TestRunsCommandSQLiteListsPersistedRun(t *testing.T) {
 	origWD, err := os.Getwd()
 	if err != nil {
