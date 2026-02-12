@@ -193,6 +193,34 @@ func TestClientRunAcceptsReferenceStrategyAliases(t *testing.T) {
 	}
 }
 
+func TestClientRunAcceptsReferencePostprocessorAlias(t *testing.T) {
+	base := t.TempDir()
+	client, err := New(Options{
+		StoreKind:     "memory",
+		BenchmarksDir: filepath.Join(base, "benchmarks"),
+		ExportsDir:    filepath.Join(base, "exports"),
+	})
+	if err != nil {
+		t.Fatalf("new client: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = client.Close()
+	})
+
+	_, err = client.Run(context.Background(), RunRequest{
+		Scape:                "xor",
+		Population:           8,
+		Generations:          2,
+		Selection:            "elite",
+		FitnessPostprocessor: "nsize_proportional",
+		WeightPerturb:        1,
+		WeightAddNeuron:      0.2,
+	})
+	if err != nil {
+		t.Fatalf("run with nsize_proportional alias: %v", err)
+	}
+}
+
 func TestClientRunRejectsNegativeNumericConfig(t *testing.T) {
 	client, err := New(Options{StoreKind: "memory", BenchmarksDir: t.TempDir(), ExportsDir: t.TempDir()})
 	if err != nil {

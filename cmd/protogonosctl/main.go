@@ -138,7 +138,7 @@ func runRun(ctx context.Context, args []string) error {
 	compareTuning := fs.Bool("compare-tuning", false, "run with and without tuning and emit side-by-side metrics")
 	profileName := fs.String("profile", "", "optional parity profile id (from testdata/fixtures/parity/ref_benchmarker_profiles.json)")
 	selectionName := fs.String("selection", "elite", "parent selection strategy: elite|tournament|species_tournament|species_shared_tournament|hof_competition|competition|top3")
-	postprocessorName := fs.String("fitness-postprocessor", "none", "fitness postprocessor: none|size_proportional|novelty_proportional")
+	postprocessorName := fs.String("fitness-postprocessor", "none", "fitness postprocessor: none|size_proportional|nsize_proportional|novelty_proportional")
 	topoPolicyName := fs.String("topo-policy", "const", "topological mutation count policy: const|ncount_linear|ncount_exponential")
 	topoCount := fs.Int("topo-count", 1, "mutation count for topo-policy=const")
 	topoParam := fs.Float64("topo-param", 0.5, "policy parameter (multiplier/power) for topo-policy")
@@ -741,7 +741,7 @@ func runBenchmark(ctx context.Context, args []string) error {
 	enableTuning := fs.Bool("tuning", false, "enable exoself tuning")
 	profileName := fs.String("profile", "", "optional parity profile id (from testdata/fixtures/parity/ref_benchmarker_profiles.json)")
 	selectionName := fs.String("selection", "elite", "parent selection strategy: elite|tournament|species_tournament|species_shared_tournament|hof_competition|competition|top3")
-	postprocessorName := fs.String("fitness-postprocessor", "none", "fitness postprocessor: none|size_proportional|novelty_proportional")
+	postprocessorName := fs.String("fitness-postprocessor", "none", "fitness postprocessor: none|size_proportional|nsize_proportional|novelty_proportional")
 	topoPolicyName := fs.String("topo-policy", "const", "topological mutation count policy: const|ncount_linear|ncount_exponential")
 	topoCount := fs.Int("topo-count", 1, "mutation count for topo-policy=const")
 	topoParam := fs.Float64("topo-param", 0.5, "policy parameter (multiplier/power) for topo-policy")
@@ -1117,6 +1117,8 @@ func postprocessorFromName(name string) (evo.FitnessPostprocessor, error) {
 	case "none":
 		return evo.NoopFitnessPostprocessor{}, nil
 	case "size_proportional":
+		return evo.SizeProportionalPostprocessor{}, nil
+	case "nsize_proportional":
 		return evo.SizeProportionalPostprocessor{}, nil
 	case "novelty_proportional":
 		return evo.NoveltyProportionalPostprocessor{}, nil

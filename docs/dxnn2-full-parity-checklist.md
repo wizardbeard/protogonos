@@ -19,7 +19,7 @@ Status keys:
 | `map2rec.erl` | `partial` | Baseline conversion parity implemented for `constraint`/`pmp`/`sensor`/`actuator`/`neuron`/`agent`/`cortex`/`specie`/`population` plus `trace`/`stat`/`topology_summary`/`signature`/`champion`; broader record coverage still pending. |
 | `genome_mutator.erl` | `partial` | Core topology/weight operators plus plasticity/substrate parameter mutations implemented; full operator breadth pending. |
 | `selection_algorithm.erl` | `partial` | Elite/tournament/species/shared species + reference aliases `hof_competition`/`competition`/`top3` implemented; additional reference strategies pending. |
-| `fitness_postprocessor.erl` | `partial` | None/size/novelty postprocessors implemented; full policy breadth pending. |
+| `fitness_postprocessor.erl` | `partial` | None/size/novelty postprocessors implemented with `nsize_proportional` alias parity; full policy breadth pending. |
 | `specie_identifier.erl` | `partial` | Topology/speciation support implemented with adaptive threshold + representatives; full reference behavior tuning pending. |
 | `tot_topological_mutations.erl` | `done` | Constant + count-scaled topological mutation count policies implemented and tested. |
 | `tuning_selection.erl` | `partial` | `best_so_far`/`original`/`dynamic_random` implemented; full reference policy set pending. |
@@ -70,6 +70,7 @@ Status keys:
 - Added sqlite integration tests for `run --config` and `benchmark --config` map2rec ingestion and flag overrides.
 - Added `profile show` (text + JSON) to inspect resolved map2rec-backed parity profile materialization.
 - Added reference selection aliases `competition` and `top3` across CLI/API selection resolution.
+- Added reference fitness-postprocessor alias `nsize_proportional` across CLI/API resolution.
 
 ## Highest-priority remaining gaps to reach strict parity
 

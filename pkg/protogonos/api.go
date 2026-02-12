@@ -1122,6 +1122,8 @@ func postprocessorFromName(name string) (evo.FitnessPostprocessor, error) {
 		return evo.NoopFitnessPostprocessor{}, nil
 	case "size_proportional":
 		return evo.SizeProportionalPostprocessor{}, nil
+	case "nsize_proportional":
+		return evo.SizeProportionalPostprocessor{}, nil
 	case "novelty_proportional":
 		return evo.NoveltyProportionalPostprocessor{}, nil
 	default:
