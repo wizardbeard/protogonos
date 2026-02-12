@@ -73,6 +73,46 @@ func TestConvertDispatchesSensorAndActuatorKinds(t *testing.T) {
 	if population, ok := gotPopulation.(PopulationRecord); !ok || population.ID != "pop1" {
 		t.Fatalf("unexpected population dispatch result: %#v", gotPopulation)
 	}
+
+	gotTrace, err := Convert("trace", map[string]any{"step_size": 100})
+	if err != nil {
+		t.Fatalf("convert trace: %v", err)
+	}
+	if trace, ok := gotTrace.(TraceRecord); !ok || trace.StepSize != 100 {
+		t.Fatalf("unexpected trace dispatch result: %#v", gotTrace)
+	}
+
+	gotStat, err := Convert("stat", map[string]any{"avg_fitness": 0.4})
+	if err != nil {
+		t.Fatalf("convert stat: %v", err)
+	}
+	if stat, ok := gotStat.(StatRecord); !ok || stat.AvgFitness != 0.4 {
+		t.Fatalf("unexpected stat dispatch result: %#v", gotStat)
+	}
+
+	gotTopo, err := Convert("topology_summary", map[string]any{"tot_neurons": 4})
+	if err != nil {
+		t.Fatalf("convert topology_summary: %v", err)
+	}
+	if topo, ok := gotTopo.(TopologySummaryRecord); !ok || topo.TotalNeurons != 4 {
+		t.Fatalf("unexpected topology_summary dispatch result: %#v", gotTopo)
+	}
+
+	gotSignature, err := Convert("signature", map[string]any{"generalized_Pattern": []any{"p"}})
+	if err != nil {
+		t.Fatalf("convert signature: %v", err)
+	}
+	if sig, ok := gotSignature.(SignatureRecord); !ok || sig.GeneralizedPattern == nil {
+		t.Fatalf("unexpected signature dispatch result: %#v", gotSignature)
+	}
+
+	gotChampion, err := Convert("champion", map[string]any{"fitness": 0.9})
+	if err != nil {
+		t.Fatalf("convert champion: %v", err)
+	}
+	if champion, ok := gotChampion.(ChampionRecord); !ok || champion.Fitness != 0.9 {
+		t.Fatalf("unexpected champion dispatch result: %#v", gotChampion)
+	}
 }
 
 func TestConvertConstraintOverridesKnownFieldsAndIgnoresUnknown(t *testing.T) {
@@ -357,5 +397,100 @@ func TestConvertPopulationMapsFields(t *testing.T) {
 	}
 	if len(out.SeedAgentIDs) != 1 || len(out.SeedSpecieIDs) != 1 {
 		t.Fatalf("unexpected population seeds: %+v", out)
+	}
+}
+
+func TestConvertTraceMapsFields(t *testing.T) {
+	in := map[string]any{
+		"stats":           []any{"s1"},
+		"tot_evaluations": 42,
+		"step_size":       250,
+	}
+	out := ConvertTrace(in)
+	if len(out.Stats) != 1 || out.TotalEvaluations != 42 || out.StepSize != 250 {
+		t.Fatalf("unexpected trace conversion: %+v", out)
+	}
+}
+
+func TestConvertTraceMalformedKnownFieldKeepsDefault(t *testing.T) {
+	out := ConvertTrace(map[string]any{"stats": "bad", "step_size": "bad"})
+	if len(out.Stats) != 0 {
+		t.Fatalf("expected default trace stats, got %+v", out.Stats)
+	}
+	if out.StepSize != 500 {
+		t.Fatalf("expected default step size 500, got %d", out.StepSize)
+	}
+}
+
+func TestConvertStatMapsFields(t *testing.T) {
+	in := map[string]any{
+		"morphology":         "xor",
+		"specie_id":          "sp-1",
+		"avg_neurons":        3.5,
+		"std_neurons":        1.1,
+		"avg_fitness":        0.4,
+		"std_fitness":        0.05,
+		"max_fitness":        0.8,
+		"min_fitness":        0.1,
+		"validation_fitness": 0.75,
+		"test_fitness":       0.70,
+		"avg_diversity":      0.2,
+		"evaluations":        123,
+		"time_stamp":         "2026-02-12T00:00:00Z",
+	}
+	out := ConvertStat(in)
+	if out.AvgFitness != 0.4 || out.Evaluations != 123 || out.ValidationFitness != 0.75 {
+		t.Fatalf("unexpected stat conversion: %+v", out)
+	}
+}
+
+func TestConvertTopologySummaryMapsFields(t *testing.T) {
+	in := map[string]any{
+		"type":            "feedforward",
+		"tot_neurons":     12,
+		"tot_n_ils":       3,
+		"tot_n_ols":       2,
+		"tot_n_ros":       1,
+		"af_distribution": map[string]any{"tanh": 8},
+	}
+	out := ConvertTopologySummary(in)
+	if out.TotalNeurons != 12 || out.TotalNILs != 3 || out.TotalNROs != 1 {
+		t.Fatalf("unexpected topology summary conversion: %+v", out)
+	}
+}
+
+func TestConvertSignatureMapsFields(t *testing.T) {
+	in := map[string]any{
+		"generalized_Pattern":   []any{"p1"},
+		"generalized_EvoHist":   []any{"h1"},
+		"generalized_Sensors":   []any{"s1"},
+		"generalized_Actuators": []any{"a1"},
+		"topology_summary":      map[string]any{"tot_neurons": 3},
+	}
+	out := ConvertSignature(in)
+	if out.GeneralizedPattern == nil || out.TopologySummary == nil {
+		t.Fatalf("unexpected signature conversion: %+v", out)
+	}
+}
+
+func TestConvertChampionMapsFields(t *testing.T) {
+	in := map[string]any{
+		"hof_fingerprint":        "hof-1",
+		"id":                     "c-1",
+		"fitness":                0.9,
+		"validation_fitness":     0.85,
+		"test_fitness":           0.83,
+		"main_fitness":           0.8,
+		"tot_n":                  12,
+		"evolvability":           0.3,
+		"robustness":             0.2,
+		"brittleness":            0.1,
+		"generation":             7,
+		"behavioral_differences": []any{"b1"},
+		"fs":                     1.2,
+	}
+	out := ConvertChampion(in)
+	if out.Fitness != 0.9 || out.TotalNeurons != 12 || out.Generation != 7 || out.FS != 1.2 {
+		t.Fatalf("unexpected champion conversion: %+v", out)
 	}
 }

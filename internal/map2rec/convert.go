@@ -22,6 +22,16 @@ func Convert(kind string, in map[string]any) (any, error) {
 		return ConvertSpecie(in), nil
 	case "population":
 		return ConvertPopulation(in), nil
+	case "trace":
+		return ConvertTrace(in), nil
+	case "stat":
+		return ConvertStat(in), nil
+	case "topology_summary":
+		return ConvertTopologySummary(in), nil
+	case "signature":
+		return ConvertSignature(in), nil
+	case "champion":
+		return ConvertChampion(in), nil
 	default:
 		return nil, ErrUnsupportedKind
 	}
@@ -561,6 +571,185 @@ func ConvertPopulation(in map[string]any) PopulationRecord {
 		case "seed_specie_ids":
 			if xs, ok := asAnySlice(val); ok {
 				out.SeedSpecieIDs = xs
+			}
+		}
+	}
+	return out
+}
+
+func ConvertTrace(in map[string]any) TraceRecord {
+	out := defaultTraceRecord()
+	for key, val := range in {
+		switch key {
+		case "stats":
+			if xs, ok := asAnySlice(val); ok {
+				out.Stats = xs
+			}
+		case "tot_evaluations":
+			if n, ok := asInt(val); ok {
+				out.TotalEvaluations = n
+			}
+		case "step_size":
+			if n, ok := asInt(val); ok {
+				out.StepSize = n
+			}
+		}
+	}
+	return out
+}
+
+func ConvertStat(in map[string]any) StatRecord {
+	out := defaultStatRecord()
+	for key, val := range in {
+		switch key {
+		case "morphology":
+			out.Morphology = val
+		case "specie_id":
+			out.SpecieID = val
+		case "avg_neurons":
+			if f, ok := asFloat64(val); ok {
+				out.AvgNeurons = f
+			}
+		case "std_neurons":
+			if f, ok := asFloat64(val); ok {
+				out.StdNeurons = f
+			}
+		case "avg_fitness":
+			if f, ok := asFloat64(val); ok {
+				out.AvgFitness = f
+			}
+		case "std_fitness":
+			if f, ok := asFloat64(val); ok {
+				out.StdFitness = f
+			}
+		case "max_fitness":
+			if f, ok := asFloat64(val); ok {
+				out.MaxFitness = f
+			}
+		case "min_fitness":
+			if f, ok := asFloat64(val); ok {
+				out.MinFitness = f
+			}
+		case "validation_fitness":
+			if f, ok := asFloat64(val); ok {
+				out.ValidationFitness = f
+			}
+		case "test_fitness":
+			if f, ok := asFloat64(val); ok {
+				out.TestFitness = f
+			}
+		case "avg_diversity":
+			if f, ok := asFloat64(val); ok {
+				out.AvgDiversity = f
+			}
+		case "evaluations":
+			if n, ok := asInt(val); ok {
+				out.Evaluations = n
+			}
+		case "time_stamp":
+			out.TimeStamp = val
+		}
+	}
+	return out
+}
+
+func ConvertTopologySummary(in map[string]any) TopologySummaryRecord {
+	out := defaultTopologySummaryRecord()
+	for key, val := range in {
+		switch key {
+		case "type":
+			out.Type = val
+		case "tot_neurons":
+			if n, ok := asInt(val); ok {
+				out.TotalNeurons = n
+			}
+		case "tot_n_ils":
+			if n, ok := asInt(val); ok {
+				out.TotalNILs = n
+			}
+		case "tot_n_ols":
+			if n, ok := asInt(val); ok {
+				out.TotalNOLs = n
+			}
+		case "tot_n_ros":
+			if n, ok := asInt(val); ok {
+				out.TotalNROs = n
+			}
+		case "af_distribution":
+			out.AFDistribution = val
+		}
+	}
+	return out
+}
+
+func ConvertSignature(in map[string]any) SignatureRecord {
+	out := defaultSignatureRecord()
+	for key, val := range in {
+		switch key {
+		case "generalized_Pattern":
+			out.GeneralizedPattern = val
+		case "generalized_EvoHist":
+			out.GeneralizedEvoHist = val
+		case "generalized_Sensors":
+			out.GeneralizedSensors = val
+		case "generalized_Actuators":
+			out.GeneralizedActuators = val
+		case "topology_summary":
+			out.TopologySummary = val
+		}
+	}
+	return out
+}
+
+func ConvertChampion(in map[string]any) ChampionRecord {
+	out := defaultChampionRecord()
+	for key, val := range in {
+		switch key {
+		case "hof_fingerprint":
+			out.HOFFingerprint = val
+		case "id":
+			out.ID = val
+		case "fitness":
+			if f, ok := asFloat64(val); ok {
+				out.Fitness = f
+			}
+		case "validation_fitness":
+			if f, ok := asFloat64(val); ok {
+				out.ValidationFitness = f
+			}
+		case "test_fitness":
+			if f, ok := asFloat64(val); ok {
+				out.TestFitness = f
+			}
+		case "main_fitness":
+			if f, ok := asFloat64(val); ok {
+				out.MainFitness = f
+			}
+		case "tot_n":
+			if n, ok := asInt(val); ok {
+				out.TotalNeurons = n
+			}
+		case "evolvability":
+			if f, ok := asFloat64(val); ok {
+				out.Evolvability = f
+			}
+		case "robustness":
+			if f, ok := asFloat64(val); ok {
+				out.Robustness = f
+			}
+		case "brittleness":
+			if f, ok := asFloat64(val); ok {
+				out.Brittleness = f
+			}
+		case "generation":
+			if n, ok := asInt(val); ok {
+				out.Generation = n
+			}
+		case "behavioral_differences":
+			out.BehavioralDifferences = val
+		case "fs":
+			if f, ok := asFloat64(val); ok {
+				out.FS = f
 			}
 		}
 	}

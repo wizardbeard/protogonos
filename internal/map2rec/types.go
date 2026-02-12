@@ -180,6 +180,61 @@ type PopulationRecord struct {
 	SeedSpecieIDs    []any
 }
 
+type TraceRecord struct {
+	Stats            []any
+	TotalEvaluations int
+	StepSize         int
+}
+
+type StatRecord struct {
+	Morphology        any
+	SpecieID          any
+	AvgNeurons        float64
+	StdNeurons        float64
+	AvgFitness        float64
+	StdFitness        float64
+	MaxFitness        float64
+	MinFitness        float64
+	ValidationFitness float64
+	TestFitness       float64
+	AvgDiversity      float64
+	Evaluations       int
+	TimeStamp         any
+}
+
+type TopologySummaryRecord struct {
+	Type           any
+	TotalNeurons   int
+	TotalNILs      int
+	TotalNOLs      int
+	TotalNROs      int
+	AFDistribution any
+}
+
+type SignatureRecord struct {
+	GeneralizedPattern   any
+	GeneralizedEvoHist   any
+	GeneralizedSensors   any
+	GeneralizedActuators any
+	TopologySummary      any
+}
+
+type ChampionRecord struct {
+	HOFFingerprint        any
+	ID                    any
+	Fitness               float64
+	ValidationFitness     float64
+	TestFitness           float64
+	MainFitness           float64
+	TotalNeurons          int
+	Evolvability          float64
+	Robustness            float64
+	Brittleness           float64
+	Generation            int
+	BehavioralDifferences any
+	FS                    float64
+}
+
 func defaultConstraintRecord() ConstraintRecord {
 	return ConstraintRecord{
 		Morphology:             "xor_mimic",
@@ -292,5 +347,31 @@ func defaultPopulationRecord() PopulationRecord {
 		Morphologies:  []any{},
 		SeedAgentIDs:  []any{},
 		SeedSpecieIDs: []any{},
+	}
+}
+
+func defaultTraceRecord() TraceRecord {
+	return TraceRecord{
+		Stats:            []any{},
+		TotalEvaluations: 0,
+		StepSize:         500,
+	}
+}
+
+func defaultStatRecord() StatRecord {
+	return StatRecord{}
+}
+
+func defaultTopologySummaryRecord() TopologySummaryRecord {
+	return TopologySummaryRecord{}
+}
+
+func defaultSignatureRecord() SignatureRecord {
+	return SignatureRecord{}
+}
+
+func defaultChampionRecord() ChampionRecord {
+	return ChampionRecord{
+		FS: 0,
 	}
 }

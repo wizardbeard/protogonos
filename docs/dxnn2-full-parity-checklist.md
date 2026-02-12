@@ -16,7 +16,7 @@ Status keys:
 | `population_monitor.erl` | `partial` | Generation loop, species-aware selection, quotas, diagnostics, lineage implemented; remaining fine-grained lifecycle parity pending. |
 | `genotype.erl` | `partial` | Seed/clone/lifecycle/store flows implemented; full reference operation surface still broader. |
 | `records.hrl` | `partial` | Core record equivalents implemented with versioned codecs; full field-level parity still pending. |
-| `map2rec.erl` | `partial` | Baseline `constraint`/`pmp`/`sensor`/`actuator` conversion parity implemented, plus `neuron`/`agent`/`cortex`/`specie`/`population` materializers; broader record coverage still pending. |
+| `map2rec.erl` | `partial` | Baseline conversion parity implemented for `constraint`/`pmp`/`sensor`/`actuator`/`neuron`/`agent`/`cortex`/`specie`/`population` plus `trace`/`stat`/`topology_summary`/`signature`/`champion`; broader record coverage still pending. |
 | `genome_mutator.erl` | `partial` | Core topology/weight operators plus plasticity/substrate parameter mutations implemented; full operator breadth pending. |
 | `selection_algorithm.erl` | `partial` | Elite/tournament/species/shared species + `hof_competition` alias implemented; additional reference strategies pending. |
 | `fitness_postprocessor.erl` | `partial` | None/size/novelty postprocessors implemented; full policy breadth pending. |
@@ -63,6 +63,7 @@ Status keys:
 - Expanded `map2rec` parity with permissive `sensor`/`actuator` record materialization and tests.
 - Added permissive `map2rec` materialization for `neuron` and `agent` records with defaults + malformed-field fallback tests.
 - Added permissive `map2rec` materialization for `cortex`, `specie`, and `population` records with mapping tests.
+- Added permissive `map2rec` materialization for `trace`, `stat`, `topology_summary`, `signature`, and `champion` records with mapping tests.
 
 ## Highest-priority remaining gaps to reach strict parity
 
