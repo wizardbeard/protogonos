@@ -75,6 +75,50 @@ func TestConstructSeedPopulationCartPoleLite(t *testing.T) {
 	}
 }
 
+func TestConstructSeedPopulationFlatland(t *testing.T) {
+	seed, err := ConstructSeedPopulation("flatland", 2, 19)
+	if err != nil {
+		t.Fatalf("construct flatland population: %v", err)
+	}
+	if len(seed.Genomes) != 2 {
+		t.Fatalf("expected 2 genomes, got %d", len(seed.Genomes))
+	}
+	if len(seed.InputNeuronIDs) != 2 || seed.InputNeuronIDs[0] != "d" || seed.InputNeuronIDs[1] != "e" {
+		t.Fatalf("unexpected input ids: %#v", seed.InputNeuronIDs)
+	}
+	if len(seed.OutputNeuronIDs) != 1 || seed.OutputNeuronIDs[0] != "m" {
+		t.Fatalf("unexpected output ids: %#v", seed.OutputNeuronIDs)
+	}
+	if len(seed.Genomes[0].SensorIDs) != 2 || seed.Genomes[0].SensorIDs[0] != protoio.FlatlandDistanceSensorName || seed.Genomes[0].SensorIDs[1] != protoio.FlatlandEnergySensorName {
+		t.Fatalf("unexpected flatland sensor ids: %#v", seed.Genomes[0].SensorIDs)
+	}
+	if len(seed.Genomes[0].ActuatorIDs) != 1 || seed.Genomes[0].ActuatorIDs[0] != protoio.FlatlandMoveActuatorName {
+		t.Fatalf("unexpected flatland actuator ids: %#v", seed.Genomes[0].ActuatorIDs)
+	}
+}
+
+func TestConstructSeedPopulationGTSA(t *testing.T) {
+	seed, err := ConstructSeedPopulation("gtsa", 2, 23)
+	if err != nil {
+		t.Fatalf("construct gtsa population: %v", err)
+	}
+	if len(seed.Genomes) != 2 {
+		t.Fatalf("expected 2 genomes, got %d", len(seed.Genomes))
+	}
+	if len(seed.InputNeuronIDs) != 1 || seed.InputNeuronIDs[0] != "x" {
+		t.Fatalf("unexpected input ids: %#v", seed.InputNeuronIDs)
+	}
+	if len(seed.OutputNeuronIDs) != 1 || seed.OutputNeuronIDs[0] != "y" {
+		t.Fatalf("unexpected output ids: %#v", seed.OutputNeuronIDs)
+	}
+	if len(seed.Genomes[0].SensorIDs) != 1 || seed.Genomes[0].SensorIDs[0] != protoio.GTSAInputSensorName {
+		t.Fatalf("unexpected gtsa sensor ids: %#v", seed.Genomes[0].SensorIDs)
+	}
+	if len(seed.Genomes[0].ActuatorIDs) != 1 || seed.Genomes[0].ActuatorIDs[0] != protoio.GTSAPredictActuatorName {
+		t.Fatalf("unexpected gtsa actuator ids: %#v", seed.Genomes[0].ActuatorIDs)
+	}
+}
+
 func TestConstructSeedPopulationUnsupportedScape(t *testing.T) {
 	_, err := ConstructSeedPopulation("unknown", 1, 1)
 	if err == nil {

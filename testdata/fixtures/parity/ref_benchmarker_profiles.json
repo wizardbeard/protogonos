@@ -1,0 +1,27 @@
+{
+  "source": ".ref/src/benchmarker.erl",
+  "profiles": [
+    {
+      "id": "ref-default-xorandxor",
+      "population_selection": "hof_competition",
+      "population_evolution": "generational",
+      "morphology": "xorAndXor",
+      "connection_architecture": "recurrent",
+      "neural_activations": ["tanh"],
+      "tuning_selection": "dynamic_random",
+      "mutation_operators": [
+        {"name": "add_bias", "weight": 10},
+        {"name": "add_outlink", "weight": 40},
+        {"name": "add_inlink", "weight": 40},
+        {"name": "add_neuron", "weight": 40},
+        {"name": "outsplice", "weight": 40},
+        {"name": "add_sensorlink", "weight": 1},
+        {"name": "add_sensor", "weight": 1},
+        {"name": "add_actuator", "weight": 1},
+        {"name": "add_cpp", "weight": 1},
+        {"name": "add_cep", "weight": 1}
+      ]
+    }
+  ]
+}
+

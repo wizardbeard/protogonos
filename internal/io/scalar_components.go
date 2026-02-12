@@ -15,6 +15,11 @@ const (
 	CartPolePositionSensorName = "cart_pole_position"
 	CartPoleVelocitySensorName = "cart_pole_velocity"
 	CartPoleForceActuatorName  = "cart_pole_force"
+	FlatlandDistanceSensorName = "flatland_distance"
+	FlatlandEnergySensorName   = "flatland_energy"
+	FlatlandMoveActuatorName   = "flatland_move"
+	GTSAInputSensorName        = "gtsa_input"
+	GTSAPredictActuatorName    = "gtsa_predict"
 )
 
 type ScalarInputSensor struct {
@@ -148,6 +153,51 @@ func initializeDefaultComponents() {
 	if err != nil {
 		panic(err)
 	}
+	err = RegisterSensorWithSpec(SensorSpec{
+		Name:          FlatlandDistanceSensorName,
+		Factory:       func() Sensor { return NewScalarInputSensor(0) },
+		SchemaVersion: SupportedSchemaVersion,
+		CodecVersion:  SupportedCodecVersion,
+		Compatible: func(scape string) error {
+			if scape != "flatland" {
+				return fmt.Errorf("unsupported scape: %s", scape)
+			}
+			return nil
+		},
+	})
+	if err != nil {
+		panic(err)
+	}
+	err = RegisterSensorWithSpec(SensorSpec{
+		Name:          FlatlandEnergySensorName,
+		Factory:       func() Sensor { return NewScalarInputSensor(0) },
+		SchemaVersion: SupportedSchemaVersion,
+		CodecVersion:  SupportedCodecVersion,
+		Compatible: func(scape string) error {
+			if scape != "flatland" {
+				return fmt.Errorf("unsupported scape: %s", scape)
+			}
+			return nil
+		},
+	})
+	if err != nil {
+		panic(err)
+	}
+	err = RegisterSensorWithSpec(SensorSpec{
+		Name:          GTSAInputSensorName,
+		Factory:       func() Sensor { return NewScalarInputSensor(0) },
+		SchemaVersion: SupportedSchemaVersion,
+		CodecVersion:  SupportedCodecVersion,
+		Compatible: func(scape string) error {
+			if scape != "gtsa" {
+				return fmt.Errorf("unsupported scape: %s", scape)
+			}
+			return nil
+		},
+	})
+	if err != nil {
+		panic(err)
+	}
 
 	err = RegisterActuatorWithSpec(ActuatorSpec{
 		Name:          ScalarOutputActuatorName,
@@ -186,6 +236,36 @@ func initializeDefaultComponents() {
 		CodecVersion:  SupportedCodecVersion,
 		Compatible: func(scape string) error {
 			if scape != "cart-pole-lite" {
+				return fmt.Errorf("unsupported scape: %s", scape)
+			}
+			return nil
+		},
+	})
+	if err != nil {
+		panic(err)
+	}
+	err = RegisterActuatorWithSpec(ActuatorSpec{
+		Name:          FlatlandMoveActuatorName,
+		Factory:       func() Actuator { return NewScalarOutputActuator() },
+		SchemaVersion: SupportedSchemaVersion,
+		CodecVersion:  SupportedCodecVersion,
+		Compatible: func(scape string) error {
+			if scape != "flatland" {
+				return fmt.Errorf("unsupported scape: %s", scape)
+			}
+			return nil
+		},
+	})
+	if err != nil {
+		panic(err)
+	}
+	err = RegisterActuatorWithSpec(ActuatorSpec{
+		Name:          GTSAPredictActuatorName,
+		Factory:       func() Actuator { return NewScalarOutputActuator() },
+		SchemaVersion: SupportedSchemaVersion,
+		CodecVersion:  SupportedCodecVersion,
+		Compatible: func(scape string) error {
+			if scape != "gtsa" {
 				return fmt.Errorf("unsupported scape: %s", scape)
 			}
 			return nil

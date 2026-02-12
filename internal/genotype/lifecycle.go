@@ -36,6 +36,18 @@ func ConstructSeedPopulation(scapeName string, size int, seed int64) (SeedPopula
 			InputNeuronIDs:  []string{"x", "v"},
 			OutputNeuronIDs: []string{"f"},
 		}, nil
+	case "flatland":
+		return SeedPopulation{
+			Genomes:         seedFlatlandPopulation(size, seed),
+			InputNeuronIDs:  []string{"d", "e"},
+			OutputNeuronIDs: []string{"m"},
+		}, nil
+	case "gtsa":
+		return SeedPopulation{
+			Genomes:         seedGTSAPopulation(size, seed),
+			InputNeuronIDs:  []string{"x"},
+			OutputNeuronIDs: []string{"y"},
+		}, nil
 	default:
 		return SeedPopulation{}, fmt.Errorf("unsupported scape: %s", scapeName)
 	}
@@ -152,6 +164,50 @@ func seedCartPoleLitePopulation(size int, seed int64) []model.Genome {
 			Synapses: []model.Synapse{
 				{ID: "s1", From: "x", To: "f", Weight: jitter(rng, 1.5), Enabled: true},
 				{ID: "s2", From: "v", To: "f", Weight: jitter(rng, 1.0), Enabled: true},
+			},
+		})
+	}
+	return population
+}
+
+func seedFlatlandPopulation(size int, seed int64) []model.Genome {
+	rng := rand.New(rand.NewSource(seed))
+	population := make([]model.Genome, 0, size)
+	for i := 0; i < size; i++ {
+		population = append(population, model.Genome{
+			VersionedRecord: model.VersionedRecord{SchemaVersion: storage.CurrentSchemaVersion, CodecVersion: storage.CurrentCodecVersion},
+			ID:              fmt.Sprintf("flatland-g0-%d", i),
+			SensorIDs:       []string{protoio.FlatlandDistanceSensorName, protoio.FlatlandEnergySensorName},
+			ActuatorIDs:     []string{protoio.FlatlandMoveActuatorName},
+			Neurons: []model.Neuron{
+				{ID: "d", Activation: "identity", Bias: 0},
+				{ID: "e", Activation: "identity", Bias: 0},
+				{ID: "m", Activation: "tanh", Bias: jitter(rng, 0.4)},
+			},
+			Synapses: []model.Synapse{
+				{ID: "s1", From: "d", To: "m", Weight: jitter(rng, 1.2), Enabled: true},
+				{ID: "s2", From: "e", To: "m", Weight: jitter(rng, 1.2), Enabled: true},
+			},
+		})
+	}
+	return population
+}
+
+func seedGTSAPopulation(size int, seed int64) []model.Genome {
+	rng := rand.New(rand.NewSource(seed))
+	population := make([]model.Genome, 0, size)
+	for i := 0; i < size; i++ {
+		population = append(population, model.Genome{
+			VersionedRecord: model.VersionedRecord{SchemaVersion: storage.CurrentSchemaVersion, CodecVersion: storage.CurrentCodecVersion},
+			ID:              fmt.Sprintf("gtsa-g0-%d", i),
+			SensorIDs:       []string{protoio.GTSAInputSensorName},
+			ActuatorIDs:     []string{protoio.GTSAPredictActuatorName},
+			Neurons: []model.Neuron{
+				{ID: "x", Activation: "identity", Bias: 0},
+				{ID: "y", Activation: "identity", Bias: jitter(rng, 0.3)},
+			},
+			Synapses: []model.Synapse{
+				{ID: "s1", From: "x", To: "y", Weight: jitter(rng, 1.0), Enabled: true},
 			},
 		})
 	}
