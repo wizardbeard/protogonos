@@ -1,0 +1,1685 @@
+[
+  {
+    "genome_id": "cp-g0-0",
+    "parent_id": "",
+    "generation": 0,
+    "operation": "seed",
+    "fingerprint": "ebaefc85411775f4",
+    "summary": {
+      "activation_distribution": {
+        "identity": 3
+      },
+      "aggregator_distribution": {
+        "dot_product": 3
+      },
+      "total_actuators": 1,
+      "total_neurons": 3,
+      "total_recurrent_synapses": 0,
+      "total_sensors": 2,
+      "total_synapses": 2
+    }
+  },
+  {
+    "genome_id": "cp-g0-1",
+    "parent_id": "",
+    "generation": 0,
+    "operation": "seed",
+    "fingerprint": "ebaefc85411775f4",
+    "summary": {
+      "activation_distribution": {
+        "identity": 3
+      },
+      "aggregator_distribution": {
+        "dot_product": 3
+      },
+      "total_actuators": 1,
+      "total_neurons": 3,
+      "total_recurrent_synapses": 0,
+      "total_sensors": 2,
+      "total_synapses": 2
+    }
+  },
+  {
+    "genome_id": "cp-g0-2",
+    "parent_id": "",
+    "generation": 0,
+    "operation": "seed",
+    "fingerprint": "ebaefc85411775f4",
+    "summary": {
+      "activation_distribution": {
+        "identity": 3
+      },
+      "aggregator_distribution": {
+        "dot_product": 3
+      },
+      "total_actuators": 1,
+      "total_neurons": 3,
+      "total_recurrent_synapses": 0,
+      "total_sensors": 2,
+      "total_synapses": 2
+    }
+  },
+  {
+    "genome_id": "cp-g0-3",
+    "parent_id": "",
+    "generation": 0,
+    "operation": "seed",
+    "fingerprint": "ebaefc85411775f4",
+    "summary": {
+      "activation_distribution": {
+        "identity": 3
+      },
+      "aggregator_distribution": {
+        "dot_product": 3
+      },
+      "total_actuators": 1,
+      "total_neurons": 3,
+      "total_recurrent_synapses": 0,
+      "total_sensors": 2,
+      "total_synapses": 2
+    }
+  },
+  {
+    "genome_id": "cp-g0-4",
+    "parent_id": "",
+    "generation": 0,
+    "operation": "seed",
+    "fingerprint": "ebaefc85411775f4",
+    "summary": {
+      "activation_distribution": {
+        "identity": 3
+      },
+      "aggregator_distribution": {
+        "dot_product": 3
+      },
+      "total_actuators": 1,
+      "total_neurons": 3,
+      "total_recurrent_synapses": 0,
+      "total_sensors": 2,
+      "total_synapses": 2
+    }
+  },
+  {
+    "genome_id": "cp-g0-5",
+    "parent_id": "",
+    "generation": 0,
+    "operation": "seed",
+    "fingerprint": "ebaefc85411775f4",
+    "summary": {
+      "activation_distribution": {
+        "identity": 3
+      },
+      "aggregator_distribution": {
+        "dot_product": 3
+      },
+      "total_actuators": 1,
+      "total_neurons": 3,
+      "total_recurrent_synapses": 0,
+      "total_sensors": 2,
+      "total_synapses": 2
+    }
+  },
+  {
+    "genome_id": "cp-g0-6",
+    "parent_id": "",
+    "generation": 0,
+    "operation": "seed",
+    "fingerprint": "ebaefc85411775f4",
+    "summary": {
+      "activation_distribution": {
+        "identity": 3
+      },
+      "aggregator_distribution": {
+        "dot_product": 3
+      },
+      "total_actuators": 1,
+      "total_neurons": 3,
+      "total_recurrent_synapses": 0,
+      "total_sensors": 2,
+      "total_synapses": 2
+    }
+  },
+  {
+    "genome_id": "cp-g0-7",
+    "parent_id": "",
+    "generation": 0,
+    "operation": "seed",
+    "fingerprint": "ebaefc85411775f4",
+    "summary": {
+      "activation_distribution": {
+        "identity": 3
+      },
+      "aggregator_distribution": {
+        "dot_product": 3
+      },
+      "total_actuators": 1,
+      "total_neurons": 3,
+      "total_recurrent_synapses": 0,
+      "total_sensors": 2,
+      "total_synapses": 2
+    }
+  },
+  {
+    "genome_id": "cp-g0-8",
+    "parent_id": "",
+    "generation": 0,
+    "operation": "seed",
+    "fingerprint": "ebaefc85411775f4",
+    "summary": {
+      "activation_distribution": {
+        "identity": 3
+      },
+      "aggregator_distribution": {
+        "dot_product": 3
+      },
+      "total_actuators": 1,
+      "total_neurons": 3,
+      "total_recurrent_synapses": 0,
+      "total_sensors": 2,
+      "total_synapses": 2
+    }
+  },
+  {
+    "genome_id": "cp-g0-9",
+    "parent_id": "",
+    "generation": 0,
+    "operation": "seed",
+    "fingerprint": "ebaefc85411775f4",
+    "summary": {
+      "activation_distribution": {
+        "identity": 3
+      },
+      "aggregator_distribution": {
+        "dot_product": 3
+      },
+      "total_actuators": 1,
+      "total_neurons": 3,
+      "total_recurrent_synapses": 0,
+      "total_sensors": 2,
+      "total_synapses": 2
+    }
+  },
+  {
+    "genome_id": "cp-g0-10",
+    "parent_id": "",
+    "generation": 0,
+    "operation": "seed",
+    "fingerprint": "ebaefc85411775f4",
+    "summary": {
+      "activation_distribution": {
+        "identity": 3
+      },
+      "aggregator_distribution": {
+        "dot_product": 3
+      },
+      "total_actuators": 1,
+      "total_neurons": 3,
+      "total_recurrent_synapses": 0,
+      "total_sensors": 2,
+      "total_synapses": 2
+    }
+  },
+  {
+    "genome_id": "cp-g0-11",
+    "parent_id": "",
+    "generation": 0,
+    "operation": "seed",
+    "fingerprint": "ebaefc85411775f4",
+    "summary": {
+      "activation_distribution": {
+        "identity": 3
+      },
+      "aggregator_distribution": {
+        "dot_product": 3
+      },
+      "total_actuators": 1,
+      "total_neurons": 3,
+      "total_recurrent_synapses": 0,
+      "total_sensors": 2,
+      "total_synapses": 2
+    }
+  },
+  {
+    "genome_id": "cp-g0-0",
+    "parent_id": "cp-g0-0",
+    "generation": 1,
+    "operation": "elite_clone",
+    "fingerprint": "ebaefc85411775f4",
+    "summary": {
+      "activation_distribution": {
+        "identity": 3
+      },
+      "aggregator_distribution": {
+        "dot_product": 3
+      },
+      "total_actuators": 1,
+      "total_neurons": 3,
+      "total_recurrent_synapses": 0,
+      "total_sensors": 2,
+      "total_synapses": 2
+    }
+  },
+  {
+    "genome_id": "cp-g0-11",
+    "parent_id": "cp-g0-11",
+    "generation": 1,
+    "operation": "elite_clone",
+    "fingerprint": "ebaefc85411775f4",
+    "summary": {
+      "activation_distribution": {
+        "identity": 3
+      },
+      "aggregator_distribution": {
+        "dot_product": 3
+      },
+      "total_actuators": 1,
+      "total_neurons": 3,
+      "total_recurrent_synapses": 0,
+      "total_sensors": 2,
+      "total_synapses": 2
+    }
+  },
+  {
+    "genome_id": "cp-g0-0-g1-i2",
+    "parent_id": "cp-g0-0",
+    "generation": 1,
+    "operation": "perturb_random_weight",
+    "fingerprint": "ebaefc85411775f4",
+    "summary": {
+      "activation_distribution": {
+        "identity": 3
+      },
+      "aggregator_distribution": {
+        "dot_product": 3
+      },
+      "total_actuators": 1,
+      "total_neurons": 3,
+      "total_recurrent_synapses": 0,
+      "total_sensors": 2,
+      "total_synapses": 2
+    }
+  },
+  {
+    "genome_id": "cp-g0-0-g1-i3",
+    "parent_id": "cp-g0-0",
+    "generation": 1,
+    "operation": "perturb_random_weight(fallback)",
+    "fingerprint": "ebaefc85411775f4",
+    "summary": {
+      "activation_distribution": {
+        "identity": 3
+      },
+      "aggregator_distribution": {
+        "dot_product": 3
+      },
+      "total_actuators": 1,
+      "total_neurons": 3,
+      "total_recurrent_synapses": 0,
+      "total_sensors": 2,
+      "total_synapses": 2
+    }
+  },
+  {
+    "genome_id": "cp-g0-0-g1-i4",
+    "parent_id": "cp-g0-0",
+    "generation": 1,
+    "operation": "perturb_random_weight",
+    "fingerprint": "ebaefc85411775f4",
+    "summary": {
+      "activation_distribution": {
+        "identity": 3
+      },
+      "aggregator_distribution": {
+        "dot_product": 3
+      },
+      "total_actuators": 1,
+      "total_neurons": 3,
+      "total_recurrent_synapses": 0,
+      "total_sensors": 2,
+      "total_synapses": 2
+    }
+  },
+  {
+    "genome_id": "cp-g0-11-g1-i5",
+    "parent_id": "cp-g0-11",
+    "generation": 1,
+    "operation": "perturb_random_weight",
+    "fingerprint": "ebaefc85411775f4",
+    "summary": {
+      "activation_distribution": {
+        "identity": 3
+      },
+      "aggregator_distribution": {
+        "dot_product": 3
+      },
+      "total_actuators": 1,
+      "total_neurons": 3,
+      "total_recurrent_synapses": 0,
+      "total_sensors": 2,
+      "total_synapses": 2
+    }
+  },
+  {
+    "genome_id": "cp-g0-11-g1-i6",
+    "parent_id": "cp-g0-11",
+    "generation": 1,
+    "operation": "add_random_synapse",
+    "fingerprint": "103193eb8c4e0099",
+    "summary": {
+      "activation_distribution": {
+        "identity": 3
+      },
+      "aggregator_distribution": {
+        "dot_product": 3
+      },
+      "total_actuators": 1,
+      "total_neurons": 3,
+      "total_recurrent_synapses": 1,
+      "total_sensors": 2,
+      "total_synapses": 3
+    }
+  },
+  {
+    "genome_id": "cp-g0-11-g1-i7",
+    "parent_id": "cp-g0-11",
+    "generation": 1,
+    "operation": "add_random_neuron",
+    "fingerprint": "a091ac85eab3cceb",
+    "summary": {
+      "activation_distribution": {
+        "identity": 3,
+        "tanh": 1
+      },
+      "aggregator_distribution": {
+        "dot_product": 4
+      },
+      "total_actuators": 1,
+      "total_neurons": 4,
+      "total_recurrent_synapses": 0,
+      "total_sensors": 2,
+      "total_synapses": 3
+    }
+  },
+  {
+    "genome_id": "cp-g0-11-g1-i8",
+    "parent_id": "cp-g0-11",
+    "generation": 1,
+    "operation": "add_random_synapse",
+    "fingerprint": "6c598eb48e8e62d3",
+    "summary": {
+      "activation_distribution": {
+        "identity": 3
+      },
+      "aggregator_distribution": {
+        "dot_product": 3
+      },
+      "total_actuators": 1,
+      "total_neurons": 3,
+      "total_recurrent_synapses": 0,
+      "total_sensors": 2,
+      "total_synapses": 3
+    }
+  },
+  {
+    "genome_id": "cp-g0-0-g1-i9",
+    "parent_id": "cp-g0-0",
+    "generation": 1,
+    "operation": "perturb_random_weight",
+    "fingerprint": "ebaefc85411775f4",
+    "summary": {
+      "activation_distribution": {
+        "identity": 3
+      },
+      "aggregator_distribution": {
+        "dot_product": 3
+      },
+      "total_actuators": 1,
+      "total_neurons": 3,
+      "total_recurrent_synapses": 0,
+      "total_sensors": 2,
+      "total_synapses": 2
+    }
+  },
+  {
+    "genome_id": "cp-g0-0-g1-i10",
+    "parent_id": "cp-g0-0",
+    "generation": 1,
+    "operation": "perturb_random_weight",
+    "fingerprint": "ebaefc85411775f4",
+    "summary": {
+      "activation_distribution": {
+        "identity": 3
+      },
+      "aggregator_distribution": {
+        "dot_product": 3
+      },
+      "total_actuators": 1,
+      "total_neurons": 3,
+      "total_recurrent_synapses": 0,
+      "total_sensors": 2,
+      "total_synapses": 2
+    }
+  },
+  {
+    "genome_id": "cp-g0-11-g1-i11",
+    "parent_id": "cp-g0-11",
+    "generation": 1,
+    "operation": "perturb_random_weight",
+    "fingerprint": "ebaefc85411775f4",
+    "summary": {
+      "activation_distribution": {
+        "identity": 3
+      },
+      "aggregator_distribution": {
+        "dot_product": 3
+      },
+      "total_actuators": 1,
+      "total_neurons": 3,
+      "total_recurrent_synapses": 0,
+      "total_sensors": 2,
+      "total_synapses": 2
+    }
+  },
+  {
+    "genome_id": "cp-g0-0-g1-i10",
+    "parent_id": "cp-g0-0-g1-i10",
+    "generation": 2,
+    "operation": "elite_clone",
+    "fingerprint": "ebaefc85411775f4",
+    "summary": {
+      "activation_distribution": {
+        "identity": 3
+      },
+      "aggregator_distribution": {
+        "dot_product": 3
+      },
+      "total_actuators": 1,
+      "total_neurons": 3,
+      "total_recurrent_synapses": 0,
+      "total_sensors": 2,
+      "total_synapses": 2
+    }
+  },
+  {
+    "genome_id": "cp-g0-0",
+    "parent_id": "cp-g0-0",
+    "generation": 2,
+    "operation": "elite_clone",
+    "fingerprint": "ebaefc85411775f4",
+    "summary": {
+      "activation_distribution": {
+        "identity": 3
+      },
+      "aggregator_distribution": {
+        "dot_product": 3
+      },
+      "total_actuators": 1,
+      "total_neurons": 3,
+      "total_recurrent_synapses": 0,
+      "total_sensors": 2,
+      "total_synapses": 2
+    }
+  },
+  {
+    "genome_id": "cp-g0-0-g2-i2",
+    "parent_id": "cp-g0-0",
+    "generation": 2,
+    "operation": "remove_random_synapse",
+    "fingerprint": "820ab16e924c4a84",
+    "summary": {
+      "activation_distribution": {
+        "identity": 3
+      },
+      "aggregator_distribution": {
+        "dot_product": 3
+      },
+      "total_actuators": 1,
+      "total_neurons": 3,
+      "total_recurrent_synapses": 0,
+      "total_sensors": 2,
+      "total_synapses": 1
+    }
+  },
+  {
+    "genome_id": "cp-g0-0-g2-i3",
+    "parent_id": "cp-g0-0",
+    "generation": 2,
+    "operation": "perturb_random_weight(fallback)",
+    "fingerprint": "ebaefc85411775f4",
+    "summary": {
+      "activation_distribution": {
+        "identity": 3
+      },
+      "aggregator_distribution": {
+        "dot_product": 3
+      },
+      "total_actuators": 1,
+      "total_neurons": 3,
+      "total_recurrent_synapses": 0,
+      "total_sensors": 2,
+      "total_synapses": 2
+    }
+  },
+  {
+    "genome_id": "cp-g0-0-g1-i10-g2-i4",
+    "parent_id": "cp-g0-0-g1-i10",
+    "generation": 2,
+    "operation": "perturb_random_weight",
+    "fingerprint": "ebaefc85411775f4",
+    "summary": {
+      "activation_distribution": {
+        "identity": 3
+      },
+      "aggregator_distribution": {
+        "dot_product": 3
+      },
+      "total_actuators": 1,
+      "total_neurons": 3,
+      "total_recurrent_synapses": 0,
+      "total_sensors": 2,
+      "total_synapses": 2
+    }
+  },
+  {
+    "genome_id": "cp-g0-0-g2-i5",
+    "parent_id": "cp-g0-0",
+    "generation": 2,
+    "operation": "perturb_random_weight",
+    "fingerprint": "ebaefc85411775f4",
+    "summary": {
+      "activation_distribution": {
+        "identity": 3
+      },
+      "aggregator_distribution": {
+        "dot_product": 3
+      },
+      "total_actuators": 1,
+      "total_neurons": 3,
+      "total_recurrent_synapses": 0,
+      "total_sensors": 2,
+      "total_synapses": 2
+    }
+  },
+  {
+    "genome_id": "cp-g0-0-g1-i10-g2-i6",
+    "parent_id": "cp-g0-0-g1-i10",
+    "generation": 2,
+    "operation": "perturb_random_weight",
+    "fingerprint": "ebaefc85411775f4",
+    "summary": {
+      "activation_distribution": {
+        "identity": 3
+      },
+      "aggregator_distribution": {
+        "dot_product": 3
+      },
+      "total_actuators": 1,
+      "total_neurons": 3,
+      "total_recurrent_synapses": 0,
+      "total_sensors": 2,
+      "total_synapses": 2
+    }
+  },
+  {
+    "genome_id": "cp-g0-0-g1-i10-g2-i7",
+    "parent_id": "cp-g0-0-g1-i10",
+    "generation": 2,
+    "operation": "add_random_synapse",
+    "fingerprint": "6c598eb48e8e62d3",
+    "summary": {
+      "activation_distribution": {
+        "identity": 3
+      },
+      "aggregator_distribution": {
+        "dot_product": 3
+      },
+      "total_actuators": 1,
+      "total_neurons": 3,
+      "total_recurrent_synapses": 0,
+      "total_sensors": 2,
+      "total_synapses": 3
+    }
+  },
+  {
+    "genome_id": "cp-g0-0-g2-i8",
+    "parent_id": "cp-g0-0",
+    "generation": 2,
+    "operation": "perturb_random_weight",
+    "fingerprint": "ebaefc85411775f4",
+    "summary": {
+      "activation_distribution": {
+        "identity": 3
+      },
+      "aggregator_distribution": {
+        "dot_product": 3
+      },
+      "total_actuators": 1,
+      "total_neurons": 3,
+      "total_recurrent_synapses": 0,
+      "total_sensors": 2,
+      "total_synapses": 2
+    }
+  },
+  {
+    "genome_id": "cp-g0-0-g1-i10-g2-i9",
+    "parent_id": "cp-g0-0-g1-i10",
+    "generation": 2,
+    "operation": "perturb_random_weight",
+    "fingerprint": "ebaefc85411775f4",
+    "summary": {
+      "activation_distribution": {
+        "identity": 3
+      },
+      "aggregator_distribution": {
+        "dot_product": 3
+      },
+      "total_actuators": 1,
+      "total_neurons": 3,
+      "total_recurrent_synapses": 0,
+      "total_sensors": 2,
+      "total_synapses": 2
+    }
+  },
+  {
+    "genome_id": "cp-g0-0-g1-i10-g2-i10",
+    "parent_id": "cp-g0-0-g1-i10",
+    "generation": 2,
+    "operation": "add_random_neuron",
+    "fingerprint": "499bcdbb220f5016",
+    "summary": {
+      "activation_distribution": {
+        "identity": 3,
+        "relu": 1
+      },
+      "aggregator_distribution": {
+        "dot_product": 4
+      },
+      "total_actuators": 1,
+      "total_neurons": 4,
+      "total_recurrent_synapses": 0,
+      "total_sensors": 2,
+      "total_synapses": 3
+    }
+  },
+  {
+    "genome_id": "cp-g0-0-g2-i11",
+    "parent_id": "cp-g0-0",
+    "generation": 2,
+    "operation": "perturb_random_weight",
+    "fingerprint": "ebaefc85411775f4",
+    "summary": {
+      "activation_distribution": {
+        "identity": 3
+      },
+      "aggregator_distribution": {
+        "dot_product": 3
+      },
+      "total_actuators": 1,
+      "total_neurons": 3,
+      "total_recurrent_synapses": 0,
+      "total_sensors": 2,
+      "total_synapses": 2
+    }
+  },
+  {
+    "genome_id": "cp-g0-0-g2-i11",
+    "parent_id": "cp-g0-0-g2-i11",
+    "generation": 3,
+    "operation": "elite_clone",
+    "fingerprint": "ebaefc85411775f4",
+    "summary": {
+      "activation_distribution": {
+        "identity": 3
+      },
+      "aggregator_distribution": {
+        "dot_product": 3
+      },
+      "total_actuators": 1,
+      "total_neurons": 3,
+      "total_recurrent_synapses": 0,
+      "total_sensors": 2,
+      "total_synapses": 2
+    }
+  },
+  {
+    "genome_id": "cp-g0-0-g1-i10-g2-i9",
+    "parent_id": "cp-g0-0-g1-i10-g2-i9",
+    "generation": 3,
+    "operation": "elite_clone",
+    "fingerprint": "ebaefc85411775f4",
+    "summary": {
+      "activation_distribution": {
+        "identity": 3
+      },
+      "aggregator_distribution": {
+        "dot_product": 3
+      },
+      "total_actuators": 1,
+      "total_neurons": 3,
+      "total_recurrent_synapses": 0,
+      "total_sensors": 2,
+      "total_synapses": 2
+    }
+  },
+  {
+    "genome_id": "cp-g0-0-g1-i10-g2-i9-g3-i2",
+    "parent_id": "cp-g0-0-g1-i10-g2-i9",
+    "generation": 3,
+    "operation": "remove_random_synapse",
+    "fingerprint": "820ab16e924c4a84",
+    "summary": {
+      "activation_distribution": {
+        "identity": 3
+      },
+      "aggregator_distribution": {
+        "dot_product": 3
+      },
+      "total_actuators": 1,
+      "total_neurons": 3,
+      "total_recurrent_synapses": 0,
+      "total_sensors": 2,
+      "total_synapses": 1
+    }
+  },
+  {
+    "genome_id": "cp-g0-0-g2-i11-g3-i3",
+    "parent_id": "cp-g0-0-g2-i11",
+    "generation": 3,
+    "operation": "add_random_synapse",
+    "fingerprint": "103193eb8c4e0099",
+    "summary": {
+      "activation_distribution": {
+        "identity": 3
+      },
+      "aggregator_distribution": {
+        "dot_product": 3
+      },
+      "total_actuators": 1,
+      "total_neurons": 3,
+      "total_recurrent_synapses": 1,
+      "total_sensors": 2,
+      "total_synapses": 3
+    }
+  },
+  {
+    "genome_id": "cp-g0-0-g1-i10-g2-i9-g3-i4",
+    "parent_id": "cp-g0-0-g1-i10-g2-i9",
+    "generation": 3,
+    "operation": "perturb_random_weight",
+    "fingerprint": "ebaefc85411775f4",
+    "summary": {
+      "activation_distribution": {
+        "identity": 3
+      },
+      "aggregator_distribution": {
+        "dot_product": 3
+      },
+      "total_actuators": 1,
+      "total_neurons": 3,
+      "total_recurrent_synapses": 0,
+      "total_sensors": 2,
+      "total_synapses": 2
+    }
+  },
+  {
+    "genome_id": "cp-g0-0-g2-i11-g3-i5",
+    "parent_id": "cp-g0-0-g2-i11",
+    "generation": 3,
+    "operation": "perturb_random_weight",
+    "fingerprint": "ebaefc85411775f4",
+    "summary": {
+      "activation_distribution": {
+        "identity": 3
+      },
+      "aggregator_distribution": {
+        "dot_product": 3
+      },
+      "total_actuators": 1,
+      "total_neurons": 3,
+      "total_recurrent_synapses": 0,
+      "total_sensors": 2,
+      "total_synapses": 2
+    }
+  },
+  {
+    "genome_id": "cp-g0-0-g2-i11-g3-i6",
+    "parent_id": "cp-g0-0-g2-i11",
+    "generation": 3,
+    "operation": "perturb_random_weight",
+    "fingerprint": "ebaefc85411775f4",
+    "summary": {
+      "activation_distribution": {
+        "identity": 3
+      },
+      "aggregator_distribution": {
+        "dot_product": 3
+      },
+      "total_actuators": 1,
+      "total_neurons": 3,
+      "total_recurrent_synapses": 0,
+      "total_sensors": 2,
+      "total_synapses": 2
+    }
+  },
+  {
+    "genome_id": "cp-g0-0-g1-i10-g2-i9-g3-i7",
+    "parent_id": "cp-g0-0-g1-i10-g2-i9",
+    "generation": 3,
+    "operation": "perturb_random_weight",
+    "fingerprint": "ebaefc85411775f4",
+    "summary": {
+      "activation_distribution": {
+        "identity": 3
+      },
+      "aggregator_distribution": {
+        "dot_product": 3
+      },
+      "total_actuators": 1,
+      "total_neurons": 3,
+      "total_recurrent_synapses": 0,
+      "total_sensors": 2,
+      "total_synapses": 2
+    }
+  },
+  {
+    "genome_id": "cp-g0-0-g2-i11-g3-i8",
+    "parent_id": "cp-g0-0-g2-i11",
+    "generation": 3,
+    "operation": "remove_random_synapse",
+    "fingerprint": "820ab16e924c4a84",
+    "summary": {
+      "activation_distribution": {
+        "identity": 3
+      },
+      "aggregator_distribution": {
+        "dot_product": 3
+      },
+      "total_actuators": 1,
+      "total_neurons": 3,
+      "total_recurrent_synapses": 0,
+      "total_sensors": 2,
+      "total_synapses": 1
+    }
+  },
+  {
+    "genome_id": "cp-g0-0-g2-i11-g3-i9",
+    "parent_id": "cp-g0-0-g2-i11",
+    "generation": 3,
+    "operation": "perturb_random_weight",
+    "fingerprint": "ebaefc85411775f4",
+    "summary": {
+      "activation_distribution": {
+        "identity": 3
+      },
+      "aggregator_distribution": {
+        "dot_product": 3
+      },
+      "total_actuators": 1,
+      "total_neurons": 3,
+      "total_recurrent_synapses": 0,
+      "total_sensors": 2,
+      "total_synapses": 2
+    }
+  },
+  {
+    "genome_id": "cp-g0-0-g2-i11-g3-i10",
+    "parent_id": "cp-g0-0-g2-i11",
+    "generation": 3,
+    "operation": "remove_random_synapse",
+    "fingerprint": "820ab16e924c4a84",
+    "summary": {
+      "activation_distribution": {
+        "identity": 3
+      },
+      "aggregator_distribution": {
+        "dot_product": 3
+      },
+      "total_actuators": 1,
+      "total_neurons": 3,
+      "total_recurrent_synapses": 0,
+      "total_sensors": 2,
+      "total_synapses": 1
+    }
+  },
+  {
+    "genome_id": "cp-g0-0-g2-i11-g3-i11",
+    "parent_id": "cp-g0-0-g2-i11",
+    "generation": 3,
+    "operation": "perturb_random_weight",
+    "fingerprint": "ebaefc85411775f4",
+    "summary": {
+      "activation_distribution": {
+        "identity": 3
+      },
+      "aggregator_distribution": {
+        "dot_product": 3
+      },
+      "total_actuators": 1,
+      "total_neurons": 3,
+      "total_recurrent_synapses": 0,
+      "total_sensors": 2,
+      "total_synapses": 2
+    }
+  },
+  {
+    "genome_id": "cp-g0-0-g2-i11-g3-i6",
+    "parent_id": "cp-g0-0-g2-i11-g3-i6",
+    "generation": 4,
+    "operation": "elite_clone",
+    "fingerprint": "ebaefc85411775f4",
+    "summary": {
+      "activation_distribution": {
+        "identity": 3
+      },
+      "aggregator_distribution": {
+        "dot_product": 3
+      },
+      "total_actuators": 1,
+      "total_neurons": 3,
+      "total_recurrent_synapses": 0,
+      "total_sensors": 2,
+      "total_synapses": 2
+    }
+  },
+  {
+    "genome_id": "cp-g0-0-g2-i11-g3-i5",
+    "parent_id": "cp-g0-0-g2-i11-g3-i5",
+    "generation": 4,
+    "operation": "elite_clone",
+    "fingerprint": "ebaefc85411775f4",
+    "summary": {
+      "activation_distribution": {
+        "identity": 3
+      },
+      "aggregator_distribution": {
+        "dot_product": 3
+      },
+      "total_actuators": 1,
+      "total_neurons": 3,
+      "total_recurrent_synapses": 0,
+      "total_sensors": 2,
+      "total_synapses": 2
+    }
+  },
+  {
+    "genome_id": "cp-g0-0-g2-i11-g3-i6-g4-i2",
+    "parent_id": "cp-g0-0-g2-i11-g3-i6",
+    "generation": 4,
+    "operation": "perturb_random_weight",
+    "fingerprint": "ebaefc85411775f4",
+    "summary": {
+      "activation_distribution": {
+        "identity": 3
+      },
+      "aggregator_distribution": {
+        "dot_product": 3
+      },
+      "total_actuators": 1,
+      "total_neurons": 3,
+      "total_recurrent_synapses": 0,
+      "total_sensors": 2,
+      "total_synapses": 2
+    }
+  },
+  {
+    "genome_id": "cp-g0-0-g2-i11-g3-i5-g4-i3",
+    "parent_id": "cp-g0-0-g2-i11-g3-i5",
+    "generation": 4,
+    "operation": "perturb_random_weight",
+    "fingerprint": "ebaefc85411775f4",
+    "summary": {
+      "activation_distribution": {
+        "identity": 3
+      },
+      "aggregator_distribution": {
+        "dot_product": 3
+      },
+      "total_actuators": 1,
+      "total_neurons": 3,
+      "total_recurrent_synapses": 0,
+      "total_sensors": 2,
+      "total_synapses": 2
+    }
+  },
+  {
+    "genome_id": "cp-g0-0-g2-i11-g3-i6-g4-i4",
+    "parent_id": "cp-g0-0-g2-i11-g3-i6",
+    "generation": 4,
+    "operation": "perturb_random_weight",
+    "fingerprint": "ebaefc85411775f4",
+    "summary": {
+      "activation_distribution": {
+        "identity": 3
+      },
+      "aggregator_distribution": {
+        "dot_product": 3
+      },
+      "total_actuators": 1,
+      "total_neurons": 3,
+      "total_recurrent_synapses": 0,
+      "total_sensors": 2,
+      "total_synapses": 2
+    }
+  },
+  {
+    "genome_id": "cp-g0-0-g2-i11-g3-i5-g4-i5",
+    "parent_id": "cp-g0-0-g2-i11-g3-i5",
+    "generation": 4,
+    "operation": "perturb_random_weight",
+    "fingerprint": "ebaefc85411775f4",
+    "summary": {
+      "activation_distribution": {
+        "identity": 3
+      },
+      "aggregator_distribution": {
+        "dot_product": 3
+      },
+      "total_actuators": 1,
+      "total_neurons": 3,
+      "total_recurrent_synapses": 0,
+      "total_sensors": 2,
+      "total_synapses": 2
+    }
+  },
+  {
+    "genome_id": "cp-g0-0-g2-i11-g3-i5-g4-i6",
+    "parent_id": "cp-g0-0-g2-i11-g3-i5",
+    "generation": 4,
+    "operation": "add_random_synapse",
+    "fingerprint": "6c598eb48e8e62d3",
+    "summary": {
+      "activation_distribution": {
+        "identity": 3
+      },
+      "aggregator_distribution": {
+        "dot_product": 3
+      },
+      "total_actuators": 1,
+      "total_neurons": 3,
+      "total_recurrent_synapses": 0,
+      "total_sensors": 2,
+      "total_synapses": 3
+    }
+  },
+  {
+    "genome_id": "cp-g0-0-g2-i11-g3-i5-g4-i7",
+    "parent_id": "cp-g0-0-g2-i11-g3-i5",
+    "generation": 4,
+    "operation": "perturb_random_weight",
+    "fingerprint": "ebaefc85411775f4",
+    "summary": {
+      "activation_distribution": {
+        "identity": 3
+      },
+      "aggregator_distribution": {
+        "dot_product": 3
+      },
+      "total_actuators": 1,
+      "total_neurons": 3,
+      "total_recurrent_synapses": 0,
+      "total_sensors": 2,
+      "total_synapses": 2
+    }
+  },
+  {
+    "genome_id": "cp-g0-0-g2-i11-g3-i6-g4-i8",
+    "parent_id": "cp-g0-0-g2-i11-g3-i6",
+    "generation": 4,
+    "operation": "perturb_random_weight",
+    "fingerprint": "ebaefc85411775f4",
+    "summary": {
+      "activation_distribution": {
+        "identity": 3
+      },
+      "aggregator_distribution": {
+        "dot_product": 3
+      },
+      "total_actuators": 1,
+      "total_neurons": 3,
+      "total_recurrent_synapses": 0,
+      "total_sensors": 2,
+      "total_synapses": 2
+    }
+  },
+  {
+    "genome_id": "cp-g0-0-g2-i11-g3-i6-g4-i9",
+    "parent_id": "cp-g0-0-g2-i11-g3-i6",
+    "generation": 4,
+    "operation": "add_random_neuron",
+    "fingerprint": "fbbb7a0b4dee176f",
+    "summary": {
+      "activation_distribution": {
+        "identity": 4
+      },
+      "aggregator_distribution": {
+        "dot_product": 4
+      },
+      "total_actuators": 1,
+      "total_neurons": 4,
+      "total_recurrent_synapses": 0,
+      "total_sensors": 2,
+      "total_synapses": 3
+    }
+  },
+  {
+    "genome_id": "cp-g0-0-g2-i11-g3-i5-g4-i10",
+    "parent_id": "cp-g0-0-g2-i11-g3-i5",
+    "generation": 4,
+    "operation": "perturb_random_weight",
+    "fingerprint": "ebaefc85411775f4",
+    "summary": {
+      "activation_distribution": {
+        "identity": 3
+      },
+      "aggregator_distribution": {
+        "dot_product": 3
+      },
+      "total_actuators": 1,
+      "total_neurons": 3,
+      "total_recurrent_synapses": 0,
+      "total_sensors": 2,
+      "total_synapses": 2
+    }
+  },
+  {
+    "genome_id": "cp-g0-0-g2-i11-g3-i6-g4-i11",
+    "parent_id": "cp-g0-0-g2-i11-g3-i6",
+    "generation": 4,
+    "operation": "perturb_random_weight",
+    "fingerprint": "ebaefc85411775f4",
+    "summary": {
+      "activation_distribution": {
+        "identity": 3
+      },
+      "aggregator_distribution": {
+        "dot_product": 3
+      },
+      "total_actuators": 1,
+      "total_neurons": 3,
+      "total_recurrent_synapses": 0,
+      "total_sensors": 2,
+      "total_synapses": 2
+    }
+  },
+  {
+    "genome_id": "cp-g0-0-g2-i11-g3-i5-g4-i3",
+    "parent_id": "cp-g0-0-g2-i11-g3-i5-g4-i3",
+    "generation": 5,
+    "operation": "elite_clone",
+    "fingerprint": "ebaefc85411775f4",
+    "summary": {
+      "activation_distribution": {
+        "identity": 3
+      },
+      "aggregator_distribution": {
+        "dot_product": 3
+      },
+      "total_actuators": 1,
+      "total_neurons": 3,
+      "total_recurrent_synapses": 0,
+      "total_sensors": 2,
+      "total_synapses": 2
+    }
+  },
+  {
+    "genome_id": "cp-g0-0-g2-i11-g3-i6-g4-i11",
+    "parent_id": "cp-g0-0-g2-i11-g3-i6-g4-i11",
+    "generation": 5,
+    "operation": "elite_clone",
+    "fingerprint": "ebaefc85411775f4",
+    "summary": {
+      "activation_distribution": {
+        "identity": 3
+      },
+      "aggregator_distribution": {
+        "dot_product": 3
+      },
+      "total_actuators": 1,
+      "total_neurons": 3,
+      "total_recurrent_synapses": 0,
+      "total_sensors": 2,
+      "total_synapses": 2
+    }
+  },
+  {
+    "genome_id": "cp-g0-0-g2-i11-g3-i6-g4-i11-g5-i2",
+    "parent_id": "cp-g0-0-g2-i11-g3-i6-g4-i11",
+    "generation": 5,
+    "operation": "perturb_random_weight",
+    "fingerprint": "ebaefc85411775f4",
+    "summary": {
+      "activation_distribution": {
+        "identity": 3
+      },
+      "aggregator_distribution": {
+        "dot_product": 3
+      },
+      "total_actuators": 1,
+      "total_neurons": 3,
+      "total_recurrent_synapses": 0,
+      "total_sensors": 2,
+      "total_synapses": 2
+    }
+  },
+  {
+    "genome_id": "cp-g0-0-g2-i11-g3-i5-g4-i3-g5-i3",
+    "parent_id": "cp-g0-0-g2-i11-g3-i5-g4-i3",
+    "generation": 5,
+    "operation": "perturb_random_weight",
+    "fingerprint": "ebaefc85411775f4",
+    "summary": {
+      "activation_distribution": {
+        "identity": 3
+      },
+      "aggregator_distribution": {
+        "dot_product": 3
+      },
+      "total_actuators": 1,
+      "total_neurons": 3,
+      "total_recurrent_synapses": 0,
+      "total_sensors": 2,
+      "total_synapses": 2
+    }
+  },
+  {
+    "genome_id": "cp-g0-0-g2-i11-g3-i5-g4-i3-g5-i4",
+    "parent_id": "cp-g0-0-g2-i11-g3-i5-g4-i3",
+    "generation": 5,
+    "operation": "perturb_random_weight",
+    "fingerprint": "ebaefc85411775f4",
+    "summary": {
+      "activation_distribution": {
+        "identity": 3
+      },
+      "aggregator_distribution": {
+        "dot_product": 3
+      },
+      "total_actuators": 1,
+      "total_neurons": 3,
+      "total_recurrent_synapses": 0,
+      "total_sensors": 2,
+      "total_synapses": 2
+    }
+  },
+  {
+    "genome_id": "cp-g0-0-g2-i11-g3-i6-g4-i11-g5-i5",
+    "parent_id": "cp-g0-0-g2-i11-g3-i6-g4-i11",
+    "generation": 5,
+    "operation": "add_random_synapse",
+    "fingerprint": "103193eb8c4e0099",
+    "summary": {
+      "activation_distribution": {
+        "identity": 3
+      },
+      "aggregator_distribution": {
+        "dot_product": 3
+      },
+      "total_actuators": 1,
+      "total_neurons": 3,
+      "total_recurrent_synapses": 1,
+      "total_sensors": 2,
+      "total_synapses": 3
+    }
+  },
+  {
+    "genome_id": "cp-g0-0-g2-i11-g3-i6-g4-i11-g5-i6",
+    "parent_id": "cp-g0-0-g2-i11-g3-i6-g4-i11",
+    "generation": 5,
+    "operation": "perturb_random_weight",
+    "fingerprint": "ebaefc85411775f4",
+    "summary": {
+      "activation_distribution": {
+        "identity": 3
+      },
+      "aggregator_distribution": {
+        "dot_product": 3
+      },
+      "total_actuators": 1,
+      "total_neurons": 3,
+      "total_recurrent_synapses": 0,
+      "total_sensors": 2,
+      "total_synapses": 2
+    }
+  },
+  {
+    "genome_id": "cp-g0-0-g2-i11-g3-i5-g4-i3-g5-i7",
+    "parent_id": "cp-g0-0-g2-i11-g3-i5-g4-i3",
+    "generation": 5,
+    "operation": "perturb_random_weight",
+    "fingerprint": "ebaefc85411775f4",
+    "summary": {
+      "activation_distribution": {
+        "identity": 3
+      },
+      "aggregator_distribution": {
+        "dot_product": 3
+      },
+      "total_actuators": 1,
+      "total_neurons": 3,
+      "total_recurrent_synapses": 0,
+      "total_sensors": 2,
+      "total_synapses": 2
+    }
+  },
+  {
+    "genome_id": "cp-g0-0-g2-i11-g3-i5-g4-i3-g5-i8",
+    "parent_id": "cp-g0-0-g2-i11-g3-i5-g4-i3",
+    "generation": 5,
+    "operation": "remove_random_synapse",
+    "fingerprint": "820ab16e924c4a84",
+    "summary": {
+      "activation_distribution": {
+        "identity": 3
+      },
+      "aggregator_distribution": {
+        "dot_product": 3
+      },
+      "total_actuators": 1,
+      "total_neurons": 3,
+      "total_recurrent_synapses": 0,
+      "total_sensors": 2,
+      "total_synapses": 1
+    }
+  },
+  {
+    "genome_id": "cp-g0-0-g2-i11-g3-i5-g4-i3-g5-i9",
+    "parent_id": "cp-g0-0-g2-i11-g3-i5-g4-i3",
+    "generation": 5,
+    "operation": "add_random_synapse",
+    "fingerprint": "6c598eb48e8e62d3",
+    "summary": {
+      "activation_distribution": {
+        "identity": 3
+      },
+      "aggregator_distribution": {
+        "dot_product": 3
+      },
+      "total_actuators": 1,
+      "total_neurons": 3,
+      "total_recurrent_synapses": 0,
+      "total_sensors": 2,
+      "total_synapses": 3
+    }
+  },
+  {
+    "genome_id": "cp-g0-0-g2-i11-g3-i5-g4-i3-g5-i10",
+    "parent_id": "cp-g0-0-g2-i11-g3-i5-g4-i3",
+    "generation": 5,
+    "operation": "add_random_synapse",
+    "fingerprint": "6c598eb48e8e62d3",
+    "summary": {
+      "activation_distribution": {
+        "identity": 3
+      },
+      "aggregator_distribution": {
+        "dot_product": 3
+      },
+      "total_actuators": 1,
+      "total_neurons": 3,
+      "total_recurrent_synapses": 0,
+      "total_sensors": 2,
+      "total_synapses": 3
+    }
+  },
+  {
+    "genome_id": "cp-g0-0-g2-i11-g3-i5-g4-i3-g5-i11",
+    "parent_id": "cp-g0-0-g2-i11-g3-i5-g4-i3",
+    "generation": 5,
+    "operation": "perturb_random_weight",
+    "fingerprint": "ebaefc85411775f4",
+    "summary": {
+      "activation_distribution": {
+        "identity": 3
+      },
+      "aggregator_distribution": {
+        "dot_product": 3
+      },
+      "total_actuators": 1,
+      "total_neurons": 3,
+      "total_recurrent_synapses": 0,
+      "total_sensors": 2,
+      "total_synapses": 2
+    }
+  },
+  {
+    "genome_id": "cp-g0-0-g2-i11-g3-i5-g4-i3-g5-i4",
+    "parent_id": "cp-g0-0-g2-i11-g3-i5-g4-i3-g5-i4",
+    "generation": 6,
+    "operation": "elite_clone",
+    "fingerprint": "ebaefc85411775f4",
+    "summary": {
+      "activation_distribution": {
+        "identity": 3
+      },
+      "aggregator_distribution": {
+        "dot_product": 3
+      },
+      "total_actuators": 1,
+      "total_neurons": 3,
+      "total_recurrent_synapses": 0,
+      "total_sensors": 2,
+      "total_synapses": 2
+    }
+  },
+  {
+    "genome_id": "cp-g0-0-g2-i11-g3-i5-g4-i3-g5-i3",
+    "parent_id": "cp-g0-0-g2-i11-g3-i5-g4-i3-g5-i3",
+    "generation": 6,
+    "operation": "elite_clone",
+    "fingerprint": "ebaefc85411775f4",
+    "summary": {
+      "activation_distribution": {
+        "identity": 3
+      },
+      "aggregator_distribution": {
+        "dot_product": 3
+      },
+      "total_actuators": 1,
+      "total_neurons": 3,
+      "total_recurrent_synapses": 0,
+      "total_sensors": 2,
+      "total_synapses": 2
+    }
+  },
+  {
+    "genome_id": "cp-g0-0-g2-i11-g3-i5-g4-i3-g5-i3-g6-i2",
+    "parent_id": "cp-g0-0-g2-i11-g3-i5-g4-i3-g5-i3",
+    "generation": 6,
+    "operation": "perturb_random_weight",
+    "fingerprint": "ebaefc85411775f4",
+    "summary": {
+      "activation_distribution": {
+        "identity": 3
+      },
+      "aggregator_distribution": {
+        "dot_product": 3
+      },
+      "total_actuators": 1,
+      "total_neurons": 3,
+      "total_recurrent_synapses": 0,
+      "total_sensors": 2,
+      "total_synapses": 2
+    }
+  },
+  {
+    "genome_id": "cp-g0-0-g2-i11-g3-i5-g4-i3-g5-i4-g6-i3",
+    "parent_id": "cp-g0-0-g2-i11-g3-i5-g4-i3-g5-i4",
+    "generation": 6,
+    "operation": "perturb_random_weight",
+    "fingerprint": "ebaefc85411775f4",
+    "summary": {
+      "activation_distribution": {
+        "identity": 3
+      },
+      "aggregator_distribution": {
+        "dot_product": 3
+      },
+      "total_actuators": 1,
+      "total_neurons": 3,
+      "total_recurrent_synapses": 0,
+      "total_sensors": 2,
+      "total_synapses": 2
+    }
+  },
+  {
+    "genome_id": "cp-g0-0-g2-i11-g3-i5-g4-i3-g5-i3-g6-i4",
+    "parent_id": "cp-g0-0-g2-i11-g3-i5-g4-i3-g5-i3",
+    "generation": 6,
+    "operation": "perturb_random_weight",
+    "fingerprint": "ebaefc85411775f4",
+    "summary": {
+      "activation_distribution": {
+        "identity": 3
+      },
+      "aggregator_distribution": {
+        "dot_product": 3
+      },
+      "total_actuators": 1,
+      "total_neurons": 3,
+      "total_recurrent_synapses": 0,
+      "total_sensors": 2,
+      "total_synapses": 2
+    }
+  },
+  {
+    "genome_id": "cp-g0-0-g2-i11-g3-i5-g4-i3-g5-i3-g6-i5",
+    "parent_id": "cp-g0-0-g2-i11-g3-i5-g4-i3-g5-i3",
+    "generation": 6,
+    "operation": "add_random_neuron",
+    "fingerprint": "a091ac85eab3cceb",
+    "summary": {
+      "activation_distribution": {
+        "identity": 3,
+        "tanh": 1
+      },
+      "aggregator_distribution": {
+        "dot_product": 4
+      },
+      "total_actuators": 1,
+      "total_neurons": 4,
+      "total_recurrent_synapses": 0,
+      "total_sensors": 2,
+      "total_synapses": 3
+    }
+  },
+  {
+    "genome_id": "cp-g0-0-g2-i11-g3-i5-g4-i3-g5-i3-g6-i6",
+    "parent_id": "cp-g0-0-g2-i11-g3-i5-g4-i3-g5-i3",
+    "generation": 6,
+    "operation": "perturb_random_weight",
+    "fingerprint": "ebaefc85411775f4",
+    "summary": {
+      "activation_distribution": {
+        "identity": 3
+      },
+      "aggregator_distribution": {
+        "dot_product": 3
+      },
+      "total_actuators": 1,
+      "total_neurons": 3,
+      "total_recurrent_synapses": 0,
+      "total_sensors": 2,
+      "total_synapses": 2
+    }
+  },
+  {
+    "genome_id": "cp-g0-0-g2-i11-g3-i5-g4-i3-g5-i3-g6-i7",
+    "parent_id": "cp-g0-0-g2-i11-g3-i5-g4-i3-g5-i3",
+    "generation": 6,
+    "operation": "perturb_random_weight",
+    "fingerprint": "ebaefc85411775f4",
+    "summary": {
+      "activation_distribution": {
+        "identity": 3
+      },
+      "aggregator_distribution": {
+        "dot_product": 3
+      },
+      "total_actuators": 1,
+      "total_neurons": 3,
+      "total_recurrent_synapses": 0,
+      "total_sensors": 2,
+      "total_synapses": 2
+    }
+  },
+  {
+    "genome_id": "cp-g0-0-g2-i11-g3-i5-g4-i3-g5-i4-g6-i8",
+    "parent_id": "cp-g0-0-g2-i11-g3-i5-g4-i3-g5-i4",
+    "generation": 6,
+    "operation": "perturb_random_weight",
+    "fingerprint": "ebaefc85411775f4",
+    "summary": {
+      "activation_distribution": {
+        "identity": 3
+      },
+      "aggregator_distribution": {
+        "dot_product": 3
+      },
+      "total_actuators": 1,
+      "total_neurons": 3,
+      "total_recurrent_synapses": 0,
+      "total_sensors": 2,
+      "total_synapses": 2
+    }
+  },
+  {
+    "genome_id": "cp-g0-0-g2-i11-g3-i5-g4-i3-g5-i4-g6-i9",
+    "parent_id": "cp-g0-0-g2-i11-g3-i5-g4-i3-g5-i4",
+    "generation": 6,
+    "operation": "add_random_synapse",
+    "fingerprint": "6c598eb48e8e62d3",
+    "summary": {
+      "activation_distribution": {
+        "identity": 3
+      },
+      "aggregator_distribution": {
+        "dot_product": 3
+      },
+      "total_actuators": 1,
+      "total_neurons": 3,
+      "total_recurrent_synapses": 0,
+      "total_sensors": 2,
+      "total_synapses": 3
+    }
+  },
+  {
+    "genome_id": "cp-g0-0-g2-i11-g3-i5-g4-i3-g5-i4-g6-i10",
+    "parent_id": "cp-g0-0-g2-i11-g3-i5-g4-i3-g5-i4",
+    "generation": 6,
+    "operation": "perturb_random_weight",
+    "fingerprint": "ebaefc85411775f4",
+    "summary": {
+      "activation_distribution": {
+        "identity": 3
+      },
+      "aggregator_distribution": {
+        "dot_product": 3
+      },
+      "total_actuators": 1,
+      "total_neurons": 3,
+      "total_recurrent_synapses": 0,
+      "total_sensors": 2,
+      "total_synapses": 2
+    }
+  },
+  {
+    "genome_id": "cp-g0-0-g2-i11-g3-i5-g4-i3-g5-i4-g6-i11",
+    "parent_id": "cp-g0-0-g2-i11-g3-i5-g4-i3-g5-i4",
+    "generation": 6,
+    "operation": "perturb_random_weight",
+    "fingerprint": "ebaefc85411775f4",
+    "summary": {
+      "activation_distribution": {
+        "identity": 3
+      },
+      "aggregator_distribution": {
+        "dot_product": 3
+      },
+      "total_actuators": 1,
+      "total_neurons": 3,
+      "total_recurrent_synapses": 0,
+      "total_sensors": 2,
+      "total_synapses": 2
+    }
+  }
+]

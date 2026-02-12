@@ -1,0 +1,50 @@
+[
+  {
+    "generation": 1,
+    "best_fitness": 0.9906343981403964,
+    "mean_fitness": -0.20532443543660342,
+    "min_fitness": -2.168840420623775,
+    "species_count": 1,
+    "fingerprint_diversity": 1
+  },
+  {
+    "generation": 2,
+    "best_fitness": 0.9959049361368988,
+    "mean_fitness": 0.8262062661480695,
+    "min_fitness": 0.5752951498207566,
+    "species_count": 2,
+    "fingerprint_diversity": 3
+  },
+  {
+    "generation": 3,
+    "best_fitness": 0.9982151201662943,
+    "mean_fitness": 0.8709355290822294,
+    "min_fitness": 0.6304239526847489,
+    "species_count": 3,
+    "fingerprint_diversity": 3
+  },
+  {
+    "generation": 4,
+    "best_fitness": 0.9982151201662943,
+    "mean_fitness": 0.8350405923703761,
+    "min_fitness": 0.6169818438430634,
+    "species_count": 3,
+    "fingerprint_diversity": 3
+  },
+  {
+    "generation": 5,
+    "best_fitness": 0.9995776405421662,
+    "mean_fitness": 0.9240971916696515,
+    "min_fitness": 0.7438128062246777,
+    "species_count": 2,
+    "fingerprint_diversity": 3
+  },
+  {
+    "generation": 6,
+    "best_fitness": 0.9995776405421662,
+    "mean_fitness": 0.8408078978239021,
+    "min_fitness": 0.6293369936632287,
+    "species_count": 3,
+    "fingerprint_diversity": 3
+  }
+]
