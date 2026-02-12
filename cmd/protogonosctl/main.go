@@ -1157,8 +1157,8 @@ func normalizeTuneSelection(name string) string {
 		return tuning.CandidateSelectBestSoFar
 	case tuning.CandidateSelectOriginal:
 		return tuning.CandidateSelectOriginal
-	case "dynamic_random":
-		return tuning.CandidateSelectBestSoFar
+	case tuning.CandidateSelectDynamic:
+		return tuning.CandidateSelectDynamic
 	default:
 		return name
 	}

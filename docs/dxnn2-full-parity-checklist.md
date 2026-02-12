@@ -22,7 +22,7 @@ Status keys:
 | `fitness_postprocessor.erl` | `partial` | None/size/novelty postprocessors implemented; full policy breadth pending. |
 | `specie_identifier.erl` | `partial` | Topology/speciation support implemented with adaptive threshold + representatives; full reference behavior tuning pending. |
 | `tot_topological_mutations.erl` | `done` | Constant + count-scaled topological mutation count policies implemented and tested. |
-| `tuning_selection.erl` | `partial` | `best_so_far`/`original` with `dynamic_random` alias; full reference policy set pending. |
+| `tuning_selection.erl` | `partial` | `best_so_far`/`original`/`dynamic_random` implemented; full reference policy set pending. |
 | `tuning_duration.erl` | `done` | Fixed/linear decay/topology-scaled attempt policies implemented and tested. |
 | `cortex.erl` | `partial` | Per-step orchestrator with sensor->nn->actuator loop implemented; distributed/OTP-specific behaviors simplified. |
 | `neuron.erl` | `partial` | Runtime neuron/synapse eval implemented; complete reference semantics breadth pending. |
@@ -34,7 +34,7 @@ Status keys:
 | `scape.erl` | `partial` | XOR/regression/cart-pole-lite/flatland/gtsa scapes implemented; full reference scape family breadth pending. |
 | `flatland.erl` | `partial` | Baseline Go flatland scape added; not full behavioral parity with reference world simulation yet. |
 | `scape_GTSA.erl` | `partial` | Baseline GTSA scape added; not full ETS/time-series workflow parity yet. |
-| `fx.erl` | `todo` | No Go equivalent scape yet. |
+| `fx.erl` | `partial` | Baseline FX scape/morphology/IO implemented; full market/workflow parity pending. |
 | `morphology.erl` | `partial` | Morphology compatibility + validation implemented for current scapes; full constructor parity pending. |
 | `sensor.erl` | `partial` | Registry + scalar families implemented for current scapes; broader sensor family parity pending. |
 | `actuator.erl` | `partial` | Registry + scalar output families implemented for current scapes; broader actuator family parity pending. |
@@ -56,6 +56,9 @@ Status keys:
 - Parity profile loader added for `.ref` benchmark profiles (`--profile`).
 - Reference strategy aliases added: `hof_competition`, `dynamic_random`.
 - `done_check` tightened to require `species_history.json` and speciation diagnostics fields.
+- Added `species-diff` API/CLI command for generation-level species dynamics diffs.
+- Centralized typed run-config materialization with stricter validation in API.
+- Implemented true `dynamic_random` exoself candidate-selection semantics.
 
 ## Highest-priority remaining gaps to reach strict parity
 
@@ -64,4 +67,3 @@ Status keys:
 3. Remaining operator/policy breadth from `genome_mutator`, `selection_algorithm`, and `fitness_postprocessor`.
 4. Full substrate CPP/CEP behavioral parity beyond baseline scaffolding.
 5. Utility ecosystem parity (`data_extractor`, `epitopes`) if required by target workflows.
-

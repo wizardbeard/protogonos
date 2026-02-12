@@ -20,6 +20,7 @@ type Exoself struct {
 const (
 	CandidateSelectBestSoFar = "best_so_far"
 	CandidateSelectOriginal  = "original"
+	CandidateSelectDynamic   = "dynamic_random"
 )
 
 func (e *Exoself) Name() string {
@@ -62,6 +63,12 @@ func (e *Exoself) Tune(ctx context.Context, genome model.Genome, attempts int, f
 			candidate = cloneGenome(best)
 		case CandidateSelectOriginal:
 			candidate = cloneGenome(genome)
+		case CandidateSelectDynamic:
+			if e.randIntn(2) == 0 {
+				candidate = cloneGenome(best)
+			} else {
+				candidate = cloneGenome(genome)
+			}
 		default:
 			return model.Genome{}, errors.New("unsupported candidate selection")
 		}

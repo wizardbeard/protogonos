@@ -10,7 +10,7 @@
       "connection_architecture": "recurrent",
       "neural_activations": ["tanh"],
       "tuning_selection": "dynamic_random",
-      "expected_tuning_selection": "best_so_far",
+      "expected_tuning_selection": "dynamic_random",
       "mutation_operators": [
         {"name": "add_bias", "weight": 10},
         {"name": "add_outlink", "weight": 40},
@@ -33,7 +33,7 @@
       "connection_architecture": "recurrent",
       "neural_activations": ["tanh"],
       "tuning_selection": "dynamic_random",
-      "expected_tuning_selection": "best_so_far",
+      "expected_tuning_selection": "dynamic_random",
       "mutation_operators": [
         {"name": "add_bias", "weight": 20},
         {"name": "add_outlink", "weight": 30},
@@ -54,7 +54,7 @@
       "connection_architecture": "recurrent",
       "neural_activations": ["tanh"],
       "tuning_selection": "dynamic_random",
-      "expected_tuning_selection": "best_so_far",
+      "expected_tuning_selection": "dynamic_random",
       "mutation_operators": [
         {"name": "mutate_weights", "weight": 60},
         {"name": "add_outlink", "weight": 15},

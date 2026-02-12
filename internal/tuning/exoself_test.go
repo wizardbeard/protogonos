@@ -89,6 +89,25 @@ func TestExoselfAttemptsZeroReturnsClone(t *testing.T) {
 	}
 }
 
+func TestExoselfDynamicRandomSelectionSupported(t *testing.T) {
+	genome := model.Genome{
+		ID:       "g",
+		Synapses: []model.Synapse{{ID: "s", Weight: 0.2, Enabled: true}},
+	}
+	tuner := &Exoself{
+		Rand:               rand.New(rand.NewSource(7)),
+		Steps:              3,
+		StepSize:           0.15,
+		CandidateSelection: CandidateSelectDynamic,
+	}
+	fitnessFn := func(_ context.Context, g model.Genome) (float64, error) {
+		return g.Synapses[0].Weight, nil
+	}
+	if _, err := tuner.Tune(context.Background(), genome, 8, fitnessFn); err != nil {
+		t.Fatalf("tune with dynamic_random selection: %v", err)
+	}
+}
+
 func TestExoselfConcurrentTuneSafe(t *testing.T) {
 	genome := model.Genome{
 		ID: "g",
