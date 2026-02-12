@@ -57,7 +57,7 @@ func TestRunCommandSQLiteCreatesArtifacts(t *testing.T) {
 	}
 
 	runID := entries[0].RunID
-	for _, file := range []string{"config.json", "fitness_history.json", "top_genomes.json", "lineage.json", "generation_diagnostics.json"} {
+	for _, file := range []string{"config.json", "fitness_history.json", "top_genomes.json", "lineage.json", "generation_diagnostics.json", "species_history.json"} {
 		path := filepath.Join("benchmarks", runID, file)
 		if _, err := os.Stat(path); err != nil {
 			t.Fatalf("expected artifact %s: %v", path, err)
@@ -178,7 +178,7 @@ func TestExportLatestSQLiteCopiesArtifacts(t *testing.T) {
 		t.Fatalf("export latest command: %v", err)
 	}
 
-	for _, file := range []string{"config.json", "fitness_history.json", "top_genomes.json", "lineage.json", "generation_diagnostics.json"} {
+	for _, file := range []string{"config.json", "fitness_history.json", "top_genomes.json", "lineage.json", "generation_diagnostics.json", "species_history.json"} {
 		path := filepath.Join("exports", runID, file)
 		if _, err := os.Stat(path); err != nil {
 			t.Fatalf("expected exported artifact %s: %v", path, err)

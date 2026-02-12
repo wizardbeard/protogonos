@@ -138,6 +138,12 @@ type DiagnosticsRequest struct {
 	Limit  int
 }
 
+type SpeciesHistoryRequest struct {
+	RunID  string
+	Latest bool
+	Limit  int
+}
+
 type TopGenomesRequest struct {
 	RunID  string
 	Latest bool
@@ -690,6 +696,56 @@ func (c *Client) Diagnostics(ctx context.Context, req DiagnosticsRequest) ([]mod
 	}
 	out := make([]model.GenerationDiagnostics, len(diagnostics))
 	copy(out, diagnostics)
+	return out, nil
+}
+
+func (c *Client) SpeciesHistory(ctx context.Context, req SpeciesHistoryRequest) ([]model.SpeciesGeneration, error) {
+	if req.RunID != "" && req.Latest {
+		return nil, errors.New("use either run id or latest")
+	}
+	if req.Limit < 0 {
+		return nil, errors.New("limit must be >= 0")
+	}
+
+	runID := req.RunID
+	if req.Latest {
+		entries, err := stats.ListRunIndex(c.benchmarksDir)
+		if err != nil {
+			return nil, err
+		}
+		if len(entries) == 0 {
+			return nil, errors.New("no runs available")
+		}
+		runID = entries[0].RunID
+	}
+	if runID == "" {
+		return nil, errors.New("species history requires run id or latest")
+	}
+
+	if _, err := c.ensurePolis(ctx); err != nil {
+		return nil, err
+	}
+	history, ok, err := c.store.GetSpeciesHistory(ctx, runID)
+	if err != nil {
+		return nil, err
+	}
+	if !ok {
+		return nil, fmt.Errorf("species history not found for run id: %s", runID)
+	}
+	if req.Limit > 0 && len(history) > req.Limit {
+		history = history[:req.Limit]
+	}
+	out := make([]model.SpeciesGeneration, 0, len(history))
+	for _, generation := range history {
+		species := make([]model.SpeciesMetrics, len(generation.Species))
+		copy(species, generation.Species)
+		out = append(out, model.SpeciesGeneration{
+			Generation:     generation.Generation,
+			Species:        species,
+			NewSpecies:     append([]string(nil), generation.NewSpecies...),
+			ExtinctSpecies: append([]string(nil), generation.ExtinctSpecies...),
+		})
+	}
 	return out, nil
 }
 

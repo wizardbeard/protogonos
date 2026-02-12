@@ -291,6 +291,48 @@ func (s *SQLiteStore) SaveTopGenomes(ctx context.Context, runID string, top []mo
 	return err
 }
 
+func (s *SQLiteStore) SaveSpeciesHistory(ctx context.Context, runID string, history []model.SpeciesGeneration) error {
+	db, err := s.getDB()
+	if err != nil {
+		return err
+	}
+
+	payload, err := EncodeSpeciesHistory(history)
+	if err != nil {
+		return err
+	}
+
+	_, err = db.ExecContext(ctx, `
+		INSERT INTO species_history (run_id, payload)
+		VALUES (?, ?)
+		ON CONFLICT(run_id) DO UPDATE SET
+			payload = excluded.payload
+	`, runID, payload)
+	return err
+}
+
+func (s *SQLiteStore) GetSpeciesHistory(ctx context.Context, runID string) ([]model.SpeciesGeneration, bool, error) {
+	db, err := s.getDB()
+	if err != nil {
+		return nil, false, err
+	}
+
+	var payload []byte
+	err = db.QueryRowContext(ctx, `SELECT payload FROM species_history WHERE run_id = ?`, runID).Scan(&payload)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, false, nil
+		}
+		return nil, false, err
+	}
+
+	history, err := DecodeSpeciesHistory(payload)
+	if err != nil {
+		return nil, false, fmt.Errorf("decode species history %s: %w", runID, err)
+	}
+	return history, true, nil
+}
+
 func (s *SQLiteStore) GetTopGenomes(ctx context.Context, runID string) ([]model.TopGenomeRecord, bool, error) {
 	db, err := s.getDB()
 	if err != nil {
@@ -406,6 +448,10 @@ func createTables(ctx context.Context, db *sql.DB) error {
 			payload BLOB NOT NULL
 		);
 		CREATE TABLE IF NOT EXISTS top_genomes (
+			run_id TEXT PRIMARY KEY,
+			payload BLOB NOT NULL
+		);
+		CREATE TABLE IF NOT EXISTS species_history (
 			run_id TEXT PRIMARY KEY,
 			payload BLOB NOT NULL
 		);

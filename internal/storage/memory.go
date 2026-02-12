@@ -15,6 +15,7 @@ type MemoryStore struct {
 	scapes      map[string]model.ScapeSummary
 	history     map[string][]float64
 	diagnostics map[string][]model.GenerationDiagnostics
+	speciesHist map[string][]model.SpeciesGeneration
 	topGenomes  map[string][]model.TopGenomeRecord
 	lineage     map[string][]model.LineageRecord
 }
@@ -33,6 +34,7 @@ func (s *MemoryStore) Init(_ context.Context) error {
 	s.scapes = make(map[string]model.ScapeSummary)
 	s.history = make(map[string][]float64)
 	s.diagnostics = make(map[string][]model.GenerationDiagnostics)
+	s.speciesHist = make(map[string][]model.SpeciesGeneration)
 	s.topGenomes = make(map[string][]model.TopGenomeRecord)
 	s.lineage = make(map[string][]model.LineageRecord)
 	return nil
@@ -138,6 +140,47 @@ func (s *MemoryStore) SaveTopGenomes(_ context.Context, runID string, top []mode
 	copy(copied, top)
 	s.topGenomes[runID] = copied
 	return nil
+}
+
+func (s *MemoryStore) SaveSpeciesHistory(_ context.Context, runID string, history []model.SpeciesGeneration) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	copied := make([]model.SpeciesGeneration, 0, len(history))
+	for _, generation := range history {
+		species := make([]model.SpeciesMetrics, len(generation.Species))
+		copy(species, generation.Species)
+		copied = append(copied, model.SpeciesGeneration{
+			Generation:     generation.Generation,
+			Species:        species,
+			NewSpecies:     append([]string(nil), generation.NewSpecies...),
+			ExtinctSpecies: append([]string(nil), generation.ExtinctSpecies...),
+		})
+	}
+	s.speciesHist[runID] = copied
+	return nil
+}
+
+func (s *MemoryStore) GetSpeciesHistory(_ context.Context, runID string) ([]model.SpeciesGeneration, bool, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	history, ok := s.speciesHist[runID]
+	if !ok {
+		return nil, false, nil
+	}
+	copied := make([]model.SpeciesGeneration, 0, len(history))
+	for _, generation := range history {
+		species := make([]model.SpeciesMetrics, len(generation.Species))
+		copy(species, generation.Species)
+		copied = append(copied, model.SpeciesGeneration{
+			Generation:     generation.Generation,
+			Species:        species,
+			NewSpecies:     append([]string(nil), generation.NewSpecies...),
+			ExtinctSpecies: append([]string(nil), generation.ExtinctSpecies...),
+		})
+	}
+	return copied, true, nil
 }
 
 func (s *MemoryStore) GetTopGenomes(_ context.Context, runID string) ([]model.TopGenomeRecord, bool, error) {

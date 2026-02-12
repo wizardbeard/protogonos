@@ -19,6 +19,8 @@ type Store interface {
 	GetFitnessHistory(ctx context.Context, runID string) ([]float64, bool, error)
 	SaveGenerationDiagnostics(ctx context.Context, runID string, diagnostics []model.GenerationDiagnostics) error
 	GetGenerationDiagnostics(ctx context.Context, runID string) ([]model.GenerationDiagnostics, bool, error)
+	SaveSpeciesHistory(ctx context.Context, runID string, history []model.SpeciesGeneration) error
+	GetSpeciesHistory(ctx context.Context, runID string) ([]model.SpeciesGeneration, bool, error)
 	SaveTopGenomes(ctx context.Context, runID string, top []model.TopGenomeRecord) error
 	GetTopGenomes(ctx context.Context, runID string) ([]model.TopGenomeRecord, bool, error)
 	SaveLineage(ctx context.Context, runID string, lineage []model.LineageRecord) error

@@ -115,6 +115,18 @@ func DecodeGenerationDiagnostics(data []byte) ([]model.GenerationDiagnostics, er
 	return diagnostics, nil
 }
 
+func EncodeSpeciesHistory(history []model.SpeciesGeneration) ([]byte, error) {
+	return json.Marshal(history)
+}
+
+func DecodeSpeciesHistory(data []byte) ([]model.SpeciesGeneration, error) {
+	var history []model.SpeciesGeneration
+	if err := json.Unmarshal(data, &history); err != nil {
+		return nil, err
+	}
+	return history, nil
+}
+
 func EncodeTopGenomes(top []model.TopGenomeRecord) ([]byte, error) {
 	return json.Marshal(top)
 }

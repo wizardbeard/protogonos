@@ -70,6 +70,13 @@ func TestClientRunRunsAndExport(t *testing.T) {
 	if len(diagnostics) == 0 {
 		t.Fatal("expected non-empty diagnostics")
 	}
+	speciesHistory, err := client.SpeciesHistory(context.Background(), SpeciesHistoryRequest{RunID: summary.RunID, Limit: 10})
+	if err != nil {
+		t.Fatalf("species history: %v", err)
+	}
+	if len(speciesHistory) == 0 {
+		t.Fatal("expected non-empty species history")
+	}
 	top, err := client.TopGenomes(context.Background(), TopGenomesRequest{RunID: summary.RunID, Limit: 5})
 	if err != nil {
 		t.Fatalf("top genomes: %v", err)
@@ -93,7 +100,7 @@ func TestClientRunRunsAndExport(t *testing.T) {
 		t.Fatalf("exported run mismatch: got=%s want=%s", exported.RunID, summary.RunID)
 	}
 
-	for _, file := range []string{"config.json", "fitness_history.json", "top_genomes.json", "lineage.json", "generation_diagnostics.json"} {
+	for _, file := range []string{"config.json", "fitness_history.json", "top_genomes.json", "lineage.json", "generation_diagnostics.json", "species_history.json"} {
 		if _, err := os.Stat(filepath.Join(exported.Directory, file)); err != nil {
 			t.Fatalf("expected exported file %s: %v", file, err)
 		}

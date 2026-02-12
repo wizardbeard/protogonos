@@ -333,6 +333,32 @@ func TestGenerationDiagnosticsCodecRoundTrip(t *testing.T) {
 	}
 }
 
+func TestSpeciesHistoryCodecRoundTrip(t *testing.T) {
+	input := []model.SpeciesGeneration{
+		{
+			Generation: 1,
+			Species:    []model.SpeciesMetrics{{Key: "sp-1", Size: 3, MeanFitness: 0.7, BestFitness: 0.9}},
+			NewSpecies: []string{"sp-1"},
+		},
+		{
+			Generation:     2,
+			Species:        []model.SpeciesMetrics{{Key: "sp-1", Size: 2, MeanFitness: 0.8, BestFitness: 0.95}},
+			ExtinctSpecies: []string{"sp-2"},
+		},
+	}
+	encoded, err := EncodeSpeciesHistory(input)
+	if err != nil {
+		t.Fatalf("encode: %v", err)
+	}
+	decoded, err := DecodeSpeciesHistory(encoded)
+	if err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if !reflect.DeepEqual(decoded, input) {
+		t.Fatalf("decoded species history mismatch: got=%+v want=%+v", decoded, input)
+	}
+}
+
 func TestTopGenomesCodecRoundTrip(t *testing.T) {
 	input := []model.TopGenomeRecord{
 		{Rank: 1, Fitness: 0.9, Genome: model.Genome{ID: "g1"}},

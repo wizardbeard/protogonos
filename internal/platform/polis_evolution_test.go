@@ -117,6 +117,16 @@ func TestPolisRunEvolution(t *testing.T) {
 	if len(diagnostics) != len(result.BestByGeneration) {
 		t.Fatalf("diagnostics length mismatch: persisted=%d result=%d", len(diagnostics), len(result.BestByGeneration))
 	}
+	speciesHistory, ok, err := store.GetSpeciesHistory(context.Background(), "evo:linear:1")
+	if err != nil {
+		t.Fatalf("load persisted species history: %v", err)
+	}
+	if !ok {
+		t.Fatal("expected persisted species history")
+	}
+	if len(speciesHistory) != len(result.BestByGeneration) {
+		t.Fatalf("species history length mismatch: persisted=%d result=%d", len(speciesHistory), len(result.BestByGeneration))
+	}
 	top, ok, err := store.GetTopGenomes(context.Background(), "evo:linear:1")
 	if err != nil {
 		t.Fatalf("load persisted top genomes: %v", err)

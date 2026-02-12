@@ -85,6 +85,36 @@ func TestMemoryStoreGenerationDiagnosticsRoundTrip(t *testing.T) {
 	}
 }
 
+func TestMemoryStoreSpeciesHistoryRoundTrip(t *testing.T) {
+	ctx := context.Background()
+	store := NewMemoryStore()
+	if err := store.Init(ctx); err != nil {
+		t.Fatalf("init: %v", err)
+	}
+
+	input := []model.SpeciesGeneration{
+		{
+			Generation:     1,
+			Species:        []model.SpeciesMetrics{{Key: "sp-1", Size: 2, MeanFitness: 0.5, BestFitness: 0.7}},
+			NewSpecies:     []string{"sp-1"},
+			ExtinctSpecies: []string{},
+		},
+	}
+	if err := store.SaveSpeciesHistory(ctx, "run-1", input); err != nil {
+		t.Fatalf("save species history: %v", err)
+	}
+	output, ok, err := store.GetSpeciesHistory(ctx, "run-1")
+	if err != nil {
+		t.Fatalf("get species history: %v", err)
+	}
+	if !ok {
+		t.Fatal("expected persisted species history")
+	}
+	if len(output) != len(input) || output[0].Species[0].Key != input[0].Species[0].Key {
+		t.Fatalf("unexpected species history: %+v", output)
+	}
+}
+
 func TestMemoryStoreTopGenomesRoundTrip(t *testing.T) {
 	ctx := context.Background()
 	store := NewMemoryStore()

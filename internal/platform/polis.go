@@ -166,6 +166,9 @@ func (p *Polis) RunEvolution(ctx context.Context, cfg EvolutionConfig) (Evolutio
 	if err := p.store.SaveGenerationDiagnostics(ctx, persistenceRunID, toModelDiagnostics(result.GenerationDiagnostics)); err != nil {
 		return EvolutionResult{}, err
 	}
+	if err := p.store.SaveSpeciesHistory(ctx, persistenceRunID, toModelSpeciesHistory(result.SpeciesHistory)); err != nil {
+		return EvolutionResult{}, err
+	}
 	if err := p.store.SaveLineage(ctx, persistenceRunID, toModelLineage(result.Lineage)); err != nil {
 		return EvolutionResult{}, err
 	}

@@ -137,6 +137,28 @@ func TestSQLiteStoreGenomeAndPopulationRoundTrip(t *testing.T) {
 		t.Fatalf("unexpected top genomes loaded: %+v", loadedTop)
 	}
 
+	speciesHistory := []model.SpeciesGeneration{
+		{
+			Generation:     1,
+			Species:        []model.SpeciesMetrics{{Key: "sp-1", Size: 2, MeanFitness: 0.5, BestFitness: 0.7}},
+			NewSpecies:     []string{"sp-1"},
+			ExtinctSpecies: []string{},
+		},
+	}
+	if err := store.SaveSpeciesHistory(ctx, "run-1", speciesHistory); err != nil {
+		t.Fatalf("save species history: %v", err)
+	}
+	loadedSpeciesHistory, ok, err := store.GetSpeciesHistory(ctx, "run-1")
+	if err != nil {
+		t.Fatalf("get species history: %v", err)
+	}
+	if !ok {
+		t.Fatal("expected species history run-1")
+	}
+	if len(loadedSpeciesHistory) != 1 || loadedSpeciesHistory[0].Generation != 1 {
+		t.Fatalf("unexpected species history loaded: %+v", loadedSpeciesHistory)
+	}
+
 	lineage := []model.LineageRecord{
 		{
 			VersionedRecord: model.VersionedRecord{SchemaVersion: CurrentSchemaVersion, CodecVersion: CurrentCodecVersion},
