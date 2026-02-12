@@ -118,8 +118,14 @@ func TestPopulationMonitorImprovesFitness(t *testing.T) {
 	if len(result.GenerationDiagnostics) != 6 {
 		t.Fatalf("expected 6 generation diagnostics, got %d", len(result.GenerationDiagnostics))
 	}
+	if len(result.SpeciesHistory) != 6 {
+		t.Fatalf("expected 6 species history records, got %d", len(result.SpeciesHistory))
+	}
 	if result.GenerationDiagnostics[0].Generation != 1 {
 		t.Fatalf("expected first diagnostics generation=1, got %d", result.GenerationDiagnostics[0].Generation)
+	}
+	if len(result.SpeciesHistory[0].Species) == 0 {
+		t.Fatal("expected first species history generation to include species entries")
 	}
 	if result.GenerationDiagnostics[0].SpeciationThreshold <= 0 {
 		t.Fatalf("expected speciation threshold diagnostics, got %f", result.GenerationDiagnostics[0].SpeciationThreshold)

@@ -347,6 +347,7 @@ func runRun(ctx context.Context, args []string) error {
 		},
 		BestByGeneration:      result.BestByGeneration,
 		GenerationDiagnostics: result.GenerationDiagnostics,
+		SpeciesHistory:        result.SpeciesHistory,
 		FinalBestFitness:      result.BestFinalFitness,
 		TopGenomes:            top,
 		Lineage:               lineage,

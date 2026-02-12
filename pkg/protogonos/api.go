@@ -440,6 +440,7 @@ func (c *Client) Run(ctx context.Context, req RunRequest) (RunSummary, error) {
 		},
 		BestByGeneration:      result.BestByGeneration,
 		GenerationDiagnostics: result.GenerationDiagnostics,
+		SpeciesHistory:        result.SpeciesHistory,
 		FinalBestFitness:      result.BestFinalFitness,
 		TopGenomes:            top,
 		Lineage:               lineage,

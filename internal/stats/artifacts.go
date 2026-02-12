@@ -51,6 +51,7 @@ type RunArtifacts struct {
 	Config                RunConfig                     `json:"config"`
 	BestByGeneration      []float64                     `json:"best_by_generation"`
 	GenerationDiagnostics []model.GenerationDiagnostics `json:"generation_diagnostics,omitempty"`
+	SpeciesHistory        []model.SpeciesGeneration     `json:"species_history,omitempty"`
 	FinalBestFitness      float64                       `json:"final_best_fitness"`
 	TopGenomes            []TopGenome                   `json:"top_genomes"`
 	Lineage               []LineageEntry                `json:"lineage"`
@@ -126,6 +127,9 @@ func WriteRunArtifacts(baseDir string, artifacts RunArtifacts) (string, error) {
 		return "", err
 	}
 	if err := writeJSON(filepath.Join(runDir, "generation_diagnostics.json"), artifacts.GenerationDiagnostics); err != nil {
+		return "", err
+	}
+	if err := writeJSON(filepath.Join(runDir, "species_history.json"), artifacts.SpeciesHistory); err != nil {
 		return "", err
 	}
 
@@ -209,7 +213,7 @@ func ExportRunArtifacts(baseDir, runID, outDir string) (string, error) {
 		return "", err
 	}
 
-	files := []string{"config.json", "fitness_history.json", "top_genomes.json", "lineage.json", "generation_diagnostics.json"}
+	files := []string{"config.json", "fitness_history.json", "top_genomes.json", "lineage.json", "generation_diagnostics.json", "species_history.json"}
 	for _, file := range files {
 		if err := copyFile(filepath.Join(src, file), filepath.Join(dst, file)); err != nil {
 			return "", err

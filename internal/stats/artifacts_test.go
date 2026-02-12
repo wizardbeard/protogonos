@@ -27,6 +27,14 @@ func TestWriteAndExportRunArtifacts(t *testing.T) {
 		GenerationDiagnostics: []model.GenerationDiagnostics{
 			{Generation: 1, BestFitness: 0.5, MeanFitness: 0.4, MinFitness: 0.3, SpeciesCount: 2, FingerprintDiversity: 2},
 		},
+		SpeciesHistory: []model.SpeciesGeneration{
+			{
+				Generation:     1,
+				Species:        []model.SpeciesMetrics{{Key: "sp-1", Size: 2, MeanFitness: 0.4, BestFitness: 0.5}},
+				NewSpecies:     []string{"sp-1"},
+				ExtinctSpecies: nil,
+			},
+		},
 		FinalBestFitness: 0.7,
 		TopGenomes: []TopGenome{{
 			Rank:    1,
@@ -46,7 +54,7 @@ func TestWriteAndExportRunArtifacts(t *testing.T) {
 		t.Fatalf("write artifacts: %v", err)
 	}
 
-	for _, file := range []string{"config.json", "fitness_history.json", "top_genomes.json", "lineage.json", "generation_diagnostics.json"} {
+	for _, file := range []string{"config.json", "fitness_history.json", "top_genomes.json", "lineage.json", "generation_diagnostics.json", "species_history.json"} {
 		if _, err := os.Stat(filepath.Join(runDir, file)); err != nil {
 			t.Fatalf("expected file %s: %v", file, err)
 		}
@@ -57,7 +65,7 @@ func TestWriteAndExportRunArtifacts(t *testing.T) {
 		t.Fatalf("export artifacts: %v", err)
 	}
 
-	for _, file := range []string{"config.json", "fitness_history.json", "top_genomes.json", "lineage.json", "generation_diagnostics.json"} {
+	for _, file := range []string{"config.json", "fitness_history.json", "top_genomes.json", "lineage.json", "generation_diagnostics.json", "species_history.json"} {
 		if _, err := os.Stat(filepath.Join(exportedDir, file)); err != nil {
 			t.Fatalf("expected exported file %s: %v", file, err)
 		}

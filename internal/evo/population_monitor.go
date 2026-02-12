@@ -28,8 +28,23 @@ type ScoredGenome struct {
 type RunResult struct {
 	BestByGeneration      []float64
 	GenerationDiagnostics []GenerationDiagnostics
+	SpeciesHistory        []SpeciesGeneration
 	FinalPopulation       []ScoredGenome
 	Lineage               []LineageRecord
+}
+
+type SpeciesGeneration struct {
+	Generation     int              `json:"generation"`
+	Species        []SpeciesMetrics `json:"species"`
+	NewSpecies     []string         `json:"new_species,omitempty"`
+	ExtinctSpecies []string         `json:"extinct_species,omitempty"`
+}
+
+type SpeciesMetrics struct {
+	Key         string  `json:"key"`
+	Size        int     `json:"size"`
+	MeanFitness float64 `json:"mean_fitness"`
+	BestFitness float64 `json:"best_fitness"`
 }
 
 type GenerationDiagnostics struct {
@@ -152,7 +167,9 @@ func (m *PopulationMonitor) Run(ctx context.Context, initial []model.Genome) (Ru
 
 	bestHistory := make([]float64, 0, m.cfg.Generations)
 	diagnostics := make([]GenerationDiagnostics, 0, m.cfg.Generations)
+	speciesHistory := make([]SpeciesGeneration, 0, m.cfg.Generations)
 	lineage := make([]LineageRecord, 0, len(initial)*(m.cfg.Generations+1))
+	prevSpeciesSet := map[string]struct{}{}
 	for _, genome := range population {
 		sig := ComputeGenomeSignature(genome)
 		lineage = append(lineage, LineageRecord{
@@ -184,6 +201,9 @@ func (m *PopulationMonitor) Run(ctx context.Context, initial []model.Genome) (Ru
 		bestHistory = append(bestHistory, scored[0].Fitness)
 		speciesByGenomeID, speciationStats := m.assignSpecies(scored)
 		diagnostics = append(diagnostics, summarizeGeneration(scored, gen+1, speciationStats))
+		history, currentSet := summarizeSpeciesGeneration(scored, speciesByGenomeID, gen+1, prevSpeciesSet)
+		speciesHistory = append(speciesHistory, history)
+		prevSpeciesSet = currentSet
 
 		var generationLineage []LineageRecord
 		population, generationLineage, err = m.nextGeneration(ctx, scored, speciesByGenomeID, gen)
@@ -196,6 +216,7 @@ func (m *PopulationMonitor) Run(ctx context.Context, initial []model.Genome) (Ru
 	return RunResult{
 		BestByGeneration:      bestHistory,
 		GenerationDiagnostics: diagnostics,
+		SpeciesHistory:        speciesHistory,
 		FinalPopulation:       scored,
 		Lineage:               lineage,
 	}, nil
@@ -641,6 +662,71 @@ func filterRankedBySpecies(ranked []ScoredGenome, speciesByGenomeID map[string]s
 		}
 	}
 	return out
+}
+
+func summarizeSpeciesGeneration(ranked []ScoredGenome, speciesByGenomeID map[string]string, generation int, prevSpeciesSet map[string]struct{}) (SpeciesGeneration, map[string]struct{}) {
+	type aggregate struct {
+		size int
+		sum  float64
+		best float64
+	}
+	bySpecies := map[string]*aggregate{}
+	currentSet := map[string]struct{}{}
+	for _, item := range ranked {
+		key := speciesByGenomeID[item.Genome.ID]
+		if key == "" {
+			key = "species:unknown"
+		}
+		currentSet[key] = struct{}{}
+		bucket := bySpecies[key]
+		if bucket == nil {
+			bucket = &aggregate{best: item.Fitness}
+			bySpecies[key] = bucket
+		}
+		bucket.size++
+		bucket.sum += item.Fitness
+		if item.Fitness > bucket.best {
+			bucket.best = item.Fitness
+		}
+	}
+	keys := make([]string, 0, len(bySpecies))
+	for key := range bySpecies {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	metrics := make([]SpeciesMetrics, 0, len(keys))
+	for _, key := range keys {
+		item := bySpecies[key]
+		metrics = append(metrics, SpeciesMetrics{
+			Key:         key,
+			Size:        item.size,
+			MeanFitness: item.sum / float64(item.size),
+			BestFitness: item.best,
+		})
+	}
+
+	newSpecies := make([]string, 0)
+	for _, key := range keys {
+		if _, ok := prevSpeciesSet[key]; !ok {
+			newSpecies = append(newSpecies, key)
+		}
+	}
+	sort.Strings(newSpecies)
+
+	extinctSpecies := make([]string, 0)
+	for key := range prevSpeciesSet {
+		if _, ok := currentSet[key]; !ok {
+			extinctSpecies = append(extinctSpecies, key)
+		}
+	}
+	sort.Strings(extinctSpecies)
+
+	return SpeciesGeneration{
+		Generation:     generation,
+		Species:        metrics,
+		NewSpecies:     newSpecies,
+		ExtinctSpecies: extinctSpecies,
+	}, currentSet
 }
 
 func (m *PopulationMonitor) chooseMutation() Operator {

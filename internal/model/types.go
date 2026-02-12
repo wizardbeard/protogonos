@@ -93,6 +93,20 @@ type GenerationDiagnostics struct {
 	LargestSpeciesSize   int     `json:"largest_species_size"`
 }
 
+type SpeciesGeneration struct {
+	Generation     int              `json:"generation"`
+	Species        []SpeciesMetrics `json:"species"`
+	NewSpecies     []string         `json:"new_species,omitempty"`
+	ExtinctSpecies []string         `json:"extinct_species,omitempty"`
+}
+
+type SpeciesMetrics struct {
+	Key         string  `json:"key"`
+	Size        int     `json:"size"`
+	MeanFitness float64 `json:"mean_fitness"`
+	BestFitness float64 `json:"best_fitness"`
+}
+
 type TopGenomeRecord struct {
 	Rank    int     `json:"rank"`
 	Fitness float64 `json:"fitness"`

@@ -42,6 +42,7 @@ type EvolutionConfig struct {
 type EvolutionResult struct {
 	BestByGeneration      []float64
 	GenerationDiagnostics []model.GenerationDiagnostics
+	SpeciesHistory        []model.SpeciesGeneration
 	BestFinalFitness      float64
 	TopFinal              []evo.ScoredGenome
 	Lineage               []evo.LineageRecord
@@ -193,6 +194,7 @@ func (p *Polis) RunEvolution(ctx context.Context, cfg EvolutionConfig) (Evolutio
 	return EvolutionResult{
 		BestByGeneration:      result.BestByGeneration,
 		GenerationDiagnostics: toModelDiagnostics(result.GenerationDiagnostics),
+		SpeciesHistory:        toModelSpeciesHistory(result.SpeciesHistory),
 		BestFinalFitness:      bestFinal,
 		TopFinal:              topFinal,
 		Lineage:               result.Lineage,
@@ -252,6 +254,28 @@ func toModelTopGenomes(top []evo.ScoredGenome) []model.TopGenomeRecord {
 			Rank:    i + 1,
 			Fitness: item.Fitness,
 			Genome:  item.Genome,
+		})
+	}
+	return out
+}
+
+func toModelSpeciesHistory(history []evo.SpeciesGeneration) []model.SpeciesGeneration {
+	out := make([]model.SpeciesGeneration, 0, len(history))
+	for _, generation := range history {
+		species := make([]model.SpeciesMetrics, 0, len(generation.Species))
+		for _, item := range generation.Species {
+			species = append(species, model.SpeciesMetrics{
+				Key:         item.Key,
+				Size:        item.Size,
+				MeanFitness: item.MeanFitness,
+				BestFitness: item.BestFitness,
+			})
+		}
+		out = append(out, model.SpeciesGeneration{
+			Generation:     generation.Generation,
+			Species:        species,
+			NewSpecies:     append([]string(nil), generation.NewSpecies...),
+			ExtinctSpecies: append([]string(nil), generation.ExtinctSpecies...),
 		})
 	}
 	return out
