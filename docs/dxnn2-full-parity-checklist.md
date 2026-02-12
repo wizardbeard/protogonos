@@ -16,7 +16,7 @@ Status keys:
 | `population_monitor.erl` | `partial` | Generation loop, species-aware selection, quotas, diagnostics, lineage implemented; remaining fine-grained lifecycle parity pending. |
 | `genotype.erl` | `partial` | Seed/clone/lifecycle/store flows implemented; full reference operation surface still broader. |
 | `records.hrl` | `partial` | Core record equivalents implemented with versioned codecs; full field-level parity still pending. |
-| `map2rec.erl` | `todo` | No equivalent generic map-to-record converter layer yet. |
+| `map2rec.erl` | `partial` | Baseline `constraint`/`pmp` map-to-record conversion layer implemented in `internal/map2rec`; broader record coverage still pending. |
 | `genome_mutator.erl` | `partial` | Core topology/weight operators plus plasticity/substrate parameter mutations implemented; full operator breadth pending. |
 | `selection_algorithm.erl` | `partial` | Elite/tournament/species/shared species + `hof_competition` alias implemented; additional reference strategies pending. |
 | `fitness_postprocessor.erl` | `partial` | None/size/novelty postprocessors implemented; full policy breadth pending. |
@@ -59,11 +59,12 @@ Status keys:
 - Added `species-diff` API/CLI command for generation-level species dynamics diffs.
 - Centralized typed run-config materialization with stricter validation in API.
 - Implemented true `dynamic_random` exoself candidate-selection semantics.
+- Added baseline `map2rec` package for permissive `constraint`/`pmp` record materialization.
 
 ## Highest-priority remaining gaps to reach strict parity
 
-1. Full `map2rec`/record-materialization parity semantics.
-2. Full scape behavior parity for `flatland`, `gtsa`, and missing `fx`.
+1. Full `map2rec`/record-materialization parity semantics across additional record families.
+2. Full scape behavior parity for `flatland`, `gtsa`, and `fx`.
 3. Remaining operator/policy breadth from `genome_mutator`, `selection_algorithm`, and `fitness_postprocessor`.
 4. Full substrate CPP/CEP behavioral parity beyond baseline scaffolding.
 5. Utility ecosystem parity (`data_extractor`, `epitopes`) if required by target workflows.
