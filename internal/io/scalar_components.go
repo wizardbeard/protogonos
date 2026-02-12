@@ -20,6 +20,9 @@ const (
 	FlatlandMoveActuatorName   = "flatland_move"
 	GTSAInputSensorName        = "gtsa_input"
 	GTSAPredictActuatorName    = "gtsa_predict"
+	FXPriceSensorName          = "fx_price"
+	FXSignalSensorName         = "fx_signal"
+	FXTradeActuatorName        = "fx_trade"
 )
 
 type ScalarInputSensor struct {
@@ -198,6 +201,36 @@ func initializeDefaultComponents() {
 	if err != nil {
 		panic(err)
 	}
+	err = RegisterSensorWithSpec(SensorSpec{
+		Name:          FXPriceSensorName,
+		Factory:       func() Sensor { return NewScalarInputSensor(0) },
+		SchemaVersion: SupportedSchemaVersion,
+		CodecVersion:  SupportedCodecVersion,
+		Compatible: func(scape string) error {
+			if scape != "fx" {
+				return fmt.Errorf("unsupported scape: %s", scape)
+			}
+			return nil
+		},
+	})
+	if err != nil {
+		panic(err)
+	}
+	err = RegisterSensorWithSpec(SensorSpec{
+		Name:          FXSignalSensorName,
+		Factory:       func() Sensor { return NewScalarInputSensor(0) },
+		SchemaVersion: SupportedSchemaVersion,
+		CodecVersion:  SupportedCodecVersion,
+		Compatible: func(scape string) error {
+			if scape != "fx" {
+				return fmt.Errorf("unsupported scape: %s", scape)
+			}
+			return nil
+		},
+	})
+	if err != nil {
+		panic(err)
+	}
 
 	err = RegisterActuatorWithSpec(ActuatorSpec{
 		Name:          ScalarOutputActuatorName,
@@ -266,6 +299,21 @@ func initializeDefaultComponents() {
 		CodecVersion:  SupportedCodecVersion,
 		Compatible: func(scape string) error {
 			if scape != "gtsa" {
+				return fmt.Errorf("unsupported scape: %s", scape)
+			}
+			return nil
+		},
+	})
+	if err != nil {
+		panic(err)
+	}
+	err = RegisterActuatorWithSpec(ActuatorSpec{
+		Name:          FXTradeActuatorName,
+		Factory:       func() Actuator { return NewScalarOutputActuator() },
+		SchemaVersion: SupportedSchemaVersion,
+		CodecVersion:  SupportedCodecVersion,
+		Compatible: func(scape string) error {
+			if scape != "fx" {
 				return fmt.Errorf("unsupported scape: %s", scape)
 			}
 			return nil

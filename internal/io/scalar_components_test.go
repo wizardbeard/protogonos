@@ -100,4 +100,68 @@ func TestScalarComponentsRegistered(t *testing.T) {
 	if cartForce.Name() != ScalarOutputActuatorName {
 		t.Fatalf("unexpected cart-pole force actuator name: %s", cartForce.Name())
 	}
+
+	flatDistance, err := ResolveSensor(FlatlandDistanceSensorName, "flatland")
+	if err != nil {
+		t.Fatalf("resolve flatland distance sensor: %v", err)
+	}
+	if flatDistance.Name() != ScalarInputSensorName {
+		t.Fatalf("unexpected flatland distance sensor name: %s", flatDistance.Name())
+	}
+
+	flatEnergy, err := ResolveSensor(FlatlandEnergySensorName, "flatland")
+	if err != nil {
+		t.Fatalf("resolve flatland energy sensor: %v", err)
+	}
+	if flatEnergy.Name() != ScalarInputSensorName {
+		t.Fatalf("unexpected flatland energy sensor name: %s", flatEnergy.Name())
+	}
+
+	flatMove, err := ResolveActuator(FlatlandMoveActuatorName, "flatland")
+	if err != nil {
+		t.Fatalf("resolve flatland move actuator: %v", err)
+	}
+	if flatMove.Name() != ScalarOutputActuatorName {
+		t.Fatalf("unexpected flatland move actuator name: %s", flatMove.Name())
+	}
+
+	gtsaInput, err := ResolveSensor(GTSAInputSensorName, "gtsa")
+	if err != nil {
+		t.Fatalf("resolve gtsa input sensor: %v", err)
+	}
+	if gtsaInput.Name() != ScalarInputSensorName {
+		t.Fatalf("unexpected gtsa input sensor name: %s", gtsaInput.Name())
+	}
+
+	gtsaPredict, err := ResolveActuator(GTSAPredictActuatorName, "gtsa")
+	if err != nil {
+		t.Fatalf("resolve gtsa predict actuator: %v", err)
+	}
+	if gtsaPredict.Name() != ScalarOutputActuatorName {
+		t.Fatalf("unexpected gtsa predict actuator name: %s", gtsaPredict.Name())
+	}
+
+	fxPrice, err := ResolveSensor(FXPriceSensorName, "fx")
+	if err != nil {
+		t.Fatalf("resolve fx price sensor: %v", err)
+	}
+	if fxPrice.Name() != ScalarInputSensorName {
+		t.Fatalf("unexpected fx price sensor name: %s", fxPrice.Name())
+	}
+
+	fxSignal, err := ResolveSensor(FXSignalSensorName, "fx")
+	if err != nil {
+		t.Fatalf("resolve fx signal sensor: %v", err)
+	}
+	if fxSignal.Name() != ScalarInputSensorName {
+		t.Fatalf("unexpected fx signal sensor name: %s", fxSignal.Name())
+	}
+
+	fxTrade, err := ResolveActuator(FXTradeActuatorName, "fx")
+	if err != nil {
+		t.Fatalf("resolve fx trade actuator: %v", err)
+	}
+	if fxTrade.Name() != ScalarOutputActuatorName {
+		t.Fatalf("unexpected fx trade actuator name: %s", fxTrade.Name())
+	}
 }

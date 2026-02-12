@@ -980,6 +980,9 @@ func registerDefaultScapes(p *platform.Polis) error {
 	if err := p.RegisterScape(scape.GTSAScape{}); err != nil {
 		return err
 	}
+	if err := p.RegisterScape(scape.FXScape{}); err != nil {
+		return err
+	}
 	return nil
 }
 

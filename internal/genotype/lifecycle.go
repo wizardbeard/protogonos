@@ -48,6 +48,12 @@ func ConstructSeedPopulation(scapeName string, size int, seed int64) (SeedPopula
 			InputNeuronIDs:  []string{"x"},
 			OutputNeuronIDs: []string{"y"},
 		}, nil
+	case "fx":
+		return SeedPopulation{
+			Genomes:         seedFXPopulation(size, seed),
+			InputNeuronIDs:  []string{"p", "s"},
+			OutputNeuronIDs: []string{"t"},
+		}, nil
 	default:
 		return SeedPopulation{}, fmt.Errorf("unsupported scape: %s", scapeName)
 	}
@@ -208,6 +214,29 @@ func seedGTSAPopulation(size int, seed int64) []model.Genome {
 			},
 			Synapses: []model.Synapse{
 				{ID: "s1", From: "x", To: "y", Weight: jitter(rng, 1.0), Enabled: true},
+			},
+		})
+	}
+	return population
+}
+
+func seedFXPopulation(size int, seed int64) []model.Genome {
+	rng := rand.New(rand.NewSource(seed))
+	population := make([]model.Genome, 0, size)
+	for i := 0; i < size; i++ {
+		population = append(population, model.Genome{
+			VersionedRecord: model.VersionedRecord{SchemaVersion: storage.CurrentSchemaVersion, CodecVersion: storage.CurrentCodecVersion},
+			ID:              fmt.Sprintf("fx-g0-%d", i),
+			SensorIDs:       []string{protoio.FXPriceSensorName, protoio.FXSignalSensorName},
+			ActuatorIDs:     []string{protoio.FXTradeActuatorName},
+			Neurons: []model.Neuron{
+				{ID: "p", Activation: "identity", Bias: 0},
+				{ID: "s", Activation: "identity", Bias: 0},
+				{ID: "t", Activation: "tanh", Bias: jitter(rng, 0.25)},
+			},
+			Synapses: []model.Synapse{
+				{ID: "s1", From: "p", To: "t", Weight: jitter(rng, 1.1), Enabled: true},
+				{ID: "s2", From: "s", To: "t", Weight: jitter(rng, 1.1), Enabled: true},
 			},
 		})
 	}

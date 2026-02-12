@@ -119,6 +119,28 @@ func TestConstructSeedPopulationGTSA(t *testing.T) {
 	}
 }
 
+func TestConstructSeedPopulationFX(t *testing.T) {
+	seed, err := ConstructSeedPopulation("fx", 2, 29)
+	if err != nil {
+		t.Fatalf("construct fx population: %v", err)
+	}
+	if len(seed.Genomes) != 2 {
+		t.Fatalf("expected 2 genomes, got %d", len(seed.Genomes))
+	}
+	if len(seed.InputNeuronIDs) != 2 || seed.InputNeuronIDs[0] != "p" || seed.InputNeuronIDs[1] != "s" {
+		t.Fatalf("unexpected input ids: %#v", seed.InputNeuronIDs)
+	}
+	if len(seed.OutputNeuronIDs) != 1 || seed.OutputNeuronIDs[0] != "t" {
+		t.Fatalf("unexpected output ids: %#v", seed.OutputNeuronIDs)
+	}
+	if len(seed.Genomes[0].SensorIDs) != 2 || seed.Genomes[0].SensorIDs[0] != protoio.FXPriceSensorName || seed.Genomes[0].SensorIDs[1] != protoio.FXSignalSensorName {
+		t.Fatalf("unexpected fx sensor ids: %#v", seed.Genomes[0].SensorIDs)
+	}
+	if len(seed.Genomes[0].ActuatorIDs) != 1 || seed.Genomes[0].ActuatorIDs[0] != protoio.FXTradeActuatorName {
+		t.Fatalf("unexpected fx actuator ids: %#v", seed.Genomes[0].ActuatorIDs)
+	}
+}
+
 func TestConstructSeedPopulationUnsupportedScape(t *testing.T) {
 	_, err := ConstructSeedPopulation("unknown", 1, 1)
 	if err == nil {

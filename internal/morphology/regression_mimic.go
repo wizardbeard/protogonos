@@ -62,6 +62,8 @@ func defaultMorphologyForScape(scapeName string) (Morphology, bool) {
 		return FlatlandMorphology{}, true
 	case "gtsa":
 		return GTSAMorphology{}, true
+	case "fx":
+		return FXMorphology{}, true
 	default:
 		return nil, false
 	}
