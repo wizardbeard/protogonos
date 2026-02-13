@@ -67,6 +67,12 @@ func (p *Polis) Init(ctx context.Context) error {
 	if p.store == nil {
 		return fmt.Errorf("store is required")
 	}
+	p.mu.RLock()
+	alreadyStarted := p.started
+	p.mu.RUnlock()
+	if alreadyStarted {
+		return nil
+	}
 	if err := p.store.Init(ctx); err != nil {
 		return err
 	}
@@ -89,8 +95,27 @@ func (p *Polis) RegisterScape(s scape.Scape) error {
 
 	p.mu.Lock()
 	defer p.mu.Unlock()
+	if !p.started {
+		return fmt.Errorf("polis is not initialized")
+	}
 	p.scapes[name] = s
 	return nil
+}
+
+func (p *Polis) GetScape(name string) (scape.Scape, bool) {
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+
+	s, ok := p.scapes[name]
+	return s, ok
+}
+
+func (p *Polis) Stop() {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	p.started = false
+	p.scapes = make(map[string]scape.Scape)
 }
 
 func (p *Polis) RunEvolution(ctx context.Context, cfg EvolutionConfig) (EvolutionResult, error) {

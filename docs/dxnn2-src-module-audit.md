@@ -21,7 +21,7 @@ Status legend:
 
 | Ref module | Primary role (inferred from source) | Go mapping | Status | Evidence |
 |---|---|---|---|---|
-| `polis.erl` | platform lifecycle, DB bootstrap/start/stop | `internal/platform/polis.go`, `internal/storage/*` | `partial` | `internal/platform/polis.go`, `.ref/src/polis.erl` |
+| `polis.erl` | platform lifecycle, DB bootstrap/start/stop | `internal/platform/polis.go`, `internal/storage/*` with idempotent init/start state, explicit stop lifecycle, and scape lookup semantics | `partial` | `internal/platform/polis.go`, `internal/platform/polis_test.go`, `.ref/src/polis.erl` |
 | `population_monitor.erl` | eval loop, evolutionary control, species/population ops | `internal/evo/population_monitor.go` | `partial` | `internal/evo/population_monitor.go`, `.ref/src/population_monitor.erl` |
 | `cortex.erl` | sensor/neuron/actuator runtime coordination | `internal/agent/cortex.go` | `partial` | `internal/agent/cortex.go`, `.ref/src/cortex.erl` |
 | `exoself.erl` | agent lifecycle + tuning + eval mode orchestration | `internal/tuning/exoself.go` + monitor integration | `partial` | `internal/tuning/exoself.go`, `internal/evo/population_monitor_tuning_test.go`, `.ref/src/exoself.erl` |
