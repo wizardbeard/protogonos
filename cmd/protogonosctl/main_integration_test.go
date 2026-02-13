@@ -107,9 +107,10 @@ func TestRunCommandSQLiteConfigLoadsMap2RecAndAllowsFlagOverrides(t *testing.T) 
 			"generation_limit": 5,
 		},
 		"constraint": map[string]any{
-			"population_selection_f": "hof_competition",
-			"tuning_selection_fs":    []any{"dynamic_random"},
-			"tuning_duration_f":      []any{"const", 2},
+			"population_selection_f":             "hof_competition",
+			"population_fitness_postprocessor_f": "nsize_proportional",
+			"tuning_selection_fs":                []any{"dynamic_random"},
+			"tuning_duration_f":                  []any{"const", 2},
 			"tot_topological_mutations_fs": []any{
 				[]any{"ncount_exponential", 0.9},
 			},
@@ -137,6 +138,7 @@ func TestRunCommandSQLiteConfigLoadsMap2RecAndAllowsFlagOverrides(t *testing.T) 
 		"--gens", "2",
 		"--topo-policy", "const",
 		"--topo-count", "2",
+		"--fitness-postprocessor", "none",
 	}
 	if err := run(context.Background(), args); err != nil {
 		t.Fatalf("run command with config: %v", err)
@@ -165,6 +167,9 @@ func TestRunCommandSQLiteConfigLoadsMap2RecAndAllowsFlagOverrides(t *testing.T) 
 	}
 	if runCfg.TopologicalPolicy != "const" || runCfg.TopologicalCount != 2 {
 		t.Fatalf("expected topo override const/2, got policy=%s count=%d", runCfg.TopologicalPolicy, runCfg.TopologicalCount)
+	}
+	if runCfg.FitnessPostprocessor != "none" {
+		t.Fatalf("expected fitness postprocessor override none, got %s", runCfg.FitnessPostprocessor)
 	}
 }
 

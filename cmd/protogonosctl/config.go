@@ -75,6 +75,7 @@ func loadRunRequestFromConfig(path string) (protoapi.RunRequest, error) {
 	if constraintMap, ok := raw["constraint"].(map[string]any); ok {
 		constraint := map2rec.ConvertConstraint(constraintMap)
 		req.Selection = mapPopulationSelection(constraint.PopulationSelectionF)
+		req.FitnessPostprocessor = mapFitnessPostprocessor(constraint.PopulationFitnessProcessorF)
 		req.TuneSelection = mapTuningSelection(firstOrEmpty(constraint.TuningSelectionFs))
 		if constraint.TuningDurationF.Name != "" {
 			req.TuneDurationPolicy = constraint.TuningDurationF.Name
@@ -261,4 +262,15 @@ func hasAnyWeightOverrideFlag(set map[string]bool) bool {
 		set["w-remove-neuron"] ||
 		set["w-plasticity"] ||
 		set["w-substrate"]
+}
+
+func mapFitnessPostprocessor(name string) string {
+	switch name {
+	case "nsize_proportional":
+		return "nsize_proportional"
+	case "size_proportional", "novelty_proportional", "none":
+		return name
+	default:
+		return name
+	}
 }
