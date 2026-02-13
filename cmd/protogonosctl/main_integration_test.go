@@ -110,6 +110,9 @@ func TestRunCommandSQLiteConfigLoadsMap2RecAndAllowsFlagOverrides(t *testing.T) 
 			"population_selection_f": "hof_competition",
 			"tuning_selection_fs":    []any{"dynamic_random"},
 			"tuning_duration_f":      []any{"const", 2},
+			"tot_topological_mutations_fs": []any{
+				[]any{"ncount_exponential", 0.9},
+			},
 			"mutation_operators": []any{
 				[]any{"add_bias", 1},
 				[]any{"add_outlink", 1},
@@ -132,6 +135,8 @@ func TestRunCommandSQLiteConfigLoadsMap2RecAndAllowsFlagOverrides(t *testing.T) 
 		"--db-path", dbPath,
 		"--config", configPath,
 		"--gens", "2",
+		"--topo-policy", "const",
+		"--topo-count", "2",
 	}
 	if err := run(context.Background(), args); err != nil {
 		t.Fatalf("run command with config: %v", err)
@@ -149,6 +154,17 @@ func TestRunCommandSQLiteConfigLoadsMap2RecAndAllowsFlagOverrides(t *testing.T) 
 	}
 	if entries[0].Generations != 2 {
 		t.Fatalf("expected --gens override to 2, got %d", entries[0].Generations)
+	}
+	configData, err := os.ReadFile(filepath.Join("benchmarks", entries[0].RunID, "config.json"))
+	if err != nil {
+		t.Fatalf("read run config artifact: %v", err)
+	}
+	var runCfg stats.RunConfig
+	if err := json.Unmarshal(configData, &runCfg); err != nil {
+		t.Fatalf("decode run config artifact: %v", err)
+	}
+	if runCfg.TopologicalPolicy != "const" || runCfg.TopologicalCount != 2 {
+		t.Fatalf("expected topo override const/2, got policy=%s count=%d", runCfg.TopologicalPolicy, runCfg.TopologicalCount)
 	}
 }
 

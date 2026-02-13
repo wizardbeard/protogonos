@@ -21,7 +21,7 @@ Status keys:
 | `selection_algorithm.erl` | `partial` | Elite/tournament/species/shared species + reference aliases `hof_competition`/`competition`/`top3` implemented; additional reference strategies pending. |
 | `fitness_postprocessor.erl` | `partial` | None/size/novelty postprocessors implemented with `nsize_proportional` alias parity; full policy breadth pending. |
 | `specie_identifier.erl` | `partial` | Topology/speciation support implemented with adaptive threshold + representatives; full reference behavior tuning pending. |
-| `tot_topological_mutations.erl` | `done` | Constant + count-scaled topological mutation count policies implemented and tested. |
+| `tot_topological_mutations.erl` | `done` | Constant + count-scaled topological mutation count policies implemented/tested, with map2rec `constraint.tot_topological_mutations_fs` config materialization support. |
 | `tuning_selection.erl` | `partial` | `best_so_far`/`original`/`dynamic_random` plus reference mode set (`all`, `all_random`, `recent`, `recent_random`, `lastgen`, `lastgen_random`) implemented; full reference policy set pending. |
 | `tuning_duration.erl` | `done` | Fixed/linear decay/topology-scaled attempt policies implemented and tested, including reference aliases (`const`, `nsize_proportional`, `wsize_proportional`). |
 | `cortex.erl` | `partial` | Per-step orchestrator with sensor->nn->actuator loop implemented; distributed/OTP-specific behaviors simplified. |
@@ -73,6 +73,7 @@ Status keys:
 - Added reference fitness-postprocessor alias `nsize_proportional` across CLI/API resolution.
 - Added reference tuning-duration aliases (`const`, `nsize_proportional`, `wsize_proportional`) across CLI/API/config materialization.
 - Added reference tuning-selection mode set (`all`, `all_random`, `recent`, `recent_random`, `lastgen`, `lastgen_random`) across tuning/API/CLI/config normalization.
+- Added map2rec materialization for `constraint.tot_topological_mutations_fs` into `RunRequest` with run-config override integration coverage.
 
 ## Highest-priority remaining gaps to reach strict parity
 

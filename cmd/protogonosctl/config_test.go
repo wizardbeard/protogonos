@@ -21,6 +21,9 @@ func TestLoadRunRequestFromConfigUsesConstraintAndPMP(t *testing.T) {
 			"population_selection_f": "hof_competition",
 			"tuning_selection_fs":    []any{"dynamic_random"},
 			"tuning_duration_f":      []any{"const", 7},
+			"tot_topological_mutations_fs": []any{
+				[]any{"ncount_exponential", 0.8},
+			},
 			"mutation_operators": []any{
 				[]any{"add_bias", 5},
 				[]any{"add_outlink", 4},
@@ -55,6 +58,9 @@ func TestLoadRunRequestFromConfigUsesConstraintAndPMP(t *testing.T) {
 	}
 	if req.TuneDurationPolicy != "const" || req.TuneDurationParam != 7 {
 		t.Fatalf("unexpected tune duration mapping: policy=%s param=%f", req.TuneDurationPolicy, req.TuneDurationParam)
+	}
+	if req.TopologicalPolicy != "ncount_exponential" || req.TopologicalParam != 0.8 {
+		t.Fatalf("unexpected topological policy mapping: policy=%s param=%f", req.TopologicalPolicy, req.TopologicalParam)
 	}
 	if req.WeightPerturb != 5 || req.WeightAddSynapse != 4 || req.WeightAddNeuron != 3 || req.WeightPlasticity != 2 {
 		t.Fatalf("unexpected mapped mutation weights: %+v", req)

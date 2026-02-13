@@ -80,6 +80,20 @@ func loadRunRequestFromConfig(path string) (protoapi.RunRequest, error) {
 			req.TuneDurationPolicy = constraint.TuningDurationF.Name
 			req.TuneDurationParam = constraint.TuningDurationF.Param
 		}
+		if len(constraint.TotTopologicalMutationsFs) > 0 {
+			policy := constraint.TotTopologicalMutationsFs[0]
+			req.TopologicalPolicy = policy.Name
+			switch policy.Name {
+			case "const":
+				if req.TopologicalCount == 0 {
+					req.TopologicalCount = int(policy.Param)
+				}
+			default:
+				if req.TopologicalParam == 0 {
+					req.TopologicalParam = policy.Param
+				}
+			}
+		}
 		for _, op := range constraint.MutationOperators {
 			switch op.Name {
 			case "mutate_weights", "add_bias":
