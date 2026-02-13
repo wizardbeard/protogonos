@@ -68,6 +68,9 @@ func TestListParityProfiles(t *testing.T) {
 func TestMapPopulationSelectionAliases(t *testing.T) {
 	cases := map[string]string{
 		"hof_competition": "species_shared_tournament",
+		"hof_rank":        "hof_rank",
+		"hof_efficiency":  "hof_efficiency",
+		"hof_random":      "hof_random",
 		"competition":     "competition",
 		"top3":            "top3",
 		"":                "species_shared_tournament",

@@ -173,7 +173,7 @@ func TestClientRunAcceptsReferenceStrategyAliases(t *testing.T) {
 		_ = client.Close()
 	})
 
-	for _, selection := range []string{"hof_competition", "competition", "top3"} {
+	for _, selection := range []string{"hof_competition", "hof_rank", "hof_efficiency", "hof_random", "competition", "top3"} {
 		_, err = client.Run(context.Background(), RunRequest{
 			Scape:           "xor",
 			Population:      8,

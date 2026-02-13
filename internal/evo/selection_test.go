@@ -227,3 +227,72 @@ func TestSpeciesSharedTournamentSelectorUsesProvidedSpeciesAssignments(t *testin
 		t.Fatalf("expected fitter provided species to dominate picks: sp-1=%d sp-2=%d", countBySpecies["sp-1"], countBySpecies["sp-2"])
 	}
 }
+
+func TestRankSelectorBiasesTowardTopRankedGenome(t *testing.T) {
+	scored := []ScoredGenome{
+		{Genome: newLinearGenome("g0", 1), Fitness: 0.9},
+		{Genome: newLinearGenome("g1", 1), Fitness: 0.7},
+		{Genome: newLinearGenome("g2", 1), Fitness: 0.5},
+		{Genome: newLinearGenome("g3", 1), Fitness: 0.3},
+	}
+	selector := RankSelector{PoolSize: len(scored)}
+	rng := rand.New(rand.NewSource(55))
+
+	counts := map[string]int{}
+	for i := 0; i < 500; i++ {
+		parent, err := selector.PickParent(rng, scored, 1)
+		if err != nil {
+			t.Fatalf("pick parent: %v", err)
+		}
+		counts[parent.ID]++
+	}
+	if counts["g0"] <= counts["g3"] {
+		t.Fatalf("expected top-ranked genome to be picked more than lowest-ranked: g0=%d g3=%d", counts["g0"], counts["g3"])
+	}
+}
+
+func TestEfficiencySelectorFavorsMoreEfficientGenome(t *testing.T) {
+	highComplexity := newComplexLinearGenome("complex", 1)
+	highComplexity.Neurons = append(highComplexity.Neurons, highComplexity.Neurons...)
+	highComplexity.Synapses = append(highComplexity.Synapses, highComplexity.Synapses...)
+
+	scored := []ScoredGenome{
+		{Genome: highComplexity, Fitness: 1.0},
+		{Genome: newLinearGenome("efficient", 1), Fitness: 0.8},
+	}
+	selector := EfficiencySelector{PoolSize: len(scored)}
+	rng := rand.New(rand.NewSource(77))
+
+	counts := map[string]int{}
+	for i := 0; i < 400; i++ {
+		parent, err := selector.PickParent(rng, scored, 1)
+		if err != nil {
+			t.Fatalf("pick parent: %v", err)
+		}
+		counts[parent.ID]++
+	}
+	if counts["efficient"] <= counts["complex"] {
+		t.Fatalf("expected efficient genome to be selected more often: efficient=%d complex=%d", counts["efficient"], counts["complex"])
+	}
+}
+
+func TestRandomSelectorSelectsMultipleCandidates(t *testing.T) {
+	scored := []ScoredGenome{
+		{Genome: newLinearGenome("a", 1), Fitness: 1},
+		{Genome: newLinearGenome("b", 1), Fitness: 0.9},
+		{Genome: newLinearGenome("c", 1), Fitness: 0.8},
+	}
+	selector := RandomSelector{PoolSize: len(scored)}
+	rng := rand.New(rand.NewSource(91))
+	seen := map[string]struct{}{}
+	for i := 0; i < 80; i++ {
+		parent, err := selector.PickParent(rng, scored, 1)
+		if err != nil {
+			t.Fatalf("pick parent: %v", err)
+		}
+		seen[parent.ID] = struct{}{}
+	}
+	if len(seen) < 2 {
+		t.Fatalf("expected random selector to sample multiple parents, got %d", len(seen))
+	}
+}

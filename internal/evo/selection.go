@@ -89,6 +89,105 @@ func (s TournamentSelector) PickParent(rng *rand.Rand, ranked []ScoredGenome, el
 	return best.Genome, nil
 }
 
+// RankSelector picks from a pool weighted by descending rank.
+type RankSelector struct {
+	PoolSize int
+}
+
+func (RankSelector) Name() string {
+	return "rank"
+}
+
+func (s RankSelector) PickParent(rng *rand.Rand, ranked []ScoredGenome, eliteCount int) (model.Genome, error) {
+	if rng == nil {
+		return model.Genome{}, fmt.Errorf("random source is required")
+	}
+	if eliteCount <= 0 || eliteCount > len(ranked) {
+		return model.Genome{}, fmt.Errorf("invalid elite count: %d", eliteCount)
+	}
+	pool := boundedPool(ranked, eliteCount, s.PoolSize)
+	total := 0.0
+	weights := make([]float64, len(pool))
+	for i := range pool {
+		weights[i] = float64(len(pool) - i)
+		total += weights[i]
+	}
+	choice := rng.Float64() * total
+	acc := 0.0
+	for i, weight := range weights {
+		acc += weight
+		if choice <= acc {
+			return pool[i].Genome, nil
+		}
+	}
+	return pool[len(pool)-1].Genome, nil
+}
+
+// EfficiencySelector picks from a pool weighted by fitness divided by network size.
+type EfficiencySelector struct {
+	PoolSize int
+}
+
+func (EfficiencySelector) Name() string {
+	return "efficiency"
+}
+
+func (s EfficiencySelector) PickParent(rng *rand.Rand, ranked []ScoredGenome, eliteCount int) (model.Genome, error) {
+	if rng == nil {
+		return model.Genome{}, fmt.Errorf("random source is required")
+	}
+	if eliteCount <= 0 || eliteCount > len(ranked) {
+		return model.Genome{}, fmt.Errorf("invalid elite count: %d", eliteCount)
+	}
+	pool := boundedPool(ranked, eliteCount, s.PoolSize)
+	weights := make([]float64, len(pool))
+	total := 0.0
+	for i, candidate := range pool {
+		size := float64(len(candidate.Genome.Neurons) + len(candidate.Genome.Synapses))
+		if size <= 0 {
+			size = 1
+		}
+		weight := candidate.Fitness / size
+		if weight < 0 {
+			weight = 0
+		}
+		weights[i] = weight
+		total += weight
+	}
+	if total <= 0 {
+		return pool[rng.Intn(len(pool))].Genome, nil
+	}
+	choice := rng.Float64() * total
+	acc := 0.0
+	for i, weight := range weights {
+		acc += weight
+		if choice <= acc {
+			return pool[i].Genome, nil
+		}
+	}
+	return pool[len(pool)-1].Genome, nil
+}
+
+// RandomSelector picks uniformly from a bounded pool.
+type RandomSelector struct {
+	PoolSize int
+}
+
+func (RandomSelector) Name() string {
+	return "random"
+}
+
+func (s RandomSelector) PickParent(rng *rand.Rand, ranked []ScoredGenome, eliteCount int) (model.Genome, error) {
+	if rng == nil {
+		return model.Genome{}, fmt.Errorf("random source is required")
+	}
+	if eliteCount <= 0 || eliteCount > len(ranked) {
+		return model.Genome{}, fmt.Errorf("invalid elite count: %d", eliteCount)
+	}
+	pool := boundedPool(ranked, eliteCount, s.PoolSize)
+	return pool[rng.Intn(len(pool))].Genome, nil
+}
+
 // SpeciesTournamentSelector first samples a species uniformly and then runs
 // tournament selection inside that species.
 type SpeciesTournamentSelector struct {
@@ -337,4 +436,17 @@ func buildSpeciesBuckets(pool []ScoredGenome, identifier SpecieIdentifier, speci
 		bySpecies[key] = append(bySpecies[key], scored)
 	}
 	return bySpecies
+}
+
+func boundedPool(ranked []ScoredGenome, eliteCount, poolSize int) []ScoredGenome {
+	if poolSize <= 0 {
+		poolSize = eliteCount * 2
+	}
+	if poolSize < eliteCount {
+		poolSize = eliteCount
+	}
+	if poolSize > len(ranked) {
+		poolSize = len(ranked)
+	}
+	return ranked[:poolSize]
 }

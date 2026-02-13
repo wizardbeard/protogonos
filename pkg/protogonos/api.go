@@ -1091,6 +1091,12 @@ func selectionFromName(name string) (evo.Selector, error) {
 			TournamentSize:        3,
 			StagnationGenerations: 2,
 		}, nil
+	case "hof_rank":
+		return evo.RankSelector{PoolSize: 0}, nil
+	case "hof_efficiency":
+		return evo.EfficiencySelector{PoolSize: 0}, nil
+	case "hof_random":
+		return evo.RandomSelector{PoolSize: 0}, nil
 	case "competition":
 		return &evo.SpeciesSharedTournamentSelector{
 			Identifier:     evo.TopologySpecieIdentifier{},
@@ -1099,6 +1105,12 @@ func selectionFromName(name string) (evo.Selector, error) {
 		}, nil
 	case "top3":
 		return evo.EliteSelector{}, nil
+	case "rank":
+		return evo.RankSelector{PoolSize: 0}, nil
+	case "efficiency":
+		return evo.EfficiencySelector{PoolSize: 0}, nil
+	case "random":
+		return evo.RandomSelector{PoolSize: 0}, nil
 	default:
 		return nil, fmt.Errorf("unsupported selection strategy: %s", name)
 	}
