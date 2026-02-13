@@ -27,6 +27,7 @@ func TestLoadRunRequestFromConfigUsesConstraintAndPMP(t *testing.T) {
 			},
 			"mutation_operators": []any{
 				[]any{"add_bias", 5},
+				[]any{"remove_bias", 1},
 				[]any{"mutate_af", 6},
 				[]any{"mutate_aggrf", 7},
 				[]any{"add_outlink", 4},
@@ -68,7 +69,7 @@ func TestLoadRunRequestFromConfigUsesConstraintAndPMP(t *testing.T) {
 	if req.FitnessPostprocessor != "nsize_proportional" {
 		t.Fatalf("unexpected fitness postprocessor mapping: %s", req.FitnessPostprocessor)
 	}
-	if req.WeightBias != 5 || req.WeightActivation != 6 || req.WeightAggregator != 7 || req.WeightAddSynapse != 4 || req.WeightAddNeuron != 3 || req.WeightPlasticity != 2 {
+	if req.WeightBias != 5 || req.WeightRemoveBias != 1 || req.WeightActivation != 6 || req.WeightAggregator != 7 || req.WeightAddSynapse != 4 || req.WeightAddNeuron != 3 || req.WeightPlasticity != 2 {
 		t.Fatalf("unexpected mapped mutation weights: %+v", req)
 	}
 }
@@ -82,6 +83,9 @@ func TestHasAnyWeightOverrideFlag(t *testing.T) {
 	}
 	if !hasAnyWeightOverrideFlag(map[string]bool{"w-bias": true}) {
 		t.Fatal("expected true when bias weight flag is set")
+	}
+	if !hasAnyWeightOverrideFlag(map[string]bool{"w-remove-bias": true}) {
+		t.Fatal("expected true when remove-bias weight flag is set")
 	}
 }
 

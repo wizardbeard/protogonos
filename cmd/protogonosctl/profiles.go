@@ -17,6 +17,7 @@ type parityPreset struct {
 	TuneSelection     string
 	WeightPerturb     float64
 	WeightBias        float64
+	WeightRemoveBias  float64
 	WeightActivation  float64
 	WeightAggregator  float64
 	WeightAddSyn      float64
@@ -63,6 +64,7 @@ type parityProfileResolved struct {
 	MutationOperatorLen int
 	WeightPerturb       float64
 	WeightBias          float64
+	WeightRemoveBias    float64
 	WeightActivation    float64
 	WeightAggregator    float64
 	WeightAddSyn        float64
@@ -99,6 +101,7 @@ func loadParityPreset(profileID string) (parityPreset, error) {
 		TuneSelection:     resolved.TuningSelection,
 		WeightPerturb:     resolved.WeightPerturb,
 		WeightBias:        resolved.WeightBias,
+		WeightRemoveBias:  resolved.WeightRemoveBias,
 		WeightActivation:  resolved.WeightActivation,
 		WeightAggregator:  resolved.WeightAggregator,
 		WeightAddSyn:      resolved.WeightAddSyn,
@@ -137,6 +140,8 @@ func resolveParityProfile(profileID string) (parityProfileResolved, error) {
 				resolved.WeightPerturb += op.Weight
 			case "add_bias":
 				resolved.WeightBias += op.Weight
+			case "remove_bias":
+				resolved.WeightRemoveBias += op.Weight
 			case "mutate_af":
 				resolved.WeightActivation += op.Weight
 			case "mutate_aggrf":
@@ -155,7 +160,7 @@ func resolveParityProfile(profileID string) (parityProfileResolved, error) {
 				resolved.WeightSubstrate += op.Weight
 			}
 		}
-		if resolved.WeightPerturb+resolved.WeightBias+resolved.WeightActivation+resolved.WeightAggregator+resolved.WeightAddSyn+resolved.WeightRemoveSyn+resolved.WeightAddNeuro+resolved.WeightRemoveNeuro+resolved.WeightPlasticity+resolved.WeightSubstrate <= 0 {
+		if resolved.WeightPerturb+resolved.WeightBias+resolved.WeightRemoveBias+resolved.WeightActivation+resolved.WeightAggregator+resolved.WeightAddSyn+resolved.WeightRemoveSyn+resolved.WeightAddNeuro+resolved.WeightRemoveNeuro+resolved.WeightPlasticity+resolved.WeightSubstrate <= 0 {
 			return parityProfileResolved{}, fmt.Errorf("profile %s has no mapped mutation weights", profileID)
 		}
 		return resolved, nil

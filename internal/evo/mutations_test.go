@@ -471,6 +471,33 @@ func TestChangeRandomAggregatorMutation(t *testing.T) {
 	}
 }
 
+func TestRemoveRandomBiasMutation(t *testing.T) {
+	genome := randomGenome(rand.New(rand.NewSource(16)))
+	for i := range genome.Neurons {
+		genome.Neurons[i].Bias = float64(i + 1)
+	}
+	op := &RemoveRandomBias{
+		Rand: rand.New(rand.NewSource(17)),
+	}
+	mutated, err := op.Apply(context.Background(), genome)
+	if err != nil {
+		t.Fatalf("apply failed: %v", err)
+	}
+
+	zeroed := false
+	for i := range genome.Neurons {
+		if mutated.Neurons[i].ID != genome.Neurons[i].ID {
+			t.Fatalf("neuron identity changed at index %d", i)
+		}
+		if mutated.Neurons[i].Bias == 0 && genome.Neurons[i].Bias != 0 {
+			zeroed = true
+		}
+	}
+	if !zeroed {
+		t.Fatal("expected one neuron bias to be removed")
+	}
+}
+
 func decodeGenomeFixture(t *testing.T, path string) model.Genome {
 	t.Helper()
 

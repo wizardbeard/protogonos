@@ -120,6 +120,32 @@ func (o *PerturbRandomBias) Apply(_ context.Context, genome model.Genome) (model
 	return mutated, nil
 }
 
+// RemoveRandomBias clears one random neuron bias.
+type RemoveRandomBias struct {
+	Rand *rand.Rand
+}
+
+func (o *RemoveRandomBias) Name() string {
+	return "remove_random_bias"
+}
+
+func (o *RemoveRandomBias) Applicable(genome model.Genome, _ string) bool {
+	return len(genome.Neurons) > 0
+}
+
+func (o *RemoveRandomBias) Apply(_ context.Context, genome model.Genome) (model.Genome, error) {
+	if len(genome.Neurons) == 0 {
+		return model.Genome{}, ErrNoNeurons
+	}
+	if o == nil || o.Rand == nil {
+		return model.Genome{}, errors.New("random source is required")
+	}
+	idx := o.Rand.Intn(len(genome.Neurons))
+	mutated := cloneGenome(genome)
+	mutated.Neurons[idx].Bias = 0
+	return mutated, nil
+}
+
 // ChangeRandomActivation mutates one neuron's activation function.
 type ChangeRandomActivation struct {
 	Rand        *rand.Rand
