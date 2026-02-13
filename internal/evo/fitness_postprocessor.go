@@ -6,6 +6,8 @@ import (
 	"protogonos/internal/model"
 )
 
+const sizeProportionalEfficiency = 0.05
+
 // FitnessPostprocessor adjusts fitness values after scape evaluation and
 // before ranking/selection.
 type FitnessPostprocessor interface {
@@ -37,7 +39,7 @@ func (SizeProportionalPostprocessor) Process(scored []ScoredGenome) []ScoredGeno
 		if complexity < 1 {
 			complexity = 1
 		}
-		out[i].Fitness = out[i].Fitness / complexity
+		out[i].Fitness = out[i].Fitness / math.Pow(complexity, sizeProportionalEfficiency)
 	}
 	return out
 }

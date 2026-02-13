@@ -419,7 +419,7 @@ func TestPopulationMonitorBuildsSubstrateFromGenomeConfig(t *testing.T) {
 
 func TestPopulationMonitorSizeProportionalPostprocessorChangesWinner(t *testing.T) {
 	complexBestRaw := newComplexLinearGenome("complex", 1.0)
-	simpleSecondRaw := newLinearGenome("simple", 0.9)
+	simpleSecondRaw := newLinearGenome("simple", 0.95)
 	initial := []model.Genome{complexBestRaw, simpleSecondRaw}
 
 	baseline, err := NewPopulationMonitor(MonitorConfig{
