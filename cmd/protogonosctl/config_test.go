@@ -79,3 +79,30 @@ func TestHasAnyWeightOverrideFlag(t *testing.T) {
 		t.Fatal("expected true when one weight flag is set")
 	}
 }
+
+func TestLoadRunRequestFromConfigPreservesSelectionAliases(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "run_config_aliases.json")
+	payload := map[string]any{
+		"constraint": map[string]any{
+			"population_selection_f": "top3",
+			"mutation_operators": []any{
+				[]any{"add_bias", 1},
+			},
+		},
+	}
+	data, err := json.Marshal(payload)
+	if err != nil {
+		t.Fatalf("marshal payload: %v", err)
+	}
+	if err := os.WriteFile(path, data, 0o644); err != nil {
+		t.Fatalf("write config: %v", err)
+	}
+
+	req, err := loadRunRequestFromConfig(path)
+	if err != nil {
+		t.Fatalf("load run request: %v", err)
+	}
+	if req.Selection != "top3" {
+		t.Fatalf("expected top3 alias preserved, got %s", req.Selection)
+	}
+}

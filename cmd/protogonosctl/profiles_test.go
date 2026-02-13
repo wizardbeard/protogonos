@@ -64,3 +64,18 @@ func TestListParityProfiles(t *testing.T) {
 		}
 	}
 }
+
+func TestMapPopulationSelectionAliases(t *testing.T) {
+	cases := map[string]string{
+		"hof_competition": "species_shared_tournament",
+		"competition":     "competition",
+		"top3":            "top3",
+		"":                "species_shared_tournament",
+		"custom":          "custom",
+	}
+	for in, want := range cases {
+		if got := mapPopulationSelection(in); got != want {
+			t.Fatalf("mapPopulationSelection(%q)=%q want=%q", in, got, want)
+		}
+	}
+}

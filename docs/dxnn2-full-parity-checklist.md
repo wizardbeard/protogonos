@@ -18,7 +18,7 @@ Status keys:
 | `records.hrl` | `partial` | Core record equivalents implemented with versioned codecs; full field-level parity still pending. |
 | `map2rec.erl` | `partial` | Baseline conversion parity implemented for `constraint`/`pmp`/`sensor`/`actuator`/`neuron`/`agent`/`cortex`/`specie`/`population` plus `trace`/`stat`/`topology_summary`/`signature`/`champion`; broader record coverage still pending. |
 | `genome_mutator.erl` | `partial` | Core topology/weight operators plus plasticity/substrate parameter mutations implemented; full operator breadth pending. |
-| `selection_algorithm.erl` | `partial` | Elite/tournament/species/shared species + reference aliases `hof_competition`/`competition`/`top3` implemented; additional reference strategies pending. |
+| `selection_algorithm.erl` | `partial` | Elite/tournament/species/shared species + reference aliases `hof_competition`/`competition`/`top3` implemented across CLI/API and map2rec `constraint.population_selection_f` config materialization; additional reference strategies pending. |
 | `fitness_postprocessor.erl` | `partial` | None/size/novelty postprocessors implemented with `nsize_proportional` alias parity and map2rec `constraint.population_fitness_postprocessor_f` config materialization; full policy breadth pending. |
 | `specie_identifier.erl` | `partial` | Topology/speciation support implemented with adaptive threshold + representatives; full reference behavior tuning pending. |
 | `tot_topological_mutations.erl` | `done` | Constant + count-scaled topological mutation count policies implemented/tested, with map2rec `constraint.tot_topological_mutations_fs` config materialization support. |
@@ -75,6 +75,7 @@ Status keys:
 - Added reference tuning-selection mode set (`all`, `all_random`, `recent`, `recent_random`, `lastgen`, `lastgen_random`) across tuning/API/CLI/config normalization.
 - Added map2rec materialization for `constraint.tot_topological_mutations_fs` into `RunRequest` with run-config override integration coverage.
 - Added map2rec materialization for `constraint.population_fitness_postprocessor_f` into `RunRequest` with run-config override integration coverage.
+- Preserved `constraint.population_selection_f` aliases (`competition`, `top3`) during map2rec config materialization instead of collapsing to one default.
 
 ## Highest-priority remaining gaps to reach strict parity
 

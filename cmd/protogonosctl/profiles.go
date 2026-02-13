@@ -206,8 +206,14 @@ func mapPopulationSelection(name string) string {
 	switch name {
 	case "hof_competition":
 		return "species_shared_tournament"
-	default:
+	case "competition":
+		return "competition"
+	case "top3":
+		return "top3"
+	case "":
 		return "species_shared_tournament"
+	default:
+		return name
 	}
 }
 
