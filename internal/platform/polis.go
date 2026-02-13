@@ -40,6 +40,7 @@ type EvolutionConfig struct {
 	Tuner                tuning.Tuner
 	TuneAttempts         int
 	TuneAttemptPolicy    tuning.AttemptPolicy
+	Control              <-chan evo.MonitorCommand
 	Initial              []model.Genome
 }
 
@@ -172,6 +173,7 @@ func (p *Polis) RunEvolution(ctx context.Context, cfg EvolutionConfig) (Evolutio
 		Tuner:                cfg.Tuner,
 		TuneAttempts:         cfg.TuneAttempts,
 		TuneAttemptPolicy:    cfg.TuneAttemptPolicy,
+		Control:              cfg.Control,
 	})
 	if err != nil {
 		return EvolutionResult{}, err

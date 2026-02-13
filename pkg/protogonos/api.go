@@ -49,6 +49,8 @@ type RunRequest struct {
 	SpecieSizeLimit      int
 	FitnessGoal          float64
 	EvaluationsLimit     int
+	StartPaused          bool
+	AutoContinueAfter    time.Duration
 	Seed                 int64
 	Workers              int
 	Selection            string
@@ -298,6 +300,26 @@ func (c *Client) Run(ctx context.Context, req RunRequest) (RunSummary, error) {
 				CandidateSelection: req.TuneSelection,
 			}
 		}
+		var controlCh chan evo.MonitorCommand
+		if req.StartPaused {
+			controlCh = make(chan evo.MonitorCommand, 2)
+			controlCh <- evo.CommandPause
+			if req.AutoContinueAfter > 0 {
+				go func() {
+					timer := time.NewTimer(req.AutoContinueAfter)
+					defer timer.Stop()
+					select {
+					case <-ctx.Done():
+						return
+					case <-timer.C:
+						select {
+						case controlCh <- evo.CommandContinue:
+						case <-ctx.Done():
+						}
+					}
+				}()
+			}
+		}
 		return p.RunEvolution(ctx, platform.EvolutionConfig{
 			RunID:                runID,
 			ScapeName:            req.Scape,
@@ -307,6 +329,7 @@ func (c *Client) Run(ctx context.Context, req RunRequest) (RunSummary, error) {
 			SpecieSizeLimit:      req.SpecieSizeLimit,
 			FitnessGoal:          req.FitnessGoal,
 			EvaluationsLimit:     req.EvaluationsLimit,
+			Control:              controlCh,
 			EliteCount:           eliteCount,
 			Workers:              req.Workers,
 			Seed:                 req.Seed,
@@ -411,6 +434,8 @@ func (c *Client) Run(ctx context.Context, req RunRequest) (RunSummary, error) {
 			SpecieSizeLimit:      req.SpecieSizeLimit,
 			FitnessGoal:          req.FitnessGoal,
 			EvaluationsLimit:     req.EvaluationsLimit,
+			StartPaused:          req.StartPaused,
+			AutoContinueAfterMS:  req.AutoContinueAfter.Milliseconds(),
 			Seed:                 req.Seed,
 			Workers:              req.Workers,
 			EliteCount:           eliteCount,
@@ -974,6 +999,9 @@ func materializeRunConfigFromRequest(req RunRequest) (materializedRunConfig, err
 	}
 	if req.EvaluationsLimit < 0 {
 		return materializedRunConfig{}, errors.New("evaluations limit must be >= 0")
+	}
+	if req.AutoContinueAfter < 0 {
+		return materializedRunConfig{}, errors.New("auto continue after must be >= 0")
 	}
 	if req.Workers < 0 {
 		return materializedRunConfig{}, errors.New("workers must be >= 0")

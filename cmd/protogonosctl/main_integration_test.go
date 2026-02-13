@@ -147,6 +147,8 @@ func TestRunCommandSQLiteConfigLoadsMap2RecAndAllowsFlagOverrides(t *testing.T) 
 		"--specie-size-limit", "4",
 		"--fitness-goal", "0.91",
 		"--evaluations-limit", "123",
+		"--start-paused",
+		"--auto-continue-ms", "5",
 	}
 	if err := run(context.Background(), args); err != nil {
 		t.Fatalf("run command with config: %v", err)
@@ -190,6 +192,9 @@ func TestRunCommandSQLiteConfigLoadsMap2RecAndAllowsFlagOverrides(t *testing.T) 
 	}
 	if runCfg.EvaluationsLimit != 123 {
 		t.Fatalf("expected evaluations limit override 123, got %d", runCfg.EvaluationsLimit)
+	}
+	if !runCfg.StartPaused || runCfg.AutoContinueAfterMS != 5 {
+		t.Fatalf("expected pause control override start=true auto_ms=5, got start=%t auto_ms=%d", runCfg.StartPaused, runCfg.AutoContinueAfterMS)
 	}
 }
 

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math"
 	"os"
+	"time"
 
 	"protogonos/internal/map2rec"
 	protoapi "protogonos/pkg/protogonos"
@@ -41,6 +42,12 @@ func loadRunRequestFromConfig(path string) (protoapi.RunRequest, error) {
 	}
 	if v, ok := asInt(raw["evaluations_limit"]); ok {
 		req.EvaluationsLimit = v
+	}
+	if v, ok := asBool(raw["start_paused"]); ok {
+		req.StartPaused = v
+	}
+	if v, ok := asInt(raw["auto_continue_ms"]); ok {
+		req.AutoContinueAfter = time.Duration(v) * time.Millisecond
 	}
 	if v, ok := asInt64(raw["seed"]); ok {
 		req.Seed = v
@@ -229,6 +236,10 @@ func overrideFromFlags(req *protoapi.RunRequest, set map[string]bool, flagValue 
 			req.FitnessGoal = v.(float64)
 		case "evaluations-limit":
 			req.EvaluationsLimit = v.(int)
+		case "start-paused":
+			req.StartPaused = v.(bool)
+		case "auto-continue-ms":
+			req.AutoContinueAfter = time.Duration(v.(int)) * time.Millisecond
 		case "seed":
 			req.Seed = v.(int64)
 		case "workers":

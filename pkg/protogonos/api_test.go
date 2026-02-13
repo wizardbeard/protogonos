@@ -2,9 +2,11 @@ package protogonos
 
 import (
 	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 )
 
 func TestClientRunRunsAndExport(t *testing.T) {
@@ -480,5 +482,62 @@ func TestClientRunRejectsNegativeNumericConfig(t *testing.T) {
 	})
 	if err == nil {
 		t.Fatal("expected specie size limit validation error")
+	}
+
+	_, err = client.Run(context.Background(), RunRequest{
+		Scape:             "xor",
+		Population:        6,
+		Generations:       2,
+		Selection:         "elite",
+		WeightPerturb:     1.0,
+		AutoContinueAfter: -time.Millisecond,
+	})
+	if err == nil {
+		t.Fatal("expected auto continue duration validation error")
+	}
+}
+
+func TestClientRunStartPausedControls(t *testing.T) {
+	base := t.TempDir()
+	client, err := New(Options{
+		StoreKind:     "memory",
+		BenchmarksDir: filepath.Join(base, "benchmarks"),
+		ExportsDir:    filepath.Join(base, "exports"),
+	})
+	if err != nil {
+		t.Fatalf("new client: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = client.Close()
+	})
+
+	pausedCtx, cancel := context.WithTimeout(context.Background(), 30*time.Millisecond)
+	defer cancel()
+	_, err = client.Run(pausedCtx, RunRequest{
+		Scape:         "xor",
+		Population:    8,
+		Generations:   2,
+		StartPaused:   true,
+		Selection:     "elite",
+		WeightPerturb: 1.0,
+	})
+	if !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("expected paused run to block until context deadline, got err=%v", err)
+	}
+
+	resumed, err := client.Run(context.Background(), RunRequest{
+		Scape:             "xor",
+		Population:        8,
+		Generations:       2,
+		StartPaused:       true,
+		AutoContinueAfter: 10 * time.Millisecond,
+		Selection:         "elite",
+		WeightPerturb:     1.0,
+	})
+	if err != nil {
+		t.Fatalf("run with auto continue: %v", err)
+	}
+	if len(resumed.BestByGeneration) != 2 {
+		t.Fatalf("expected full run after auto continue, got %d generations", len(resumed.BestByGeneration))
 	}
 }

@@ -5,14 +5,17 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 )
 
 func TestLoadRunRequestFromConfigUsesConstraintAndPMP(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "run_config.json")
 	payload := map[string]any{
-		"scape":   "gtsa",
-		"seed":    77,
-		"workers": 3,
+		"scape":            "gtsa",
+		"seed":             77,
+		"workers":          3,
+		"start_paused":     true,
+		"auto_continue_ms": 25,
 		"pmp": map[string]any{
 			"survival_percentage": 0.6,
 			"specie_size_limit":   3,
@@ -55,6 +58,9 @@ func TestLoadRunRequestFromConfigUsesConstraintAndPMP(t *testing.T) {
 	}
 	if req.Scape != "gtsa" || req.Seed != 77 || req.Workers != 3 {
 		t.Fatalf("unexpected base fields: %+v", req)
+	}
+	if !req.StartPaused || req.AutoContinueAfter != 25*time.Millisecond {
+		t.Fatalf("expected pause controls from top-level config, got start=%t after=%s", req.StartPaused, req.AutoContinueAfter)
 	}
 	if req.Population != 12 || req.Generations != 9 {
 		t.Fatalf("expected pmp derived population/generations, got pop=%d gens=%d", req.Population, req.Generations)

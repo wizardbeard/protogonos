@@ -22,6 +22,8 @@ type RunConfig struct {
 	SpecieSizeLimit      int     `json:"specie_size_limit"`
 	FitnessGoal          float64 `json:"fitness_goal"`
 	EvaluationsLimit     int     `json:"evaluations_limit"`
+	StartPaused          bool    `json:"start_paused"`
+	AutoContinueAfterMS  int64   `json:"auto_continue_after_ms"`
 	Seed                 int64   `json:"seed"`
 	Workers              int     `json:"workers"`
 	EliteCount           int     `json:"elite_count"`

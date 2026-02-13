@@ -9,6 +9,7 @@ import (
 	"math/rand"
 	"os"
 	"path/filepath"
+	"time"
 
 	"protogonos/internal/evo"
 	"protogonos/internal/morphology"
@@ -134,6 +135,8 @@ func runRun(ctx context.Context, args []string) error {
 	specieSizeLimit := fs.Int("specie-size-limit", 0, "maximum parent-pool size retained per species (0 disables)")
 	fitnessGoal := fs.Float64("fitness-goal", 0.0, "early-stop best fitness goal (0 disables)")
 	evaluationsLimit := fs.Int("evaluations-limit", 0, "early-stop total evaluation limit (0 disables)")
+	startPaused := fs.Bool("start-paused", false, "start monitor in paused state (requires continue)")
+	autoContinueMS := fs.Int("auto-continue-ms", 0, "auto-send continue after N milliseconds when start-paused is set (0 disables)")
 	seed := fs.Int64("seed", 1, "rng seed")
 	workers := fs.Int("workers", 4, "worker count")
 	storeKind := fs.String("store", storage.DefaultStoreKind(), "store backend: memory|sqlite")
@@ -186,6 +189,8 @@ func runRun(ctx context.Context, args []string) error {
 			SpecieSizeLimit:      *specieSizeLimit,
 			FitnessGoal:          *fitnessGoal,
 			EvaluationsLimit:     *evaluationsLimit,
+			StartPaused:          *startPaused,
+			AutoContinueAfter:    time.Duration(*autoContinueMS) * time.Millisecond,
 			Seed:                 *seed,
 			Workers:              *workers,
 			Selection:            *selectionName,
@@ -224,6 +229,8 @@ func runRun(ctx context.Context, args []string) error {
 			"specie-size-limit":     *specieSizeLimit,
 			"fitness-goal":          *fitnessGoal,
 			"evaluations-limit":     *evaluationsLimit,
+			"start-paused":          *startPaused,
+			"auto-continue-ms":      *autoContinueMS,
 			"seed":                  *seed,
 			"workers":               *workers,
 			"tuning":                *enableTuning,
@@ -770,6 +777,8 @@ func runBenchmark(ctx context.Context, args []string) error {
 	specieSizeLimit := fs.Int("specie-size-limit", 0, "maximum parent-pool size retained per species (0 disables)")
 	fitnessGoal := fs.Float64("fitness-goal", 0.0, "early-stop best fitness goal (0 disables)")
 	evaluationsLimit := fs.Int("evaluations-limit", 0, "early-stop total evaluation limit (0 disables)")
+	startPaused := fs.Bool("start-paused", false, "start monitor in paused state (requires continue)")
+	autoContinueMS := fs.Int("auto-continue-ms", 0, "auto-send continue after N milliseconds when start-paused is set (0 disables)")
 	seed := fs.Int64("seed", 1, "rng seed")
 	workers := fs.Int("workers", 4, "worker count")
 	storeKind := fs.String("store", storage.DefaultStoreKind(), "store backend: memory|sqlite")
@@ -822,6 +831,8 @@ func runBenchmark(ctx context.Context, args []string) error {
 			SpecieSizeLimit:      *specieSizeLimit,
 			FitnessGoal:          *fitnessGoal,
 			EvaluationsLimit:     *evaluationsLimit,
+			StartPaused:          *startPaused,
+			AutoContinueAfter:    time.Duration(*autoContinueMS) * time.Millisecond,
 			Seed:                 *seed,
 			Workers:              *workers,
 			Selection:            *selectionName,
@@ -859,6 +870,8 @@ func runBenchmark(ctx context.Context, args []string) error {
 			"specie-size-limit":     *specieSizeLimit,
 			"fitness-goal":          *fitnessGoal,
 			"evaluations-limit":     *evaluationsLimit,
+			"start-paused":          *startPaused,
+			"auto-continue-ms":      *autoContinueMS,
 			"seed":                  *seed,
 			"workers":               *workers,
 			"tuning":                *enableTuning,
