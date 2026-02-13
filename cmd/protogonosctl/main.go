@@ -131,6 +131,7 @@ func runRun(ctx context.Context, args []string) error {
 	population := fs.Int("pop", 50, "population size")
 	generations := fs.Int("gens", 100, "generation count")
 	survivalPercentage := fs.Float64("survival-percentage", 0.0, "survival percentage used to derive elite retention when elite count is unset")
+	specieSizeLimit := fs.Int("specie-size-limit", 0, "maximum parent-pool size retained per species (0 disables)")
 	fitnessGoal := fs.Float64("fitness-goal", 0.0, "early-stop best fitness goal (0 disables)")
 	evaluationsLimit := fs.Int("evaluations-limit", 0, "early-stop total evaluation limit (0 disables)")
 	seed := fs.Int64("seed", 1, "rng seed")
@@ -182,6 +183,7 @@ func runRun(ctx context.Context, args []string) error {
 			Population:           *population,
 			Generations:          *generations,
 			SurvivalPercentage:   *survivalPercentage,
+			SpecieSizeLimit:      *specieSizeLimit,
 			FitnessGoal:          *fitnessGoal,
 			EvaluationsLimit:     *evaluationsLimit,
 			Seed:                 *seed,
@@ -219,6 +221,7 @@ func runRun(ctx context.Context, args []string) error {
 			"pop":                   *population,
 			"gens":                  *generations,
 			"survival-percentage":   *survivalPercentage,
+			"specie-size-limit":     *specieSizeLimit,
 			"fitness-goal":          *fitnessGoal,
 			"evaluations-limit":     *evaluationsLimit,
 			"seed":                  *seed,
@@ -764,6 +767,7 @@ func runBenchmark(ctx context.Context, args []string) error {
 	population := fs.Int("pop", 50, "population size")
 	generations := fs.Int("gens", 100, "generation count")
 	survivalPercentage := fs.Float64("survival-percentage", 0.0, "survival percentage used to derive elite retention when elite count is unset")
+	specieSizeLimit := fs.Int("specie-size-limit", 0, "maximum parent-pool size retained per species (0 disables)")
 	fitnessGoal := fs.Float64("fitness-goal", 0.0, "early-stop best fitness goal (0 disables)")
 	evaluationsLimit := fs.Int("evaluations-limit", 0, "early-stop total evaluation limit (0 disables)")
 	seed := fs.Int64("seed", 1, "rng seed")
@@ -815,6 +819,7 @@ func runBenchmark(ctx context.Context, args []string) error {
 			Population:           *population,
 			Generations:          *generations,
 			SurvivalPercentage:   *survivalPercentage,
+			SpecieSizeLimit:      *specieSizeLimit,
 			FitnessGoal:          *fitnessGoal,
 			EvaluationsLimit:     *evaluationsLimit,
 			Seed:                 *seed,
@@ -851,6 +856,7 @@ func runBenchmark(ctx context.Context, args []string) error {
 			"pop":                   *population,
 			"gens":                  *generations,
 			"survival-percentage":   *survivalPercentage,
+			"specie-size-limit":     *specieSizeLimit,
 			"fitness-goal":          *fitnessGoal,
 			"evaluations-limit":     *evaluationsLimit,
 			"seed":                  *seed,

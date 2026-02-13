@@ -46,6 +46,7 @@ type RunRequest struct {
 	Population           int
 	Generations          int
 	SurvivalPercentage   float64
+	SpecieSizeLimit      int
 	FitnessGoal          float64
 	EvaluationsLimit     int
 	Seed                 int64
@@ -303,6 +304,7 @@ func (c *Client) Run(ctx context.Context, req RunRequest) (RunSummary, error) {
 			PopulationSize:       req.Population,
 			Generations:          req.Generations,
 			SurvivalPercentage:   req.SurvivalPercentage,
+			SpecieSizeLimit:      req.SpecieSizeLimit,
 			FitnessGoal:          req.FitnessGoal,
 			EvaluationsLimit:     req.EvaluationsLimit,
 			EliteCount:           eliteCount,
@@ -406,6 +408,7 @@ func (c *Client) Run(ctx context.Context, req RunRequest) (RunSummary, error) {
 			PopulationSize:       req.Population,
 			Generations:          req.Generations,
 			SurvivalPercentage:   req.SurvivalPercentage,
+			SpecieSizeLimit:      req.SpecieSizeLimit,
 			FitnessGoal:          req.FitnessGoal,
 			EvaluationsLimit:     req.EvaluationsLimit,
 			Seed:                 req.Seed,
@@ -965,6 +968,9 @@ func materializeRunConfigFromRequest(req RunRequest) (materializedRunConfig, err
 	}
 	if req.FitnessGoal < 0 {
 		return materializedRunConfig{}, errors.New("fitness goal must be >= 0")
+	}
+	if req.SpecieSizeLimit < 0 {
+		return materializedRunConfig{}, errors.New("specie size limit must be >= 0")
 	}
 	if req.EvaluationsLimit < 0 {
 		return materializedRunConfig{}, errors.New("evaluations limit must be >= 0")

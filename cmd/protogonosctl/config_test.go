@@ -15,6 +15,7 @@ func TestLoadRunRequestFromConfigUsesConstraintAndPMP(t *testing.T) {
 		"workers": 3,
 		"pmp": map[string]any{
 			"survival_percentage": 0.6,
+			"specie_size_limit":   3,
 			"init_specie_size":    12,
 			"generation_limit":    9,
 			"evaluations_limit":   111,
@@ -60,6 +61,9 @@ func TestLoadRunRequestFromConfigUsesConstraintAndPMP(t *testing.T) {
 	}
 	if req.SurvivalPercentage != 0.6 || req.EvaluationsLimit != 111 || req.FitnessGoal != 0.88 {
 		t.Fatalf("expected pmp-derived monitor controls, got survival=%f eval_limit=%d fitness_goal=%f", req.SurvivalPercentage, req.EvaluationsLimit, req.FitnessGoal)
+	}
+	if req.SpecieSizeLimit != 3 {
+		t.Fatalf("expected pmp-derived specie size limit 3, got %d", req.SpecieSizeLimit)
 	}
 	if req.Selection != "species_shared_tournament" {
 		t.Fatalf("unexpected selection mapping: %s", req.Selection)

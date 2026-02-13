@@ -13,7 +13,7 @@ Status keys:
 | Reference module | Status | Notes |
 |---|---|---|
 | `polis.erl` | `partial` | Core lifecycle + persistence orchestration implemented, including idempotent init/start state, explicit stop lifecycle, and scape lookup semantics; OTP process/supervision semantics still simplified. |
-| `population_monitor.erl` | `partial` | Generation loop, species-aware selection, quotas, diagnostics, lineage implemented, including early-stop lifecycle controls for fitness-goal/evaluation-limit and `survival_percentage`-driven elite retention semantics; remaining fine-grained lifecycle parity pending. |
+| `population_monitor.erl` | `partial` | Generation loop, species-aware selection, quotas, diagnostics, lineage implemented, including early-stop lifecycle controls for fitness-goal/evaluation-limit, `survival_percentage`-driven elite retention semantics, and `specie_size_limit` parent-pool capping; remaining fine-grained lifecycle parity pending. |
 | `genotype.erl` | `partial` | Seed/clone/lifecycle/store flows implemented; full reference operation surface still broader. |
 | `records.hrl` | `partial` | Core record equivalents implemented with versioned codecs; full field-level parity still pending. |
 | `map2rec.erl` | `partial` | Baseline conversion parity implemented for `constraint`/`pmp`/`sensor`/`actuator`/`neuron`/`agent`/`cortex`/`specie`/`population` plus `trace`/`stat`/`topology_summary`/`signature`/`champion`; broader record coverage still pending. |
@@ -86,6 +86,7 @@ Status keys:
 - Added population-monitor lifecycle stop controls (`fitness_goal`, `evaluations_limit`) with early-termination coverage and fixed persisted generation to reflect executed generations under early stop.
 - Added `survival_percentage` parity semantics in `PopulationMonitor` to derive elite retention count when `elite_count` is unset, with validation and lineage-backed behavioral tests.
 - Added map2rec/CLI/API parity wiring for lifecycle controls (`survival_percentage`, `fitness_goal`, `evaluations_limit`) through `run --config` and persisted run artifacts, with sqlite integration and API validation coverage.
+- Added map2rec/CLI/API parity wiring for `specie_size_limit` with monitor-level per-species parent-pool capping semantics and dedicated unit/integration validation coverage.
 
 ## Highest-priority remaining gaps to reach strict parity
 

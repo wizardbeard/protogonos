@@ -19,6 +19,7 @@ type RunConfig struct {
 	PopulationSize       int     `json:"population_size"`
 	Generations          int     `json:"generations"`
 	SurvivalPercentage   float64 `json:"survival_percentage"`
+	SpecieSizeLimit      int     `json:"specie_size_limit"`
 	FitnessGoal          float64 `json:"fitness_goal"`
 	EvaluationsLimit     int     `json:"evaluations_limit"`
 	Seed                 int64   `json:"seed"`

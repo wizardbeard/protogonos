@@ -79,6 +79,7 @@ type MonitorConfig struct {
 	PopulationSize       int
 	EliteCount           int
 	SurvivalPercentage   float64
+	SpecieSizeLimit      int
 	Generations          int
 	FitnessGoal          float64
 	EvaluationsLimit     int
@@ -138,6 +139,9 @@ func NewPopulationMonitor(cfg MonitorConfig) (*PopulationMonitor, error) {
 	}
 	if cfg.Generations <= 0 {
 		return nil, fmt.Errorf("generations must be > 0")
+	}
+	if cfg.SpecieSizeLimit < 0 {
+		return nil, fmt.Errorf("specie size limit must be >= 0")
 	}
 	if cfg.EvaluationsLimit < 0 {
 		return nil, fmt.Errorf("evaluations limit must be >= 0")
@@ -458,6 +462,13 @@ func (m *PopulationMonitor) nextGeneration(ctx context.Context, ranked []ScoredG
 	next := make([]model.Genome, 0, m.cfg.PopulationSize)
 	lineage := make([]LineageRecord, 0, m.cfg.PopulationSize)
 	nextGeneration := generation + 1
+	parentPool := ranked
+	if m.cfg.SpecieSizeLimit > 0 {
+		parentPool = limitSpeciesParentPool(ranked, speciesByGenomeID, m.cfg.SpecieSizeLimit)
+		if len(parentPool) == 0 {
+			parentPool = ranked
+		}
+	}
 
 	for i := 0; i < m.cfg.EliteCount; i++ {
 		elite := genotype.CloneAgent(ranked[i].Genome, ranked[i].Genome.ID)
@@ -474,12 +485,12 @@ func (m *PopulationMonitor) nextGeneration(ctx context.Context, ranked []ScoredG
 	}
 
 	remaining := m.cfg.PopulationSize - len(next)
-	offspringPlan := buildSpeciesOffspringPlan(ranked, speciesByGenomeID, remaining)
+	offspringPlan := buildSpeciesOffspringPlan(parentPool, speciesByGenomeID, remaining)
 	for _, item := range offspringPlan {
 		if len(next) >= m.cfg.PopulationSize {
 			break
 		}
-		speciesRanked := filterRankedBySpecies(ranked, speciesByGenomeID, item.SpeciesKey)
+		speciesRanked := filterRankedBySpecies(parentPool, speciesByGenomeID, item.SpeciesKey)
 		if len(speciesRanked) == 0 {
 			continue
 		}
@@ -491,7 +502,7 @@ func (m *PopulationMonitor) nextGeneration(ctx context.Context, ranked []ScoredG
 				return nil, nil, err
 			}
 
-			parent, err := m.pickParentForSpecies(ranked, speciesRanked, speciesByGenomeID, generation)
+			parent, err := m.pickParentForSpecies(parentPool, speciesRanked, speciesByGenomeID, generation)
 			if err != nil {
 				return nil, nil, err
 			}
@@ -509,7 +520,7 @@ func (m *PopulationMonitor) nextGeneration(ctx context.Context, ranked []ScoredG
 			return nil, nil, err
 		}
 
-		parent, err := m.pickParentForSpecies(ranked, ranked, speciesByGenomeID, generation)
+		parent, err := m.pickParentForSpecies(parentPool, parentPool, speciesByGenomeID, generation)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -522,6 +533,26 @@ func (m *PopulationMonitor) nextGeneration(ctx context.Context, ranked []ScoredG
 	}
 
 	return next, lineage, nil
+}
+
+func limitSpeciesParentPool(ranked []ScoredGenome, speciesByGenomeID map[string]string, perSpeciesLimit int) []ScoredGenome {
+	if perSpeciesLimit <= 0 {
+		return append([]ScoredGenome(nil), ranked...)
+	}
+	countBySpecies := make(map[string]int, len(speciesByGenomeID))
+	out := make([]ScoredGenome, 0, len(ranked))
+	for _, item := range ranked {
+		key := speciesByGenomeID[item.Genome.ID]
+		if key == "" {
+			key = "species:unknown"
+		}
+		if countBySpecies[key] >= perSpeciesLimit {
+			continue
+		}
+		countBySpecies[key]++
+		out = append(out, item)
+	}
+	return out
 }
 
 func (m *PopulationMonitor) pickParentForSpecies(allRanked, speciesRanked []ScoredGenome, speciesByGenomeID map[string]string, generation int) (model.Genome, error) {

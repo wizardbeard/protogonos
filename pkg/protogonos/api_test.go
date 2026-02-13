@@ -469,4 +469,16 @@ func TestClientRunRejectsNegativeNumericConfig(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected evaluations limit validation error")
 	}
+
+	_, err = client.Run(context.Background(), RunRequest{
+		Scape:           "xor",
+		Population:      6,
+		Generations:     2,
+		SpecieSizeLimit: -1,
+		Selection:       "elite",
+		WeightPerturb:   1.0,
+	})
+	if err == nil {
+		t.Fatal("expected specie size limit validation error")
+	}
 }

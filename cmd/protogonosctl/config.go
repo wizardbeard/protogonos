@@ -33,6 +33,9 @@ func loadRunRequestFromConfig(path string) (protoapi.RunRequest, error) {
 	if v, ok := asFloat64(raw["survival_percentage"]); ok {
 		req.SurvivalPercentage = v
 	}
+	if v, ok := asInt(raw["specie_size_limit"]); ok {
+		req.SpecieSizeLimit = v
+	}
 	if v, ok := asFloat64(raw["fitness_goal"]); ok {
 		req.FitnessGoal = v
 	}
@@ -143,6 +146,9 @@ func loadRunRequestFromConfig(path string) (protoapi.RunRequest, error) {
 		if req.Population == 0 {
 			req.Population = pmp.InitSpecieSize
 		}
+		if req.SpecieSizeLimit == 0 {
+			req.SpecieSizeLimit = pmp.SpecieSizeLimit
+		}
 		if req.Generations == 0 {
 			req.Generations = pmp.GenerationLimit
 		}
@@ -217,6 +223,8 @@ func overrideFromFlags(req *protoapi.RunRequest, set map[string]bool, flagValue 
 			req.Generations = v.(int)
 		case "survival-percentage":
 			req.SurvivalPercentage = v.(float64)
+		case "specie-size-limit":
+			req.SpecieSizeLimit = v.(int)
 		case "fitness-goal":
 			req.FitnessGoal = v.(float64)
 		case "evaluations-limit":

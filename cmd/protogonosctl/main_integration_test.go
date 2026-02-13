@@ -104,6 +104,7 @@ func TestRunCommandSQLiteConfigLoadsMap2RecAndAllowsFlagOverrides(t *testing.T) 
 		"enable_tuning": true,
 		"pmp": map[string]any{
 			"init_specie_size":    8,
+			"specie_size_limit":   2,
 			"generation_limit":    5,
 			"survival_percentage": 0.6,
 			"fitness_goal":        0.85,
@@ -143,6 +144,7 @@ func TestRunCommandSQLiteConfigLoadsMap2RecAndAllowsFlagOverrides(t *testing.T) 
 		"--topo-count", "2",
 		"--fitness-postprocessor", "none",
 		"--survival-percentage", "0.4",
+		"--specie-size-limit", "4",
 		"--fitness-goal", "0.91",
 		"--evaluations-limit", "123",
 	}
@@ -179,6 +181,9 @@ func TestRunCommandSQLiteConfigLoadsMap2RecAndAllowsFlagOverrides(t *testing.T) 
 	}
 	if runCfg.SurvivalPercentage != 0.4 {
 		t.Fatalf("expected survival percentage override 0.4, got %f", runCfg.SurvivalPercentage)
+	}
+	if runCfg.SpecieSizeLimit != 4 {
+		t.Fatalf("expected specie size limit override 4, got %d", runCfg.SpecieSizeLimit)
 	}
 	if runCfg.FitnessGoal != 0.91 {
 		t.Fatalf("expected fitness goal override 0.91, got %f", runCfg.FitnessGoal)

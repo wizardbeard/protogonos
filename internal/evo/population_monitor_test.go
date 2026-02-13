@@ -342,6 +342,52 @@ func TestPopulationMonitorMutationPolicyValidation(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected survival percentage validation error")
 	}
+
+	_, err = NewPopulationMonitor(MonitorConfig{
+		Scape:           oneDimScape{},
+		Mutation:        namedNoopMutation{name: "noop"},
+		PopulationSize:  4,
+		EliteCount:      1,
+		SpecieSizeLimit: -1,
+		Generations:     1,
+		Workers:         1,
+		Seed:            1,
+		InputNeuronIDs:  []string{"i"},
+		OutputNeuronIDs: []string{"o"},
+	})
+	if err == nil {
+		t.Fatal("expected specie size limit validation error")
+	}
+}
+
+func TestLimitSpeciesParentPool(t *testing.T) {
+	ranked := []ScoredGenome{
+		{Genome: model.Genome{ID: "a1"}, Fitness: 10},
+		{Genome: model.Genome{ID: "a2"}, Fitness: 9},
+		{Genome: model.Genome{ID: "b1"}, Fitness: 8},
+		{Genome: model.Genome{ID: "a3"}, Fitness: 7},
+		{Genome: model.Genome{ID: "b2"}, Fitness: 6},
+	}
+	speciesByGenomeID := map[string]string{
+		"a1": "A",
+		"a2": "A",
+		"a3": "A",
+		"b1": "B",
+		"b2": "B",
+	}
+
+	limited := limitSpeciesParentPool(ranked, speciesByGenomeID, 1)
+	if len(limited) != 2 {
+		t.Fatalf("expected 2 genomes after per-species limit, got %d", len(limited))
+	}
+	if limited[0].Genome.ID != "a1" || limited[1].Genome.ID != "b1" {
+		t.Fatalf("expected top genome per species preserved by rank order, got %+v", limited)
+	}
+
+	unlimited := limitSpeciesParentPool(ranked, speciesByGenomeID, 0)
+	if len(unlimited) != len(ranked) {
+		t.Fatalf("expected unlimited parent pool size %d, got %d", len(ranked), len(unlimited))
+	}
 }
 
 func TestPopulationMonitorDerivesEliteCountFromSurvivalPercentage(t *testing.T) {
