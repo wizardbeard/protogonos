@@ -152,6 +152,72 @@ func TestPopulationMonitorImprovesFitness(t *testing.T) {
 	}
 }
 
+func TestPopulationMonitorStopsAtFitnessGoal(t *testing.T) {
+	initial := []model.Genome{
+		newLinearGenome("g0", 1.0),
+		newLinearGenome("g1", 0.8),
+		newLinearGenome("g2", 0.6),
+		newLinearGenome("g3", 0.4),
+	}
+
+	monitor, err := NewPopulationMonitor(MonitorConfig{
+		Scape:           oneDimScape{},
+		Mutation:        namedNoopMutation{name: "noop"},
+		PopulationSize:  len(initial),
+		EliteCount:      1,
+		Generations:     6,
+		FitnessGoal:     0.99,
+		Workers:         2,
+		Seed:            1,
+		InputNeuronIDs:  []string{"i"},
+		OutputNeuronIDs: []string{"o"},
+	})
+	if err != nil {
+		t.Fatalf("new monitor: %v", err)
+	}
+
+	result, err := monitor.Run(context.Background(), initial)
+	if err != nil {
+		t.Fatalf("run: %v", err)
+	}
+	if len(result.BestByGeneration) != 1 {
+		t.Fatalf("expected early stop after first generation, got %d generations", len(result.BestByGeneration))
+	}
+}
+
+func TestPopulationMonitorStopsAtEvaluationLimit(t *testing.T) {
+	initial := []model.Genome{
+		newLinearGenome("g0", -1.0),
+		newLinearGenome("g1", -0.8),
+		newLinearGenome("g2", -0.6),
+		newLinearGenome("g3", -0.4),
+	}
+
+	monitor, err := NewPopulationMonitor(MonitorConfig{
+		Scape:            oneDimScape{},
+		Mutation:         namedNoopMutation{name: "noop"},
+		PopulationSize:   len(initial),
+		EliteCount:       1,
+		Generations:      6,
+		EvaluationsLimit: len(initial),
+		Workers:          2,
+		Seed:             1,
+		InputNeuronIDs:   []string{"i"},
+		OutputNeuronIDs:  []string{"o"},
+	})
+	if err != nil {
+		t.Fatalf("new monitor: %v", err)
+	}
+
+	result, err := monitor.Run(context.Background(), initial)
+	if err != nil {
+		t.Fatalf("run: %v", err)
+	}
+	if len(result.BestByGeneration) != 1 {
+		t.Fatalf("expected stop after first generation due to evaluation limit, got %d generations", len(result.BestByGeneration))
+	}
+}
+
 func TestPopulationMonitorMixedMutationPolicyLineage(t *testing.T) {
 	initial := []model.Genome{
 		newLinearGenome("g0", -1.0),
@@ -243,6 +309,22 @@ func TestPopulationMonitorMutationPolicyValidation(t *testing.T) {
 	})
 	if err == nil {
 		t.Fatal("expected at least one positive policy weight")
+	}
+
+	_, err = NewPopulationMonitor(MonitorConfig{
+		Scape:            oneDimScape{},
+		Mutation:         namedNoopMutation{name: "noop"},
+		PopulationSize:   4,
+		EliteCount:       1,
+		Generations:      1,
+		EvaluationsLimit: -1,
+		Workers:          1,
+		Seed:             1,
+		InputNeuronIDs:   []string{"i"},
+		OutputNeuronIDs:  []string{"o"},
+	})
+	if err == nil {
+		t.Fatal("expected evaluations limit validation error")
 	}
 }
 

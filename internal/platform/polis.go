@@ -23,6 +23,8 @@ type EvolutionConfig struct {
 	ScapeName            string
 	PopulationSize       int
 	Generations          int
+	FitnessGoal          float64
+	EvaluationsLimit     int
 	EliteCount           int
 	Workers              int
 	Seed                 int64
@@ -153,6 +155,8 @@ func (p *Polis) RunEvolution(ctx context.Context, cfg EvolutionConfig) (Evolutio
 		PopulationSize:       cfg.PopulationSize,
 		EliteCount:           cfg.EliteCount,
 		Generations:          cfg.Generations,
+		FitnessGoal:          cfg.FitnessGoal,
+		EvaluationsLimit:     cfg.EvaluationsLimit,
 		Workers:              cfg.Workers,
 		Seed:                 cfg.Seed,
 		InputNeuronIDs:       cfg.InputNeuronIDs,
@@ -177,12 +181,13 @@ func (p *Polis) RunEvolution(ctx context.Context, cfg EvolutionConfig) (Evolutio
 	for _, scored := range result.FinalPopulation {
 		finalGenomes = append(finalGenomes, scored.Genome)
 	}
+	executedGenerations := len(result.BestByGeneration)
 	persistenceRunID := cfg.RunID
 	if persistenceRunID == "" {
 		persistenceRunID = fmt.Sprintf("evo:%s:%d", cfg.ScapeName, cfg.Seed)
 	}
 	populationID := persistenceRunID
-	if err := genotype.SavePopulationSnapshot(ctx, p.store, populationID, cfg.Generations, finalGenomes); err != nil {
+	if err := genotype.SavePopulationSnapshot(ctx, p.store, populationID, executedGenerations, finalGenomes); err != nil {
 		return EvolutionResult{}, err
 	}
 	if err := p.store.SaveFitnessHistory(ctx, persistenceRunID, result.BestByGeneration); err != nil {

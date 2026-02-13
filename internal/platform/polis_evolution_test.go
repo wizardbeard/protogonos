@@ -149,6 +149,93 @@ func TestPolisRunEvolution(t *testing.T) {
 	}
 }
 
+func TestPolisRunEvolutionRespectsFitnessGoal(t *testing.T) {
+	store := storage.NewMemoryStore()
+	p := NewPolis(Config{Store: store})
+	if err := p.Init(context.Background()); err != nil {
+		t.Fatalf("init: %v", err)
+	}
+	if err := p.RegisterScape(linearScape{}); err != nil {
+		t.Fatalf("register scape: %v", err)
+	}
+
+	initial := []model.Genome{
+		linearGenome("g0", 1.0),
+		linearGenome("g1", 0.8),
+		linearGenome("g2", 0.6),
+		linearGenome("g3", 0.4),
+	}
+
+	result, err := p.RunEvolution(context.Background(), EvolutionConfig{
+		ScapeName:       "linear",
+		PopulationSize:  len(initial),
+		Generations:     6,
+		FitnessGoal:     0.99,
+		EliteCount:      1,
+		Workers:         2,
+		Seed:            9,
+		InputNeuronIDs:  []string{"i"},
+		OutputNeuronIDs: []string{"o"},
+		Mutation:        &evo.PerturbRandomWeight{Rand: rand.New(rand.NewSource(50)), MaxDelta: 0.4},
+		Initial:         initial,
+	})
+	if err != nil {
+		t.Fatalf("run evolution: %v", err)
+	}
+	if len(result.BestByGeneration) != 1 {
+		t.Fatalf("expected early stop at fitness goal, got %d generations", len(result.BestByGeneration))
+	}
+
+	pop, ok, err := store.GetPopulation(context.Background(), "evo:linear:9")
+	if err != nil {
+		t.Fatalf("load persisted population: %v", err)
+	}
+	if !ok {
+		t.Fatal("expected persisted population snapshot")
+	}
+	if pop.Generation != 1 {
+		t.Fatalf("expected persisted generation=1 after early stop, got %d", pop.Generation)
+	}
+}
+
+func TestPolisRunEvolutionRespectsEvaluationLimit(t *testing.T) {
+	store := storage.NewMemoryStore()
+	p := NewPolis(Config{Store: store})
+	if err := p.Init(context.Background()); err != nil {
+		t.Fatalf("init: %v", err)
+	}
+	if err := p.RegisterScape(linearScape{}); err != nil {
+		t.Fatalf("register scape: %v", err)
+	}
+
+	initial := []model.Genome{
+		linearGenome("g0", -1.0),
+		linearGenome("g1", -0.8),
+		linearGenome("g2", -0.6),
+		linearGenome("g3", -0.4),
+	}
+
+	result, err := p.RunEvolution(context.Background(), EvolutionConfig{
+		ScapeName:        "linear",
+		PopulationSize:   len(initial),
+		Generations:      6,
+		EvaluationsLimit: len(initial),
+		EliteCount:       1,
+		Workers:          2,
+		Seed:             10,
+		InputNeuronIDs:   []string{"i"},
+		OutputNeuronIDs:  []string{"o"},
+		Mutation:         &evo.PerturbRandomWeight{Rand: rand.New(rand.NewSource(51)), MaxDelta: 0.4},
+		Initial:          initial,
+	})
+	if err != nil {
+		t.Fatalf("run evolution: %v", err)
+	}
+	if len(result.BestByGeneration) != 1 {
+		t.Fatalf("expected early stop at evaluation limit, got %d generations", len(result.BestByGeneration))
+	}
+}
+
 func linearGenome(id string, weight float64) model.Genome {
 	return model.Genome{
 		VersionedRecord: model.VersionedRecord{SchemaVersion: storage.CurrentSchemaVersion, CodecVersion: storage.CurrentCodecVersion},

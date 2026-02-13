@@ -79,6 +79,8 @@ type MonitorConfig struct {
 	PopulationSize       int
 	EliteCount           int
 	Generations          int
+	FitnessGoal          float64
+	EvaluationsLimit     int
 	Workers              int
 	Seed                 int64
 	InputNeuronIDs       []string
@@ -124,6 +126,9 @@ func NewPopulationMonitor(cfg MonitorConfig) (*PopulationMonitor, error) {
 	}
 	if cfg.Generations <= 0 {
 		return nil, fmt.Errorf("generations must be > 0")
+	}
+	if cfg.EvaluationsLimit < 0 {
+		return nil, fmt.Errorf("evaluations limit must be >= 0")
 	}
 	if cfg.Workers <= 0 {
 		cfg.Workers = 1
@@ -182,6 +187,7 @@ func (m *PopulationMonitor) Run(ctx context.Context, initial []model.Genome) (Ru
 		})
 	}
 	var scored []ScoredGenome
+	evaluations := 0
 
 	for gen := 0; gen < m.cfg.Generations; gen++ {
 		if err := ctx.Err(); err != nil {
@@ -198,12 +204,17 @@ func (m *PopulationMonitor) Run(ctx context.Context, initial []model.Genome) (Ru
 		sort.Slice(scored, func(i, j int) bool {
 			return scored[i].Fitness > scored[j].Fitness
 		})
+		evaluations += len(scored)
 		bestHistory = append(bestHistory, scored[0].Fitness)
 		speciesByGenomeID, speciationStats := m.assignSpecies(scored)
 		diagnostics = append(diagnostics, summarizeGeneration(scored, gen+1, speciationStats))
 		history, currentSet := summarizeSpeciesGeneration(scored, speciesByGenomeID, gen+1, prevSpeciesSet)
 		speciesHistory = append(speciesHistory, history)
 		prevSpeciesSet = currentSet
+		if (m.cfg.FitnessGoal > 0 && scored[0].Fitness >= m.cfg.FitnessGoal) ||
+			(m.cfg.EvaluationsLimit > 0 && evaluations >= m.cfg.EvaluationsLimit) {
+			break
+		}
 
 		var generationLineage []LineageRecord
 		population, generationLineage, err = m.nextGeneration(ctx, scored, speciesByGenomeID, gen)
