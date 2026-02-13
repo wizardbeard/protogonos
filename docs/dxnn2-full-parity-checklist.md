@@ -85,6 +85,7 @@ Status keys:
 - Hardened `polis` lifecycle semantics with idempotent init, explicit stop/reset of in-memory runtime registration, and direct registered-scape lookup coverage.
 - Added population-monitor lifecycle stop controls (`fitness_goal`, `evaluations_limit`) with early-termination coverage and fixed persisted generation to reflect executed generations under early stop.
 - Added `survival_percentage` parity semantics in `PopulationMonitor` to derive elite retention count when `elite_count` is unset, with validation and lineage-backed behavioral tests.
+- Added map2rec/CLI/API parity wiring for lifecycle controls (`survival_percentage`, `fitness_goal`, `evaluations_limit`) through `run --config` and persisted run artifacts, with sqlite integration and API validation coverage.
 
 ## Highest-priority remaining gaps to reach strict parity
 

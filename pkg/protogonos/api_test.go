@@ -435,4 +435,38 @@ func TestClientRunRejectsNegativeNumericConfig(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected tune step size validation error")
 	}
+
+	_, err = client.Run(context.Background(), RunRequest{
+		Scape:              "xor",
+		Population:         6,
+		Generations:        2,
+		SurvivalPercentage: 1.1,
+	})
+	if err == nil {
+		t.Fatal("expected survival percentage validation error")
+	}
+
+	_, err = client.Run(context.Background(), RunRequest{
+		Scape:         "xor",
+		Population:    6,
+		Generations:   2,
+		FitnessGoal:   -0.01,
+		Selection:     "elite",
+		WeightPerturb: 1.0,
+	})
+	if err == nil {
+		t.Fatal("expected fitness goal validation error")
+	}
+
+	_, err = client.Run(context.Background(), RunRequest{
+		Scape:            "xor",
+		Population:       6,
+		Generations:      2,
+		EvaluationsLimit: -10,
+		Selection:        "elite",
+		WeightPerturb:    1.0,
+	})
+	if err == nil {
+		t.Fatal("expected evaluations limit validation error")
+	}
 }

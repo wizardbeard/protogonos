@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"math"
 	"os"
 
 	"protogonos/internal/map2rec"
@@ -28,6 +29,15 @@ func loadRunRequestFromConfig(path string) (protoapi.RunRequest, error) {
 	}
 	if v, ok := asInt(raw["generations"]); ok {
 		req.Generations = v
+	}
+	if v, ok := asFloat64(raw["survival_percentage"]); ok {
+		req.SurvivalPercentage = v
+	}
+	if v, ok := asFloat64(raw["fitness_goal"]); ok {
+		req.FitnessGoal = v
+	}
+	if v, ok := asInt(raw["evaluations_limit"]); ok {
+		req.EvaluationsLimit = v
 	}
 	if v, ok := asInt64(raw["seed"]); ok {
 		req.Seed = v
@@ -127,11 +137,20 @@ func loadRunRequestFromConfig(path string) (protoapi.RunRequest, error) {
 
 	if pmpMap, ok := raw["pmp"].(map[string]any); ok {
 		pmp := map2rec.ConvertPMP(pmpMap)
+		if req.SurvivalPercentage == 0 {
+			req.SurvivalPercentage = pmp.SurvivalPercentage
+		}
 		if req.Population == 0 {
 			req.Population = pmp.InitSpecieSize
 		}
 		if req.Generations == 0 {
 			req.Generations = pmp.GenerationLimit
+		}
+		if req.EvaluationsLimit == 0 {
+			req.EvaluationsLimit = pmp.EvaluationsLimit
+		}
+		if req.FitnessGoal == 0 && !math.IsInf(pmp.FitnessGoal, 1) {
+			req.FitnessGoal = pmp.FitnessGoal
 		}
 	}
 
@@ -196,6 +215,12 @@ func overrideFromFlags(req *protoapi.RunRequest, set map[string]bool, flagValue 
 			req.Population = v.(int)
 		case "gens":
 			req.Generations = v.(int)
+		case "survival-percentage":
+			req.SurvivalPercentage = v.(float64)
+		case "fitness-goal":
+			req.FitnessGoal = v.(float64)
+		case "evaluations-limit":
+			req.EvaluationsLimit = v.(int)
 		case "seed":
 			req.Seed = v.(int64)
 		case "workers":

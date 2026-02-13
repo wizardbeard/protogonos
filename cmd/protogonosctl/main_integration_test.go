@@ -103,8 +103,11 @@ func TestRunCommandSQLiteConfigLoadsMap2RecAndAllowsFlagOverrides(t *testing.T) 
 		"seed":          71,
 		"enable_tuning": true,
 		"pmp": map[string]any{
-			"init_specie_size": 8,
-			"generation_limit": 5,
+			"init_specie_size":    8,
+			"generation_limit":    5,
+			"survival_percentage": 0.6,
+			"fitness_goal":        0.85,
+			"evaluations_limit":   90,
 		},
 		"constraint": map[string]any{
 			"population_selection_f":             "hof_competition",
@@ -139,6 +142,9 @@ func TestRunCommandSQLiteConfigLoadsMap2RecAndAllowsFlagOverrides(t *testing.T) 
 		"--topo-policy", "const",
 		"--topo-count", "2",
 		"--fitness-postprocessor", "none",
+		"--survival-percentage", "0.4",
+		"--fitness-goal", "0.91",
+		"--evaluations-limit", "123",
 	}
 	if err := run(context.Background(), args); err != nil {
 		t.Fatalf("run command with config: %v", err)
@@ -170,6 +176,15 @@ func TestRunCommandSQLiteConfigLoadsMap2RecAndAllowsFlagOverrides(t *testing.T) 
 	}
 	if runCfg.FitnessPostprocessor != "none" {
 		t.Fatalf("expected fitness postprocessor override none, got %s", runCfg.FitnessPostprocessor)
+	}
+	if runCfg.SurvivalPercentage != 0.4 {
+		t.Fatalf("expected survival percentage override 0.4, got %f", runCfg.SurvivalPercentage)
+	}
+	if runCfg.FitnessGoal != 0.91 {
+		t.Fatalf("expected fitness goal override 0.91, got %f", runCfg.FitnessGoal)
+	}
+	if runCfg.EvaluationsLimit != 123 {
+		t.Fatalf("expected evaluations limit override 123, got %d", runCfg.EvaluationsLimit)
 	}
 }
 

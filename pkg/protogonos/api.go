@@ -45,6 +45,9 @@ type RunRequest struct {
 	Scape                string
 	Population           int
 	Generations          int
+	SurvivalPercentage   float64
+	FitnessGoal          float64
+	EvaluationsLimit     int
 	Seed                 int64
 	Workers              int
 	Selection            string
@@ -274,6 +277,9 @@ func (c *Client) Run(ctx context.Context, req RunRequest) (RunSummary, error) {
 	if eliteCount < 1 {
 		eliteCount = 1
 	}
+	if req.SurvivalPercentage > 0 {
+		eliteCount = 0
+	}
 	now := time.Now().UTC()
 	runID := fmt.Sprintf("%s-%d-%d", req.Scape, req.Seed, now.Unix())
 
@@ -296,6 +302,9 @@ func (c *Client) Run(ctx context.Context, req RunRequest) (RunSummary, error) {
 			ScapeName:            req.Scape,
 			PopulationSize:       req.Population,
 			Generations:          req.Generations,
+			SurvivalPercentage:   req.SurvivalPercentage,
+			FitnessGoal:          req.FitnessGoal,
+			EvaluationsLimit:     req.EvaluationsLimit,
 			EliteCount:           eliteCount,
 			Workers:              req.Workers,
 			Seed:                 req.Seed,
@@ -396,6 +405,9 @@ func (c *Client) Run(ctx context.Context, req RunRequest) (RunSummary, error) {
 			Scape:                req.Scape,
 			PopulationSize:       req.Population,
 			Generations:          req.Generations,
+			SurvivalPercentage:   req.SurvivalPercentage,
+			FitnessGoal:          req.FitnessGoal,
+			EvaluationsLimit:     req.EvaluationsLimit,
 			Seed:                 req.Seed,
 			Workers:              req.Workers,
 			EliteCount:           eliteCount,
@@ -947,6 +959,15 @@ func materializeRunConfigFromRequest(req RunRequest) (materializedRunConfig, err
 	}
 	if req.Generations == 0 {
 		req.Generations = 100
+	}
+	if req.SurvivalPercentage < 0 || req.SurvivalPercentage > 1 {
+		return materializedRunConfig{}, errors.New("survival percentage must be in [0, 1]")
+	}
+	if req.FitnessGoal < 0 {
+		return materializedRunConfig{}, errors.New("fitness goal must be >= 0")
+	}
+	if req.EvaluationsLimit < 0 {
+		return materializedRunConfig{}, errors.New("evaluations limit must be >= 0")
 	}
 	if req.Workers < 0 {
 		return materializedRunConfig{}, errors.New("workers must be >= 0")

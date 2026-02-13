@@ -18,6 +18,9 @@ type RunConfig struct {
 	Scape                string  `json:"scape"`
 	PopulationSize       int     `json:"population_size"`
 	Generations          int     `json:"generations"`
+	SurvivalPercentage   float64 `json:"survival_percentage"`
+	FitnessGoal          float64 `json:"fitness_goal"`
+	EvaluationsLimit     int     `json:"evaluations_limit"`
 	Seed                 int64   `json:"seed"`
 	Workers              int     `json:"workers"`
 	EliteCount           int     `json:"elite_count"`

@@ -14,8 +14,11 @@ func TestLoadRunRequestFromConfigUsesConstraintAndPMP(t *testing.T) {
 		"seed":    77,
 		"workers": 3,
 		"pmp": map[string]any{
-			"init_specie_size": 12,
-			"generation_limit": 9,
+			"survival_percentage": 0.6,
+			"init_specie_size":    12,
+			"generation_limit":    9,
+			"evaluations_limit":   111,
+			"fitness_goal":        0.88,
 		},
 		"constraint": map[string]any{
 			"population_selection_f":             "hof_competition",
@@ -54,6 +57,9 @@ func TestLoadRunRequestFromConfigUsesConstraintAndPMP(t *testing.T) {
 	}
 	if req.Population != 12 || req.Generations != 9 {
 		t.Fatalf("expected pmp derived population/generations, got pop=%d gens=%d", req.Population, req.Generations)
+	}
+	if req.SurvivalPercentage != 0.6 || req.EvaluationsLimit != 111 || req.FitnessGoal != 0.88 {
+		t.Fatalf("expected pmp-derived monitor controls, got survival=%f eval_limit=%d fitness_goal=%f", req.SurvivalPercentage, req.EvaluationsLimit, req.FitnessGoal)
 	}
 	if req.Selection != "species_shared_tournament" {
 		t.Fatalf("unexpected selection mapping: %s", req.Selection)
@@ -117,5 +123,34 @@ func TestLoadRunRequestFromConfigPreservesSelectionAliases(t *testing.T) {
 	}
 	if req.Selection != "top3" {
 		t.Fatalf("expected top3 alias preserved, got %s", req.Selection)
+	}
+}
+
+func TestLoadRunRequestFromConfigTreatsPMPInfiniteFitnessGoalAsDisabled(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "run_config_inf_goal.json")
+	payload := map[string]any{
+		"pmp": map[string]any{
+			"init_specie_size":  10,
+			"generation_limit":  4,
+			"evaluations_limit": 200,
+		},
+	}
+	data, err := json.Marshal(payload)
+	if err != nil {
+		t.Fatalf("marshal payload: %v", err)
+	}
+	if err := os.WriteFile(path, data, 0o644); err != nil {
+		t.Fatalf("write config: %v", err)
+	}
+
+	req, err := loadRunRequestFromConfig(path)
+	if err != nil {
+		t.Fatalf("load run request: %v", err)
+	}
+	if req.FitnessGoal != 0 {
+		t.Fatalf("expected disabled fitness goal for pmp inf default, got %f", req.FitnessGoal)
+	}
+	if req.EvaluationsLimit != 200 {
+		t.Fatalf("expected evaluations_limit to map from pmp, got %d", req.EvaluationsLimit)
 	}
 }

@@ -130,6 +130,9 @@ func runRun(ctx context.Context, args []string) error {
 	scapeName := fs.String("scape", "xor", "scape name")
 	population := fs.Int("pop", 50, "population size")
 	generations := fs.Int("gens", 100, "generation count")
+	survivalPercentage := fs.Float64("survival-percentage", 0.0, "survival percentage used to derive elite retention when elite count is unset")
+	fitnessGoal := fs.Float64("fitness-goal", 0.0, "early-stop best fitness goal (0 disables)")
+	evaluationsLimit := fs.Int("evaluations-limit", 0, "early-stop total evaluation limit (0 disables)")
 	seed := fs.Int64("seed", 1, "rng seed")
 	workers := fs.Int("workers", 4, "worker count")
 	storeKind := fs.String("store", storage.DefaultStoreKind(), "store backend: memory|sqlite")
@@ -178,6 +181,9 @@ func runRun(ctx context.Context, args []string) error {
 			Scape:                *scapeName,
 			Population:           *population,
 			Generations:          *generations,
+			SurvivalPercentage:   *survivalPercentage,
+			FitnessGoal:          *fitnessGoal,
+			EvaluationsLimit:     *evaluationsLimit,
 			Seed:                 *seed,
 			Workers:              *workers,
 			Selection:            *selectionName,
@@ -212,6 +218,9 @@ func runRun(ctx context.Context, args []string) error {
 			"scape":                 *scapeName,
 			"pop":                   *population,
 			"gens":                  *generations,
+			"survival-percentage":   *survivalPercentage,
+			"fitness-goal":          *fitnessGoal,
+			"evaluations-limit":     *evaluationsLimit,
 			"seed":                  *seed,
 			"workers":               *workers,
 			"tuning":                *enableTuning,
@@ -754,6 +763,9 @@ func runBenchmark(ctx context.Context, args []string) error {
 	scapeName := fs.String("scape", "xor", "scape name")
 	population := fs.Int("pop", 50, "population size")
 	generations := fs.Int("gens", 100, "generation count")
+	survivalPercentage := fs.Float64("survival-percentage", 0.0, "survival percentage used to derive elite retention when elite count is unset")
+	fitnessGoal := fs.Float64("fitness-goal", 0.0, "early-stop best fitness goal (0 disables)")
+	evaluationsLimit := fs.Int("evaluations-limit", 0, "early-stop total evaluation limit (0 disables)")
 	seed := fs.Int64("seed", 1, "rng seed")
 	workers := fs.Int("workers", 4, "worker count")
 	storeKind := fs.String("store", storage.DefaultStoreKind(), "store backend: memory|sqlite")
@@ -802,6 +814,9 @@ func runBenchmark(ctx context.Context, args []string) error {
 			Scape:                *scapeName,
 			Population:           *population,
 			Generations:          *generations,
+			SurvivalPercentage:   *survivalPercentage,
+			FitnessGoal:          *fitnessGoal,
+			EvaluationsLimit:     *evaluationsLimit,
 			Seed:                 *seed,
 			Workers:              *workers,
 			Selection:            *selectionName,
@@ -835,6 +850,9 @@ func runBenchmark(ctx context.Context, args []string) error {
 			"scape":                 *scapeName,
 			"pop":                   *population,
 			"gens":                  *generations,
+			"survival-percentage":   *survivalPercentage,
+			"fitness-goal":          *fitnessGoal,
+			"evaluations-limit":     *evaluationsLimit,
 			"seed":                  *seed,
 			"workers":               *workers,
 			"tuning":                *enableTuning,
