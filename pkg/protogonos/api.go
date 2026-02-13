@@ -70,6 +70,7 @@ type RunRequest struct {
 	WeightRemoveSynapse  float64
 	WeightAddNeuron      float64
 	WeightRemoveNeuron   float64
+	WeightPlasticityRule float64
 	WeightPlasticity     float64
 	WeightSubstrate      float64
 }
@@ -420,6 +421,7 @@ func (c *Client) Run(ctx context.Context, req RunRequest) (RunSummary, error) {
 			WeightRemoveSynapse:  req.WeightRemoveSynapse,
 			WeightAddNeuron:      req.WeightAddNeuron,
 			WeightRemoveNeuron:   req.WeightRemoveNeuron,
+			WeightPlasticityRule: req.WeightPlasticityRule,
 			WeightPlasticity:     req.WeightPlasticity,
 			WeightSubstrate:      req.WeightSubstrate,
 		},
@@ -1008,7 +1010,7 @@ func materializeRunConfigFromRequest(req RunRequest) (materializedRunConfig, err
 	if req.TuneStepSize == 0 {
 		req.TuneStepSize = 0.35
 	}
-	if req.WeightPerturb == 0 && req.WeightBias == 0 && req.WeightRemoveBias == 0 && req.WeightActivation == 0 && req.WeightAggregator == 0 && req.WeightAddSynapse == 0 && req.WeightRemoveSynapse == 0 && req.WeightAddNeuron == 0 && req.WeightRemoveNeuron == 0 && req.WeightPlasticity == 0 && req.WeightSubstrate == 0 {
+	if req.WeightPerturb == 0 && req.WeightBias == 0 && req.WeightRemoveBias == 0 && req.WeightActivation == 0 && req.WeightAggregator == 0 && req.WeightAddSynapse == 0 && req.WeightRemoveSynapse == 0 && req.WeightAddNeuron == 0 && req.WeightRemoveNeuron == 0 && req.WeightPlasticityRule == 0 && req.WeightPlasticity == 0 && req.WeightSubstrate == 0 {
 		req.WeightPerturb = 0.70
 		req.WeightBias = 0.00
 		req.WeightRemoveBias = 0.00
@@ -1018,13 +1020,14 @@ func materializeRunConfigFromRequest(req RunRequest) (materializedRunConfig, err
 		req.WeightRemoveSynapse = 0.08
 		req.WeightAddNeuron = 0.07
 		req.WeightRemoveNeuron = 0.05
+		req.WeightPlasticityRule = 0.00
 		req.WeightPlasticity = 0.03
 		req.WeightSubstrate = 0.02
 	}
-	if req.WeightPerturb < 0 || req.WeightBias < 0 || req.WeightRemoveBias < 0 || req.WeightActivation < 0 || req.WeightAggregator < 0 || req.WeightAddSynapse < 0 || req.WeightRemoveSynapse < 0 || req.WeightAddNeuron < 0 || req.WeightRemoveNeuron < 0 || req.WeightPlasticity < 0 || req.WeightSubstrate < 0 {
+	if req.WeightPerturb < 0 || req.WeightBias < 0 || req.WeightRemoveBias < 0 || req.WeightActivation < 0 || req.WeightAggregator < 0 || req.WeightAddSynapse < 0 || req.WeightRemoveSynapse < 0 || req.WeightAddNeuron < 0 || req.WeightRemoveNeuron < 0 || req.WeightPlasticityRule < 0 || req.WeightPlasticity < 0 || req.WeightSubstrate < 0 {
 		return materializedRunConfig{}, errors.New("mutation weights must be >= 0")
 	}
-	if req.WeightPerturb+req.WeightBias+req.WeightRemoveBias+req.WeightActivation+req.WeightAggregator+req.WeightAddSynapse+req.WeightRemoveSynapse+req.WeightAddNeuron+req.WeightRemoveNeuron+req.WeightPlasticity+req.WeightSubstrate <= 0 {
+	if req.WeightPerturb+req.WeightBias+req.WeightRemoveBias+req.WeightActivation+req.WeightAggregator+req.WeightAddSynapse+req.WeightRemoveSynapse+req.WeightAddNeuron+req.WeightRemoveNeuron+req.WeightPlasticityRule+req.WeightPlasticity+req.WeightSubstrate <= 0 {
 		return materializedRunConfig{}, errors.New("at least one mutation weight must be > 0")
 	}
 
@@ -1077,6 +1080,7 @@ func defaultMutationPolicy(seed int64, inputNeuronIDs, outputNeuronIDs []string,
 		{Operator: &evo.RemoveRandomSynapse{Rand: rand.New(rand.NewSource(seed + 1002))}, Weight: req.WeightRemoveSynapse},
 		{Operator: &evo.AddRandomNeuron{Rand: rand.New(rand.NewSource(seed + 1003))}, Weight: req.WeightAddNeuron},
 		{Operator: &evo.RemoveRandomNeuron{Rand: rand.New(rand.NewSource(seed + 1004)), Protected: protected}, Weight: req.WeightRemoveNeuron},
+		{Operator: &evo.ChangePlasticityRule{Rand: rand.New(rand.NewSource(seed + 1011))}, Weight: req.WeightPlasticityRule},
 		{Operator: &evo.PerturbPlasticityRate{Rand: rand.New(rand.NewSource(seed + 1005)), MaxDelta: 0.15}, Weight: req.WeightPlasticity},
 		{Operator: &evo.PerturbSubstrateParameter{Rand: rand.New(rand.NewSource(seed + 1006)), MaxDelta: 0.15}, Weight: req.WeightSubstrate},
 	}

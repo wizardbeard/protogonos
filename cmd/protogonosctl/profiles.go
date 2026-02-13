@@ -13,19 +13,20 @@ import (
 const parityProfileFixturePath = "testdata/fixtures/parity/ref_benchmarker_profiles.json"
 
 type parityPreset struct {
-	Selection         string
-	TuneSelection     string
-	WeightPerturb     float64
-	WeightBias        float64
-	WeightRemoveBias  float64
-	WeightActivation  float64
-	WeightAggregator  float64
-	WeightAddSyn      float64
-	WeightRemoveSyn   float64
-	WeightAddNeuro    float64
-	WeightRemoveNeuro float64
-	WeightPlasticity  float64
-	WeightSubstrate   float64
+	Selection            string
+	TuneSelection        string
+	WeightPerturb        float64
+	WeightBias           float64
+	WeightRemoveBias     float64
+	WeightActivation     float64
+	WeightAggregator     float64
+	WeightAddSyn         float64
+	WeightRemoveSyn      float64
+	WeightAddNeuro       float64
+	WeightRemoveNeuro    float64
+	WeightPlasticityRule float64
+	WeightPlasticity     float64
+	WeightSubstrate      float64
 }
 
 type parityProfileFixture struct {
@@ -56,23 +57,24 @@ type parityProfileInfo struct {
 }
 
 type parityProfileResolved struct {
-	ID                  string
-	PopulationSelection string
-	TuningSelection     string
-	ExpectedSelection   string
-	ExpectedTuning      string
-	MutationOperatorLen int
-	WeightPerturb       float64
-	WeightBias          float64
-	WeightRemoveBias    float64
-	WeightActivation    float64
-	WeightAggregator    float64
-	WeightAddSyn        float64
-	WeightRemoveSyn     float64
-	WeightAddNeuro      float64
-	WeightRemoveNeuro   float64
-	WeightPlasticity    float64
-	WeightSubstrate     float64
+	ID                   string
+	PopulationSelection  string
+	TuningSelection      string
+	ExpectedSelection    string
+	ExpectedTuning       string
+	MutationOperatorLen  int
+	WeightPerturb        float64
+	WeightBias           float64
+	WeightRemoveBias     float64
+	WeightActivation     float64
+	WeightAggregator     float64
+	WeightAddSyn         float64
+	WeightRemoveSyn      float64
+	WeightAddNeuro       float64
+	WeightRemoveNeuro    float64
+	WeightPlasticityRule float64
+	WeightPlasticity     float64
+	WeightSubstrate      float64
 }
 
 func loadParityFixture() (parityProfileFixture, error) {
@@ -97,19 +99,20 @@ func loadParityPreset(profileID string) (parityPreset, error) {
 		return parityPreset{}, err
 	}
 	return parityPreset{
-		Selection:         resolved.PopulationSelection,
-		TuneSelection:     resolved.TuningSelection,
-		WeightPerturb:     resolved.WeightPerturb,
-		WeightBias:        resolved.WeightBias,
-		WeightRemoveBias:  resolved.WeightRemoveBias,
-		WeightActivation:  resolved.WeightActivation,
-		WeightAggregator:  resolved.WeightAggregator,
-		WeightAddSyn:      resolved.WeightAddSyn,
-		WeightRemoveSyn:   resolved.WeightRemoveSyn,
-		WeightAddNeuro:    resolved.WeightAddNeuro,
-		WeightRemoveNeuro: resolved.WeightRemoveNeuro,
-		WeightPlasticity:  resolved.WeightPlasticity,
-		WeightSubstrate:   resolved.WeightSubstrate,
+		Selection:            resolved.PopulationSelection,
+		TuneSelection:        resolved.TuningSelection,
+		WeightPerturb:        resolved.WeightPerturb,
+		WeightBias:           resolved.WeightBias,
+		WeightRemoveBias:     resolved.WeightRemoveBias,
+		WeightActivation:     resolved.WeightActivation,
+		WeightAggregator:     resolved.WeightAggregator,
+		WeightAddSyn:         resolved.WeightAddSyn,
+		WeightRemoveSyn:      resolved.WeightRemoveSyn,
+		WeightAddNeuro:       resolved.WeightAddNeuro,
+		WeightRemoveNeuro:    resolved.WeightRemoveNeuro,
+		WeightPlasticityRule: resolved.WeightPlasticityRule,
+		WeightPlasticity:     resolved.WeightPlasticity,
+		WeightSubstrate:      resolved.WeightSubstrate,
 	}, nil
 }
 
@@ -156,11 +159,13 @@ func resolveParityProfile(profileID string) (parityProfileResolved, error) {
 				resolved.WeightRemoveNeuro += op.Weight
 			case "mutate_plasticity_parameters":
 				resolved.WeightPlasticity += op.Weight
+			case "mutate_pf":
+				resolved.WeightPlasticityRule += op.Weight
 			case "add_sensor", "add_sensorlink", "add_actuator", "add_cpp", "add_cep":
 				resolved.WeightSubstrate += op.Weight
 			}
 		}
-		if resolved.WeightPerturb+resolved.WeightBias+resolved.WeightRemoveBias+resolved.WeightActivation+resolved.WeightAggregator+resolved.WeightAddSyn+resolved.WeightRemoveSyn+resolved.WeightAddNeuro+resolved.WeightRemoveNeuro+resolved.WeightPlasticity+resolved.WeightSubstrate <= 0 {
+		if resolved.WeightPerturb+resolved.WeightBias+resolved.WeightRemoveBias+resolved.WeightActivation+resolved.WeightAggregator+resolved.WeightAddSyn+resolved.WeightRemoveSyn+resolved.WeightAddNeuro+resolved.WeightRemoveNeuro+resolved.WeightPlasticityRule+resolved.WeightPlasticity+resolved.WeightSubstrate <= 0 {
 			return parityProfileResolved{}, fmt.Errorf("profile %s has no mapped mutation weights", profileID)
 		}
 		return resolved, nil

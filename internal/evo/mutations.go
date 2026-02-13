@@ -8,6 +8,7 @@ import (
 
 	"protogonos/internal/genotype"
 	"protogonos/internal/model"
+	"protogonos/internal/nn"
 )
 
 var (
@@ -413,6 +414,49 @@ func (o *PerturbPlasticityRate) Apply(_ context.Context, genome model.Genome) (m
 	if mutated.Plasticity.Rate < 0 {
 		mutated.Plasticity.Rate = 0
 	}
+	return mutated, nil
+}
+
+// ChangePlasticityRule mutates the configured plasticity rule.
+type ChangePlasticityRule struct {
+	Rand  *rand.Rand
+	Rules []string
+}
+
+func (o *ChangePlasticityRule) Name() string {
+	return "change_plasticity_rule"
+}
+
+func (o *ChangePlasticityRule) Applicable(genome model.Genome, _ string) bool {
+	return genome.Plasticity != nil
+}
+
+func (o *ChangePlasticityRule) Apply(_ context.Context, genome model.Genome) (model.Genome, error) {
+	if o == nil || o.Rand == nil {
+		return model.Genome{}, errors.New("random source is required")
+	}
+	if genome.Plasticity == nil {
+		return cloneGenome(genome), nil
+	}
+	rules := o.Rules
+	if len(rules) == 0 {
+		rules = []string{nn.PlasticityNone, nn.PlasticityHebbian, nn.PlasticityOja}
+	}
+
+	current := genome.Plasticity.Rule
+	choices := make([]string, 0, len(rules))
+	for _, rule := range rules {
+		if rule == "" || rule == current {
+			continue
+		}
+		choices = append(choices, rule)
+	}
+	if len(choices) == 0 {
+		return cloneGenome(genome), nil
+	}
+
+	mutated := cloneGenome(genome)
+	mutated.Plasticity.Rule = choices[o.Rand.Intn(len(choices))]
 	return mutated, nil
 }
 

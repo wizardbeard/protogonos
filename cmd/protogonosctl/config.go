@@ -117,6 +117,8 @@ func loadRunRequestFromConfig(path string) (protoapi.RunRequest, error) {
 				req.WeightRemoveNeuron += op.Weight
 			case "mutate_plasticity_parameters":
 				req.WeightPlasticity += op.Weight
+			case "mutate_pf":
+				req.WeightPlasticityRule += op.Weight
 			case "add_sensor", "add_sensorlink", "add_actuator", "add_cpp", "add_cep":
 				req.WeightSubstrate += op.Weight
 			}
@@ -246,6 +248,8 @@ func overrideFromFlags(req *protoapi.RunRequest, set map[string]bool, flagValue 
 			req.WeightRemoveNeuron = v.(float64)
 		case "w-plasticity":
 			req.WeightPlasticity = v.(float64)
+		case "w-plasticity-rule":
+			req.WeightPlasticityRule = v.(float64)
 		case "w-substrate":
 			req.WeightSubstrate = v.(float64)
 		}
@@ -280,6 +284,7 @@ func hasAnyWeightOverrideFlag(set map[string]bool) bool {
 		set["w-remove-synapse"] ||
 		set["w-add-neuron"] ||
 		set["w-remove-neuron"] ||
+		set["w-plasticity-rule"] ||
 		set["w-plasticity"] ||
 		set["w-substrate"]
 }

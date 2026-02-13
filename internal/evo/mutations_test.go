@@ -361,6 +361,29 @@ func TestPerturbSubstrateParameterMutation(t *testing.T) {
 	}
 }
 
+func TestChangePlasticityRuleMutation(t *testing.T) {
+	genome := randomGenome(rand.New(rand.NewSource(5)))
+	genome.Plasticity = &model.PlasticityConfig{
+		Rule:            "hebbian",
+		Rate:            0.2,
+		SaturationLimit: 1.0,
+	}
+	op := &ChangePlasticityRule{
+		Rand:  rand.New(rand.NewSource(6)),
+		Rules: []string{"none", "hebbian", "oja"},
+	}
+	mutated, err := op.Apply(context.Background(), genome)
+	if err != nil {
+		t.Fatalf("apply failed: %v", err)
+	}
+	if mutated.Plasticity == nil {
+		t.Fatal("expected plasticity config on mutated genome")
+	}
+	if mutated.Plasticity.Rule == genome.Plasticity.Rule {
+		t.Fatal("expected plasticity rule to change")
+	}
+}
+
 func TestContextualOperatorApplicability(t *testing.T) {
 	genome := randomGenome(rand.New(rand.NewSource(7)))
 	if (&PerturbRandomBias{}).Applicable(model.Genome{}, "xor") {
@@ -368,6 +391,9 @@ func TestContextualOperatorApplicability(t *testing.T) {
 	}
 	if (&PerturbPlasticityRate{}).Applicable(genome, "xor") {
 		t.Fatal("expected plasticity operator to be inapplicable without plasticity config")
+	}
+	if (&ChangePlasticityRule{}).Applicable(genome, "xor") {
+		t.Fatal("expected plasticity-rule operator to be inapplicable without plasticity config")
 	}
 	if (&PerturbSubstrateParameter{}).Applicable(genome, "xor") {
 		t.Fatal("expected substrate operator to be inapplicable without substrate config")
@@ -381,6 +407,9 @@ func TestContextualOperatorApplicability(t *testing.T) {
 	}
 	if !(&PerturbPlasticityRate{}).Applicable(genome, "xor") {
 		t.Fatal("expected plasticity operator to be applicable with plasticity config")
+	}
+	if !(&ChangePlasticityRule{}).Applicable(genome, "xor") {
+		t.Fatal("expected plasticity-rule operator to be applicable with plasticity config")
 	}
 	if !(&PerturbSubstrateParameter{}).Applicable(genome, "xor") {
 		t.Fatal("expected substrate operator to be applicable with substrate config")

@@ -17,7 +17,7 @@ Status keys:
 | `genotype.erl` | `partial` | Seed/clone/lifecycle/store flows implemented; full reference operation surface still broader. |
 | `records.hrl` | `partial` | Core record equivalents implemented with versioned codecs; full field-level parity still pending. |
 | `map2rec.erl` | `partial` | Baseline conversion parity implemented for `constraint`/`pmp`/`sensor`/`actuator`/`neuron`/`agent`/`cortex`/`specie`/`population` plus `trace`/`stat`/`topology_summary`/`signature`/`champion`; broader record coverage still pending. |
-| `genome_mutator.erl` | `partial` | Core topology/weight operators plus plasticity/substrate parameter mutations implemented, with dedicated `add_bias`/`remove_bias` parity via random bias perturb/remove operators and dedicated `mutate_af`/`mutate_aggrf` parity via random activation/aggregator mutations; full operator breadth pending. |
+| `genome_mutator.erl` | `partial` | Core topology/weight operators plus plasticity/substrate parameter mutations implemented, with dedicated `add_bias`/`remove_bias` parity via random bias perturb/remove operators, dedicated `mutate_af`/`mutate_aggrf` parity via random activation/aggregator mutations, and dedicated `mutate_pf` parity via plasticity-rule mutation; full operator breadth pending. |
 | `selection_algorithm.erl` | `partial` | Elite/tournament/species/shared species + reference aliases `hof_competition`/`hof_rank`/`hof_efficiency`/`hof_random`/`competition`/`top3` implemented across CLI/API and map2rec `constraint.population_selection_f` config materialization; additional reference strategies pending. |
 | `fitness_postprocessor.erl` | `partial` | None/size/novelty postprocessors implemented with `nsize_proportional` alias parity, reference `size_proportional` efficiency exponent parity (`EFF=0.05`), and map2rec `constraint.population_fitness_postprocessor_f` config materialization; full policy breadth pending. |
 | `specie_identifier.erl` | `partial` | Topology/speciation support implemented with adaptive threshold + representatives; full reference behavior tuning pending. |
@@ -81,6 +81,7 @@ Status keys:
 - Added dedicated bias mutation operator (`perturb_random_bias`) and mapped reference `add_bias` config/profile operators to a distinct bias-mutation weight path.
 - Added dedicated activation/aggregator mutation operators (`change_random_activation`, `change_random_aggregator`) and mapped reference `mutate_af`/`mutate_aggrf` config/profile operators to distinct mutation-weight paths.
 - Added dedicated bias-removal mutation operator (`remove_random_bias`) and mapped reference `remove_bias` config/profile operators to a distinct remove-bias mutation-weight path.
+- Added dedicated plasticity-function mutation operator (`change_plasticity_rule`) and mapped reference `mutate_pf` config/profile operators to a distinct plasticity-rule mutation-weight path.
 
 ## Highest-priority remaining gaps to reach strict parity
 

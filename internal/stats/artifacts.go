@@ -43,6 +43,7 @@ type RunConfig struct {
 	WeightRemoveSynapse  float64 `json:"weight_remove_synapse"`
 	WeightAddNeuron      float64 `json:"weight_add_neuron"`
 	WeightRemoveNeuron   float64 `json:"weight_remove_neuron"`
+	WeightPlasticityRule float64 `json:"weight_plasticity_rule"`
 	WeightPlasticity     float64 `json:"weight_plasticity"`
 	WeightSubstrate      float64 `json:"weight_substrate"`
 }
