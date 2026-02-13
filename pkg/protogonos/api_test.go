@@ -221,6 +221,40 @@ func TestClientRunAcceptsReferencePostprocessorAlias(t *testing.T) {
 	}
 }
 
+func TestClientRunAcceptsReferenceTuningDurationAliases(t *testing.T) {
+	base := t.TempDir()
+	client, err := New(Options{
+		StoreKind:     "memory",
+		BenchmarksDir: filepath.Join(base, "benchmarks"),
+		ExportsDir:    filepath.Join(base, "exports"),
+	})
+	if err != nil {
+		t.Fatalf("new client: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = client.Close()
+	})
+
+	for _, durationPolicy := range []string{"const", "nsize_proportional", "wsize_proportional"} {
+		_, err = client.Run(context.Background(), RunRequest{
+			Scape:              "xor",
+			Population:         8,
+			Generations:        2,
+			Selection:          "elite",
+			EnableTuning:       true,
+			TuneDurationPolicy: durationPolicy,
+			TuneDurationParam:  1.0,
+			TuneAttempts:       2,
+			TuneSteps:          2,
+			TuneStepSize:       0.2,
+			WeightPerturb:      1,
+		})
+		if err != nil {
+			t.Fatalf("run with duration alias %s: %v", durationPolicy, err)
+		}
+	}
+}
+
 func TestClientRunRejectsNegativeNumericConfig(t *testing.T) {
 	client, err := New(Options{StoreKind: "memory", BenchmarksDir: t.TempDir(), ExportsDir: t.TempDir()})
 	if err != nil {

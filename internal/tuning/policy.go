@@ -76,7 +76,7 @@ func (p TopologyScaledAttemptPolicy) Attempts(baseAttempts, _generation, _totalG
 }
 
 func AttemptPolicyFromConfig(name string, param float64) (AttemptPolicy, error) {
-	switch name {
+	switch NormalizeAttemptPolicyName(name) {
 	case "", "fixed":
 		return FixedAttemptPolicy{}, nil
 	case "linear_decay":
@@ -93,5 +93,18 @@ func AttemptPolicyFromConfig(name string, param float64) (AttemptPolicy, error) 
 		return TopologyScaledAttemptPolicy{Scale: scale, MinAttempts: 1, MaxAttempts: 0}, nil
 	default:
 		return nil, fmt.Errorf("unsupported tune duration policy: %s", name)
+	}
+}
+
+func NormalizeAttemptPolicyName(name string) string {
+	switch name {
+	case "", "fixed", "const":
+		return "fixed"
+	case "linear_decay":
+		return "linear_decay"
+	case "topology_scaled", "nsize_proportional", "wsize_proportional":
+		return "topology_scaled"
+	default:
+		return name
 	}
 }

@@ -46,7 +46,28 @@ func TestAttemptPolicyFromConfig(t *testing.T) {
 	if _, err := AttemptPolicyFromConfig("topology_scaled", 1.2); err != nil {
 		t.Fatalf("topology_scaled policy: %v", err)
 	}
+	if _, err := AttemptPolicyFromConfig("const", 0); err != nil {
+		t.Fatalf("const alias policy: %v", err)
+	}
+	if _, err := AttemptPolicyFromConfig("nsize_proportional", 1.2); err != nil {
+		t.Fatalf("nsize_proportional alias policy: %v", err)
+	}
+	if _, err := AttemptPolicyFromConfig("wsize_proportional", 1.2); err != nil {
+		t.Fatalf("wsize_proportional alias policy: %v", err)
+	}
 	if _, err := AttemptPolicyFromConfig("unknown", 1); err == nil {
 		t.Fatal("expected unknown policy error")
+	}
+}
+
+func TestNormalizeAttemptPolicyName(t *testing.T) {
+	if got := NormalizeAttemptPolicyName("const"); got != "fixed" {
+		t.Fatalf("unexpected const normalization: %s", got)
+	}
+	if got := NormalizeAttemptPolicyName("nsize_proportional"); got != "topology_scaled" {
+		t.Fatalf("unexpected nsize_proportional normalization: %s", got)
+	}
+	if got := NormalizeAttemptPolicyName("wsize_proportional"); got != "topology_scaled" {
+		t.Fatalf("unexpected wsize_proportional normalization: %s", got)
 	}
 }

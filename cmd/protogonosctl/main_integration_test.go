@@ -99,8 +99,9 @@ func TestRunCommandSQLiteConfigLoadsMap2RecAndAllowsFlagOverrides(t *testing.T) 
 
 	configPath := filepath.Join(workdir, "run_config.json")
 	cfg := map[string]any{
-		"scape": "xor",
-		"seed":  71,
+		"scape":         "xor",
+		"seed":          71,
+		"enable_tuning": true,
 		"pmp": map[string]any{
 			"init_specie_size": 8,
 			"generation_limit": 5,
@@ -108,6 +109,7 @@ func TestRunCommandSQLiteConfigLoadsMap2RecAndAllowsFlagOverrides(t *testing.T) 
 		"constraint": map[string]any{
 			"population_selection_f": "hof_competition",
 			"tuning_selection_fs":    []any{"dynamic_random"},
+			"tuning_duration_f":      []any{"const", 2},
 			"mutation_operators": []any{
 				[]any{"add_bias", 1},
 				[]any{"add_outlink", 1},
@@ -636,8 +638,9 @@ func TestBenchmarkCommandConfigLoadsMap2RecAndAllowsFlagOverrides(t *testing.T) 
 
 	configPath := filepath.Join(workdir, "benchmark_config.json")
 	cfg := map[string]any{
-		"scape": "xor",
-		"seed":  515,
+		"scape":         "xor",
+		"seed":          515,
+		"enable_tuning": true,
 		"pmp": map[string]any{
 			"init_specie_size": 9,
 			"generation_limit": 6,
@@ -645,6 +648,7 @@ func TestBenchmarkCommandConfigLoadsMap2RecAndAllowsFlagOverrides(t *testing.T) 
 		"constraint": map[string]any{
 			"population_selection_f": "hof_competition",
 			"tuning_selection_fs":    []any{"dynamic_random"},
+			"tuning_duration_f":      []any{"const", 2},
 			"mutation_operators": []any{
 				[]any{"add_bias", 1},
 				[]any{"add_outlink", 1},

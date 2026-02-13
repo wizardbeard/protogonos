@@ -76,6 +76,10 @@ func loadRunRequestFromConfig(path string) (protoapi.RunRequest, error) {
 		constraint := map2rec.ConvertConstraint(constraintMap)
 		req.Selection = mapPopulationSelection(constraint.PopulationSelectionF)
 		req.TuneSelection = mapTuningSelection(firstOrEmpty(constraint.TuningSelectionFs))
+		if constraint.TuningDurationF.Name != "" {
+			req.TuneDurationPolicy = constraint.TuningDurationF.Name
+			req.TuneDurationParam = constraint.TuningDurationF.Param
+		}
 		for _, op := range constraint.MutationOperators {
 			switch op.Name {
 			case "mutate_weights", "add_bias":

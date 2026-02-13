@@ -981,6 +981,7 @@ func materializeRunConfigFromRequest(req RunRequest) (materializedRunConfig, err
 	if req.TuneDurationPolicy == "" {
 		req.TuneDurationPolicy = "fixed"
 	}
+	req.TuneDurationPolicy = tuning.NormalizeAttemptPolicyName(req.TuneDurationPolicy)
 	if req.TuneDurationParam < 0 {
 		return materializedRunConfig{}, errors.New("tune duration param must be >= 0")
 	}

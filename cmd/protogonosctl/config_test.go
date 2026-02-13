@@ -20,6 +20,7 @@ func TestLoadRunRequestFromConfigUsesConstraintAndPMP(t *testing.T) {
 		"constraint": map[string]any{
 			"population_selection_f": "hof_competition",
 			"tuning_selection_fs":    []any{"dynamic_random"},
+			"tuning_duration_f":      []any{"const", 7},
 			"mutation_operators": []any{
 				[]any{"add_bias", 5},
 				[]any{"add_outlink", 4},
@@ -51,6 +52,9 @@ func TestLoadRunRequestFromConfigUsesConstraintAndPMP(t *testing.T) {
 	}
 	if req.TuneSelection != "dynamic_random" {
 		t.Fatalf("unexpected tune selection mapping: %s", req.TuneSelection)
+	}
+	if req.TuneDurationPolicy != "const" || req.TuneDurationParam != 7 {
+		t.Fatalf("unexpected tune duration mapping: policy=%s param=%f", req.TuneDurationPolicy, req.TuneDurationParam)
 	}
 	if req.WeightPerturb != 5 || req.WeightAddSynapse != 4 || req.WeightAddNeuron != 3 || req.WeightPlasticity != 2 {
 		t.Fatalf("unexpected mapped mutation weights: %+v", req)
