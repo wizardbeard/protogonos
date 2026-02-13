@@ -16,6 +16,7 @@ type parityPreset struct {
 	Selection         string
 	TuneSelection     string
 	WeightPerturb     float64
+	WeightBias        float64
 	WeightAddSyn      float64
 	WeightRemoveSyn   float64
 	WeightAddNeuro    float64
@@ -59,6 +60,7 @@ type parityProfileResolved struct {
 	ExpectedTuning      string
 	MutationOperatorLen int
 	WeightPerturb       float64
+	WeightBias          float64
 	WeightAddSyn        float64
 	WeightRemoveSyn     float64
 	WeightAddNeuro      float64
@@ -92,6 +94,7 @@ func loadParityPreset(profileID string) (parityPreset, error) {
 		Selection:         resolved.PopulationSelection,
 		TuneSelection:     resolved.TuningSelection,
 		WeightPerturb:     resolved.WeightPerturb,
+		WeightBias:        resolved.WeightBias,
 		WeightAddSyn:      resolved.WeightAddSyn,
 		WeightRemoveSyn:   resolved.WeightRemoveSyn,
 		WeightAddNeuro:    resolved.WeightAddNeuro,
@@ -124,8 +127,10 @@ func resolveParityProfile(profileID string) (parityProfileResolved, error) {
 		}
 		for _, op := range constraint.MutationOperators {
 			switch op.Name {
-			case "mutate_weights", "add_bias":
+			case "mutate_weights":
 				resolved.WeightPerturb += op.Weight
+			case "add_bias":
+				resolved.WeightBias += op.Weight
 			case "add_outlink", "add_inlink":
 				resolved.WeightAddSyn += op.Weight
 			case "add_neuron", "outsplice", "insplice":
@@ -140,7 +145,7 @@ func resolveParityProfile(profileID string) (parityProfileResolved, error) {
 				resolved.WeightSubstrate += op.Weight
 			}
 		}
-		if resolved.WeightPerturb+resolved.WeightAddSyn+resolved.WeightRemoveSyn+resolved.WeightAddNeuro+resolved.WeightRemoveNeuro+resolved.WeightPlasticity+resolved.WeightSubstrate <= 0 {
+		if resolved.WeightPerturb+resolved.WeightBias+resolved.WeightAddSyn+resolved.WeightRemoveSyn+resolved.WeightAddNeuro+resolved.WeightRemoveNeuro+resolved.WeightPlasticity+resolved.WeightSubstrate <= 0 {
 			return parityProfileResolved{}, fmt.Errorf("profile %s has no mapped mutation weights", profileID)
 		}
 		return resolved, nil

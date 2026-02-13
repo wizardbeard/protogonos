@@ -87,6 +87,39 @@ func (o *PerturbRandomWeight) Apply(_ context.Context, genome model.Genome) (mod
 	return mutated, nil
 }
 
+// PerturbRandomBias mutates a random neuron bias using uniform delta in [-MaxDelta, MaxDelta].
+type PerturbRandomBias struct {
+	Rand     *rand.Rand
+	MaxDelta float64
+}
+
+func (o *PerturbRandomBias) Name() string {
+	return "perturb_random_bias"
+}
+
+func (o *PerturbRandomBias) Applicable(genome model.Genome, _ string) bool {
+	return len(genome.Neurons) > 0
+}
+
+func (o *PerturbRandomBias) Apply(_ context.Context, genome model.Genome) (model.Genome, error) {
+	if len(genome.Neurons) == 0 {
+		return model.Genome{}, ErrNoNeurons
+	}
+	if o == nil || o.Rand == nil {
+		return model.Genome{}, errors.New("random source is required")
+	}
+	if o.MaxDelta <= 0 {
+		return model.Genome{}, errors.New("max delta must be > 0")
+	}
+
+	idx := o.Rand.Intn(len(genome.Neurons))
+	delta := (o.Rand.Float64()*2 - 1) * o.MaxDelta
+
+	mutated := cloneGenome(genome)
+	mutated.Neurons[idx].Bias += delta
+	return mutated, nil
+}
+
 // AddRandomSynapse adds a random synapse between existing neurons.
 type AddRandomSynapse struct {
 	Rand         *rand.Rand

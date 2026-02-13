@@ -363,6 +363,9 @@ func TestPerturbSubstrateParameterMutation(t *testing.T) {
 
 func TestContextualOperatorApplicability(t *testing.T) {
 	genome := randomGenome(rand.New(rand.NewSource(7)))
+	if (&PerturbRandomBias{}).Applicable(model.Genome{}, "xor") {
+		t.Fatal("expected bias operator to be inapplicable without neurons")
+	}
 	if (&PerturbPlasticityRate{}).Applicable(genome, "xor") {
 		t.Fatal("expected plasticity operator to be inapplicable without plasticity config")
 	}
@@ -381,6 +384,37 @@ func TestContextualOperatorApplicability(t *testing.T) {
 	}
 	if !(&PerturbSubstrateParameter{}).Applicable(genome, "xor") {
 		t.Fatal("expected substrate operator to be applicable with substrate config")
+	}
+}
+
+func TestPerturbRandomBiasMutation(t *testing.T) {
+	genome := randomGenome(rand.New(rand.NewSource(10)))
+	op := &PerturbRandomBias{
+		Rand:     rand.New(rand.NewSource(11)),
+		MaxDelta: 0.3,
+	}
+	mutated, err := op.Apply(context.Background(), genome)
+	if err != nil {
+		t.Fatalf("apply failed: %v", err)
+	}
+
+	if len(mutated.Neurons) != len(genome.Neurons) {
+		t.Fatalf("neuron count changed: got=%d want=%d", len(mutated.Neurons), len(genome.Neurons))
+	}
+	changed := false
+	for i := range genome.Neurons {
+		if mutated.Neurons[i].ID != genome.Neurons[i].ID {
+			t.Fatalf("neuron identity changed at index %d", i)
+		}
+		if mutated.Neurons[i].Activation != genome.Neurons[i].Activation {
+			t.Fatalf("neuron activation changed at index %d", i)
+		}
+		if mutated.Neurons[i].Bias != genome.Neurons[i].Bias {
+			changed = true
+		}
+	}
+	if !changed {
+		t.Fatal("expected at least one neuron bias to change")
 	}
 }
 

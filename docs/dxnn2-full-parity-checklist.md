@@ -17,7 +17,7 @@ Status keys:
 | `genotype.erl` | `partial` | Seed/clone/lifecycle/store flows implemented; full reference operation surface still broader. |
 | `records.hrl` | `partial` | Core record equivalents implemented with versioned codecs; full field-level parity still pending. |
 | `map2rec.erl` | `partial` | Baseline conversion parity implemented for `constraint`/`pmp`/`sensor`/`actuator`/`neuron`/`agent`/`cortex`/`specie`/`population` plus `trace`/`stat`/`topology_summary`/`signature`/`champion`; broader record coverage still pending. |
-| `genome_mutator.erl` | `partial` | Core topology/weight operators plus plasticity/substrate parameter mutations implemented; full operator breadth pending. |
+| `genome_mutator.erl` | `partial` | Core topology/weight operators plus plasticity/substrate parameter mutations implemented, with dedicated `add_bias` parity via random bias perturbation; full operator breadth pending. |
 | `selection_algorithm.erl` | `partial` | Elite/tournament/species/shared species + reference aliases `hof_competition`/`hof_rank`/`hof_efficiency`/`hof_random`/`competition`/`top3` implemented across CLI/API and map2rec `constraint.population_selection_f` config materialization; additional reference strategies pending. |
 | `fitness_postprocessor.erl` | `partial` | None/size/novelty postprocessors implemented with `nsize_proportional` alias parity, reference `size_proportional` efficiency exponent parity (`EFF=0.05`), and map2rec `constraint.population_fitness_postprocessor_f` config materialization; full policy breadth pending. |
 | `specie_identifier.erl` | `partial` | Topology/speciation support implemented with adaptive threshold + representatives; full reference behavior tuning pending. |
@@ -78,6 +78,7 @@ Status keys:
 - Preserved `constraint.population_selection_f` aliases (`competition`, `top3`) during map2rec config materialization instead of collapsing to one default.
 - Added selection-strategy parity aliases `hof_rank`, `hof_efficiency`, and `hof_random` with CLI/API resolution and selector tests.
 - Aligned `size_proportional` fitness postprocessing with reference efficiency scaling exponent (`EFF=0.05`) and added dedicated postprocessor tests.
+- Added dedicated bias mutation operator (`perturb_random_bias`) and mapped reference `add_bias` config/profile operators to a distinct bias-mutation weight path.
 
 ## Highest-priority remaining gaps to reach strict parity
 

@@ -150,6 +150,7 @@ func runRun(ctx context.Context, args []string) error {
 	tuneDurationPolicy := fs.String("tune-duration-policy", "fixed", "tuning attempt policy: fixed|const|linear_decay|topology_scaled|nsize_proportional|wsize_proportional")
 	tuneDurationParam := fs.Float64("tune-duration-param", 1.0, "tuning attempt policy parameter")
 	wPerturb := fs.Float64("w-perturb", 0.70, "weight for perturb_random_weight mutation")
+	wBias := fs.Float64("w-bias", 0.00, "weight for perturb_random_bias mutation")
 	wAddSynapse := fs.Float64("w-add-synapse", 0.10, "weight for add_random_synapse mutation")
 	wRemoveSynapse := fs.Float64("w-remove-synapse", 0.08, "weight for remove_random_synapse mutation")
 	wAddNeuron := fs.Float64("w-add-neuron", 0.07, "weight for add_random_neuron mutation")
@@ -190,6 +191,7 @@ func runRun(ctx context.Context, args []string) error {
 			TuneSteps:            *tuneSteps,
 			TuneStepSize:         *tuneStepSize,
 			WeightPerturb:        *wPerturb,
+			WeightBias:           *wBias,
 			WeightAddSynapse:     *wAddSynapse,
 			WeightRemoveSynapse:  *wRemoveSynapse,
 			WeightAddNeuron:      *wAddNeuron,
@@ -219,6 +221,7 @@ func runRun(ctx context.Context, args []string) error {
 			"tune-duration-policy":  *tuneDurationPolicy,
 			"tune-duration-param":   *tuneDurationParam,
 			"w-perturb":             *wPerturb,
+			"w-bias":                *wBias,
 			"w-add-synapse":         *wAddSynapse,
 			"w-remove-synapse":      *wRemoveSynapse,
 			"w-add-neuron":          *wAddNeuron,
@@ -238,6 +241,7 @@ func runRun(ctx context.Context, args []string) error {
 		req.Selection = preset.Selection
 		req.TuneSelection = preset.TuneSelection
 		req.WeightPerturb = preset.WeightPerturb
+		req.WeightBias = preset.WeightBias
 		req.WeightAddSynapse = preset.WeightAddSyn
 		req.WeightRemoveSynapse = preset.WeightRemoveSyn
 		req.WeightAddNeuron = preset.WeightAddNeuro
@@ -246,10 +250,10 @@ func runRun(ctx context.Context, args []string) error {
 		req.WeightSubstrate = preset.WeightSubstrate
 	}
 	req.TuneSelection = normalizeTuneSelection(req.TuneSelection)
-	if req.WeightPerturb < 0 || req.WeightAddSynapse < 0 || req.WeightRemoveSynapse < 0 || req.WeightAddNeuron < 0 || req.WeightRemoveNeuron < 0 || req.WeightPlasticity < 0 || req.WeightSubstrate < 0 {
+	if req.WeightPerturb < 0 || req.WeightBias < 0 || req.WeightAddSynapse < 0 || req.WeightRemoveSynapse < 0 || req.WeightAddNeuron < 0 || req.WeightRemoveNeuron < 0 || req.WeightPlasticity < 0 || req.WeightSubstrate < 0 {
 		return errors.New("mutation weights must be >= 0")
 	}
-	weightSum := req.WeightPerturb + req.WeightAddSynapse + req.WeightRemoveSynapse + req.WeightAddNeuron + req.WeightRemoveNeuron + req.WeightPlasticity + req.WeightSubstrate
+	weightSum := req.WeightPerturb + req.WeightBias + req.WeightAddSynapse + req.WeightRemoveSynapse + req.WeightAddNeuron + req.WeightRemoveNeuron + req.WeightPlasticity + req.WeightSubstrate
 	if weightSum <= 0 && (*configPath == "" || *profileName != "" || hasAnyWeightOverrideFlag(setFlags)) {
 		return errors.New("at least one mutation weight must be > 0")
 	}
@@ -753,6 +757,7 @@ func runBenchmark(ctx context.Context, args []string) error {
 	tuneDurationPolicy := fs.String("tune-duration-policy", "fixed", "tuning attempt policy: fixed|const|linear_decay|topology_scaled|nsize_proportional|wsize_proportional")
 	tuneDurationParam := fs.Float64("tune-duration-param", 1.0, "tuning attempt policy parameter")
 	wPerturb := fs.Float64("w-perturb", 0.70, "weight for perturb_random_weight mutation")
+	wBias := fs.Float64("w-bias", 0.00, "weight for perturb_random_bias mutation")
 	wAddSynapse := fs.Float64("w-add-synapse", 0.10, "weight for add_random_synapse mutation")
 	wRemoveSynapse := fs.Float64("w-remove-synapse", 0.08, "weight for remove_random_synapse mutation")
 	wAddNeuron := fs.Float64("w-add-neuron", 0.07, "weight for add_random_neuron mutation")
@@ -793,6 +798,7 @@ func runBenchmark(ctx context.Context, args []string) error {
 			TuneSteps:            *tuneSteps,
 			TuneStepSize:         *tuneStepSize,
 			WeightPerturb:        *wPerturb,
+			WeightBias:           *wBias,
 			WeightAddSynapse:     *wAddSynapse,
 			WeightRemoveSynapse:  *wRemoveSynapse,
 			WeightAddNeuron:      *wAddNeuron,
@@ -821,6 +827,7 @@ func runBenchmark(ctx context.Context, args []string) error {
 			"tune-duration-policy":  *tuneDurationPolicy,
 			"tune-duration-param":   *tuneDurationParam,
 			"w-perturb":             *wPerturb,
+			"w-bias":                *wBias,
 			"w-add-synapse":         *wAddSynapse,
 			"w-remove-synapse":      *wRemoveSynapse,
 			"w-add-neuron":          *wAddNeuron,
@@ -840,6 +847,7 @@ func runBenchmark(ctx context.Context, args []string) error {
 		req.Selection = preset.Selection
 		req.TuneSelection = preset.TuneSelection
 		req.WeightPerturb = preset.WeightPerturb
+		req.WeightBias = preset.WeightBias
 		req.WeightAddSynapse = preset.WeightAddSyn
 		req.WeightRemoveSynapse = preset.WeightRemoveSyn
 		req.WeightAddNeuron = preset.WeightAddNeuro
@@ -848,10 +856,10 @@ func runBenchmark(ctx context.Context, args []string) error {
 		req.WeightSubstrate = preset.WeightSubstrate
 	}
 	req.TuneSelection = normalizeTuneSelection(req.TuneSelection)
-	if req.WeightPerturb < 0 || req.WeightAddSynapse < 0 || req.WeightRemoveSynapse < 0 || req.WeightAddNeuron < 0 || req.WeightRemoveNeuron < 0 || req.WeightPlasticity < 0 || req.WeightSubstrate < 0 {
+	if req.WeightPerturb < 0 || req.WeightBias < 0 || req.WeightAddSynapse < 0 || req.WeightRemoveSynapse < 0 || req.WeightAddNeuron < 0 || req.WeightRemoveNeuron < 0 || req.WeightPlasticity < 0 || req.WeightSubstrate < 0 {
 		return errors.New("mutation weights must be >= 0")
 	}
-	weightSum := req.WeightPerturb + req.WeightAddSynapse + req.WeightRemoveSynapse + req.WeightAddNeuron + req.WeightRemoveNeuron + req.WeightPlasticity + req.WeightSubstrate
+	weightSum := req.WeightPerturb + req.WeightBias + req.WeightAddSynapse + req.WeightRemoveSynapse + req.WeightAddNeuron + req.WeightRemoveNeuron + req.WeightPlasticity + req.WeightSubstrate
 	if weightSum <= 0 && (*configPath == "" || *profileName != "" || hasAnyWeightOverrideFlag(setFlags)) {
 		return errors.New("at least one mutation weight must be > 0")
 	}
@@ -956,7 +964,7 @@ func runProfile(_ context.Context, args []string) error {
 			enc.SetIndent("", "  ")
 			return enc.Encode(resolved)
 		}
-		fmt.Printf("id=%s selection=%s expected_selection=%s tune_selection=%s expected_tune_selection=%s mutation_ops=%d w_perturb=%.3f w_add_syn=%.3f w_remove_syn=%.3f w_add_neuron=%.3f w_remove_neuron=%.3f w_plasticity=%.3f w_substrate=%.3f\n",
+		fmt.Printf("id=%s selection=%s expected_selection=%s tune_selection=%s expected_tune_selection=%s mutation_ops=%d w_perturb=%.3f w_bias=%.3f w_add_syn=%.3f w_remove_syn=%.3f w_add_neuron=%.3f w_remove_neuron=%.3f w_plasticity=%.3f w_substrate=%.3f\n",
 			resolved.ID,
 			resolved.PopulationSelection,
 			resolved.ExpectedSelection,
@@ -964,6 +972,7 @@ func runProfile(_ context.Context, args []string) error {
 			resolved.ExpectedTuning,
 			resolved.MutationOperatorLen,
 			resolved.WeightPerturb,
+			resolved.WeightBias,
 			resolved.WeightAddSyn,
 			resolved.WeightRemoveSyn,
 			resolved.WeightAddNeuro,

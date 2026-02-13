@@ -97,8 +97,10 @@ func loadRunRequestFromConfig(path string) (protoapi.RunRequest, error) {
 		}
 		for _, op := range constraint.MutationOperators {
 			switch op.Name {
-			case "mutate_weights", "add_bias":
+			case "mutate_weights":
 				req.WeightPerturb += op.Weight
+			case "add_bias":
+				req.WeightBias += op.Weight
 			case "add_outlink", "add_inlink":
 				req.WeightAddSynapse += op.Weight
 			case "remove_outlink", "remove_inlink":
@@ -220,6 +222,8 @@ func overrideFromFlags(req *protoapi.RunRequest, set map[string]bool, flagValue 
 			req.TuneDurationParam = v.(float64)
 		case "w-perturb":
 			req.WeightPerturb = v.(float64)
+		case "w-bias":
+			req.WeightBias = v.(float64)
 		case "w-add-synapse":
 			req.WeightAddSynapse = v.(float64)
 		case "w-remove-synapse":
@@ -256,6 +260,7 @@ func loadOrDefaultRunRequest(configPath string) (protoapi.RunRequest, error) {
 
 func hasAnyWeightOverrideFlag(set map[string]bool) bool {
 	return set["w-perturb"] ||
+		set["w-bias"] ||
 		set["w-add-synapse"] ||
 		set["w-remove-synapse"] ||
 		set["w-add-neuron"] ||

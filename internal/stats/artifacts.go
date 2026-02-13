@@ -35,6 +35,7 @@ type RunConfig struct {
 	TuneSteps            int     `json:"tune_steps"`
 	TuneStepSize         float64 `json:"tune_step_size"`
 	WeightPerturb        float64 `json:"weight_perturb"`
+	WeightBias           float64 `json:"weight_bias"`
 	WeightAddSynapse     float64 `json:"weight_add_synapse"`
 	WeightRemoveSynapse  float64 `json:"weight_remove_synapse"`
 	WeightAddNeuron      float64 `json:"weight_add_neuron"`
