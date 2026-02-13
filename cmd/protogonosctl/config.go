@@ -101,6 +101,10 @@ func loadRunRequestFromConfig(path string) (protoapi.RunRequest, error) {
 				req.WeightPerturb += op.Weight
 			case "add_bias":
 				req.WeightBias += op.Weight
+			case "mutate_af":
+				req.WeightActivation += op.Weight
+			case "mutate_aggrf":
+				req.WeightAggregator += op.Weight
 			case "add_outlink", "add_inlink":
 				req.WeightAddSynapse += op.Weight
 			case "remove_outlink", "remove_inlink":
@@ -224,6 +228,10 @@ func overrideFromFlags(req *protoapi.RunRequest, set map[string]bool, flagValue 
 			req.WeightPerturb = v.(float64)
 		case "w-bias":
 			req.WeightBias = v.(float64)
+		case "w-activation":
+			req.WeightActivation = v.(float64)
+		case "w-aggregator":
+			req.WeightAggregator = v.(float64)
 		case "w-add-synapse":
 			req.WeightAddSynapse = v.(float64)
 		case "w-remove-synapse":
@@ -261,6 +269,8 @@ func loadOrDefaultRunRequest(configPath string) (protoapi.RunRequest, error) {
 func hasAnyWeightOverrideFlag(set map[string]bool) bool {
 	return set["w-perturb"] ||
 		set["w-bias"] ||
+		set["w-activation"] ||
+		set["w-aggregator"] ||
 		set["w-add-synapse"] ||
 		set["w-remove-synapse"] ||
 		set["w-add-neuron"] ||

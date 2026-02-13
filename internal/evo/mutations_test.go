@@ -418,6 +418,59 @@ func TestPerturbRandomBiasMutation(t *testing.T) {
 	}
 }
 
+func TestChangeRandomActivationMutation(t *testing.T) {
+	genome := randomGenome(rand.New(rand.NewSource(12)))
+	op := &ChangeRandomActivation{
+		Rand:        rand.New(rand.NewSource(13)),
+		Activations: []string{"identity", "relu"},
+	}
+	mutated, err := op.Apply(context.Background(), genome)
+	if err != nil {
+		t.Fatalf("apply failed: %v", err)
+	}
+
+	changed := false
+	for i := range genome.Neurons {
+		if mutated.Neurons[i].ID != genome.Neurons[i].ID {
+			t.Fatalf("neuron identity changed at index %d", i)
+		}
+		if mutated.Neurons[i].Activation != genome.Neurons[i].Activation {
+			changed = true
+		}
+	}
+	if !changed {
+		t.Fatal("expected one activation to change")
+	}
+}
+
+func TestChangeRandomAggregatorMutation(t *testing.T) {
+	genome := randomGenome(rand.New(rand.NewSource(14)))
+	for i := range genome.Neurons {
+		genome.Neurons[i].Aggregator = "dot_product"
+	}
+	op := &ChangeRandomAggregator{
+		Rand:        rand.New(rand.NewSource(15)),
+		Aggregators: []string{"dot_product", "mult_product", "diff_product"},
+	}
+	mutated, err := op.Apply(context.Background(), genome)
+	if err != nil {
+		t.Fatalf("apply failed: %v", err)
+	}
+
+	changed := false
+	for i := range genome.Neurons {
+		if mutated.Neurons[i].ID != genome.Neurons[i].ID {
+			t.Fatalf("neuron identity changed at index %d", i)
+		}
+		if mutated.Neurons[i].Aggregator != genome.Neurons[i].Aggregator {
+			changed = true
+		}
+	}
+	if !changed {
+		t.Fatal("expected one aggregator to change")
+	}
+}
+
 func decodeGenomeFixture(t *testing.T, path string) model.Genome {
 	t.Helper()
 

@@ -120,6 +120,92 @@ func (o *PerturbRandomBias) Apply(_ context.Context, genome model.Genome) (model
 	return mutated, nil
 }
 
+// ChangeRandomActivation mutates one neuron's activation function.
+type ChangeRandomActivation struct {
+	Rand        *rand.Rand
+	Activations []string
+}
+
+func (o *ChangeRandomActivation) Name() string {
+	return "change_random_activation"
+}
+
+func (o *ChangeRandomActivation) Applicable(genome model.Genome, _ string) bool {
+	return len(genome.Neurons) > 0
+}
+
+func (o *ChangeRandomActivation) Apply(_ context.Context, genome model.Genome) (model.Genome, error) {
+	if len(genome.Neurons) == 0 {
+		return model.Genome{}, ErrNoNeurons
+	}
+	if o == nil || o.Rand == nil {
+		return model.Genome{}, errors.New("random source is required")
+	}
+	activations := o.Activations
+	if len(activations) == 0 {
+		activations = []string{"identity", "relu", "tanh", "sigmoid"}
+	}
+
+	idx := o.Rand.Intn(len(genome.Neurons))
+	current := genome.Neurons[idx].Activation
+	choices := make([]string, 0, len(activations))
+	for _, name := range activations {
+		if name != "" && name != current {
+			choices = append(choices, name)
+		}
+	}
+	if len(choices) == 0 {
+		return cloneGenome(genome), nil
+	}
+
+	mutated := cloneGenome(genome)
+	mutated.Neurons[idx].Activation = choices[o.Rand.Intn(len(choices))]
+	return mutated, nil
+}
+
+// ChangeRandomAggregator mutates one neuron's aggregation function.
+type ChangeRandomAggregator struct {
+	Rand        *rand.Rand
+	Aggregators []string
+}
+
+func (o *ChangeRandomAggregator) Name() string {
+	return "change_random_aggregator"
+}
+
+func (o *ChangeRandomAggregator) Applicable(genome model.Genome, _ string) bool {
+	return len(genome.Neurons) > 0
+}
+
+func (o *ChangeRandomAggregator) Apply(_ context.Context, genome model.Genome) (model.Genome, error) {
+	if len(genome.Neurons) == 0 {
+		return model.Genome{}, ErrNoNeurons
+	}
+	if o == nil || o.Rand == nil {
+		return model.Genome{}, errors.New("random source is required")
+	}
+	aggregators := o.Aggregators
+	if len(aggregators) == 0 {
+		aggregators = []string{"dot_product", "mult_product", "diff_product"}
+	}
+
+	idx := o.Rand.Intn(len(genome.Neurons))
+	current := genome.Neurons[idx].Aggregator
+	choices := make([]string, 0, len(aggregators))
+	for _, name := range aggregators {
+		if name != "" && name != current {
+			choices = append(choices, name)
+		}
+	}
+	if len(choices) == 0 {
+		return cloneGenome(genome), nil
+	}
+
+	mutated := cloneGenome(genome)
+	mutated.Neurons[idx].Aggregator = choices[o.Rand.Intn(len(choices))]
+	return mutated, nil
+}
+
 // AddRandomSynapse adds a random synapse between existing neurons.
 type AddRandomSynapse struct {
 	Rand         *rand.Rand

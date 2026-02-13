@@ -27,6 +27,8 @@ func TestLoadRunRequestFromConfigUsesConstraintAndPMP(t *testing.T) {
 			},
 			"mutation_operators": []any{
 				[]any{"add_bias", 5},
+				[]any{"mutate_af", 6},
+				[]any{"mutate_aggrf", 7},
 				[]any{"add_outlink", 4},
 				[]any{"add_neuron", 3},
 				[]any{"mutate_plasticity_parameters", 2},
@@ -66,7 +68,7 @@ func TestLoadRunRequestFromConfigUsesConstraintAndPMP(t *testing.T) {
 	if req.FitnessPostprocessor != "nsize_proportional" {
 		t.Fatalf("unexpected fitness postprocessor mapping: %s", req.FitnessPostprocessor)
 	}
-	if req.WeightBias != 5 || req.WeightAddSynapse != 4 || req.WeightAddNeuron != 3 || req.WeightPlasticity != 2 {
+	if req.WeightBias != 5 || req.WeightActivation != 6 || req.WeightAggregator != 7 || req.WeightAddSynapse != 4 || req.WeightAddNeuron != 3 || req.WeightPlasticity != 2 {
 		t.Fatalf("unexpected mapped mutation weights: %+v", req)
 	}
 }

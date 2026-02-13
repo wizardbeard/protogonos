@@ -248,6 +248,34 @@ func TestClientRunAcceptsBiasOnlyMutationPolicy(t *testing.T) {
 	}
 }
 
+func TestClientRunAcceptsActivationAndAggregatorOnlyMutationPolicy(t *testing.T) {
+	base := t.TempDir()
+	client, err := New(Options{
+		StoreKind:     "memory",
+		BenchmarksDir: filepath.Join(base, "benchmarks"),
+		ExportsDir:    filepath.Join(base, "exports"),
+	})
+	if err != nil {
+		t.Fatalf("new client: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = client.Close()
+	})
+
+	_, err = client.Run(context.Background(), RunRequest{
+		Scape:            "xor",
+		Population:       8,
+		Generations:      2,
+		Selection:        "elite",
+		WeightActivation: 1.0,
+		WeightAggregator: 1.0,
+		WeightPerturb:    0,
+	})
+	if err != nil {
+		t.Fatalf("run with activation/aggregator-only mutation policy: %v", err)
+	}
+}
+
 func TestClientRunAcceptsReferenceTuningDurationAliases(t *testing.T) {
 	base := t.TempDir()
 	client, err := New(Options{
