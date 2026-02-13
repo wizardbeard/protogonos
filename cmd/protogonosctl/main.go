@@ -146,7 +146,7 @@ func runRun(ctx context.Context, args []string) error {
 	tuneAttempts := fs.Int("attempts", 4, "tuning attempts per agent evaluation")
 	tuneSteps := fs.Int("tune-steps", 6, "tuning perturbation steps per attempt")
 	tuneStepSize := fs.Float64("tune-step-size", 0.35, "tuning perturbation magnitude")
-	tuneSelection := fs.String("tune-selection", tuning.CandidateSelectBestSoFar, "tuner candidate selection: best_so_far|original|dynamic_random")
+	tuneSelection := fs.String("tune-selection", tuning.CandidateSelectBestSoFar, "tuner candidate selection: best_so_far|original|dynamic_random|all|all_random|recent|recent_random|lastgen|lastgen_random")
 	tuneDurationPolicy := fs.String("tune-duration-policy", "fixed", "tuning attempt policy: fixed|const|linear_decay|topology_scaled|nsize_proportional|wsize_proportional")
 	tuneDurationParam := fs.Float64("tune-duration-param", 1.0, "tuning attempt policy parameter")
 	wPerturb := fs.Float64("w-perturb", 0.70, "weight for perturb_random_weight mutation")
@@ -749,7 +749,7 @@ func runBenchmark(ctx context.Context, args []string) error {
 	tuneAttempts := fs.Int("attempts", 4, "tuning attempts per agent evaluation")
 	tuneSteps := fs.Int("tune-steps", 6, "tuning perturbation steps per attempt")
 	tuneStepSize := fs.Float64("tune-step-size", 0.35, "tuning perturbation magnitude")
-	tuneSelection := fs.String("tune-selection", tuning.CandidateSelectBestSoFar, "tuner candidate selection: best_so_far|original|dynamic_random")
+	tuneSelection := fs.String("tune-selection", tuning.CandidateSelectBestSoFar, "tuner candidate selection: best_so_far|original|dynamic_random|all|all_random|recent|recent_random|lastgen|lastgen_random")
 	tuneDurationPolicy := fs.String("tune-duration-policy", "fixed", "tuning attempt policy: fixed|const|linear_decay|topology_scaled|nsize_proportional|wsize_proportional")
 	tuneDurationParam := fs.Float64("tune-duration-param", 1.0, "tuning attempt policy parameter")
 	wPerturb := fs.Float64("w-perturb", 0.70, "weight for perturb_random_weight mutation")
@@ -1100,16 +1100,7 @@ func selectionFromName(name string) (evo.Selector, error) {
 }
 
 func normalizeTuneSelection(name string) string {
-	switch name {
-	case "", tuning.CandidateSelectBestSoFar:
-		return tuning.CandidateSelectBestSoFar
-	case tuning.CandidateSelectOriginal:
-		return tuning.CandidateSelectOriginal
-	case tuning.CandidateSelectDynamic:
-		return tuning.CandidateSelectDynamic
-	default:
-		return name
-	}
+	return tuning.NormalizeCandidateSelectionName(name)
 }
 
 func postprocessorFromName(name string) (evo.FitnessPostprocessor, error) {

@@ -108,6 +108,56 @@ func TestExoselfDynamicRandomSelectionSupported(t *testing.T) {
 	}
 }
 
+func TestExoselfExtendedSelectionModesSupported(t *testing.T) {
+	genome := model.Genome{
+		ID:       "g",
+		Synapses: []model.Synapse{{ID: "s", Weight: 0.2, Enabled: true}},
+	}
+	fitnessFn := func(_ context.Context, g model.Genome) (float64, error) {
+		return g.Synapses[0].Weight, nil
+	}
+	modes := []string{
+		CandidateSelectAll,
+		CandidateSelectAllRandom,
+		CandidateSelectRecent,
+		CandidateSelectRecentRnd,
+		CandidateSelectLastGen,
+		CandidateSelectLastGenRd,
+	}
+	for i, mode := range modes {
+		tuner := &Exoself{
+			Rand:               rand.New(rand.NewSource(int64(100 + i))),
+			Steps:              3,
+			StepSize:           0.15,
+			CandidateSelection: mode,
+		}
+		if _, err := tuner.Tune(context.Background(), genome, 8, fitnessFn); err != nil {
+			t.Fatalf("tune with mode=%s: %v", mode, err)
+		}
+	}
+}
+
+func TestNormalizeCandidateSelectionName(t *testing.T) {
+	cases := map[string]string{
+		"":                 CandidateSelectBestSoFar,
+		"best_so_far":      CandidateSelectBestSoFar,
+		"original":         CandidateSelectOriginal,
+		"dynamic_random":   CandidateSelectDynamic,
+		"all":              CandidateSelectAll,
+		"all_random":       CandidateSelectAllRandom,
+		"recent":           CandidateSelectRecent,
+		"recent_random":    CandidateSelectRecentRnd,
+		"lastgen":          CandidateSelectLastGen,
+		"lastgen_random":   CandidateSelectLastGenRd,
+		"unknown_mode_xyz": "unknown_mode_xyz",
+	}
+	for in, want := range cases {
+		if got := NormalizeCandidateSelectionName(in); got != want {
+			t.Fatalf("normalize selection %q: got=%q want=%q", in, got, want)
+		}
+	}
+}
+
 func TestExoselfConcurrentTuneSafe(t *testing.T) {
 	genome := model.Genome{
 		ID: "g",

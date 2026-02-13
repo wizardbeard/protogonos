@@ -1105,16 +1105,7 @@ func selectionFromName(name string) (evo.Selector, error) {
 }
 
 func normalizeTuneSelection(name string) string {
-	switch name {
-	case "", tuning.CandidateSelectBestSoFar:
-		return tuning.CandidateSelectBestSoFar
-	case tuning.CandidateSelectOriginal:
-		return tuning.CandidateSelectOriginal
-	case tuning.CandidateSelectDynamic:
-		return tuning.CandidateSelectDynamic
-	default:
-		return name
-	}
+	return tuning.NormalizeCandidateSelectionName(name)
 }
 
 func postprocessorFromName(name string) (evo.FitnessPostprocessor, error) {

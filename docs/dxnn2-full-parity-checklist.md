@@ -22,7 +22,7 @@ Status keys:
 | `fitness_postprocessor.erl` | `partial` | None/size/novelty postprocessors implemented with `nsize_proportional` alias parity; full policy breadth pending. |
 | `specie_identifier.erl` | `partial` | Topology/speciation support implemented with adaptive threshold + representatives; full reference behavior tuning pending. |
 | `tot_topological_mutations.erl` | `done` | Constant + count-scaled topological mutation count policies implemented and tested. |
-| `tuning_selection.erl` | `partial` | `best_so_far`/`original`/`dynamic_random` implemented; full reference policy set pending. |
+| `tuning_selection.erl` | `partial` | `best_so_far`/`original`/`dynamic_random` plus reference mode set (`all`, `all_random`, `recent`, `recent_random`, `lastgen`, `lastgen_random`) implemented; full reference policy set pending. |
 | `tuning_duration.erl` | `done` | Fixed/linear decay/topology-scaled attempt policies implemented and tested, including reference aliases (`const`, `nsize_proportional`, `wsize_proportional`). |
 | `cortex.erl` | `partial` | Per-step orchestrator with sensor->nn->actuator loop implemented; distributed/OTP-specific behaviors simplified. |
 | `neuron.erl` | `partial` | Runtime neuron/synapse eval implemented; complete reference semantics breadth pending. |
@@ -72,6 +72,7 @@ Status keys:
 - Added reference selection aliases `competition` and `top3` across CLI/API selection resolution.
 - Added reference fitness-postprocessor alias `nsize_proportional` across CLI/API resolution.
 - Added reference tuning-duration aliases (`const`, `nsize_proportional`, `wsize_proportional`) across CLI/API/config materialization.
+- Added reference tuning-selection mode set (`all`, `all_random`, `recent`, `recent_random`, `lastgen`, `lastgen_random`) across tuning/API/CLI/config normalization.
 
 ## Highest-priority remaining gaps to reach strict parity
 

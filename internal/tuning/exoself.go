@@ -21,6 +21,12 @@ const (
 	CandidateSelectBestSoFar = "best_so_far"
 	CandidateSelectOriginal  = "original"
 	CandidateSelectDynamic   = "dynamic_random"
+	CandidateSelectAll       = "all"
+	CandidateSelectAllRandom = "all_random"
+	CandidateSelectRecent    = "recent"
+	CandidateSelectRecentRnd = "recent_random"
+	CandidateSelectLastGen   = "lastgen"
+	CandidateSelectLastGenRd = "lastgen_random"
 )
 
 func (e *Exoself) Name() string {
@@ -55,42 +61,33 @@ func (e *Exoself) Tune(ctx context.Context, genome model.Genome, attempts int, f
 	if err != nil {
 		return model.Genome{}, err
 	}
+	recentBase := cloneGenome(best)
 
 	for a := 0; a < attempts; a++ {
-		var candidate model.Genome
-		switch e.CandidateSelection {
-		case "", CandidateSelectBestSoFar:
-			candidate = cloneGenome(best)
-		case CandidateSelectOriginal:
-			candidate = cloneGenome(genome)
-		case CandidateSelectDynamic:
-			if e.randIntn(2) == 0 {
-				candidate = cloneGenome(best)
-			} else {
-				candidate = cloneGenome(genome)
-			}
-		default:
-			return model.Genome{}, errors.New("unsupported candidate selection")
-		}
-		for s := 0; s < e.Steps; s++ {
-			if err := ctx.Err(); err != nil {
-				return model.Genome{}, err
-			}
-			if len(candidate.Synapses) == 0 {
-				break
-			}
-			idx := e.randIntn(len(candidate.Synapses))
-			delta := (e.randFloat64()*2 - 1) * e.StepSize
-			candidate.Synapses[idx].Weight += delta
-		}
-
-		candidateFitness, err := fitness(ctx, candidate)
+		bases, err := e.candidateBases(best, genome, recentBase)
 		if err != nil {
 			return model.Genome{}, err
 		}
-		if candidateFitness > bestFitness {
-			best = candidate
-			bestFitness = candidateFitness
+		localBest := cloneGenome(best)
+		localBestFitness := bestFitness
+		for _, base := range bases {
+			candidate, err := e.perturbCandidate(ctx, base)
+			if err != nil {
+				return model.Genome{}, err
+			}
+			candidateFitness, err := fitness(ctx, candidate)
+			if err != nil {
+				return model.Genome{}, err
+			}
+			if candidateFitness > localBestFitness {
+				localBest = candidate
+				localBestFitness = candidateFitness
+			}
+		}
+		recentBase = cloneGenome(localBest)
+		if localBestFitness > bestFitness {
+			best = localBest
+			bestFitness = localBestFitness
 		}
 	}
 
@@ -116,4 +113,83 @@ func cloneGenome(g model.Genome) model.Genome {
 	out.SensorIDs = append([]string(nil), g.SensorIDs...)
 	out.ActuatorIDs = append([]string(nil), g.ActuatorIDs...)
 	return out
+}
+
+func NormalizeCandidateSelectionName(name string) string {
+	switch name {
+	case "", CandidateSelectBestSoFar:
+		return CandidateSelectBestSoFar
+	case CandidateSelectOriginal:
+		return CandidateSelectOriginal
+	case CandidateSelectDynamic:
+		return CandidateSelectDynamic
+	case CandidateSelectAll:
+		return CandidateSelectAll
+	case CandidateSelectAllRandom:
+		return CandidateSelectAllRandom
+	case CandidateSelectRecent:
+		return CandidateSelectRecent
+	case CandidateSelectRecentRnd:
+		return CandidateSelectRecentRnd
+	case CandidateSelectLastGen:
+		return CandidateSelectLastGen
+	case CandidateSelectLastGenRd:
+		return CandidateSelectLastGenRd
+	default:
+		return name
+	}
+}
+
+func (e *Exoself) candidateBases(best, original, recent model.Genome) ([]model.Genome, error) {
+	switch NormalizeCandidateSelectionName(e.CandidateSelection) {
+	case CandidateSelectBestSoFar:
+		return []model.Genome{cloneGenome(best)}, nil
+	case CandidateSelectOriginal, CandidateSelectLastGen:
+		return []model.Genome{cloneGenome(original)}, nil
+	case CandidateSelectDynamic, CandidateSelectLastGenRd:
+		if e.randIntn(2) == 0 {
+			return []model.Genome{cloneGenome(best)}, nil
+		}
+		return []model.Genome{cloneGenome(original)}, nil
+	case CandidateSelectRecent:
+		return []model.Genome{cloneGenome(recent)}, nil
+	case CandidateSelectRecentRnd:
+		switch e.randIntn(3) {
+		case 0:
+			return []model.Genome{cloneGenome(recent)}, nil
+		case 1:
+			return []model.Genome{cloneGenome(best)}, nil
+		default:
+			return []model.Genome{cloneGenome(original)}, nil
+		}
+	case CandidateSelectAll:
+		return []model.Genome{cloneGenome(best), cloneGenome(original), cloneGenome(recent)}, nil
+	case CandidateSelectAllRandom:
+		switch e.randIntn(3) {
+		case 0:
+			return []model.Genome{cloneGenome(best)}, nil
+		case 1:
+			return []model.Genome{cloneGenome(original)}, nil
+		default:
+			return []model.Genome{cloneGenome(recent)}, nil
+		}
+	default:
+		return nil, errors.New("unsupported candidate selection")
+	}
+}
+
+func (e *Exoself) perturbCandidate(ctx context.Context, base model.Genome) (model.Genome, error) {
+	candidate := cloneGenome(base)
+	for s := 0; s < e.Steps; s++ {
+		if err := ctx.Err(); err != nil {
+			return model.Genome{}, err
+		}
+		if len(candidate.Synapses) == 0 {
+			break
+		}
+		idx := e.randIntn(len(candidate.Synapses))
+		delta := (e.randFloat64()*2 - 1) * e.StepSize
+		candidate.Synapses[idx].Weight += delta
+	}
+	return candidate, nil
 }

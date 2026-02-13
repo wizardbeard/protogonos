@@ -212,12 +212,5 @@ func mapPopulationSelection(name string) string {
 }
 
 func mapTuningSelection(name string) string {
-	switch name {
-	case tuning.CandidateSelectDynamic:
-		return tuning.CandidateSelectDynamic
-	case "":
-		return tuning.CandidateSelectBestSoFar
-	default:
-		return name
-	}
+	return tuning.NormalizeCandidateSelectionName(name)
 }
