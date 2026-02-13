@@ -90,13 +90,23 @@ type MonitorConfig struct {
 	Tuner                tuning.Tuner
 	TuneAttempts         int
 	TuneAttemptPolicy    tuning.AttemptPolicy
+	Control              <-chan MonitorCommand
 }
 
 type PopulationMonitor struct {
 	cfg        MonitorConfig
 	rng        *rand.Rand
 	speciation *AdaptiveSpeciation
+	paused     bool
 }
+
+type MonitorCommand string
+
+const (
+	CommandPause    MonitorCommand = "pause"
+	CommandContinue MonitorCommand = "continue"
+	CommandStop     MonitorCommand = "stop"
+)
 
 func NewPopulationMonitor(cfg MonitorConfig) (*PopulationMonitor, error) {
 	if cfg.Scape == nil {
@@ -209,8 +219,14 @@ func (m *PopulationMonitor) Run(ctx context.Context, initial []model.Genome) (Ru
 		if err := ctx.Err(); err != nil {
 			return RunResult{}, err
 		}
+		stop, err := m.applyControl(ctx, false)
+		if err != nil {
+			return RunResult{}, err
+		}
+		if stop {
+			break
+		}
 
-		var err error
 		scored, err = m.evaluatePopulation(ctx, population, gen)
 		if err != nil {
 			return RunResult{}, err
@@ -231,6 +247,13 @@ func (m *PopulationMonitor) Run(ctx context.Context, initial []model.Genome) (Ru
 			(m.cfg.EvaluationsLimit > 0 && evaluations >= m.cfg.EvaluationsLimit) {
 			break
 		}
+		stop, err = m.applyControl(ctx, true)
+		if err != nil {
+			return RunResult{}, err
+		}
+		if stop {
+			break
+		}
 
 		var generationLineage []LineageRecord
 		population, generationLineage, err = m.nextGeneration(ctx, scored, speciesByGenomeID, gen)
@@ -247,6 +270,55 @@ func (m *PopulationMonitor) Run(ctx context.Context, initial []model.Genome) (Ru
 		FinalPopulation:       scored,
 		Lineage:               lineage,
 	}, nil
+}
+
+func (m *PopulationMonitor) applyControl(ctx context.Context, waitIfPaused bool) (bool, error) {
+	if m.cfg.Control == nil {
+		return false, nil
+	}
+	for {
+		select {
+		case <-ctx.Done():
+			return false, ctx.Err()
+		case cmd, ok := <-m.cfg.Control:
+			if !ok {
+				return false, nil
+			}
+			if m.handleCommand(cmd) {
+				return true, nil
+			}
+		default:
+			if !m.paused || !waitIfPaused {
+				return false, nil
+			}
+			select {
+			case <-ctx.Done():
+				return false, ctx.Err()
+			case cmd, ok := <-m.cfg.Control:
+				if !ok {
+					return false, nil
+				}
+				if m.handleCommand(cmd) {
+					return true, nil
+				}
+				if !m.paused {
+					return false, nil
+				}
+			}
+		}
+	}
+}
+
+func (m *PopulationMonitor) handleCommand(cmd MonitorCommand) bool {
+	switch cmd {
+	case CommandPause:
+		m.paused = true
+	case CommandContinue:
+		m.paused = false
+	case CommandStop:
+		return true
+	}
+	return false
 }
 
 func summarizeGeneration(scored []ScoredGenome, generation int, speciationStats SpeciationStats) GenerationDiagnostics {

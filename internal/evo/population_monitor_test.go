@@ -6,6 +6,7 @@ import (
 	"math/rand"
 	"strings"
 	"testing"
+	"time"
 
 	protoio "protogonos/internal/io"
 	"protogonos/internal/model"
@@ -387,6 +388,99 @@ func TestLimitSpeciesParentPool(t *testing.T) {
 	unlimited := limitSpeciesParentPool(ranked, speciesByGenomeID, 0)
 	if len(unlimited) != len(ranked) {
 		t.Fatalf("expected unlimited parent pool size %d, got %d", len(ranked), len(unlimited))
+	}
+}
+
+func TestPopulationMonitorPauseContinueControl(t *testing.T) {
+	initial := []model.Genome{
+		newLinearGenome("g0", -1.0),
+		newLinearGenome("g1", -0.8),
+		newLinearGenome("g2", -0.6),
+		newLinearGenome("g3", -0.4),
+	}
+	control := make(chan MonitorCommand, 4)
+	control <- CommandPause
+
+	monitor, err := NewPopulationMonitor(MonitorConfig{
+		Scape:           oneDimScape{},
+		Mutation:        namedNoopMutation{name: "noop"},
+		PopulationSize:  len(initial),
+		EliteCount:      1,
+		Generations:     2,
+		Workers:         2,
+		Seed:            1,
+		InputNeuronIDs:  []string{"i"},
+		OutputNeuronIDs: []string{"o"},
+		Control:         control,
+	})
+	if err != nil {
+		t.Fatalf("new monitor: %v", err)
+	}
+
+	done := make(chan RunResult, 1)
+	errs := make(chan error, 1)
+	go func() {
+		result, runErr := monitor.Run(context.Background(), initial)
+		if runErr != nil {
+			errs <- runErr
+			return
+		}
+		done <- result
+	}()
+
+	select {
+	case <-done:
+		t.Fatal("expected run to pause before spawning next generation")
+	case runErr := <-errs:
+		t.Fatalf("run failed while paused: %v", runErr)
+	case <-time.After(30 * time.Millisecond):
+	}
+
+	control <- CommandContinue
+	select {
+	case runErr := <-errs:
+		t.Fatalf("run failed after continue: %v", runErr)
+	case result := <-done:
+		if len(result.BestByGeneration) != 2 {
+			t.Fatalf("expected full run after continue, got %d generations", len(result.BestByGeneration))
+		}
+	case <-time.After(time.Second):
+		t.Fatal("timeout waiting for run completion after continue")
+	}
+}
+
+func TestPopulationMonitorStopControl(t *testing.T) {
+	initial := []model.Genome{
+		newLinearGenome("g0", -1.0),
+		newLinearGenome("g1", -0.8),
+		newLinearGenome("g2", -0.6),
+		newLinearGenome("g3", -0.4),
+	}
+	control := make(chan MonitorCommand, 1)
+	control <- CommandStop
+
+	monitor, err := NewPopulationMonitor(MonitorConfig{
+		Scape:           oneDimScape{},
+		Mutation:        namedNoopMutation{name: "noop"},
+		PopulationSize:  len(initial),
+		EliteCount:      1,
+		Generations:     4,
+		Workers:         2,
+		Seed:            1,
+		InputNeuronIDs:  []string{"i"},
+		OutputNeuronIDs: []string{"o"},
+		Control:         control,
+	})
+	if err != nil {
+		t.Fatalf("new monitor: %v", err)
+	}
+
+	result, err := monitor.Run(context.Background(), initial)
+	if err != nil {
+		t.Fatalf("run: %v", err)
+	}
+	if len(result.BestByGeneration) != 0 {
+		t.Fatalf("expected immediate stop before evaluation, got %d generations", len(result.BestByGeneration))
 	}
 }
 
