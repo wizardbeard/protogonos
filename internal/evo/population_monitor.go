@@ -78,6 +78,7 @@ type MonitorConfig struct {
 	TopologicalMutations TopologicalMutationPolicy
 	PopulationSize       int
 	EliteCount           int
+	SurvivalPercentage   float64
 	Generations          int
 	FitnessGoal          float64
 	EvaluationsLimit     int
@@ -120,6 +121,17 @@ func NewPopulationMonitor(cfg MonitorConfig) (*PopulationMonitor, error) {
 	}
 	if cfg.PopulationSize <= 0 {
 		return nil, fmt.Errorf("population size must be > 0")
+	}
+	if cfg.SurvivalPercentage < 0 || cfg.SurvivalPercentage > 1 {
+		return nil, fmt.Errorf("survival percentage must be in [0, 1]")
+	}
+	if cfg.EliteCount <= 0 {
+		if cfg.SurvivalPercentage > 0 {
+			cfg.EliteCount = int(math.Ceil(float64(cfg.PopulationSize) * cfg.SurvivalPercentage))
+			if cfg.EliteCount < 1 {
+				cfg.EliteCount = 1
+			}
+		}
 	}
 	if cfg.EliteCount <= 0 || cfg.EliteCount > cfg.PopulationSize {
 		return nil, fmt.Errorf("elite count must be in [1, population size]")

@@ -23,6 +23,7 @@ type EvolutionConfig struct {
 	ScapeName            string
 	PopulationSize       int
 	Generations          int
+	SurvivalPercentage   float64
 	FitnessGoal          float64
 	EvaluationsLimit     int
 	EliteCount           int
@@ -154,6 +155,7 @@ func (p *Polis) RunEvolution(ctx context.Context, cfg EvolutionConfig) (Evolutio
 		Mutation:             cfg.Mutation,
 		PopulationSize:       cfg.PopulationSize,
 		EliteCount:           cfg.EliteCount,
+		SurvivalPercentage:   cfg.SurvivalPercentage,
 		Generations:          cfg.Generations,
 		FitnessGoal:          cfg.FitnessGoal,
 		EvaluationsLimit:     cfg.EvaluationsLimit,

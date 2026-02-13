@@ -326,6 +326,64 @@ func TestPopulationMonitorMutationPolicyValidation(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected evaluations limit validation error")
 	}
+
+	_, err = NewPopulationMonitor(MonitorConfig{
+		Scape:              oneDimScape{},
+		Mutation:           namedNoopMutation{name: "noop"},
+		PopulationSize:     4,
+		EliteCount:         1,
+		SurvivalPercentage: 1.1,
+		Generations:        1,
+		Workers:            1,
+		Seed:               1,
+		InputNeuronIDs:     []string{"i"},
+		OutputNeuronIDs:    []string{"o"},
+	})
+	if err == nil {
+		t.Fatal("expected survival percentage validation error")
+	}
+}
+
+func TestPopulationMonitorDerivesEliteCountFromSurvivalPercentage(t *testing.T) {
+	initial := []model.Genome{
+		newLinearGenome("g0", -1.0),
+		newLinearGenome("g1", -0.8),
+		newLinearGenome("g2", -0.6),
+		newLinearGenome("g3", -0.4),
+		newLinearGenome("g4", -0.2),
+		newLinearGenome("g5", 0.0),
+	}
+	monitor, err := NewPopulationMonitor(MonitorConfig{
+		Scape:              oneDimScape{},
+		Mutation:           namedNoopMutation{name: "noop"},
+		PopulationSize:     len(initial),
+		EliteCount:         0,
+		SurvivalPercentage: 0.5,
+		Generations:        1,
+		Workers:            2,
+		Seed:               1,
+		InputNeuronIDs:     []string{"i"},
+		OutputNeuronIDs:    []string{"o"},
+	})
+	if err != nil {
+		t.Fatalf("new monitor: %v", err)
+	}
+	if monitor.cfg.EliteCount != 3 {
+		t.Fatalf("expected derived elite count 3, got %d", monitor.cfg.EliteCount)
+	}
+	result, err := monitor.Run(context.Background(), initial)
+	if err != nil {
+		t.Fatalf("run: %v", err)
+	}
+	eliteClones := 0
+	for _, rec := range result.Lineage {
+		if rec.Operation == "elite_clone" && rec.Generation == 1 {
+			eliteClones++
+		}
+	}
+	if eliteClones != 3 {
+		t.Fatalf("expected 3 elite clones from survival percentage, got %d", eliteClones)
+	}
 }
 
 func TestPopulationMonitorMutationPolicyFallback(t *testing.T) {
