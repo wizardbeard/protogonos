@@ -44,6 +44,7 @@ type Client struct {
 type RunRequest struct {
 	RunID                string
 	ContinuePopulationID string
+	SpecieIdentifier     string
 	Scape                string
 	Population           int
 	Generations          int
@@ -463,6 +464,7 @@ func (c *Client) Run(ctx context.Context, req RunRequest) (RunSummary, error) {
 			RunID:                runID,
 			Scape:                req.Scape,
 			ContinuePopulationID: req.ContinuePopulationID,
+			SpecieIdentifier:     req.SpecieIdentifier,
 			InitialGeneration:    initialGeneration,
 			PopulationSize:       req.Population,
 			Generations:          req.Generations,
@@ -1165,7 +1167,15 @@ func materializeRunConfigFromRequest(req RunRequest) (materializedRunConfig, err
 		return materializedRunConfig{}, errors.New("at least one mutation weight must be > 0")
 	}
 
-	selector, err := selectionFromName(req.Selection)
+	if req.SpecieIdentifier == "" {
+		req.SpecieIdentifier = "topology"
+	}
+	specieIdentifier, err := evo.SpecieIdentifierFromName(req.SpecieIdentifier)
+	if err != nil {
+		return materializedRunConfig{}, err
+	}
+
+	selector, err := selectionFromName(req.Selection, specieIdentifier)
 	if err != nil {
 		return materializedRunConfig{}, err
 	}
@@ -1220,7 +1230,7 @@ func defaultMutationPolicy(seed int64, inputNeuronIDs, outputNeuronIDs []string,
 	}
 }
 
-func selectionFromName(name string) (evo.Selector, error) {
+func selectionFromName(name string, specieIdentifier evo.SpecieIdentifier) (evo.Selector, error) {
 	switch name {
 	case "elite":
 		return evo.EliteSelector{}, nil
@@ -1228,19 +1238,19 @@ func selectionFromName(name string) (evo.Selector, error) {
 		return evo.TournamentSelector{PoolSize: 0, TournamentSize: 3}, nil
 	case "species_tournament":
 		return evo.SpeciesTournamentSelector{
-			Identifier:     evo.TopologySpecieIdentifier{},
+			Identifier:     specieIdentifier,
 			PoolSize:       0,
 			TournamentSize: 3,
 		}, nil
 	case "species_shared_tournament":
 		return &evo.SpeciesSharedTournamentSelector{
-			Identifier:     evo.TopologySpecieIdentifier{},
+			Identifier:     specieIdentifier,
 			PoolSize:       0,
 			TournamentSize: 3,
 		}, nil
 	case "hof_competition":
 		return &evo.SpeciesSharedTournamentSelector{
-			Identifier:            evo.TopologySpecieIdentifier{},
+			Identifier:            specieIdentifier,
 			PoolSize:              0,
 			TournamentSize:        3,
 			StagnationGenerations: 2,
@@ -1255,7 +1265,7 @@ func selectionFromName(name string) (evo.Selector, error) {
 		return evo.RandomSelector{PoolSize: 0}, nil
 	case "competition":
 		return &evo.SpeciesSharedTournamentSelector{
-			Identifier:     evo.TopologySpecieIdentifier{},
+			Identifier:     specieIdentifier,
 			PoolSize:       0,
 			TournamentSize: 3,
 		}, nil

@@ -77,6 +77,9 @@ func TestLoadRunRequestFromConfigUsesConstraintAndPMP(t *testing.T) {
 	if req.Selection != "species_shared_tournament" {
 		t.Fatalf("unexpected selection mapping: %s", req.Selection)
 	}
+	if req.SpecieIdentifier != "tot_n" {
+		t.Fatalf("unexpected specie identifier mapping: %s", req.SpecieIdentifier)
+	}
 	if req.TuneSelection != "dynamic_random" {
 		t.Fatalf("unexpected tune selection mapping: %s", req.TuneSelection)
 	}

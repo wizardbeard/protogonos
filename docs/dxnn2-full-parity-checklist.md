@@ -20,7 +20,7 @@ Status keys:
 | `genome_mutator.erl` | `partial` | Core topology/weight operators plus plasticity/substrate parameter mutations implemented, with dedicated `add_bias`/`remove_bias` parity via random bias perturb/remove operators, dedicated `mutate_af`/`mutate_aggrf` parity via random activation/aggregator mutations, and dedicated `mutate_pf` parity via plasticity-rule mutation; full operator breadth pending. |
 | `selection_algorithm.erl` | `done` | Elite/tournament/species/shared species plus reference HOF strategy surface (`hof_competition`/`hof_rank`/`hof_top3`/`hof_efficiency`/`hof_random`) and aliases (`competition`/`top3`) implemented across CLI/API and map2rec `constraint.population_selection_f` config materialization. |
 | `fitness_postprocessor.erl` | `done` | Reference postprocessor surface implemented: `none`, `size_proportional` (with `EFF=0.05` scaling), and `novelty_proportional` placeholder semantics aligned as no-op; `nsize_proportional` alias and map2rec `constraint.population_fitness_postprocessor_f` materialization wired through CLI/API. |
-| `specie_identifier.erl` | `partial` | Topology/speciation support implemented with adaptive threshold + representatives; full reference behavior tuning pending. |
+| `specie_identifier.erl` | `done` | Reference `tot_n` specie distinguisher parity implemented, plus topology-based identifier support and adaptive species assignment continuity/threshold diagnostics. |
 | `tot_topological_mutations.erl` | `done` | Constant + count-scaled topological mutation count policies implemented/tested, with map2rec `constraint.tot_topological_mutations_fs` config materialization support. |
 | `tuning_selection.erl` | `partial` | `best_so_far`/`original`/`dynamic_random` plus reference mode set (`all`, `all_random`, `recent`, `recent_random`, `lastgen`, `lastgen_random`) implemented; full reference policy set pending. |
 | `tuning_duration.erl` | `done` | Fixed/linear decay/topology-scaled attempt policies implemented and tested, including reference aliases (`const`, `nsize_proportional`, `wsize_proportional`). |
@@ -101,6 +101,7 @@ Status keys:
 - Added explicit population lifecycle deletion path (`population delete --id ...`) mapped to genotype/store snapshot deletion for `delete_population` parity coverage.
 - Added dedicated `hof_top3` selection parity path and wired it across evo selector resolution, API/CLI strategy parsing, and alias-acceptance tests.
 - Aligned `novelty_proportional` with reference placeholder behavior as no-op while preserving clone isolation and postprocessor alias wiring (`nsize_proportional`).
+- Added `tot_n` specie identifier parity and wired specie-identifier selection (`topology|tot_n`) through config/API/runtime and run artifacts.
 
 ## Highest-priority remaining gaps to reach strict parity
 

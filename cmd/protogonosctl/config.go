@@ -28,6 +28,9 @@ func loadRunRequestFromConfig(path string) (protoapi.RunRequest, error) {
 	if v, ok := asString(raw["continue_population_id"]); ok {
 		req.ContinuePopulationID = v
 	}
+	if v, ok := asString(raw["specie_identifier"]); ok {
+		req.SpecieIdentifier = v
+	}
 	if v, ok := asString(raw["scape"]); ok {
 		req.Scape = v
 	}
@@ -101,6 +104,9 @@ func loadRunRequestFromConfig(path string) (protoapi.RunRequest, error) {
 	if constraintMap, ok := raw["constraint"].(map[string]any); ok {
 		constraint := map2rec.ConvertConstraint(constraintMap)
 		req.Selection = mapPopulationSelection(constraint.PopulationSelectionF)
+		if req.SpecieIdentifier == "" {
+			req.SpecieIdentifier = mapSpecieIdentifier(constraint.SpecieDistinguishers)
+		}
 		req.FitnessPostprocessor = mapFitnessPostprocessor(constraint.PopulationFitnessProcessorF)
 		req.TuneSelection = mapTuningSelection(firstOrEmpty(constraint.TuningSelectionFs))
 		if constraint.TuningDurationF.Name != "" {
@@ -240,6 +246,8 @@ func overrideFromFlags(req *protoapi.RunRequest, set map[string]bool, flagValue 
 			req.RunID = v.(string)
 		case "continue-pop-id":
 			req.ContinuePopulationID = v.(string)
+		case "specie-identifier":
+			req.SpecieIdentifier = v.(string)
 		case "scape":
 			req.Scape = v.(string)
 		case "pop":
@@ -360,4 +368,25 @@ func mapFitnessPostprocessor(name string) string {
 	default:
 		return name
 	}
+}
+
+func mapSpecieIdentifier(distinguishers []string) string {
+	name := map2recFirstNonEmpty(distinguishers)
+	switch name {
+	case "tot_n":
+		return "tot_n"
+	case "pattern", "topology":
+		return "topology"
+	default:
+		return ""
+	}
+}
+
+func map2recFirstNonEmpty(xs []string) string {
+	for _, item := range xs {
+		if item != "" {
+			return item
+		}
+	}
+	return ""
 }

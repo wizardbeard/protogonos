@@ -199,6 +199,45 @@ func TestClientRunAcceptsReferenceStrategyAliases(t *testing.T) {
 	}
 }
 
+func TestClientRunValidatesSpecieIdentifier(t *testing.T) {
+	base := t.TempDir()
+	client, err := New(Options{
+		StoreKind:     "memory",
+		BenchmarksDir: filepath.Join(base, "benchmarks"),
+		ExportsDir:    filepath.Join(base, "exports"),
+	})
+	if err != nil {
+		t.Fatalf("new client: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = client.Close()
+	})
+
+	_, err = client.Run(context.Background(), RunRequest{
+		Scape:            "xor",
+		Population:       8,
+		Generations:      2,
+		Selection:        "species_tournament",
+		SpecieIdentifier: "unknown",
+		WeightPerturb:    1,
+	})
+	if err == nil {
+		t.Fatal("expected specie identifier validation error")
+	}
+
+	_, err = client.Run(context.Background(), RunRequest{
+		Scape:            "xor",
+		Population:       8,
+		Generations:      2,
+		Selection:        "species_tournament",
+		SpecieIdentifier: "tot_n",
+		WeightPerturb:    1,
+	})
+	if err != nil {
+		t.Fatalf("run with tot_n specie identifier: %v", err)
+	}
+}
+
 func TestClientRunAcceptsReferencePostprocessorAlias(t *testing.T) {
 	base := t.TempDir()
 	client, err := New(Options{
