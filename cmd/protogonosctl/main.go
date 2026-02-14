@@ -150,7 +150,7 @@ func runRun(ctx context.Context, args []string) error {
 	enableTuning := fs.Bool("tuning", false, "enable exoself tuning")
 	compareTuning := fs.Bool("compare-tuning", false, "run with and without tuning and emit side-by-side metrics")
 	profileName := fs.String("profile", "", "optional parity profile id (from testdata/fixtures/parity/ref_benchmarker_profiles.json)")
-	selectionName := fs.String("selection", "elite", "parent selection strategy: elite|tournament|species_tournament|species_shared_tournament|hof_competition|hof_rank|hof_efficiency|hof_random|competition|top3")
+	selectionName := fs.String("selection", "elite", "parent selection strategy: elite|tournament|species_tournament|species_shared_tournament|hof_competition|hof_rank|hof_top3|hof_efficiency|hof_random|competition|top3")
 	postprocessorName := fs.String("fitness-postprocessor", "none", "fitness postprocessor: none|size_proportional|nsize_proportional|novelty_proportional")
 	topoPolicyName := fs.String("topo-policy", "const", "topological mutation count policy: const|ncount_linear|ncount_exponential")
 	topoCount := fs.Int("topo-count", 1, "mutation count for topo-policy=const")
@@ -797,7 +797,7 @@ func runBenchmark(ctx context.Context, args []string) error {
 	dbPath := fs.String("db-path", "protogonos.db", "sqlite database path")
 	enableTuning := fs.Bool("tuning", false, "enable exoself tuning")
 	profileName := fs.String("profile", "", "optional parity profile id (from testdata/fixtures/parity/ref_benchmarker_profiles.json)")
-	selectionName := fs.String("selection", "elite", "parent selection strategy: elite|tournament|species_tournament|species_shared_tournament|hof_competition|hof_rank|hof_efficiency|hof_random|competition|top3")
+	selectionName := fs.String("selection", "elite", "parent selection strategy: elite|tournament|species_tournament|species_shared_tournament|hof_competition|hof_rank|hof_top3|hof_efficiency|hof_random|competition|top3")
 	postprocessorName := fs.String("fitness-postprocessor", "none", "fitness postprocessor: none|size_proportional|nsize_proportional|novelty_proportional")
 	topoPolicyName := fs.String("topo-policy", "const", "topological mutation count policy: const|ncount_linear|ncount_exponential")
 	topoCount := fs.Int("topo-count", 1, "mutation count for topo-policy=const")
@@ -1279,6 +1279,8 @@ func selectionFromName(name string) (evo.Selector, error) {
 		}, nil
 	case "hof_rank":
 		return evo.RankSelector{PoolSize: 0}, nil
+	case "hof_top3":
+		return evo.TopKFitnessSelector{K: 3}, nil
 	case "hof_efficiency":
 		return evo.EfficiencySelector{PoolSize: 0}, nil
 	case "hof_random":
@@ -1290,7 +1292,7 @@ func selectionFromName(name string) (evo.Selector, error) {
 			TournamentSize: 3,
 		}, nil
 	case "top3":
-		return evo.EliteSelector{}, nil
+		return evo.TopKFitnessSelector{K: 3}, nil
 	case "rank":
 		return evo.RankSelector{PoolSize: 0}, nil
 	case "efficiency":

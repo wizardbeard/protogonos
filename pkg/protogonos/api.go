@@ -1247,6 +1247,8 @@ func selectionFromName(name string) (evo.Selector, error) {
 		}, nil
 	case "hof_rank":
 		return evo.RankSelector{PoolSize: 0}, nil
+	case "hof_top3":
+		return evo.TopKFitnessSelector{K: 3}, nil
 	case "hof_efficiency":
 		return evo.EfficiencySelector{PoolSize: 0}, nil
 	case "hof_random":
@@ -1258,7 +1260,7 @@ func selectionFromName(name string) (evo.Selector, error) {
 			TournamentSize: 3,
 		}, nil
 	case "top3":
-		return evo.EliteSelector{}, nil
+		return evo.TopKFitnessSelector{K: 3}, nil
 	case "rank":
 		return evo.RankSelector{PoolSize: 0}, nil
 	case "efficiency":

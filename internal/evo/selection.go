@@ -188,6 +188,67 @@ func (s RandomSelector) PickParent(rng *rand.Rand, ranked []ScoredGenome, eliteC
 	return pool[rng.Intn(len(pool))].Genome, nil
 }
 
+// TopKFitnessSelector picks from the top-k ranked pool weighted by fitness.
+type TopKFitnessSelector struct {
+	K int
+}
+
+func (TopKFitnessSelector) Name() string {
+	return "topk_fitness"
+}
+
+func (s TopKFitnessSelector) PickParent(rng *rand.Rand, ranked []ScoredGenome, eliteCount int) (model.Genome, error) {
+	if rng == nil {
+		return model.Genome{}, fmt.Errorf("random source is required")
+	}
+	if eliteCount <= 0 || eliteCount > len(ranked) {
+		return model.Genome{}, fmt.Errorf("invalid elite count: %d", eliteCount)
+	}
+	k := s.K
+	if k <= 0 {
+		k = 3
+	}
+	if k > len(ranked) {
+		k = len(ranked)
+	}
+	pool := ranked[:k]
+
+	minFitness := pool[0].Fitness
+	for _, candidate := range pool[1:] {
+		if candidate.Fitness < minFitness {
+			minFitness = candidate.Fitness
+		}
+	}
+	shift := 0.0
+	if minFitness <= 0 {
+		shift = -minFitness + 1e-9
+	}
+
+	total := 0.0
+	weights := make([]float64, len(pool))
+	for i, candidate := range pool {
+		weight := candidate.Fitness + shift
+		if weight < 0 {
+			weight = 0
+		}
+		weights[i] = weight
+		total += weight
+	}
+	if total <= 0 {
+		return pool[rng.Intn(len(pool))].Genome, nil
+	}
+
+	choice := rng.Float64() * total
+	acc := 0.0
+	for i, weight := range weights {
+		acc += weight
+		if choice <= acc {
+			return pool[i].Genome, nil
+		}
+	}
+	return pool[len(pool)-1].Genome, nil
+}
+
 // SpeciesTournamentSelector first samples a species uniformly and then runs
 // tournament selection inside that species.
 type SpeciesTournamentSelector struct {

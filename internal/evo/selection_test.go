@@ -296,3 +296,56 @@ func TestRandomSelectorSelectsMultipleCandidates(t *testing.T) {
 		t.Fatalf("expected random selector to sample multiple parents, got %d", len(seen))
 	}
 }
+
+func TestTopKFitnessSelectorRestrictsSelectionToTopK(t *testing.T) {
+	scored := []ScoredGenome{
+		{Genome: newLinearGenome("g0", 1), Fitness: 0.90},
+		{Genome: newLinearGenome("g1", 1), Fitness: 0.80},
+		{Genome: newLinearGenome("g2", 1), Fitness: 0.70},
+		{Genome: newLinearGenome("g3", 1), Fitness: 0.60},
+		{Genome: newLinearGenome("g4", 1), Fitness: 0.50},
+	}
+	selector := TopKFitnessSelector{K: 3}
+	rng := rand.New(rand.NewSource(123))
+	seen := map[string]struct{}{}
+
+	for i := 0; i < 250; i++ {
+		parent, err := selector.PickParent(rng, scored, 1)
+		if err != nil {
+			t.Fatalf("pick parent: %v", err)
+		}
+		seen[parent.ID] = struct{}{}
+	}
+	if _, ok := seen["g3"]; ok {
+		t.Fatalf("selector picked genome outside top-k: g3")
+	}
+	if _, ok := seen["g4"]; ok {
+		t.Fatalf("selector picked genome outside top-k: g4")
+	}
+}
+
+func TestTopKFitnessSelectorBiasesTowardBestInTopK(t *testing.T) {
+	scored := []ScoredGenome{
+		{Genome: newLinearGenome("best", 1), Fitness: 1.0},
+		{Genome: newLinearGenome("mid", 1), Fitness: 0.2},
+		{Genome: newLinearGenome("low", 1), Fitness: 0.1},
+		{Genome: newLinearGenome("outside", 1), Fitness: 0.9},
+	}
+	selector := TopKFitnessSelector{K: 3}
+	rng := rand.New(rand.NewSource(321))
+	counts := map[string]int{}
+
+	for i := 0; i < 600; i++ {
+		parent, err := selector.PickParent(rng, scored, 1)
+		if err != nil {
+			t.Fatalf("pick parent: %v", err)
+		}
+		counts[parent.ID]++
+	}
+	if counts["best"] <= counts["mid"] || counts["best"] <= counts["low"] {
+		t.Fatalf("expected best to dominate in top-k pool: best=%d mid=%d low=%d", counts["best"], counts["mid"], counts["low"])
+	}
+	if counts["outside"] != 0 {
+		t.Fatalf("expected outside top-k genome to never be selected, got %d", counts["outside"])
+	}
+}

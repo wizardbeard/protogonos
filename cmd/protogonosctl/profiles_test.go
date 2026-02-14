@@ -69,6 +69,7 @@ func TestMapPopulationSelectionAliases(t *testing.T) {
 	cases := map[string]string{
 		"hof_competition": "species_shared_tournament",
 		"hof_rank":        "hof_rank",
+		"hof_top3":        "hof_top3",
 		"hof_efficiency":  "hof_efficiency",
 		"hof_random":      "hof_random",
 		"competition":     "competition",
