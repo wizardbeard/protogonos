@@ -47,6 +47,7 @@ func init() {
 
 func initializeBuiltInActivations() {
 	MustRegisterActivation("identity", func(x float64) float64 { return x })
+	MustRegisterActivation("linear", func(x float64) float64 { return x })
 	MustRegisterActivation("relu", func(x float64) float64 {
 		if x < 0 {
 			return 0
@@ -54,8 +55,87 @@ func initializeBuiltInActivations() {
 		return x
 	})
 	MustRegisterActivation("tanh", math.Tanh)
+	MustRegisterActivation("cos", math.Cos)
+	MustRegisterActivation("sin", math.Sin)
+	MustRegisterActivation("sgn", func(x float64) float64 {
+		if x == 0 {
+			return 0
+		}
+		if x > 0 {
+			return 1
+		}
+		return -1
+	})
+	MustRegisterActivation("bin", func(x float64) float64 {
+		if x > 0 {
+			return 1
+		}
+		return 0
+	})
+	MustRegisterActivation("bip", func(x float64) float64 {
+		if x > 0 {
+			return 1
+		}
+		return -1
+	})
+	MustRegisterActivation("trinary", func(x float64) float64 {
+		if x < 0.33 && x > -0.33 {
+			return 0
+		}
+		if x >= 0.33 {
+			return 1
+		}
+		return -1
+	})
+	MustRegisterActivation("multiquadric", func(x float64) float64 {
+		return math.Sqrt((x * x) + 0.01)
+	})
+	MustRegisterActivation("absolute", math.Abs)
+	MustRegisterActivation("quadratic", func(x float64) float64 {
+		if x == 0 {
+			return 0
+		}
+		if x > 0 {
+			return x * x
+		}
+		return -(x * x)
+	})
+	MustRegisterActivation("gaussian", func(x float64) float64 {
+		if x > 10 {
+			x = 10
+		} else if x < -10 {
+			x = -10
+		}
+		return math.Exp(-(x * x))
+	})
+	MustRegisterActivation("sqrt", func(x float64) float64 {
+		if x == 0 {
+			return 0
+		}
+		if x > 0 {
+			return math.Sqrt(x)
+		}
+		return -math.Sqrt(-x)
+	})
+	MustRegisterActivation("log", func(x float64) float64 {
+		if x == 0 {
+			return 0
+		}
+		if x > 0 {
+			return math.Log(x)
+		}
+		return -math.Log(-x)
+	})
 	MustRegisterActivation("sigmoid", func(x float64) float64 {
+		if x > 10 {
+			x = 10
+		} else if x < -10 {
+			x = -10
+		}
 		return 1.0 / (1.0 + math.Exp(-x))
+	})
+	MustRegisterActivation("sigmoid1", func(x float64) float64 {
+		return x / (1.0 + math.Abs(x))
 	})
 }
 

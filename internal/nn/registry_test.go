@@ -2,6 +2,7 @@ package nn
 
 import (
 	"errors"
+	"math"
 	"testing"
 )
 
@@ -78,18 +79,68 @@ func TestListActivationsSorted(t *testing.T) {
 	if len(names) < 6 {
 		t.Fatalf("expected built-ins plus custom activations, got: %+v", names)
 	}
-	if names[0] != "a" || names[1] != "b" {
-		t.Fatalf("unexpected activation list: %+v", names)
+	foundA := false
+	foundB := false
+	for i := 1; i < len(names); i++ {
+		if names[i-1] > names[i] {
+			t.Fatalf("expected sorted activation list, got: %+v", names)
+		}
+	}
+	for _, name := range names {
+		if name == "a" {
+			foundA = true
+		}
+		if name == "b" {
+			foundB = true
+		}
+	}
+	if !foundA || !foundB {
+		t.Fatalf("expected custom activations in list, got: %+v", names)
 	}
 }
 
 func TestBuiltinsAvailable(t *testing.T) {
 	// Built-ins are registered during init and should remain available in regular runtime.
-	for _, name := range []string{"identity", "relu", "tanh", "sigmoid"} {
+	for _, name := range []string{
+		"identity", "linear", "relu", "tanh", "cos", "sin", "sgn", "bin", "bip",
+		"trinary", "multiquadric", "absolute", "quadratic", "gaussian", "sqrt",
+		"log", "sigmoid", "sigmoid1",
+	} {
 		fn, err := GetActivation(name)
 		if err != nil {
 			t.Fatalf("get builtin activation %s: %v", name, err)
 		}
 		_ = fn(1.0)
+	}
+}
+
+func TestExtendedBuiltinsBehavior(t *testing.T) {
+	cases := []struct {
+		name  string
+		x     float64
+		want  float64
+		delta float64
+	}{
+		{name: "sgn", x: -1.2, want: -1, delta: 1e-9},
+		{name: "bin", x: -0.1, want: 0, delta: 1e-9},
+		{name: "bip", x: -0.1, want: -1, delta: 1e-9},
+		{name: "trinary", x: 0.0, want: 0, delta: 1e-9},
+		{name: "absolute", x: -2.5, want: 2.5, delta: 1e-9},
+		{name: "quadratic", x: -2.0, want: -4.0, delta: 1e-9},
+		{name: "gaussian", x: 0.0, want: 1.0, delta: 1e-9},
+		{name: "sqrt", x: -4.0, want: -2.0, delta: 1e-9},
+		{name: "log", x: -math.E, want: -1.0, delta: 1e-9},
+		{name: "sigmoid1", x: 2.0, want: 2.0 / 3.0, delta: 1e-9},
+	}
+
+	for _, tc := range cases {
+		fn, err := GetActivation(tc.name)
+		if err != nil {
+			t.Fatalf("get activation %s: %v", tc.name, err)
+		}
+		got := fn(tc.x)
+		if math.Abs(got-tc.want) > tc.delta {
+			t.Fatalf("activation %s(%f): got=%f want=%f", tc.name, tc.x, got, tc.want)
+		}
 	}
 }

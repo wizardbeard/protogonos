@@ -26,7 +26,7 @@ Status keys:
 | `tuning_duration.erl` | `done` | Fixed/linear decay/topology-scaled attempt policies implemented and tested, including reference aliases (`const`, `nsize_proportional`, `wsize_proportional`). |
 | `cortex.erl` | `partial` | Per-step orchestrator with sensor->nn->actuator loop implemented, including vector/chunked actuator dispatch semantics; distributed/OTP-specific process lifecycle/sync semantics remain simplified. |
 | `neuron.erl` | `partial` | Runtime neuron/synapse eval implemented with activation, aggregator modes, and reference-aligned output saturation (`[-1,1]`); complete reference semantics breadth (OTP actor lifecycle, weight backup/restore protocol) pending. |
-| `functions.erl` | `partial` | Core activation/math set implemented; full function catalog parity pending. |
+| `functions.erl` | `partial` | Expanded activation/math catalog implemented (`tanh`/`sigmoid`/`sigmoid1`/`sin`/`cos`/`gaussian`/`sqrt`/`log`/threshold families, etc.); broader non-activation utility helper surface still pending. |
 | `derivatives.erl` | `done` | Derivative registry and tests implemented. |
 | `plasticity.erl` | `partial` | Runtime plasticity integration + mutation hooks implemented; full rule set parity pending. |
 | `signal_aggregator.erl` | `partial` | Aggregator support present; full reference aggregator set pending. |
@@ -104,6 +104,7 @@ Status keys:
 - Added `tot_n` specie identifier parity and wired specie-identifier selection (`topology|tot_n`) through config/API/runtime and run artifacts.
 - Expanded cortex actuator dispatch parity to support single-actuator vector writes and even chunking across multiple actuators.
 - Aligned neuron forward-path output clipping with reference neuron saturation semantics (`OUTPUT_SAT_LIMIT=1`).
+- Expanded NN activation registry toward reference `functions.erl` with additional built-ins and behavior tests (sin/cos/gaussian/sqrt/log/threshold-style activations).
 
 ## Highest-priority remaining gaps to reach strict parity
 
