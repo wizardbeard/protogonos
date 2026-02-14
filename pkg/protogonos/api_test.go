@@ -673,3 +673,42 @@ func TestClientRunCanContinueFromPopulationSnapshot(t *testing.T) {
 		t.Fatalf("expected continued run to use snapshot population size 8, got %d", config.PopulationSize)
 	}
 }
+
+func TestClientRunContinuePopulationScapeMismatchFailsFast(t *testing.T) {
+	base := t.TempDir()
+	client, err := New(Options{
+		StoreKind:     "memory",
+		BenchmarksDir: filepath.Join(base, "benchmarks"),
+		ExportsDir:    filepath.Join(base, "exports"),
+	})
+	if err != nil {
+		t.Fatalf("new client: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = client.Close()
+	})
+
+	_, err = client.Run(context.Background(), RunRequest{
+		RunID:         "reg-base",
+		Scape:         "regression-mimic",
+		Population:    6,
+		Generations:   1,
+		Selection:     "elite",
+		WeightPerturb: 1.0,
+	})
+	if err != nil {
+		t.Fatalf("seed regression run: %v", err)
+	}
+
+	_, err = client.Run(context.Background(), RunRequest{
+		RunID:                "xor-continued",
+		ContinuePopulationID: "reg-base",
+		Scape:                "xor",
+		Generations:          1,
+		Selection:            "elite",
+		WeightPerturb:        1.0,
+	})
+	if err == nil {
+		t.Fatal("expected scape mismatch compatibility error")
+	}
+}

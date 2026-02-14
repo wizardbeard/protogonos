@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	protoio "protogonos/internal/io"
+	"protogonos/internal/model"
 )
 
 type RegressionMimicMorphology struct{}
@@ -30,6 +31,29 @@ func EnsureScapeCompatibility(scapeName string) error {
 		return nil
 	}
 	return ValidateRegisteredComponents(scapeName, m)
+}
+
+func EnsureGenomeIOCompatibility(scapeName string, genome model.Genome) error {
+	for _, sensorName := range genome.SensorIDs {
+		if _, err := protoio.ResolveSensor(sensorName, scapeName); err != nil {
+			return fmt.Errorf("genome %s sensor %s incompatible with scape %s: %w", genome.ID, sensorName, scapeName, err)
+		}
+	}
+	for _, actuatorName := range genome.ActuatorIDs {
+		if _, err := protoio.ResolveActuator(actuatorName, scapeName); err != nil {
+			return fmt.Errorf("genome %s actuator %s incompatible with scape %s: %w", genome.ID, actuatorName, scapeName, err)
+		}
+	}
+	return nil
+}
+
+func EnsurePopulationIOCompatibility(scapeName string, genomes []model.Genome) error {
+	for _, genome := range genomes {
+		if err := EnsureGenomeIOCompatibility(scapeName, genome); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func ValidateRegisteredComponents(scapeName string, m Morphology) error {

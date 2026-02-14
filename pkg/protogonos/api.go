@@ -293,6 +293,9 @@ func (c *Client) Run(ctx context.Context, req RunRequest) (RunSummary, error) {
 	if err := morphology.EnsureScapeCompatibility(req.Scape); err != nil {
 		return RunSummary{}, err
 	}
+	if err := morphology.EnsurePopulationIOCompatibility(req.Scape, initialPopulation); err != nil {
+		return RunSummary{}, err
+	}
 
 	eliteCount := req.Population / 5
 	if eliteCount < 1 {

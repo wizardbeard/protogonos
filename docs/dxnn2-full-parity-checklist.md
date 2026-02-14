@@ -91,6 +91,7 @@ Status keys:
 - Exposed monitor pause-control flow through platform/API/CLI via `start_paused`/`auto_continue_ms` (`--start-paused`, `--auto-continue-ms`) with config-materialization and integration coverage.
 - Added live run control registry in `polis` keyed by `run_id` and exposed API-level `PauseRun`/`ContinueRun`/`StopRun` controls with controlled-run integration tests.
 - Added population continuation flow (`continue/1` parity path) by loading persisted population snapshots via `continue_population_id`/`--continue-pop-id` and resuming evolution from stored genomes.
+- Added fail-fast IO compatibility validation for continued populations against the target scape (`EnsurePopulationIOCompatibility`) to prevent deferred worker-time mismatches.
 
 ## Highest-priority remaining gaps to reach strict parity
 
