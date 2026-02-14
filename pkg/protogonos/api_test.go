@@ -2,11 +2,14 @@ package protogonos
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"os"
 	"path/filepath"
 	"testing"
 	"time"
+
+	"protogonos/internal/stats"
 )
 
 func TestClientRunRunsAndExport(t *testing.T) {
@@ -607,5 +610,66 @@ func TestClientLiveRunControl(t *testing.T) {
 
 	if err := client.ContinueRun(context.Background(), MonitorControlRequest{RunID: runID}); err == nil {
 		t.Fatal("expected continue on inactive run to fail")
+	}
+}
+
+func TestClientRunCanContinueFromPopulationSnapshot(t *testing.T) {
+	base := t.TempDir()
+	client, err := New(Options{
+		StoreKind:     "memory",
+		BenchmarksDir: filepath.Join(base, "benchmarks"),
+		ExportsDir:    filepath.Join(base, "exports"),
+	})
+	if err != nil {
+		t.Fatalf("new client: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = client.Close()
+	})
+
+	seedRun, err := client.Run(context.Background(), RunRequest{
+		RunID:         "pop-seed",
+		Scape:         "xor",
+		Population:    8,
+		Generations:   2,
+		Selection:     "elite",
+		WeightPerturb: 1.0,
+	})
+	if err != nil {
+		t.Fatalf("seed run: %v", err)
+	}
+	if len(seedRun.BestByGeneration) != 2 {
+		t.Fatalf("expected seed run generations=2, got %d", len(seedRun.BestByGeneration))
+	}
+
+	continued, err := client.Run(context.Background(), RunRequest{
+		RunID:                "pop-continued",
+		ContinuePopulationID: "pop-seed",
+		Scape:                "xor",
+		Population:           1,
+		Generations:          2,
+		Selection:            "elite",
+		WeightPerturb:        1.0,
+	})
+	if err != nil {
+		t.Fatalf("continued run: %v", err)
+	}
+	if len(continued.BestByGeneration) != 2 {
+		t.Fatalf("expected continued run generations=2, got %d", len(continued.BestByGeneration))
+	}
+
+	configData, err := os.ReadFile(filepath.Join(base, "benchmarks", continued.RunID, "config.json"))
+	if err != nil {
+		t.Fatalf("read continued config: %v", err)
+	}
+	var config stats.RunConfig
+	if err := json.Unmarshal(configData, &config); err != nil {
+		t.Fatalf("decode continued config: %v", err)
+	}
+	if config.ContinuePopulationID != "pop-seed" {
+		t.Fatalf("expected continue population id pop-seed, got %s", config.ContinuePopulationID)
+	}
+	if config.PopulationSize != 8 {
+		t.Fatalf("expected continued run to use snapshot population size 8, got %d", config.PopulationSize)
 	}
 }

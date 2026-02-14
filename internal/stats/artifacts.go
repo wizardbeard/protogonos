@@ -15,6 +15,7 @@ const runIndexFile = "run_index.json"
 
 type RunConfig struct {
 	RunID                string  `json:"run_id"`
+	ContinuePopulationID string  `json:"continue_population_id,omitempty"`
 	Scape                string  `json:"scape"`
 	PopulationSize       int     `json:"population_size"`
 	Generations          int     `json:"generations"`

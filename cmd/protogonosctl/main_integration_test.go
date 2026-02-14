@@ -255,6 +255,65 @@ func TestRunsCommandSQLiteListsPersistedRun(t *testing.T) {
 	}
 }
 
+func TestRunCommandSQLiteCanContinueFromPopulationSnapshot(t *testing.T) {
+	origWD, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("getwd: %v", err)
+	}
+	workdir := t.TempDir()
+	if err := os.Chdir(workdir); err != nil {
+		t.Fatalf("chdir tempdir: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = os.Chdir(origWD)
+	})
+
+	dbPath := filepath.Join(workdir, "protogonos.db")
+	baseRunID := "sqlite-base-pop"
+	if err := run(context.Background(), []string{
+		"run",
+		"--store", "sqlite",
+		"--db-path", dbPath,
+		"--run-id", baseRunID,
+		"--scape", "xor",
+		"--pop", "8",
+		"--gens", "2",
+		"--seed", "51",
+	}); err != nil {
+		t.Fatalf("seed run command: %v", err)
+	}
+
+	continuedRunID := "sqlite-continued-pop"
+	if err := run(context.Background(), []string{
+		"run",
+		"--store", "sqlite",
+		"--db-path", dbPath,
+		"--run-id", continuedRunID,
+		"--continue-pop-id", baseRunID,
+		"--scape", "xor",
+		"--pop", "1",
+		"--gens", "2",
+		"--seed", "52",
+	}); err != nil {
+		t.Fatalf("continued run command: %v", err)
+	}
+
+	configData, err := os.ReadFile(filepath.Join("benchmarks", continuedRunID, "config.json"))
+	if err != nil {
+		t.Fatalf("read continued run config artifact: %v", err)
+	}
+	var runCfg stats.RunConfig
+	if err := json.Unmarshal(configData, &runCfg); err != nil {
+		t.Fatalf("decode continued run config artifact: %v", err)
+	}
+	if runCfg.ContinuePopulationID != baseRunID {
+		t.Fatalf("expected continue population id %s, got %s", baseRunID, runCfg.ContinuePopulationID)
+	}
+	if runCfg.PopulationSize != 8 {
+		t.Fatalf("expected continued population size 8 from snapshot, got %d", runCfg.PopulationSize)
+	}
+}
+
 func TestExportLatestSQLiteCopiesArtifacts(t *testing.T) {
 	origWD, err := os.Getwd()
 	if err != nil {

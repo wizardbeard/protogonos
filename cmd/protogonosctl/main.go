@@ -129,6 +129,7 @@ func runRun(ctx context.Context, args []string) error {
 	fs := flag.NewFlagSet("run", flag.ContinueOnError)
 	configPath := fs.String("config", "", "optional run config JSON path (map2rec-backed)")
 	runID := fs.String("run-id", "", "explicit run id (optional)")
+	continuePopID := fs.String("continue-pop-id", "", "continue from persisted population snapshot id")
 	scapeName := fs.String("scape", "xor", "scape name")
 	population := fs.Int("pop", 50, "population size")
 	generations := fs.Int("gens", 100, "generation count")
@@ -185,6 +186,7 @@ func runRun(ctx context.Context, args []string) error {
 		req = protoapi.RunRequest{
 			Scape:                *scapeName,
 			RunID:                *runID,
+			ContinuePopulationID: *continuePopID,
 			Population:           *population,
 			Generations:          *generations,
 			SurvivalPercentage:   *survivalPercentage,
@@ -226,6 +228,7 @@ func runRun(ctx context.Context, args []string) error {
 		err := overrideFromFlags(&req, setFlags, map[string]any{
 			"scape":                 *scapeName,
 			"run-id":                *runID,
+			"continue-pop-id":       *continuePopID,
 			"pop":                   *population,
 			"gens":                  *generations,
 			"survival-percentage":   *survivalPercentage,
@@ -774,6 +777,7 @@ func runBenchmark(ctx context.Context, args []string) error {
 	fs := flag.NewFlagSet("benchmark", flag.ContinueOnError)
 	configPath := fs.String("config", "", "optional run config JSON path (map2rec-backed)")
 	runID := fs.String("run-id", "", "explicit run id (optional)")
+	continuePopID := fs.String("continue-pop-id", "", "continue from persisted population snapshot id")
 	scapeName := fs.String("scape", "xor", "scape name")
 	population := fs.Int("pop", 50, "population size")
 	generations := fs.Int("gens", 100, "generation count")
@@ -830,6 +834,7 @@ func runBenchmark(ctx context.Context, args []string) error {
 		req = protoapi.RunRequest{
 			Scape:                *scapeName,
 			RunID:                *runID,
+			ContinuePopulationID: *continuePopID,
 			Population:           *population,
 			Generations:          *generations,
 			SurvivalPercentage:   *survivalPercentage,
@@ -870,6 +875,7 @@ func runBenchmark(ctx context.Context, args []string) error {
 		err := overrideFromFlags(&req, setFlags, map[string]any{
 			"scape":                 *scapeName,
 			"run-id":                *runID,
+			"continue-pop-id":       *continuePopID,
 			"pop":                   *population,
 			"gens":                  *generations,
 			"survival-percentage":   *survivalPercentage,

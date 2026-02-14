@@ -43,6 +43,7 @@ type Client struct {
 
 type RunRequest struct {
 	RunID                string
+	ContinuePopulationID string
 	Scape                string
 	Population           int
 	Generations          int
@@ -277,6 +278,18 @@ func (c *Client) Run(ctx context.Context, req RunRequest) (RunSummary, error) {
 	if err != nil {
 		return RunSummary{}, err
 	}
+	initialPopulation := seedPopulation.Genomes
+	if req.ContinuePopulationID != "" {
+		_, continued, err := genotype.LoadPopulationSnapshot(ctx, c.store, req.ContinuePopulationID)
+		if err != nil {
+			return RunSummary{}, err
+		}
+		if len(continued) == 0 {
+			return RunSummary{}, fmt.Errorf("continued population is empty: %s", req.ContinuePopulationID)
+		}
+		initialPopulation = continued
+		req.Population = len(continued)
+	}
 	if err := morphology.EnsureScapeCompatibility(req.Scape); err != nil {
 		return RunSummary{}, err
 	}
@@ -351,7 +364,7 @@ func (c *Client) Run(ctx context.Context, req RunRequest) (RunSummary, error) {
 			Tuner:                tuner,
 			TuneAttempts:         req.TuneAttempts,
 			TuneAttemptPolicy:    attemptPolicy,
-			Initial:              seedPopulation.Genomes,
+			Initial:              initialPopulation,
 		})
 	}
 
@@ -436,6 +449,7 @@ func (c *Client) Run(ctx context.Context, req RunRequest) (RunSummary, error) {
 		Config: stats.RunConfig{
 			RunID:                runID,
 			Scape:                req.Scape,
+			ContinuePopulationID: req.ContinuePopulationID,
 			PopulationSize:       req.Population,
 			Generations:          req.Generations,
 			SurvivalPercentage:   req.SurvivalPercentage,

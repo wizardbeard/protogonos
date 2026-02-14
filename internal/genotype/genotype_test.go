@@ -115,3 +115,29 @@ func TestSavePopulationSnapshotReconcilesMembership(t *testing.T) {
 		t.Fatalf("unexpected population agents: %+v", pop.AgentIDs)
 	}
 }
+
+func TestLoadPopulationSnapshot(t *testing.T) {
+	ctx := context.Background()
+	store := storage.NewMemoryStore()
+	if err := store.Init(ctx); err != nil {
+		t.Fatalf("init store: %v", err)
+	}
+	genomes := []model.Genome{
+		{VersionedRecord: model.VersionedRecord{SchemaVersion: 1, CodecVersion: 1}, ID: "g1"},
+		{VersionedRecord: model.VersionedRecord{SchemaVersion: 1, CodecVersion: 1}, ID: "g2"},
+	}
+	if err := SavePopulationSnapshot(ctx, store, "pop-load", 4, genomes); err != nil {
+		t.Fatalf("seed snapshot: %v", err)
+	}
+
+	pop, loaded, err := LoadPopulationSnapshot(ctx, store, "pop-load")
+	if err != nil {
+		t.Fatalf("load snapshot: %v", err)
+	}
+	if pop.Generation != 4 || len(loaded) != 2 {
+		t.Fatalf("unexpected loaded snapshot pop=%+v genomes=%d", pop, len(loaded))
+	}
+	if loaded[0].ID != "g1" || loaded[1].ID != "g2" {
+		t.Fatalf("unexpected loaded genome ordering: %+v", []string{loaded[0].ID, loaded[1].ID})
+	}
+}

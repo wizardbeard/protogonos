@@ -47,6 +47,36 @@ func SavePopulationSnapshot(ctx context.Context, store storage.Store, population
 	})
 }
 
+func LoadPopulationSnapshot(ctx context.Context, store storage.Store, populationID string) (model.Population, []model.Genome, error) {
+	if store == nil {
+		return model.Population{}, nil, fmt.Errorf("store is required")
+	}
+	if populationID == "" {
+		return model.Population{}, nil, fmt.Errorf("population id is required")
+	}
+
+	pop, ok, err := store.GetPopulation(ctx, populationID)
+	if err != nil {
+		return model.Population{}, nil, err
+	}
+	if !ok {
+		return model.Population{}, nil, fmt.Errorf("population not found: %s", populationID)
+	}
+
+	genomes := make([]model.Genome, 0, len(pop.AgentIDs))
+	for _, agentID := range pop.AgentIDs {
+		g, ok, err := store.GetGenome(ctx, agentID)
+		if err != nil {
+			return model.Population{}, nil, err
+		}
+		if !ok {
+			return model.Population{}, nil, fmt.Errorf("genome not found for population %s agent %s", populationID, agentID)
+		}
+		genomes = append(genomes, g)
+	}
+	return pop, genomes, nil
+}
+
 func reconcilePopulationMembership(ctx context.Context, store storage.Store, populationID string, keep map[string]struct{}) error {
 	population, ok, err := store.GetPopulation(ctx, populationID)
 	if err != nil {

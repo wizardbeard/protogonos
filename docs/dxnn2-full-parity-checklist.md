@@ -13,7 +13,7 @@ Status keys:
 | Reference module | Status | Notes |
 |---|---|---|
 | `polis.erl` | `partial` | Core lifecycle + persistence orchestration implemented, including idempotent init/start state, explicit stop lifecycle, and scape lookup semantics; OTP process/supervision semantics still simplified. |
-| `population_monitor.erl` | `partial` | Generation loop, species-aware selection, quotas, diagnostics, lineage implemented, including early-stop lifecycle controls for fitness-goal/evaluation-limit, `survival_percentage`-driven elite retention semantics, `specie_size_limit` parent-pool capping, and pause/continue/stop control-channel semantics at generation boundaries with live run control via platform/API and explicit `run_id`; remaining fine-grained lifecycle parity pending. |
+| `population_monitor.erl` | `partial` | Generation loop, species-aware selection, quotas, diagnostics, lineage implemented, including early-stop lifecycle controls for fitness-goal/evaluation-limit, `survival_percentage`-driven elite retention semantics, `specie_size_limit` parent-pool capping, pause/continue/stop control-channel semantics with live run control via platform/API and explicit `run_id`, and continuation from persisted population snapshots (`continue_population_id`); remaining fine-grained lifecycle parity pending. |
 | `genotype.erl` | `partial` | Seed/clone/lifecycle/store flows implemented; full reference operation surface still broader. |
 | `records.hrl` | `partial` | Core record equivalents implemented with versioned codecs; full field-level parity still pending. |
 | `map2rec.erl` | `partial` | Baseline conversion parity implemented for `constraint`/`pmp`/`sensor`/`actuator`/`neuron`/`agent`/`cortex`/`specie`/`population` plus `trace`/`stat`/`topology_summary`/`signature`/`champion`; broader record coverage still pending. |
@@ -90,6 +90,7 @@ Status keys:
 - Added population-monitor control-channel semantics (`pause`, `continue`, `stop`) with generation-boundary synchronization tests to mirror reference op-tag control flow.
 - Exposed monitor pause-control flow through platform/API/CLI via `start_paused`/`auto_continue_ms` (`--start-paused`, `--auto-continue-ms`) with config-materialization and integration coverage.
 - Added live run control registry in `polis` keyed by `run_id` and exposed API-level `PauseRun`/`ContinueRun`/`StopRun` controls with controlled-run integration tests.
+- Added population continuation flow (`continue/1` parity path) by loading persisted population snapshots via `continue_population_id`/`--continue-pop-id` and resuming evolution from stored genomes.
 
 ## Highest-priority remaining gaps to reach strict parity
 
