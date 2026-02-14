@@ -42,6 +42,7 @@ type Client struct {
 }
 
 type RunRequest struct {
+	RunID                string
 	Scape                string
 	Population           int
 	Generations          int
@@ -200,6 +201,10 @@ type TopGenomesRequest struct {
 	Limit  int
 }
 
+type MonitorControlRequest struct {
+	RunID string
+}
+
 type ScapeSummaryItem struct {
 	Name        string
 	Description string
@@ -284,7 +289,10 @@ func (c *Client) Run(ctx context.Context, req RunRequest) (RunSummary, error) {
 		eliteCount = 0
 	}
 	now := time.Now().UTC()
-	runID := fmt.Sprintf("%s-%d-%d", req.Scape, req.Seed, now.Unix())
+	runID := req.RunID
+	if runID == "" {
+		runID = fmt.Sprintf("%s-%d-%d", req.Scape, req.Seed, now.Unix())
+	}
 
 	runEvolution := func(useTuning bool) (platform.EvolutionResult, error) {
 		mutation := &evo.PerturbRandomWeight{Rand: rand.New(rand.NewSource(req.Seed + 1000)), MaxDelta: 1.0}
@@ -936,6 +944,39 @@ func (c *Client) ScapeSummary(ctx context.Context, scapeName string) (ScapeSumma
 		Description: summary.Description,
 		BestFitness: summary.BestFitness,
 	}, nil
+}
+
+func (c *Client) PauseRun(ctx context.Context, req MonitorControlRequest) error {
+	if req.RunID == "" {
+		return errors.New("run id is required")
+	}
+	p, err := c.ensurePolis(ctx)
+	if err != nil {
+		return err
+	}
+	return p.PauseRun(req.RunID)
+}
+
+func (c *Client) ContinueRun(ctx context.Context, req MonitorControlRequest) error {
+	if req.RunID == "" {
+		return errors.New("run id is required")
+	}
+	p, err := c.ensurePolis(ctx)
+	if err != nil {
+		return err
+	}
+	return p.ContinueRun(req.RunID)
+}
+
+func (c *Client) StopRun(ctx context.Context, req MonitorControlRequest) error {
+	if req.RunID == "" {
+		return errors.New("run id is required")
+	}
+	p, err := c.ensurePolis(ctx)
+	if err != nil {
+		return err
+	}
+	return p.StopRun(req.RunID)
 }
 
 func (c *Client) ensurePolis(ctx context.Context) (*platform.Polis, error) {

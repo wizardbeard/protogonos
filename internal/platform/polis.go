@@ -40,7 +40,7 @@ type EvolutionConfig struct {
 	Tuner                tuning.Tuner
 	TuneAttempts         int
 	TuneAttemptPolicy    tuning.AttemptPolicy
-	Control              <-chan evo.MonitorCommand
+	Control              chan evo.MonitorCommand
 	Initial              []model.Genome
 }
 
@@ -59,12 +59,14 @@ type Polis struct {
 	mu      sync.RWMutex
 	scapes  map[string]scape.Scape
 	started bool
+	runs    map[string]chan evo.MonitorCommand
 }
 
 func NewPolis(cfg Config) *Polis {
 	return &Polis{
 		store:  cfg.Store,
 		scapes: make(map[string]scape.Scape),
+		runs:   make(map[string]chan evo.MonitorCommand),
 	}
 }
 
@@ -118,9 +120,16 @@ func (p *Polis) GetScape(name string) (scape.Scape, bool) {
 func (p *Polis) Stop() {
 	p.mu.Lock()
 	defer p.mu.Unlock()
+	for _, control := range p.runs {
+		select {
+		case control <- evo.CommandStop:
+		default:
+		}
+	}
 
 	p.started = false
 	p.scapes = make(map[string]scape.Scape)
+	p.runs = make(map[string]chan evo.MonitorCommand)
 }
 
 func (p *Polis) RunEvolution(ctx context.Context, cfg EvolutionConfig) (EvolutionResult, error) {
@@ -152,6 +161,19 @@ func (p *Polis) RunEvolution(ctx context.Context, cfg EvolutionConfig) (Evolutio
 		return EvolutionResult{}, fmt.Errorf("scape not registered: %s", cfg.ScapeName)
 	}
 
+	runID := cfg.RunID
+	if runID == "" {
+		runID = fmt.Sprintf("evo:%s:%d", cfg.ScapeName, cfg.Seed)
+	}
+	control := cfg.Control
+	if control == nil {
+		control = make(chan evo.MonitorCommand, 16)
+	}
+	if err := p.registerRunControl(runID, control); err != nil {
+		return EvolutionResult{}, err
+	}
+	defer p.unregisterRunControl(runID)
+
 	monitor, err := evo.NewPopulationMonitor(evo.MonitorConfig{
 		Scape:                targetScape,
 		Mutation:             cfg.Mutation,
@@ -173,7 +195,7 @@ func (p *Polis) RunEvolution(ctx context.Context, cfg EvolutionConfig) (Evolutio
 		Tuner:                cfg.Tuner,
 		TuneAttempts:         cfg.TuneAttempts,
 		TuneAttemptPolicy:    cfg.TuneAttemptPolicy,
-		Control:              cfg.Control,
+		Control:              control,
 	})
 	if err != nil {
 		return EvolutionResult{}, err
@@ -188,10 +210,7 @@ func (p *Polis) RunEvolution(ctx context.Context, cfg EvolutionConfig) (Evolutio
 		finalGenomes = append(finalGenomes, scored.Genome)
 	}
 	executedGenerations := len(result.BestByGeneration)
-	persistenceRunID := cfg.RunID
-	if persistenceRunID == "" {
-		persistenceRunID = fmt.Sprintf("evo:%s:%d", cfg.ScapeName, cfg.Seed)
-	}
+	persistenceRunID := runID
 	populationID := persistenceRunID
 	if err := genotype.SavePopulationSnapshot(ctx, p.store, populationID, executedGenerations, finalGenomes); err != nil {
 		return EvolutionResult{}, err
@@ -339,6 +358,61 @@ func (p *Polis) updateScapeSummary(ctx context.Context, scapeName string, fitnes
 		summary.BestFitness = fitness
 	}
 	return p.store.SaveScapeSummary(ctx, summary)
+}
+
+func (p *Polis) PauseRun(runID string) error {
+	return p.sendRunCommand(runID, evo.CommandPause)
+}
+
+func (p *Polis) ContinueRun(runID string) error {
+	return p.sendRunCommand(runID, evo.CommandContinue)
+}
+
+func (p *Polis) StopRun(runID string) error {
+	return p.sendRunCommand(runID, evo.CommandStop)
+}
+
+func (p *Polis) registerRunControl(runID string, control chan evo.MonitorCommand) error {
+	if runID == "" {
+		return fmt.Errorf("run id is required")
+	}
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if !p.started {
+		return fmt.Errorf("polis is not initialized")
+	}
+	if _, exists := p.runs[runID]; exists {
+		return fmt.Errorf("run already active: %s", runID)
+	}
+	p.runs[runID] = control
+	return nil
+}
+
+func (p *Polis) unregisterRunControl(runID string) {
+	if runID == "" {
+		return
+	}
+	p.mu.Lock()
+	delete(p.runs, runID)
+	p.mu.Unlock()
+}
+
+func (p *Polis) sendRunCommand(runID string, cmd evo.MonitorCommand) error {
+	if runID == "" {
+		return fmt.Errorf("run id is required")
+	}
+	p.mu.RLock()
+	control, ok := p.runs[runID]
+	p.mu.RUnlock()
+	if !ok {
+		return fmt.Errorf("run not active: %s", runID)
+	}
+	select {
+	case control <- cmd:
+		return nil
+	default:
+		return fmt.Errorf("run control channel is full: %s", runID)
+	}
 }
 
 func (p *Polis) RegisteredScapes() []string {

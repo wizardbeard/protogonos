@@ -22,6 +22,9 @@ func loadRunRequestFromConfig(path string) (protoapi.RunRequest, error) {
 	}
 
 	var req protoapi.RunRequest
+	if v, ok := asString(raw["run_id"]); ok {
+		req.RunID = v
+	}
 	if v, ok := asString(raw["scape"]); ok {
 		req.Scape = v
 	}
@@ -222,6 +225,8 @@ func overrideFromFlags(req *protoapi.RunRequest, set map[string]bool, flagValue 
 			continue
 		}
 		switch name {
+		case "run-id":
+			req.RunID = v.(string)
 		case "scape":
 			req.Scape = v.(string)
 		case "pop":

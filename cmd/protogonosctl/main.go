@@ -128,6 +128,7 @@ func runStart(ctx context.Context, args []string) error {
 func runRun(ctx context.Context, args []string) error {
 	fs := flag.NewFlagSet("run", flag.ContinueOnError)
 	configPath := fs.String("config", "", "optional run config JSON path (map2rec-backed)")
+	runID := fs.String("run-id", "", "explicit run id (optional)")
 	scapeName := fs.String("scape", "xor", "scape name")
 	population := fs.Int("pop", 50, "population size")
 	generations := fs.Int("gens", 100, "generation count")
@@ -183,6 +184,7 @@ func runRun(ctx context.Context, args []string) error {
 	if *configPath == "" {
 		req = protoapi.RunRequest{
 			Scape:                *scapeName,
+			RunID:                *runID,
 			Population:           *population,
 			Generations:          *generations,
 			SurvivalPercentage:   *survivalPercentage,
@@ -223,6 +225,7 @@ func runRun(ctx context.Context, args []string) error {
 	} else {
 		err := overrideFromFlags(&req, setFlags, map[string]any{
 			"scape":                 *scapeName,
+			"run-id":                *runID,
 			"pop":                   *population,
 			"gens":                  *generations,
 			"survival-percentage":   *survivalPercentage,
@@ -770,6 +773,7 @@ func runScapeSummary(ctx context.Context, args []string) error {
 func runBenchmark(ctx context.Context, args []string) error {
 	fs := flag.NewFlagSet("benchmark", flag.ContinueOnError)
 	configPath := fs.String("config", "", "optional run config JSON path (map2rec-backed)")
+	runID := fs.String("run-id", "", "explicit run id (optional)")
 	scapeName := fs.String("scape", "xor", "scape name")
 	population := fs.Int("pop", 50, "population size")
 	generations := fs.Int("gens", 100, "generation count")
@@ -825,6 +829,7 @@ func runBenchmark(ctx context.Context, args []string) error {
 	if *configPath == "" {
 		req = protoapi.RunRequest{
 			Scape:                *scapeName,
+			RunID:                *runID,
 			Population:           *population,
 			Generations:          *generations,
 			SurvivalPercentage:   *survivalPercentage,
@@ -864,6 +869,7 @@ func runBenchmark(ctx context.Context, args []string) error {
 	} else {
 		err := overrideFromFlags(&req, setFlags, map[string]any{
 			"scape":                 *scapeName,
+			"run-id":                *runID,
 			"pop":                   *population,
 			"gens":                  *generations,
 			"survival-percentage":   *survivalPercentage,

@@ -11,6 +11,7 @@ import (
 func TestLoadRunRequestFromConfigUsesConstraintAndPMP(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "run_config.json")
 	payload := map[string]any{
+		"run_id":           "cfg-run-1",
 		"scape":            "gtsa",
 		"seed":             77,
 		"workers":          3,
@@ -56,7 +57,7 @@ func TestLoadRunRequestFromConfigUsesConstraintAndPMP(t *testing.T) {
 	if err != nil {
 		t.Fatalf("load run request: %v", err)
 	}
-	if req.Scape != "gtsa" || req.Seed != 77 || req.Workers != 3 {
+	if req.RunID != "cfg-run-1" || req.Scape != "gtsa" || req.Seed != 77 || req.Workers != 3 {
 		t.Fatalf("unexpected base fields: %+v", req)
 	}
 	if !req.StartPaused || req.AutoContinueAfter != 25*time.Millisecond {

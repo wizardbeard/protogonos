@@ -139,6 +139,7 @@ func TestRunCommandSQLiteConfigLoadsMap2RecAndAllowsFlagOverrides(t *testing.T) 
 		"--store", "sqlite",
 		"--db-path", dbPath,
 		"--config", configPath,
+		"--run-id", "sqlite-config-override-run",
 		"--gens", "2",
 		"--topo-policy", "const",
 		"--topo-count", "2",
@@ -177,6 +178,9 @@ func TestRunCommandSQLiteConfigLoadsMap2RecAndAllowsFlagOverrides(t *testing.T) 
 	}
 	if runCfg.TopologicalPolicy != "const" || runCfg.TopologicalCount != 2 {
 		t.Fatalf("expected topo override const/2, got policy=%s count=%d", runCfg.TopologicalPolicy, runCfg.TopologicalCount)
+	}
+	if runCfg.RunID != "sqlite-config-override-run" {
+		t.Fatalf("expected explicit run id override, got %s", runCfg.RunID)
 	}
 	if runCfg.FitnessPostprocessor != "none" {
 		t.Fatalf("expected fitness postprocessor override none, got %s", runCfg.FitnessPostprocessor)

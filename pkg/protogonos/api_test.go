@@ -541,3 +541,71 @@ func TestClientRunStartPausedControls(t *testing.T) {
 		t.Fatalf("expected full run after auto continue, got %d generations", len(resumed.BestByGeneration))
 	}
 }
+
+func TestClientLiveRunControl(t *testing.T) {
+	base := t.TempDir()
+	client, err := New(Options{
+		StoreKind:     "memory",
+		BenchmarksDir: filepath.Join(base, "benchmarks"),
+		ExportsDir:    filepath.Join(base, "exports"),
+	})
+	if err != nil {
+		t.Fatalf("new client: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = client.Close()
+	})
+
+	runID := "api-live-control"
+	done := make(chan RunSummary, 1)
+	errs := make(chan error, 1)
+	go func() {
+		summary, runErr := client.Run(context.Background(), RunRequest{
+			RunID:         runID,
+			Scape:         "xor",
+			Population:    8,
+			Generations:   4,
+			StartPaused:   true,
+			Selection:     "elite",
+			WeightPerturb: 1.0,
+		})
+		if runErr != nil {
+			errs <- runErr
+			return
+		}
+		done <- summary
+	}()
+
+	select {
+	case <-done:
+		t.Fatal("expected paused run not to complete before continue")
+	case err := <-errs:
+		t.Fatalf("run failed while paused: %v", err)
+	case <-time.After(30 * time.Millisecond):
+	}
+
+	if err := client.ContinueRun(context.Background(), MonitorControlRequest{RunID: runID}); err != nil {
+		t.Fatalf("continue run: %v", err)
+	}
+	if err := client.PauseRun(context.Background(), MonitorControlRequest{RunID: runID}); err != nil {
+		t.Fatalf("pause run: %v", err)
+	}
+	if err := client.StopRun(context.Background(), MonitorControlRequest{RunID: runID}); err != nil {
+		t.Fatalf("stop run: %v", err)
+	}
+
+	select {
+	case err := <-errs:
+		t.Fatalf("run failed after stop: %v", err)
+	case summary := <-done:
+		if len(summary.BestByGeneration) == 0 || len(summary.BestByGeneration) >= 4 {
+			t.Fatalf("expected early-stopped run with partial progress, got %d generations", len(summary.BestByGeneration))
+		}
+	case <-time.After(time.Second):
+		t.Fatal("timeout waiting for controlled run completion")
+	}
+
+	if err := client.ContinueRun(context.Background(), MonitorControlRequest{RunID: runID}); err == nil {
+		t.Fatal("expected continue on inactive run to fail")
+	}
+}

@@ -4,6 +4,7 @@ import (
 	"context"
 	"math/rand"
 	"testing"
+	"time"
 
 	"protogonos/internal/evo"
 	"protogonos/internal/model"
@@ -233,6 +234,83 @@ func TestPolisRunEvolutionRespectsEvaluationLimit(t *testing.T) {
 	}
 	if len(result.BestByGeneration) != 1 {
 		t.Fatalf("expected early stop at evaluation limit, got %d generations", len(result.BestByGeneration))
+	}
+}
+
+func TestPolisRunControlPauseContinueStop(t *testing.T) {
+	store := storage.NewMemoryStore()
+	p := NewPolis(Config{Store: store})
+	if err := p.Init(context.Background()); err != nil {
+		t.Fatalf("init: %v", err)
+	}
+	if err := p.RegisterScape(linearScape{}); err != nil {
+		t.Fatalf("register scape: %v", err)
+	}
+
+	initial := []model.Genome{
+		linearGenome("g0", -1.0),
+		linearGenome("g1", -0.8),
+		linearGenome("g2", -0.6),
+		linearGenome("g3", -0.4),
+	}
+	control := make(chan evo.MonitorCommand, 2)
+	control <- evo.CommandPause
+	runID := "control-run"
+
+	resultCh := make(chan EvolutionResult, 1)
+	errCh := make(chan error, 1)
+	go func() {
+		result, err := p.RunEvolution(context.Background(), EvolutionConfig{
+			RunID:           runID,
+			ScapeName:       "linear",
+			PopulationSize:  len(initial),
+			Generations:     4,
+			EliteCount:      1,
+			Workers:         2,
+			Seed:            77,
+			InputNeuronIDs:  []string{"i"},
+			OutputNeuronIDs: []string{"o"},
+			Mutation:        &evo.PerturbRandomWeight{Rand: rand.New(rand.NewSource(90)), MaxDelta: 0.3},
+			Control:         control,
+			Initial:         initial,
+		})
+		if err != nil {
+			errCh <- err
+			return
+		}
+		resultCh <- result
+	}()
+
+	select {
+	case <-resultCh:
+		t.Fatal("expected paused run not to complete before continue")
+	case err := <-errCh:
+		t.Fatalf("unexpected run error: %v", err)
+	case <-time.After(30 * time.Millisecond):
+	}
+
+	if err := p.ContinueRun(runID); err != nil {
+		t.Fatalf("continue run: %v", err)
+	}
+	if err := p.PauseRun(runID); err != nil {
+		t.Fatalf("pause run: %v", err)
+	}
+	if err := p.StopRun(runID); err != nil {
+		t.Fatalf("stop run: %v", err)
+	}
+
+	select {
+	case err := <-errCh:
+		t.Fatalf("unexpected run error after stop: %v", err)
+	case result := <-resultCh:
+		if len(result.BestByGeneration) == 0 || len(result.BestByGeneration) >= 4 {
+			t.Fatalf("expected early stop with partial progress, got generations=%d", len(result.BestByGeneration))
+		}
+	case <-time.After(time.Second):
+		t.Fatal("timeout waiting for controlled run completion")
+	}
+	if err := p.ContinueRun(runID); err == nil {
+		t.Fatal("expected continue on inactive run to fail")
 	}
 }
 
