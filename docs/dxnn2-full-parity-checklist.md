@@ -24,7 +24,7 @@ Status keys:
 | `tot_topological_mutations.erl` | `done` | Constant + count-scaled topological mutation count policies implemented/tested, with map2rec `constraint.tot_topological_mutations_fs` config materialization support. |
 | `tuning_selection.erl` | `partial` | `best_so_far`/`original`/`dynamic_random` plus reference mode set (`all`, `all_random`, `recent`, `recent_random`, `lastgen`, `lastgen_random`) implemented; full reference policy set pending. |
 | `tuning_duration.erl` | `done` | Fixed/linear decay/topology-scaled attempt policies implemented and tested, including reference aliases (`const`, `nsize_proportional`, `wsize_proportional`). |
-| `cortex.erl` | `partial` | Per-step orchestrator with sensor->nn->actuator loop implemented; distributed/OTP-specific behaviors simplified. |
+| `cortex.erl` | `partial` | Per-step orchestrator with sensor->nn->actuator loop implemented, including vector/chunked actuator dispatch semantics; distributed/OTP-specific process lifecycle/sync semantics remain simplified. |
 | `neuron.erl` | `partial` | Runtime neuron/synapse eval implemented; complete reference semantics breadth pending. |
 | `functions.erl` | `partial` | Core activation/math set implemented; full function catalog parity pending. |
 | `derivatives.erl` | `done` | Derivative registry and tests implemented. |
@@ -102,6 +102,7 @@ Status keys:
 - Added dedicated `hof_top3` selection parity path and wired it across evo selector resolution, API/CLI strategy parsing, and alias-acceptance tests.
 - Aligned `novelty_proportional` with reference placeholder behavior as no-op while preserving clone isolation and postprocessor alias wiring (`nsize_proportional`).
 - Added `tot_n` specie identifier parity and wired specie-identifier selection (`topology|tot_n`) through config/API/runtime and run artifacts.
+- Expanded cortex actuator dispatch parity to support single-actuator vector writes and even chunking across multiple actuators.
 
 ## Highest-priority remaining gaps to reach strict parity
 

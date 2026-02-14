@@ -129,19 +129,45 @@ func (c *Cortex) execute(ctx context.Context, inputs []float64) ([]float64, erro
 	}
 
 	if len(c.genome.ActuatorIDs) > 0 {
-		if len(c.genome.ActuatorIDs) != len(outputs) {
-			return nil, fmt.Errorf("actuator count mismatch: outputs=%d actuators=%d", len(outputs), len(c.genome.ActuatorIDs))
+		chunks, err := splitOutputsForActuators(outputs, len(c.genome.ActuatorIDs))
+		if err != nil {
+			return nil, err
 		}
 		for i, actuatorID := range c.genome.ActuatorIDs {
 			actuator, ok := c.actuators[actuatorID]
 			if !ok {
 				return nil, fmt.Errorf("actuator not registered: %s", actuatorID)
 			}
-			if err := actuator.Write(ctx, []float64{outputs[i]}); err != nil {
+			if err := actuator.Write(ctx, chunks[i]); err != nil {
 				return nil, err
 			}
 		}
 	}
 
 	return outputs, nil
+}
+
+func splitOutputsForActuators(outputs []float64, actuatorCount int) ([][]float64, error) {
+	if actuatorCount <= 0 {
+		return nil, fmt.Errorf("actuator count must be > 0")
+	}
+	// Keep one-to-many compatibility: a single actuator receives the full output
+	// vector, while N actuators receive equal contiguous slices.
+	if actuatorCount == 1 {
+		return [][]float64{append([]float64(nil), outputs...)}, nil
+	}
+	if len(outputs)%actuatorCount != 0 {
+		return nil, fmt.Errorf("actuator/output shape mismatch: outputs=%d actuators=%d", len(outputs), actuatorCount)
+	}
+	chunkSize := len(outputs) / actuatorCount
+	if chunkSize <= 0 {
+		return nil, fmt.Errorf("actuator/output shape mismatch: outputs=%d actuators=%d", len(outputs), actuatorCount)
+	}
+	chunks := make([][]float64, 0, actuatorCount)
+	for i := 0; i < actuatorCount; i++ {
+		start := i * chunkSize
+		end := start + chunkSize
+		chunks = append(chunks, append([]float64(nil), outputs[start:end]...))
+	}
+	return chunks, nil
 }
