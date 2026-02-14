@@ -731,3 +731,44 @@ func TestClientRunContinuePopulationScapeMismatchFailsFast(t *testing.T) {
 		t.Fatal("expected scape mismatch compatibility error")
 	}
 }
+
+func TestClientRunContinueDefaultsRunIDToPopulationID(t *testing.T) {
+	base := t.TempDir()
+	client, err := New(Options{
+		StoreKind:     "memory",
+		BenchmarksDir: filepath.Join(base, "benchmarks"),
+		ExportsDir:    filepath.Join(base, "exports"),
+	})
+	if err != nil {
+		t.Fatalf("new client: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = client.Close()
+	})
+
+	_, err = client.Run(context.Background(), RunRequest{
+		RunID:         "cont-pop-id",
+		Scape:         "xor",
+		Population:    8,
+		Generations:   1,
+		Selection:     "elite",
+		WeightPerturb: 1.0,
+	})
+	if err != nil {
+		t.Fatalf("seed run: %v", err)
+	}
+
+	continued, err := client.Run(context.Background(), RunRequest{
+		ContinuePopulationID: "cont-pop-id",
+		Scape:                "xor",
+		Generations:          1,
+		Selection:            "elite",
+		WeightPerturb:        1.0,
+	})
+	if err != nil {
+		t.Fatalf("continued run: %v", err)
+	}
+	if continued.RunID != "cont-pop-id" {
+		t.Fatalf("expected continued run id to default to population id cont-pop-id, got %s", continued.RunID)
+	}
+}

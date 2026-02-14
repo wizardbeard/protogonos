@@ -94,6 +94,7 @@ Status keys:
 - Added fail-fast IO compatibility validation for continued populations against the target scape (`EnsurePopulationIOCompatibility`) to prevent deferred worker-time mismatches.
 - Added generation-offset continuation semantics so resumed runs continue absolute generation numbering and persisted population generations from snapshot state.
 - Added `initial_generation` artifact/config persistence for continued runs to make generation-offset provenance explicit in exported run metadata.
+- Aligned continuation identity semantics closer to reference `continue/1`: when `continue_population_id` is set and `run_id` is omitted, the continued run reuses the population ID as run identity.
 
 ## Highest-priority remaining gaps to reach strict parity
 

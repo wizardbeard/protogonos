@@ -308,6 +308,9 @@ func (c *Client) Run(ctx context.Context, req RunRequest) (RunSummary, error) {
 	}
 	now := time.Now().UTC()
 	runID := req.RunID
+	if runID == "" && req.ContinuePopulationID != "" {
+		runID = req.ContinuePopulationID
+	}
 	if runID == "" {
 		runID = fmt.Sprintf("%s-%d-%d", req.Scape, req.Seed, now.Unix())
 	}
