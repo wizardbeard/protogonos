@@ -2,8 +2,6 @@ package evo
 
 import (
 	"math"
-
-	"protogonos/internal/model"
 )
 
 const sizeProportionalEfficiency = 0.05
@@ -46,6 +44,10 @@ func (SizeProportionalPostprocessor) Process(scored []ScoredGenome) []ScoredGeno
 
 // NoveltyProportionalPostprocessor boosts genomes with greater population
 // novelty based on topology-level differences.
+//
+// Reference DXNN2 leaves novelty_proportional as a placeholder (`void`).
+// Keep this as a no-op for parity and stability until a reference-backed
+// novelty definition is adopted.
 type NoveltyProportionalPostprocessor struct{}
 
 func (NoveltyProportionalPostprocessor) Name() string {
@@ -53,34 +55,7 @@ func (NoveltyProportionalPostprocessor) Name() string {
 }
 
 func (NoveltyProportionalPostprocessor) Process(scored []ScoredGenome) []ScoredGenome {
-	out := cloneScored(scored)
-	if len(out) <= 1 {
-		return out
-	}
-
-	for i := range out {
-		novelty := 0.0
-		for j := range out {
-			if i == j {
-				continue
-			}
-			novelty += topologyDistance(out[i].Genome, out[j].Genome)
-		}
-		novelty /= float64(len(out) - 1)
-		out[i].Fitness = out[i].Fitness * (1.0 + novelty)
-	}
-	return out
-}
-
-func topologyDistance(a, b model.Genome) float64 {
-	an := float64(len(a.Neurons))
-	bn := float64(len(b.Neurons))
-	as := float64(len(a.Synapses))
-	bs := float64(len(b.Synapses))
-
-	nd := math.Abs(an - bn)
-	sd := math.Abs(as - bs)
-	return (nd + sd) / 2.0
+	return cloneScored(scored)
 }
 
 func cloneScored(scored []ScoredGenome) []ScoredGenome {

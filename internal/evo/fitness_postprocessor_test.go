@@ -35,3 +35,23 @@ func TestSizeProportionalPostprocessorKeepsCloneIsolation(t *testing.T) {
 		t.Fatal("expected postprocessor output to be cloned from input")
 	}
 }
+
+func TestNoveltyProportionalPostprocessorIsNoopForReferenceParity(t *testing.T) {
+	scored := []ScoredGenome{
+		{Genome: newLinearGenome("a", 1), Fitness: 0.7},
+		{Genome: newComplexLinearGenome("b", 1), Fitness: 0.4},
+	}
+	out := NoveltyProportionalPostprocessor{}.Process(scored)
+	if len(out) != len(scored) {
+		t.Fatalf("unexpected output length: got=%d want=%d", len(out), len(scored))
+	}
+	for i := range out {
+		if out[i].Fitness != scored[i].Fitness {
+			t.Fatalf("expected no-op novelty postprocessor at index %d: got=%f want=%f", i, out[i].Fitness, scored[i].Fitness)
+		}
+	}
+	out[0].Fitness = 999
+	if scored[0].Fitness == 999 {
+		t.Fatal("expected postprocessor output to be cloned from input")
+	}
+}

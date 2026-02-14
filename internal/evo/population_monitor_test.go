@@ -974,7 +974,7 @@ func TestPopulationMonitorGatesIncompatibleContextualMutations(t *testing.T) {
 	}
 }
 
-func TestNoveltyPostprocessorBoostsTopologyOutlier(t *testing.T) {
+func TestNoveltyPostprocessorIsNoopForReferenceParity(t *testing.T) {
 	scored := []ScoredGenome{
 		{Genome: newLinearGenome("a", 1), Fitness: 1},
 		{Genome: newLinearGenome("b", 1), Fitness: 1},
@@ -982,8 +982,13 @@ func TestNoveltyPostprocessorBoostsTopologyOutlier(t *testing.T) {
 	}
 	out := NoveltyProportionalPostprocessor{}.Process(scored)
 
-	if out[2].Fitness <= out[0].Fitness {
-		t.Fatalf("expected topology outlier to receive novelty boost: %+v", out)
+	if len(out) != len(scored) {
+		t.Fatalf("unexpected output length: got=%d want=%d", len(out), len(scored))
+	}
+	for i := range out {
+		if out[i].Fitness != scored[i].Fitness {
+			t.Fatalf("expected no-op novelty postprocessor at index %d: got=%f want=%f", i, out[i].Fitness, scored[i].Fitness)
+		}
 	}
 }
 
