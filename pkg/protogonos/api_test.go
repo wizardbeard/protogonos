@@ -670,6 +670,9 @@ func TestClientRunCanContinueFromPopulationSnapshot(t *testing.T) {
 	if config.ContinuePopulationID != "pop-seed" {
 		t.Fatalf("expected continue population id pop-seed, got %s", config.ContinuePopulationID)
 	}
+	if config.InitialGeneration != 2 {
+		t.Fatalf("expected initial generation 2 for continued run, got %d", config.InitialGeneration)
+	}
 	if config.PopulationSize != 8 {
 		t.Fatalf("expected continued run to use snapshot population size 8, got %d", config.PopulationSize)
 	}

@@ -309,6 +309,9 @@ func TestRunCommandSQLiteCanContinueFromPopulationSnapshot(t *testing.T) {
 	if runCfg.ContinuePopulationID != baseRunID {
 		t.Fatalf("expected continue population id %s, got %s", baseRunID, runCfg.ContinuePopulationID)
 	}
+	if runCfg.InitialGeneration != 2 {
+		t.Fatalf("expected continued initial generation 2, got %d", runCfg.InitialGeneration)
+	}
 	if runCfg.PopulationSize != 8 {
 		t.Fatalf("expected continued population size 8 from snapshot, got %d", runCfg.PopulationSize)
 	}

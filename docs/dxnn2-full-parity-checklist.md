@@ -93,6 +93,7 @@ Status keys:
 - Added population continuation flow (`continue/1` parity path) by loading persisted population snapshots via `continue_population_id`/`--continue-pop-id` and resuming evolution from stored genomes.
 - Added fail-fast IO compatibility validation for continued populations against the target scape (`EnsurePopulationIOCompatibility`) to prevent deferred worker-time mismatches.
 - Added generation-offset continuation semantics so resumed runs continue absolute generation numbering and persisted population generations from snapshot state.
+- Added `initial_generation` artifact/config persistence for continued runs to make generation-offset provenance explicit in exported run metadata.
 
 ## Highest-priority remaining gaps to reach strict parity
 

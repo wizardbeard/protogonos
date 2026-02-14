@@ -456,6 +456,7 @@ func (c *Client) Run(ctx context.Context, req RunRequest) (RunSummary, error) {
 			RunID:                runID,
 			Scape:                req.Scape,
 			ContinuePopulationID: req.ContinuePopulationID,
+			InitialGeneration:    initialGeneration,
 			PopulationSize:       req.Population,
 			Generations:          req.Generations,
 			SurvivalPercentage:   req.SurvivalPercentage,
