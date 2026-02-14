@@ -96,6 +96,7 @@ Status keys:
 - Added `initial_generation` artifact/config persistence for continued runs to make generation-offset provenance explicit in exported run metadata.
 - Aligned continuation identity semantics closer to reference `continue/1`: when `continue_population_id` is set and `run_id` is omitted, the continued run reuses the population ID as run identity.
 - Added append-on-continue persistence semantics: when a continuation reuses an existing run identity, prior fitness/diagnostics/species/lineage/top-genome history is merged and extended instead of being replaced.
+- Added CLI live-control command surface `monitor pause|continue|stop --run-id ...` mapped to platform/API run-control registry semantics.
 
 ## Highest-priority remaining gaps to reach strict parity
 

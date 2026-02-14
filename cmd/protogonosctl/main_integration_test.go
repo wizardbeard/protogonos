@@ -1111,6 +1111,44 @@ func TestProfileShowCommandJSON(t *testing.T) {
 	}
 }
 
+func TestMonitorCommandReturnsRunNotActiveForUnknownRun(t *testing.T) {
+	origWD, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("getwd: %v", err)
+	}
+	workdir := t.TempDir()
+	if err := os.Chdir(workdir); err != nil {
+		t.Fatalf("chdir tempdir: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = os.Chdir(origWD)
+	})
+
+	dbPath := filepath.Join(workdir, "protogonos.db")
+	if err := run(context.Background(), []string{
+		"monitor", "continue",
+		"--store", "sqlite",
+		"--db-path", dbPath,
+		"--run-id", "monitor-live",
+	}); err == nil || !strings.Contains(err.Error(), "run not active") {
+		t.Fatalf("expected run not active error, got %v", err)
+	}
+}
+
+func TestMonitorCommandValidation(t *testing.T) {
+	if err := run(context.Background(), []string{"monitor"}); err == nil {
+		t.Fatal("expected missing action error")
+	}
+
+	if err := run(context.Background(), []string{"monitor", "pause"}); err == nil {
+		t.Fatal("expected missing run-id error")
+	}
+
+	if err := run(context.Background(), []string{"monitor", "invalid", "--run-id", "x"}); err == nil {
+		t.Fatal("expected unknown action error")
+	}
+}
+
 func captureStdout(fn func() error) (string, error) {
 	origStdout := os.Stdout
 	r, w, err := os.Pipe()
