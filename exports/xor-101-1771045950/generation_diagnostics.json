@@ -1,0 +1,74 @@
+[
+  {
+    "generation": 1,
+    "best_fitness": 0.6801663016213432,
+    "mean_fitness": 0.6007236227614349,
+    "min_fitness": 0.5034467965675402,
+    "species_count": 1,
+    "fingerprint_diversity": 1,
+    "speciation_threshold": 0.9,
+    "target_species_count": 3,
+    "mean_species_size": 12,
+    "largest_species_size": 12
+  },
+  {
+    "generation": 2,
+    "best_fitness": 0.6944492846659766,
+    "mean_fitness": 0.667371227501008,
+    "min_fitness": 0.5691651665909843,
+    "species_count": 1,
+    "fingerprint_diversity": 3,
+    "speciation_threshold": 0.8,
+    "target_species_count": 3,
+    "mean_species_size": 12,
+    "largest_species_size": 12
+  },
+  {
+    "generation": 3,
+    "best_fitness": 0.7077504990394845,
+    "mean_fitness": 0.6783023921370739,
+    "min_fitness": 0.5843271482780488,
+    "species_count": 2,
+    "fingerprint_diversity": 5,
+    "speciation_threshold": 0.7000000000000001,
+    "target_species_count": 3,
+    "mean_species_size": 6,
+    "largest_species_size": 10
+  },
+  {
+    "generation": 4,
+    "best_fitness": 0.7424951886263482,
+    "mean_fitness": 0.6762715125160298,
+    "min_fitness": 0.5797292385616977,
+    "species_count": 2,
+    "fingerprint_diversity": 4,
+    "speciation_threshold": 0.6000000000000001,
+    "target_species_count": 3,
+    "mean_species_size": 6,
+    "largest_species_size": 7
+  },
+  {
+    "generation": 5,
+    "best_fitness": 0.7460392518066306,
+    "mean_fitness": 0.7112979484757531,
+    "min_fitness": 0.6486199533708181,
+    "species_count": 3,
+    "fingerprint_diversity": 4,
+    "speciation_threshold": 0.6000000000000001,
+    "target_species_count": 3,
+    "mean_species_size": 4,
+    "largest_species_size": 7
+  },
+  {
+    "generation": 6,
+    "best_fitness": 0.788777441919371,
+    "mean_fitness": 0.7176135559493405,
+    "min_fitness": 0.6461826251427052,
+    "species_count": 5,
+    "fingerprint_diversity": 6,
+    "speciation_threshold": 0.7000000000000001,
+    "target_species_count": 3,
+    "mean_species_size": 2.4,
+    "largest_species_size": 5
+  }
+]

@@ -1,5 +1,113 @@
 [
   {
+    "run_id": "regression-mimic-202-1771048976",
+    "scape": "regression-mimic",
+    "population_size": 12,
+    "generations": 6,
+    "seed": 202,
+    "workers": 2,
+    "elite_count": 2,
+    "tuning_enabled": false,
+    "final_best_fitness": 0.9999032100657194,
+    "created_at_utc": "2026-02-14T06:02:56.593318722Z"
+  },
+  {
+    "run_id": "xor-101-1771048975",
+    "scape": "xor",
+    "population_size": 12,
+    "generations": 6,
+    "seed": 101,
+    "workers": 2,
+    "elite_count": 2,
+    "tuning_enabled": false,
+    "final_best_fitness": 0.788777441919371,
+    "created_at_utc": "2026-02-14T06:02:55.381359289Z"
+  },
+  {
+    "run_id": "cart-pole-lite-303-1771047312",
+    "scape": "cart-pole-lite",
+    "population_size": 12,
+    "generations": 6,
+    "seed": 303,
+    "workers": 2,
+    "elite_count": 2,
+    "tuning_enabled": false,
+    "final_best_fitness": 0.9466451545272846,
+    "created_at_utc": "2026-02-14T05:35:12.87084426Z"
+  },
+  {
+    "run_id": "regression-mimic-202-1771047311",
+    "scape": "regression-mimic",
+    "population_size": 12,
+    "generations": 6,
+    "seed": 202,
+    "workers": 2,
+    "elite_count": 2,
+    "tuning_enabled": false,
+    "final_best_fitness": 0.9999032100657194,
+    "created_at_utc": "2026-02-14T05:35:11.904028752Z"
+  },
+  {
+    "run_id": "xor-101-1771047310",
+    "scape": "xor",
+    "population_size": 12,
+    "generations": 6,
+    "seed": 101,
+    "workers": 2,
+    "elite_count": 2,
+    "tuning_enabled": false,
+    "final_best_fitness": 0.788777441919371,
+    "created_at_utc": "2026-02-14T05:35:10.878827563Z"
+  },
+  {
+    "run_id": "cart-pole-lite-303-1771045952",
+    "scape": "cart-pole-lite",
+    "population_size": 12,
+    "generations": 6,
+    "seed": 303,
+    "workers": 2,
+    "elite_count": 2,
+    "tuning_enabled": false,
+    "final_best_fitness": 0.9466451545272846,
+    "created_at_utc": "2026-02-14T05:12:32.894071567Z"
+  },
+  {
+    "run_id": "regression-mimic-202-1771045951",
+    "scape": "regression-mimic",
+    "population_size": 12,
+    "generations": 6,
+    "seed": 202,
+    "workers": 2,
+    "elite_count": 2,
+    "tuning_enabled": false,
+    "final_best_fitness": 0.9999032100657194,
+    "created_at_utc": "2026-02-14T05:12:31.812311786Z"
+  },
+  {
+    "run_id": "xor-101-1771045950",
+    "scape": "xor",
+    "population_size": 12,
+    "generations": 6,
+    "seed": 101,
+    "workers": 2,
+    "elite_count": 2,
+    "tuning_enabled": false,
+    "final_best_fitness": 0.788777441919371,
+    "created_at_utc": "2026-02-14T05:12:30.710890733Z"
+  },
+  {
+    "run_id": "cart-pole-lite-303-1771044518",
+    "scape": "cart-pole-lite",
+    "population_size": 12,
+    "generations": 6,
+    "seed": 303,
+    "workers": 2,
+    "elite_count": 2,
+    "tuning_enabled": false,
+    "final_best_fitness": 0.9466451545272846,
+    "created_at_utc": "2026-02-14T04:48:38.714574285Z"
+  },
+  {
     "run_id": "regression-mimic-202-1771044517",
     "scape": "regression-mimic",
     "population_size": 12,
@@ -588,7 +696,7 @@
     "created_at_utc": "2026-02-10T01:19:44Z"
   },
   {
-    "run_id": "cart-pole-lite-303-1771044518",
+    "run_id": "cart-pole-lite-303-1771048977",
     "scape": "cart-pole-lite",
     "population_size": 12,
     "generations": 6,
@@ -597,6 +705,6 @@
     "elite_count": 2,
     "tuning_enabled": false,
     "final_best_fitness": 0.9466451545272846,
-    "created_at_utc": "2026-02-14T04:48:38.714574285Z"
+    "created_at_utc": "2026-02-14T06:02:57.72582772Z"
   }
 ]

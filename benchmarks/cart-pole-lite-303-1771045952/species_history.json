@@ -1,0 +1,140 @@
+[
+  {
+    "generation": 1,
+    "species": [
+      {
+        "key": "sp-001",
+        "size": 12,
+        "mean_fitness": 0.7015038814665515,
+        "best_fitness": 0.9105842157608967
+      }
+    ],
+    "new_species": [
+      "sp-001"
+    ]
+  },
+  {
+    "generation": 2,
+    "species": [
+      {
+        "key": "sp-001",
+        "size": 10,
+        "mean_fitness": 0.859181535224279,
+        "best_fitness": 0.9159914626439691
+      },
+      {
+        "key": "sp-002",
+        "size": 2,
+        "mean_fitness": 0.8699930778992884,
+        "best_fitness": 0.8755623948234161
+      }
+    ],
+    "new_species": [
+      "sp-002"
+    ]
+  },
+  {
+    "generation": 3,
+    "species": [
+      {
+        "key": "sp-001",
+        "size": 6,
+        "mean_fitness": 0.8912012351917805,
+        "best_fitness": 0.9159914626439691
+      },
+      {
+        "key": "sp-002",
+        "size": 4,
+        "mean_fitness": 0.8679704624213516,
+        "best_fitness": 0.8755623948234161
+      },
+      {
+        "key": "sp-003",
+        "size": 2,
+        "mean_fitness": 0.6970843699021656,
+        "best_fitness": 0.8428054829851175
+      }
+    ],
+    "new_species": [
+      "sp-003"
+    ]
+  },
+  {
+    "generation": 4,
+    "species": [
+      {
+        "key": "sp-001",
+        "size": 7,
+        "mean_fitness": 0.9025755298561293,
+        "best_fitness": 0.9349191332545828
+      },
+      {
+        "key": "sp-002",
+        "size": 2,
+        "mean_fitness": 0.8715171638675425,
+        "best_fitness": 0.8755623948234161
+      },
+      {
+        "key": "sp-003",
+        "size": 3,
+        "mean_fitness": 0.8428054829851175,
+        "best_fitness": 0.8428054829851175
+      }
+    ]
+  },
+  {
+    "generation": 5,
+    "species": [
+      {
+        "key": "sp-001",
+        "size": 6,
+        "mean_fitness": 0.929642704332739,
+        "best_fitness": 0.9379464304175156
+      },
+      {
+        "key": "sp-002",
+        "size": 3,
+        "mean_fitness": 0.870168753548918,
+        "best_fitness": 0.8755623948234161
+      },
+      {
+        "key": "sp-003",
+        "size": 3,
+        "mean_fitness": 0.8428054829851175,
+        "best_fitness": 0.8428054829851175
+      }
+    ]
+  },
+  {
+    "generation": 6,
+    "species": [
+      {
+        "key": "sp-001",
+        "size": 6,
+        "mean_fitness": 0.929680134865127,
+        "best_fitness": 0.9466451545272846
+      },
+      {
+        "key": "sp-002",
+        "size": 2,
+        "mean_fitness": 0.8715171638675425,
+        "best_fitness": 0.8755623948234161
+      },
+      {
+        "key": "sp-003",
+        "size": 3,
+        "mean_fitness": 0.8428054829851175,
+        "best_fitness": 0.8428054829851175
+      },
+      {
+        "key": "sp-004",
+        "size": 1,
+        "mean_fitness": 0.9349191332545828,
+        "best_fitness": 0.9349191332545828
+      }
+    ],
+    "new_species": [
+      "sp-004"
+    ]
+  }
+]
