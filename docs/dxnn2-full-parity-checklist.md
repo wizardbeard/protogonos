@@ -105,6 +105,7 @@ Status keys:
 - Expanded cortex actuator dispatch parity to support single-actuator vector writes and even chunking across multiple actuators.
 - Aligned neuron forward-path output clipping with reference neuron saturation semantics (`OUTPUT_SAT_LIMIT=1`).
 - Expanded NN activation registry toward reference `functions.erl` with additional built-ins and behavior tests (sin/cos/gaussian/sqrt/log/threshold-style activations).
+- Expanded derivative parity toward reference `derivatives.erl` (including `linear`, `sigmoid1`, `multiquadric`, `sqrt`, `log`, and clipping parity in `sigmoid`/`gaussian` derivatives).
 
 ## Highest-priority remaining gaps to reach strict parity
 

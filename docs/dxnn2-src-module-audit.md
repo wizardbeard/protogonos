@@ -36,7 +36,7 @@ Status legend:
 | `tuning_duration.erl` | tuning-attempt duration policies | `internal/tuning/policy.go` + API/CLI/config alias normalization (`const`/`nsize_proportional`/`wsize_proportional`) | `partial` | `internal/tuning/policy.go`, `pkg/protogonos/api.go`, `cmd/protogonosctl/config.go`, `.ref/src/tuning_duration.erl` |
 | `tot_topological_mutations.erl` | mutation-count policy functions | `internal/evo/topological_mutations.go` + monitor integration + map2rec constraint materialization into run config | `partial` | `internal/evo/topological_mutations.go`, `internal/evo/population_monitor.go`, `cmd/protogonosctl/config.go`, `.ref/src/tot_topological_mutations.erl` |
 | `functions.erl` | activation/math utility set | `internal/nn/registry.go` built-ins with expanded reference-style activation catalog (sin/cos/gaussian/sqrt/log/threshold families) | `partial` | `internal/nn/registry.go`, `internal/nn/registry_test.go`, `.ref/src/functions.erl` |
-| `derivatives.erl` | derivative functions for activations | `internal/nn/derivatives.go` | `partial` | `internal/nn/derivatives.go`, `.ref/src/derivatives.erl` |
+| `derivatives.erl` | derivative functions for activations | `internal/nn/derivatives.go` with expanded reference-style derivative surface (`linear`/`sigmoid1`/`multiquadric`/`sqrt`/`log` plus clipping parity for `sigmoid`/`gaussian`) | `implemented` | `internal/nn/derivatives.go`, `internal/nn/derivatives_test.go`, `.ref/src/derivatives.erl` |
 | `plasticity.erl` | Hebbian/Oja/etc plasticity rules | `internal/nn/plasticity.go` + cortex integration | `partial` | `internal/nn/plasticity.go`, `internal/agent/cortex.go`, `.ref/src/plasticity.erl` |
 | `signal_aggregator.erl` | dot/mult/diff aggregation modes | selectable per-neuron aggregation in forward path | `partial` | `internal/nn/network.go`, `internal/nn/network_test.go`, `.ref/src/signal_aggregator.erl` |
 | `genotype.erl` | construction/cloning/deletion/fingerprint topologies | seed builders + model/store basics + topology fingerprint/signature + genotype utility package | `partial` | `cmd/protogonosctl/main.go`, `pkg/protogonos/api.go`, `internal/model/types.go`, `internal/genotype/*`, `.ref/src/genotype.erl` |
@@ -58,8 +58,8 @@ Status legend:
 
 ## Summary
 
-- `implemented`: 3
-- `partial`: 26
+- `implemented`: 4
+- `partial`: 25
 - `missing`: 0
 - `out-of-scope-now`: 4
 
