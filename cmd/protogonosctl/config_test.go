@@ -25,6 +25,7 @@ func TestLoadRunRequestFromConfigUsesConstraintAndPMP(t *testing.T) {
 			"generation_limit":    9,
 			"evaluations_limit":   111,
 			"fitness_goal":        0.88,
+			"population_id":       "pmp-pop",
 		},
 		"constraint": map[string]any{
 			"population_selection_f":             "hof_competition",
@@ -90,6 +91,35 @@ func TestLoadRunRequestFromConfigUsesConstraintAndPMP(t *testing.T) {
 	}
 	if req.WeightBias != 5 || req.WeightRemoveBias != 1 || req.WeightActivation != 6 || req.WeightAggregator != 7 || req.WeightAddSynapse != 4 || req.WeightAddNeuron != 3 || req.WeightPlasticityRule != 8 || req.WeightPlasticity != 2 {
 		t.Fatalf("unexpected mapped mutation weights: %+v", req)
+	}
+}
+
+func TestLoadRunRequestFromConfigUsesPMPPopulationIDForContinuationDefaults(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "run_config_pmp_pop.json")
+	payload := map[string]any{
+		"scape": "xor",
+		"pmp": map[string]any{
+			"population_id":    "pmp-cont-pop",
+			"init_specie_size": 7,
+		},
+	}
+	data, err := json.Marshal(payload)
+	if err != nil {
+		t.Fatalf("marshal payload: %v", err)
+	}
+	if err := os.WriteFile(path, data, 0o644); err != nil {
+		t.Fatalf("write config: %v", err)
+	}
+
+	req, err := loadRunRequestFromConfig(path)
+	if err != nil {
+		t.Fatalf("load run request: %v", err)
+	}
+	if req.ContinuePopulationID != "pmp-cont-pop" {
+		t.Fatalf("expected continue population id from pmp population_id, got %s", req.ContinuePopulationID)
+	}
+	if req.RunID != "pmp-cont-pop" {
+		t.Fatalf("expected run id default from pmp population_id, got %s", req.RunID)
 	}
 }
 

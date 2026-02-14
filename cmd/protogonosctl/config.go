@@ -153,6 +153,14 @@ func loadRunRequestFromConfig(path string) (protoapi.RunRequest, error) {
 
 	if pmpMap, ok := raw["pmp"].(map[string]any); ok {
 		pmp := map2rec.ConvertPMP(pmpMap)
+		if _, hasPopulationID := pmpMap["population_id"]; hasPopulationID {
+			if req.ContinuePopulationID == "" && pmp.PopulationID != "" {
+				req.ContinuePopulationID = pmp.PopulationID
+			}
+			if req.RunID == "" && pmp.PopulationID != "" {
+				req.RunID = pmp.PopulationID
+			}
+		}
 		if req.SurvivalPercentage == 0 {
 			req.SurvivalPercentage = pmp.SurvivalPercentage
 		}
