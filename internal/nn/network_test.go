@@ -139,3 +139,26 @@ func TestForwardUnsupportedAggregator(t *testing.T) {
 		t.Fatal("expected unsupported aggregator error")
 	}
 }
+
+func TestMultProductUsesMultiplicativeBiasParity(t *testing.T) {
+	genome := model.Genome{
+		Neurons: []model.Neuron{
+			{ID: "i1", Activation: "identity"},
+			{ID: "i2", Activation: "identity"},
+			{ID: "o", Activation: "identity", Aggregator: "mult_product", Bias: 3.0},
+		},
+		Synapses: []model.Synapse{
+			{ID: "s1", From: "i1", To: "o", Weight: 1, Enabled: true},
+			{ID: "s2", From: "i2", To: "o", Weight: 2, Enabled: true},
+		},
+	}
+
+	values, err := Forward(genome, map[string]float64{"i1": 0.1, "i2": 0.2})
+	if err != nil {
+		t.Fatalf("forward: %v", err)
+	}
+	// (0.1*1)*(0.2*2)*3 = 0.12
+	if math.Abs(values["o"]-0.12) > 1e-9 {
+		t.Fatalf("unexpected mult_product output with multiplicative bias: got=%f want=0.12", values["o"])
+	}
+}

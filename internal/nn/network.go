@@ -77,7 +77,12 @@ func aggregateIncoming(mode string, bias float64, synapses []model.Synapse, valu
 		for _, synapse := range synapses {
 			total *= values[synapse.From] * synapse.Weight
 		}
-		return total + bias, nil
+		// Reference mult_product is multiplicative; treat neuron bias as a
+		// multiplicative factor when present.
+		if bias != 0 {
+			total *= bias
+		}
+		return total, nil
 	case "diff_product":
 		if len(synapses) == 0 {
 			return bias, nil
