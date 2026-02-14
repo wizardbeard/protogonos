@@ -145,10 +145,15 @@ func TestExoselfExtendedSelectionModesSupported(t *testing.T) {
 		return g.Synapses[0].Weight, nil
 	}
 	modes := []string{
+		CandidateSelectDynamicA,
 		CandidateSelectAll,
 		CandidateSelectAllRandom,
+		CandidateSelectActive,
+		CandidateSelectActiveRnd,
 		CandidateSelectRecent,
 		CandidateSelectRecentRnd,
+		CandidateSelectCurrent,
+		CandidateSelectCurrentRd,
 		CandidateSelectLastGen,
 		CandidateSelectLastGenRd,
 	}
@@ -170,11 +175,16 @@ func TestNormalizeCandidateSelectionName(t *testing.T) {
 		"":                 CandidateSelectBestSoFar,
 		"best_so_far":      CandidateSelectBestSoFar,
 		"original":         CandidateSelectOriginal,
+		"dynamic":          CandidateSelectDynamicA,
 		"dynamic_random":   CandidateSelectDynamic,
 		"all":              CandidateSelectAll,
 		"all_random":       CandidateSelectAllRandom,
+		"active":           CandidateSelectActive,
+		"active_random":    CandidateSelectActiveRnd,
 		"recent":           CandidateSelectRecent,
 		"recent_random":    CandidateSelectRecentRnd,
+		"current":          CandidateSelectCurrent,
+		"current_random":   CandidateSelectCurrentRd,
 		"lastgen":          CandidateSelectLastGen,
 		"lastgen_random":   CandidateSelectLastGenRd,
 		"unknown_mode_xyz": "unknown_mode_xyz",

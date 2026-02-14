@@ -22,7 +22,7 @@ Status keys:
 | `fitness_postprocessor.erl` | `done` | Reference postprocessor surface implemented: `none`, `size_proportional` (with `EFF=0.05` scaling), and `novelty_proportional` placeholder semantics aligned as no-op; `nsize_proportional` alias and map2rec `constraint.population_fitness_postprocessor_f` materialization wired through CLI/API. |
 | `specie_identifier.erl` | `done` | Reference `tot_n` specie distinguisher parity implemented, plus topology-based identifier support and adaptive species assignment continuity/threshold diagnostics. |
 | `tot_topological_mutations.erl` | `done` | Constant + count-scaled topological mutation count policies implemented/tested, with map2rec `constraint.tot_topological_mutations_fs` config materialization support. |
-| `tuning_selection.erl` | `partial` | `best_so_far`/`original`/`dynamic_random` plus reference mode set (`all`, `all_random`, `recent`, `recent_random`, `lastgen`, `lastgen_random`) implemented; full reference policy set pending. |
+| `tuning_selection.erl` | `partial` | Reference mode-name surface implemented (`dynamic`, `dynamic_random`, `active`, `active_random`, `current`, `current_random`, `all`, `all_random`) plus legacy aliases (`recent`, `recent_random`, `lastgen`, `lastgen_random`); age/spread semantics are still simplified versus source. |
 | `tuning_duration.erl` | `done` | Fixed/linear decay/topology-scaled attempt policies implemented and tested, including reference aliases (`const`, `nsize_proportional`, `wsize_proportional`). |
 | `cortex.erl` | `partial` | Per-step orchestrator with sensor->nn->actuator loop implemented, including vector/chunked actuator dispatch semantics; distributed/OTP-specific process lifecycle/sync semantics remain simplified. |
 | `neuron.erl` | `partial` | Runtime neuron/synapse eval implemented with activation, aggregator modes, and reference-aligned output saturation (`[-1,1]`); complete reference semantics breadth (OTP actor lifecycle, weight backup/restore protocol) pending. |
@@ -109,6 +109,7 @@ Status keys:
 - Added plasticity rule-name alias parity so reference-style PF names (`hebbian_w`, `ojas`, `ojas_w`) map onto runtime Hebbian/Oja updates.
 - Aligned `mult_product` aggregator semantics with reference multiplicative bias behavior and added focused NN parity coverage.
 - Added exoself minimum-improvement gating (`tune_min_improvement`) across tuner runtime, CLI/config/API wiring, and validation coverage.
+- Added tuning-selection alias parity for reference mode names (`dynamic`, `active`, `active_random`, `current`, `current_random`) with CLI/API/config normalization and runtime support.
 
 ## Highest-priority remaining gaps to reach strict parity
 

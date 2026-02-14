@@ -21,11 +21,16 @@ type Exoself struct {
 const (
 	CandidateSelectBestSoFar = "best_so_far"
 	CandidateSelectOriginal  = "original"
+	CandidateSelectDynamicA  = "dynamic"
 	CandidateSelectDynamic   = "dynamic_random"
 	CandidateSelectAll       = "all"
 	CandidateSelectAllRandom = "all_random"
+	CandidateSelectActive    = "active"
+	CandidateSelectActiveRnd = "active_random"
 	CandidateSelectRecent    = "recent"
 	CandidateSelectRecentRnd = "recent_random"
+	CandidateSelectCurrent   = "current"
+	CandidateSelectCurrentRd = "current_random"
 	CandidateSelectLastGen   = "lastgen"
 	CandidateSelectLastGenRd = "lastgen_random"
 )
@@ -125,16 +130,26 @@ func NormalizeCandidateSelectionName(name string) string {
 		return CandidateSelectBestSoFar
 	case CandidateSelectOriginal:
 		return CandidateSelectOriginal
+	case CandidateSelectDynamicA:
+		return CandidateSelectDynamicA
 	case CandidateSelectDynamic:
 		return CandidateSelectDynamic
 	case CandidateSelectAll:
 		return CandidateSelectAll
 	case CandidateSelectAllRandom:
 		return CandidateSelectAllRandom
+	case CandidateSelectActive:
+		return CandidateSelectActive
+	case CandidateSelectActiveRnd:
+		return CandidateSelectActiveRnd
 	case CandidateSelectRecent:
 		return CandidateSelectRecent
 	case CandidateSelectRecentRnd:
 		return CandidateSelectRecentRnd
+	case CandidateSelectCurrent:
+		return CandidateSelectCurrent
+	case CandidateSelectCurrentRd:
+		return CandidateSelectCurrentRd
 	case CandidateSelectLastGen:
 		return CandidateSelectLastGen
 	case CandidateSelectLastGenRd:
@@ -150,14 +165,16 @@ func (e *Exoself) candidateBases(best, original, recent model.Genome) ([]model.G
 		return []model.Genome{cloneGenome(best)}, nil
 	case CandidateSelectOriginal, CandidateSelectLastGen:
 		return []model.Genome{cloneGenome(original)}, nil
+	case CandidateSelectDynamicA:
+		return []model.Genome{cloneGenome(best), cloneGenome(original)}, nil
 	case CandidateSelectDynamic, CandidateSelectLastGenRd:
 		if e.randIntn(2) == 0 {
 			return []model.Genome{cloneGenome(best)}, nil
 		}
 		return []model.Genome{cloneGenome(original)}, nil
-	case CandidateSelectRecent:
+	case CandidateSelectActive, CandidateSelectRecent:
 		return []model.Genome{cloneGenome(recent)}, nil
-	case CandidateSelectRecentRnd:
+	case CandidateSelectActiveRnd, CandidateSelectRecentRnd:
 		switch e.randIntn(3) {
 		case 0:
 			return []model.Genome{cloneGenome(recent)}, nil
@@ -166,9 +183,9 @@ func (e *Exoself) candidateBases(best, original, recent model.Genome) ([]model.G
 		default:
 			return []model.Genome{cloneGenome(original)}, nil
 		}
-	case CandidateSelectAll:
+	case CandidateSelectCurrent, CandidateSelectAll:
 		return []model.Genome{cloneGenome(best), cloneGenome(original), cloneGenome(recent)}, nil
-	case CandidateSelectAllRandom:
+	case CandidateSelectCurrentRd, CandidateSelectAllRandom:
 		switch e.randIntn(3) {
 		case 0:
 			return []model.Genome{cloneGenome(best)}, nil

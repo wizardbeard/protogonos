@@ -424,10 +424,15 @@ func TestClientRunAcceptsReferenceTuningSelectionModes(t *testing.T) {
 	})
 
 	modes := []string{
+		"dynamic",
 		"all",
 		"all_random",
+		"active",
+		"active_random",
 		"recent",
 		"recent_random",
+		"current",
+		"current_random",
 		"lastgen",
 		"lastgen_random",
 	}
