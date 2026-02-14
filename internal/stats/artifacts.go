@@ -43,6 +43,7 @@ type RunConfig struct {
 	TuneAttempts         int     `json:"tune_attempts"`
 	TuneSteps            int     `json:"tune_steps"`
 	TuneStepSize         float64 `json:"tune_step_size"`
+	TuneMinImprovement   float64 `json:"tune_min_improvement"`
 	WeightPerturb        float64 `json:"weight_perturb"`
 	WeightBias           float64 `json:"weight_bias"`
 	WeightRemoveBias     float64 `json:"weight_remove_bias"`

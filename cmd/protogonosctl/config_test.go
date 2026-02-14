@@ -18,6 +18,7 @@ func TestLoadRunRequestFromConfigUsesConstraintAndPMP(t *testing.T) {
 		"workers":                3,
 		"start_paused":           true,
 		"auto_continue_ms":       25,
+		"tune_min_improvement":   0.015,
 		"pmp": map[string]any{
 			"survival_percentage": 0.6,
 			"specie_size_limit":   3,
@@ -85,6 +86,9 @@ func TestLoadRunRequestFromConfigUsesConstraintAndPMP(t *testing.T) {
 	}
 	if req.TuneDurationPolicy != "const" || req.TuneDurationParam != 7 {
 		t.Fatalf("unexpected tune duration mapping: policy=%s param=%f", req.TuneDurationPolicy, req.TuneDurationParam)
+	}
+	if req.TuneMinImprovement != 0.015 {
+		t.Fatalf("unexpected tune min improvement mapping: %f", req.TuneMinImprovement)
 	}
 	if req.TopologicalPolicy != "ncount_exponential" || req.TopologicalParam != 0.8 {
 		t.Fatalf("unexpected topological policy mapping: policy=%s param=%f", req.TopologicalPolicy, req.TopologicalParam)

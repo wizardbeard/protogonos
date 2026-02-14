@@ -99,9 +99,10 @@ func TestRunCommandSQLiteConfigLoadsMap2RecAndAllowsFlagOverrides(t *testing.T) 
 
 	configPath := filepath.Join(workdir, "run_config.json")
 	cfg := map[string]any{
-		"scape":         "xor",
-		"seed":          71,
-		"enable_tuning": true,
+		"scape":                "xor",
+		"seed":                 71,
+		"enable_tuning":        true,
+		"tune_min_improvement": 0.02,
 		"pmp": map[string]any{
 			"init_specie_size":    8,
 			"specie_size_limit":   2,
@@ -199,6 +200,9 @@ func TestRunCommandSQLiteConfigLoadsMap2RecAndAllowsFlagOverrides(t *testing.T) 
 	}
 	if !runCfg.StartPaused || runCfg.AutoContinueAfterMS != 5 {
 		t.Fatalf("expected pause control override start=true auto_ms=5, got start=%t auto_ms=%d", runCfg.StartPaused, runCfg.AutoContinueAfterMS)
+	}
+	if runCfg.TuneMinImprovement != 0.02 {
+		t.Fatalf("expected tune min improvement from config 0.02, got %f", runCfg.TuneMinImprovement)
 	}
 }
 

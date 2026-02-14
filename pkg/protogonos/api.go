@@ -70,6 +70,7 @@ type RunRequest struct {
 	TuneAttempts         int
 	TuneSteps            int
 	TuneStepSize         float64
+	TuneMinImprovement   float64
 	WeightPerturb        float64
 	WeightBias           float64
 	WeightRemoveBias     float64
@@ -331,6 +332,7 @@ func (c *Client) Run(ctx context.Context, req RunRequest) (RunSummary, error) {
 				Rand:               rand.New(rand.NewSource(req.Seed + 2000)),
 				Steps:              req.TuneSteps,
 				StepSize:           req.TuneStepSize,
+				MinImprovement:     req.TuneMinImprovement,
 				CandidateSelection: req.TuneSelection,
 			}
 		}
@@ -490,6 +492,7 @@ func (c *Client) Run(ctx context.Context, req RunRequest) (RunSummary, error) {
 			TuneAttempts:         req.TuneAttempts,
 			TuneSteps:            req.TuneSteps,
 			TuneStepSize:         req.TuneStepSize,
+			TuneMinImprovement:   req.TuneMinImprovement,
 			WeightPerturb:        req.WeightPerturb,
 			WeightBias:           req.WeightBias,
 			WeightRemoveBias:     req.WeightRemoveBias,
@@ -1145,6 +1148,9 @@ func materializeRunConfigFromRequest(req RunRequest) (materializedRunConfig, err
 	}
 	if req.TuneStepSize == 0 {
 		req.TuneStepSize = 0.35
+	}
+	if req.TuneMinImprovement < 0 {
+		return materializedRunConfig{}, errors.New("tune min improvement must be >= 0")
 	}
 	if req.WeightPerturb == 0 && req.WeightBias == 0 && req.WeightRemoveBias == 0 && req.WeightActivation == 0 && req.WeightAggregator == 0 && req.WeightAddSynapse == 0 && req.WeightRemoveSynapse == 0 && req.WeightAddNeuron == 0 && req.WeightRemoveNeuron == 0 && req.WeightPlasticityRule == 0 && req.WeightPlasticity == 0 && req.WeightSubstrate == 0 {
 		req.WeightPerturb = 0.70

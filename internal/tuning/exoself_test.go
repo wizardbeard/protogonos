@@ -69,8 +69,36 @@ func TestExoselfInputValidation(t *testing.T) {
 	if _, err := (&Exoself{Rand: rand.New(rand.NewSource(1)), Steps: 1, StepSize: 1}).Tune(context.Background(), genome, 1, nil); err == nil {
 		t.Fatal("expected fitness validation error")
 	}
+	if _, err := (&Exoself{Rand: rand.New(rand.NewSource(1)), Steps: 1, StepSize: 1, MinImprovement: -0.1}).Tune(context.Background(), genome, 1, fitnessFn); err == nil {
+		t.Fatal("expected min improvement validation error")
+	}
 	if _, err := (&Exoself{Rand: rand.New(rand.NewSource(1)), Steps: 1, StepSize: 1, CandidateSelection: "unknown"}).Tune(context.Background(), genome, 1, fitnessFn); err == nil {
 		t.Fatal("expected candidate selection validation error")
+	}
+}
+
+func TestExoselfMinImprovementBlocksSmallGains(t *testing.T) {
+	genome := model.Genome{
+		ID:       "g",
+		Synapses: []model.Synapse{{ID: "s", Weight: 0.0, Enabled: true}},
+	}
+	tuner := &Exoself{
+		Rand:           rand.New(rand.NewSource(3)),
+		Steps:          6,
+		StepSize:       0.25,
+		MinImprovement: 0.5,
+	}
+	fitnessFn := func(_ context.Context, g model.Genome) (float64, error) {
+		delta := math.Abs(g.Synapses[0].Weight - 0.2)
+		return -delta, nil
+	}
+
+	tuned, err := tuner.Tune(context.Background(), genome, 40, fitnessFn)
+	if err != nil {
+		t.Fatalf("tune: %v", err)
+	}
+	if tuned.Synapses[0].Weight != genome.Synapses[0].Weight {
+		t.Fatalf("expected unchanged weight when gains are below threshold: got=%f want=%f", tuned.Synapses[0].Weight, genome.Synapses[0].Weight)
 	}
 }
 

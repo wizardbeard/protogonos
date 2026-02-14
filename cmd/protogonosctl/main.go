@@ -160,6 +160,7 @@ func runRun(ctx context.Context, args []string) error {
 	tuneAttempts := fs.Int("attempts", 4, "tuning attempts per agent evaluation")
 	tuneSteps := fs.Int("tune-steps", 6, "tuning perturbation steps per attempt")
 	tuneStepSize := fs.Float64("tune-step-size", 0.35, "tuning perturbation magnitude")
+	tuneMinImprovement := fs.Float64("tune-min-improvement", 0.0, "minimum fitness gain required to accept a tuning candidate")
 	tuneSelection := fs.String("tune-selection", tuning.CandidateSelectBestSoFar, "tuner candidate selection: best_so_far|original|dynamic_random|all|all_random|recent|recent_random|lastgen|lastgen_random")
 	tuneDurationPolicy := fs.String("tune-duration-policy", "fixed", "tuning attempt policy: fixed|const|linear_decay|topology_scaled|nsize_proportional|wsize_proportional")
 	tuneDurationParam := fs.Float64("tune-duration-param", 1.0, "tuning attempt policy parameter")
@@ -217,6 +218,7 @@ func runRun(ctx context.Context, args []string) error {
 			TuneAttempts:         *tuneAttempts,
 			TuneSteps:            *tuneSteps,
 			TuneStepSize:         *tuneStepSize,
+			TuneMinImprovement:   *tuneMinImprovement,
 			WeightPerturb:        *wPerturb,
 			WeightBias:           *wBias,
 			WeightRemoveBias:     *wRemoveBias,
@@ -257,6 +259,7 @@ func runRun(ctx context.Context, args []string) error {
 			"attempts":              *tuneAttempts,
 			"tune-steps":            *tuneSteps,
 			"tune-step-size":        *tuneStepSize,
+			"tune-min-improvement":  *tuneMinImprovement,
 			"tune-selection":        *tuneSelection,
 			"tune-duration-policy":  *tuneDurationPolicy,
 			"tune-duration-param":   *tuneDurationParam,
@@ -810,6 +813,7 @@ func runBenchmark(ctx context.Context, args []string) error {
 	tuneAttempts := fs.Int("attempts", 4, "tuning attempts per agent evaluation")
 	tuneSteps := fs.Int("tune-steps", 6, "tuning perturbation steps per attempt")
 	tuneStepSize := fs.Float64("tune-step-size", 0.35, "tuning perturbation magnitude")
+	tuneMinImprovement := fs.Float64("tune-min-improvement", 0.0, "minimum fitness gain required to accept a tuning candidate")
 	tuneSelection := fs.String("tune-selection", tuning.CandidateSelectBestSoFar, "tuner candidate selection: best_so_far|original|dynamic_random|all|all_random|recent|recent_random|lastgen|lastgen_random")
 	tuneDurationPolicy := fs.String("tune-duration-policy", "fixed", "tuning attempt policy: fixed|const|linear_decay|topology_scaled|nsize_proportional|wsize_proportional")
 	tuneDurationParam := fs.Float64("tune-duration-param", 1.0, "tuning attempt policy parameter")
@@ -867,6 +871,7 @@ func runBenchmark(ctx context.Context, args []string) error {
 			TuneAttempts:         *tuneAttempts,
 			TuneSteps:            *tuneSteps,
 			TuneStepSize:         *tuneStepSize,
+			TuneMinImprovement:   *tuneMinImprovement,
 			WeightPerturb:        *wPerturb,
 			WeightBias:           *wBias,
 			WeightRemoveBias:     *wRemoveBias,
@@ -906,6 +911,7 @@ func runBenchmark(ctx context.Context, args []string) error {
 			"attempts":              *tuneAttempts,
 			"tune-steps":            *tuneSteps,
 			"tune-step-size":        *tuneStepSize,
+			"tune-min-improvement":  *tuneMinImprovement,
 			"tune-selection":        *tuneSelection,
 			"tune-duration-policy":  *tuneDurationPolicy,
 			"tune-duration-param":   *tuneDurationParam,

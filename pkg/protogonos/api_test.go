@@ -485,6 +485,18 @@ func TestClientRunRejectsNegativeNumericConfig(t *testing.T) {
 		Scape:              "xor",
 		Population:         6,
 		Generations:        2,
+		TuneMinImprovement: -0.1,
+		EnableTuning:       true,
+		TuneDurationParam:  1,
+	})
+	if err == nil {
+		t.Fatal("expected tune min improvement validation error")
+	}
+
+	_, err = client.Run(context.Background(), RunRequest{
+		Scape:              "xor",
+		Population:         6,
+		Generations:        2,
 		SurvivalPercentage: 1.1,
 	})
 	if err == nil {

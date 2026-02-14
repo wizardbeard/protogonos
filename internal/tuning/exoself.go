@@ -13,6 +13,7 @@ type Exoself struct {
 	Rand               *rand.Rand
 	Steps              int
 	StepSize           float64
+	MinImprovement     float64
 	CandidateSelection string
 	mu                 sync.Mutex
 }
@@ -49,6 +50,9 @@ func (e *Exoself) Tune(ctx context.Context, genome model.Genome, attempts int, f
 	if e.StepSize <= 0 {
 		return model.Genome{}, errors.New("step size must be > 0")
 	}
+	if e.MinImprovement < 0 {
+		return model.Genome{}, errors.New("min improvement must be >= 0")
+	}
 	if fitness == nil {
 		return model.Genome{}, errors.New("fitness function is required")
 	}
@@ -79,13 +83,13 @@ func (e *Exoself) Tune(ctx context.Context, genome model.Genome, attempts int, f
 			if err != nil {
 				return model.Genome{}, err
 			}
-			if candidateFitness > localBestFitness {
+			if candidateFitness > localBestFitness+e.MinImprovement {
 				localBest = candidate
 				localBestFitness = candidateFitness
 			}
 		}
 		recentBase = cloneGenome(localBest)
-		if localBestFitness > bestFitness {
+		if localBestFitness > bestFitness+e.MinImprovement {
 			best = localBest
 			bestFitness = localBestFitness
 		}
