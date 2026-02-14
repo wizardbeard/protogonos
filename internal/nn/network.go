@@ -7,6 +7,8 @@ import (
 	"protogonos/internal/model"
 )
 
+const outputSaturationLimit = 1.0
+
 func Forward(genome model.Genome, inputByNeuron map[string]float64) (map[string]float64, error) {
 	values := make(map[string]float64, len(genome.Neurons))
 	for neuronID, value := range inputByNeuron {
@@ -35,10 +37,20 @@ func Forward(genome model.Genome, inputByNeuron map[string]float64) (map[string]
 		if err != nil {
 			return nil, fmt.Errorf("neuron %s: %w", neuron.ID, err)
 		}
-		values[neuron.ID] = activated
+		values[neuron.ID] = saturate(activated, -outputSaturationLimit, outputSaturationLimit)
 	}
 
 	return values, nil
+}
+
+func saturate(v, min, max float64) float64 {
+	if v < min {
+		return min
+	}
+	if v > max {
+		return max
+	}
+	return v
 }
 
 func applyActivation(name string, x float64) (float64, error) {

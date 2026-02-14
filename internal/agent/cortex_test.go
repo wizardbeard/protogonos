@@ -62,7 +62,7 @@ func TestCortexTickSensorToActuator(t *testing.T) {
 		t.Fatalf("tick: %v", err)
 	}
 
-	want := 0.5 + (2.0 * 0.25) + 0.2
+	want := 1.0
 	if len(out) != 1 || out[0] != want {
 		t.Fatalf("unexpected output: got=%v want=[%f]", out, want)
 	}
@@ -102,7 +102,7 @@ func TestCortexSubstrateTransformsOutputs(t *testing.T) {
 	if err != nil {
 		t.Fatalf("run step 1: %v", err)
 	}
-	if len(out1) != 1 || out1[0] != 1.5 {
+	if len(out1) != 1 || out1[0] != 1.0 {
 		t.Fatalf("unexpected output 1: %+v", out1)
 	}
 
@@ -136,11 +136,11 @@ func TestCortexHebbianPlasticityStatefulWeights(t *testing.T) {
 		t.Fatalf("new cortex: %v", err)
 	}
 
-	out1, err := c.RunStep(context.Background(), []float64{2})
+	out1, err := c.RunStep(context.Background(), []float64{0.4})
 	if err != nil {
 		t.Fatalf("run step 1: %v", err)
 	}
-	out2, err := c.RunStep(context.Background(), []float64{2})
+	out2, err := c.RunStep(context.Background(), []float64{0.4})
 	if err != nil {
 		t.Fatalf("run step 2: %v", err)
 	}

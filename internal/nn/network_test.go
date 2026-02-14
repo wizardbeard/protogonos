@@ -25,7 +25,7 @@ func TestForwardSimpleFeedForward(t *testing.T) {
 		t.Fatalf("forward: %v", err)
 	}
 
-	want := 2*1.0 + (-1)*0.25 + 0.5
+	want := 1.0
 	if math.Abs(values["o"]-want) > 1e-9 {
 		t.Fatalf("unexpected output: got=%f want=%f", values["o"], want)
 	}
@@ -99,7 +99,7 @@ func TestForwardAggregatorModes(t *testing.T) {
 	if err != nil {
 		t.Fatalf("forward dot: %v", err)
 	}
-	if values["o"] != 17 {
+	if values["o"] != 1 {
 		t.Fatalf("unexpected dot output: %f", values["o"])
 	}
 
@@ -109,7 +109,7 @@ func TestForwardAggregatorModes(t *testing.T) {
 	if err != nil {
 		t.Fatalf("forward mult: %v", err)
 	}
-	if values["o"] != 49 {
+	if values["o"] != 1 {
 		t.Fatalf("unexpected mult output: %f", values["o"])
 	}
 
@@ -119,7 +119,7 @@ func TestForwardAggregatorModes(t *testing.T) {
 	if err != nil {
 		t.Fatalf("forward diff: %v", err)
 	}
-	if values["o"] != -7 {
+	if values["o"] != -1 {
 		t.Fatalf("unexpected diff output: %f", values["o"])
 	}
 }

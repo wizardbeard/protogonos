@@ -25,7 +25,7 @@ Status keys:
 | `tuning_selection.erl` | `partial` | `best_so_far`/`original`/`dynamic_random` plus reference mode set (`all`, `all_random`, `recent`, `recent_random`, `lastgen`, `lastgen_random`) implemented; full reference policy set pending. |
 | `tuning_duration.erl` | `done` | Fixed/linear decay/topology-scaled attempt policies implemented and tested, including reference aliases (`const`, `nsize_proportional`, `wsize_proportional`). |
 | `cortex.erl` | `partial` | Per-step orchestrator with sensor->nn->actuator loop implemented, including vector/chunked actuator dispatch semantics; distributed/OTP-specific process lifecycle/sync semantics remain simplified. |
-| `neuron.erl` | `partial` | Runtime neuron/synapse eval implemented; complete reference semantics breadth pending. |
+| `neuron.erl` | `partial` | Runtime neuron/synapse eval implemented with activation, aggregator modes, and reference-aligned output saturation (`[-1,1]`); complete reference semantics breadth (OTP actor lifecycle, weight backup/restore protocol) pending. |
 | `functions.erl` | `partial` | Core activation/math set implemented; full function catalog parity pending. |
 | `derivatives.erl` | `done` | Derivative registry and tests implemented. |
 | `plasticity.erl` | `partial` | Runtime plasticity integration + mutation hooks implemented; full rule set parity pending. |
@@ -103,6 +103,7 @@ Status keys:
 - Aligned `novelty_proportional` with reference placeholder behavior as no-op while preserving clone isolation and postprocessor alias wiring (`nsize_proportional`).
 - Added `tot_n` specie identifier parity and wired specie-identifier selection (`topology|tot_n`) through config/API/runtime and run artifacts.
 - Expanded cortex actuator dispatch parity to support single-actuator vector writes and even chunking across multiple actuators.
+- Aligned neuron forward-path output clipping with reference neuron saturation semantics (`OUTPUT_SAT_LIMIT=1`).
 
 ## Highest-priority remaining gaps to reach strict parity
 
