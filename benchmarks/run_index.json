@@ -1,5 +1,41 @@
 [
   {
+    "run_id": "regression-mimic-202-1771051283",
+    "scape": "regression-mimic",
+    "population_size": 12,
+    "generations": 6,
+    "seed": 202,
+    "workers": 2,
+    "elite_count": 2,
+    "tuning_enabled": false,
+    "final_best_fitness": 0.9999032100657194,
+    "created_at_utc": "2026-02-14T06:41:23.731825877Z"
+  },
+  {
+    "run_id": "xor-101-1771051282",
+    "scape": "xor",
+    "population_size": 12,
+    "generations": 6,
+    "seed": 101,
+    "workers": 2,
+    "elite_count": 2,
+    "tuning_enabled": false,
+    "final_best_fitness": 0.788777441919371,
+    "created_at_utc": "2026-02-14T06:41:22.610029071Z"
+  },
+  {
+    "run_id": "cart-pole-lite-303-1771050550",
+    "scape": "cart-pole-lite",
+    "population_size": 12,
+    "generations": 6,
+    "seed": 303,
+    "workers": 2,
+    "elite_count": 2,
+    "tuning_enabled": false,
+    "final_best_fitness": 0.9466451545272846,
+    "created_at_utc": "2026-02-14T06:29:10.111626463Z"
+  },
+  {
     "run_id": "regression-mimic-202-1771050548",
     "scape": "regression-mimic",
     "population_size": 12,
@@ -732,7 +768,7 @@
     "created_at_utc": "2026-02-10T01:19:44Z"
   },
   {
-    "run_id": "cart-pole-lite-303-1771050550",
+    "run_id": "cart-pole-lite-303-1771051285",
     "scape": "cart-pole-lite",
     "population_size": 12,
     "generations": 6,
@@ -741,6 +777,6 @@
     "elite_count": 2,
     "tuning_enabled": false,
     "final_best_fitness": 0.9466451545272846,
-    "created_at_utc": "2026-02-14T06:29:10.111626463Z"
+    "created_at_utc": "2026-02-14T06:41:25.047542503Z"
   }
 ]
