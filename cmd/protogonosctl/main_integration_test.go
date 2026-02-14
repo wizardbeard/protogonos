@@ -1149,6 +1149,52 @@ func TestMonitorCommandValidation(t *testing.T) {
 	}
 }
 
+func TestPopulationDeleteCommand(t *testing.T) {
+	origWD, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("getwd: %v", err)
+	}
+	workdir := t.TempDir()
+	if err := os.Chdir(workdir); err != nil {
+		t.Fatalf("chdir tempdir: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = os.Chdir(origWD)
+	})
+
+	dbPath := filepath.Join(workdir, "protogonos.db")
+	runID := "pop-del-cli"
+	if err := run(context.Background(), []string{
+		"run",
+		"--store", "sqlite",
+		"--db-path", dbPath,
+		"--run-id", runID,
+		"--scape", "xor",
+		"--pop", "6",
+		"--gens", "1",
+		"--seed", "61",
+	}); err != nil {
+		t.Fatalf("seed run command: %v", err)
+	}
+
+	if err := run(context.Background(), []string{
+		"population", "delete",
+		"--store", "sqlite",
+		"--db-path", dbPath,
+		"--id", runID,
+	}); err != nil {
+		t.Fatalf("population delete command: %v", err)
+	}
+	if err := run(context.Background(), []string{
+		"population", "delete",
+		"--store", "sqlite",
+		"--db-path", dbPath,
+		"--id", runID,
+	}); err == nil {
+		t.Fatal("expected deleting missing population to fail")
+	}
+}
+
 func captureStdout(fn func() error) (string, error) {
 	origStdout := os.Stdout
 	r, w, err := os.Pipe()

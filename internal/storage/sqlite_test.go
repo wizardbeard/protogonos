@@ -67,6 +67,16 @@ func TestSQLiteStoreGenomeAndPopulationRoundTrip(t *testing.T) {
 	if loadedPopulation.ID != population.ID || loadedPopulation.Generation != population.Generation {
 		t.Fatalf("unexpected population loaded: %+v", loadedPopulation)
 	}
+	if err := store.DeletePopulation(ctx, population.ID); err != nil {
+		t.Fatalf("delete population: %v", err)
+	}
+	_, ok, err = store.GetPopulation(ctx, population.ID)
+	if err != nil {
+		t.Fatalf("get population after delete: %v", err)
+	}
+	if ok {
+		t.Fatalf("expected deleted population %s to be absent", population.ID)
+	}
 
 	scapeSummary := model.ScapeSummary{
 		VersionedRecord: model.VersionedRecord{SchemaVersion: CurrentSchemaVersion, CodecVersion: CurrentCodecVersion},

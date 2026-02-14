@@ -72,6 +72,14 @@ func (s *MemoryStore) GetPopulation(_ context.Context, id string) (model.Populat
 	return population, ok, nil
 }
 
+func (s *MemoryStore) DeletePopulation(_ context.Context, id string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	delete(s.populations, id)
+	return nil
+}
+
 func (s *MemoryStore) SaveScapeSummary(_ context.Context, summary model.ScapeSummary) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()

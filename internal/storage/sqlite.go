@@ -143,6 +143,15 @@ func (s *SQLiteStore) GetPopulation(ctx context.Context, id string) (model.Popul
 	return population, true, nil
 }
 
+func (s *SQLiteStore) DeletePopulation(ctx context.Context, id string) error {
+	db, err := s.getDB()
+	if err != nil {
+		return err
+	}
+	_, err = db.ExecContext(ctx, `DELETE FROM populations WHERE id = ?`, id)
+	return err
+}
+
 func (s *SQLiteStore) SaveScapeSummary(ctx context.Context, summary model.ScapeSummary) error {
 	db, err := s.getDB()
 	if err != nil {

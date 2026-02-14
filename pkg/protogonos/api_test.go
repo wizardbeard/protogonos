@@ -772,3 +772,37 @@ func TestClientRunContinueDefaultsRunIDToPopulationID(t *testing.T) {
 		t.Fatalf("expected continued run id to default to population id cont-pop-id, got %s", continued.RunID)
 	}
 }
+
+func TestClientDeletePopulation(t *testing.T) {
+	base := t.TempDir()
+	client, err := New(Options{
+		StoreKind:     "memory",
+		BenchmarksDir: filepath.Join(base, "benchmarks"),
+		ExportsDir:    filepath.Join(base, "exports"),
+	})
+	if err != nil {
+		t.Fatalf("new client: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = client.Close()
+	})
+
+	_, err = client.Run(context.Background(), RunRequest{
+		RunID:         "pop-delete",
+		Scape:         "xor",
+		Population:    6,
+		Generations:   1,
+		Selection:     "elite",
+		WeightPerturb: 1.0,
+	})
+	if err != nil {
+		t.Fatalf("seed run: %v", err)
+	}
+
+	if err := client.DeletePopulation(context.Background(), DeletePopulationRequest{PopulationID: "pop-delete"}); err != nil {
+		t.Fatalf("delete population: %v", err)
+	}
+	if err := client.DeletePopulation(context.Background(), DeletePopulationRequest{PopulationID: "pop-delete"}); err == nil {
+		t.Fatal("expected delete population to fail when population is missing")
+	}
+}

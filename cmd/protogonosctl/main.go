@@ -63,6 +63,8 @@ func run(ctx context.Context, args []string) error {
 		return runSpeciesDiff(ctx, args[1:])
 	case "monitor":
 		return runMonitor(ctx, args[1:])
+	case "population":
+		return runPopulation(ctx, args[1:])
 	case "top":
 		return runTop(ctx, args[1:])
 	case "scape-summary":
@@ -1155,6 +1157,46 @@ func runMonitor(ctx context.Context, args []string) error {
 	return nil
 }
 
+func runPopulation(ctx context.Context, args []string) error {
+	if len(args) == 0 {
+		return errors.New("population requires a subcommand: delete")
+	}
+	switch args[0] {
+	case "delete":
+		fs := flag.NewFlagSet("population delete", flag.ContinueOnError)
+		populationID := fs.String("id", "", "population id")
+		storeKind := fs.String("store", storage.DefaultStoreKind(), "store backend: memory|sqlite")
+		dbPath := fs.String("db-path", "protogonos.db", "sqlite database path")
+		if err := fs.Parse(args[1:]); err != nil {
+			return err
+		}
+		if *populationID == "" {
+			return errors.New("population delete requires --id")
+		}
+
+		client, err := protoapi.New(protoapi.Options{
+			StoreKind:     *storeKind,
+			DBPath:        *dbPath,
+			BenchmarksDir: benchmarksDir,
+			ExportsDir:    exportsDir,
+		})
+		if err != nil {
+			return err
+		}
+		defer func() {
+			_ = client.Close()
+		}()
+
+		if err := client.DeletePopulation(ctx, protoapi.DeletePopulationRequest{PopulationID: *populationID}); err != nil {
+			return err
+		}
+		fmt.Printf("population deleted id=%s\n", *populationID)
+		return nil
+	default:
+		return fmt.Errorf("unsupported population subcommand: %s", args[0])
+	}
+}
+
 func registerDefaultScapes(p *platform.Polis) error {
 	if err := p.RegisterScape(scape.XORScape{}); err != nil {
 		return err
@@ -1207,7 +1249,7 @@ func defaultMutationPolicy(
 }
 
 func usageError(msg string) error {
-	return fmt.Errorf("%s\nusage: protogonosctl <init|start|run|benchmark|profile|runs|lineage|fitness|diagnostics|species|species-diff|monitor|top|scape-summary|export> [flags]", msg)
+	return fmt.Errorf("%s\nusage: protogonosctl <init|start|run|benchmark|profile|runs|lineage|fitness|diagnostics|species|species-diff|monitor|population|top|scape-summary|export> [flags]", msg)
 }
 
 func selectionFromName(name string) (evo.Selector, error) {

@@ -98,6 +98,7 @@ Status keys:
 - Added append-on-continue persistence semantics: when a continuation reuses an existing run identity, prior fitness/diagnostics/species/lineage/top-genome history is merged and extended instead of being replaced.
 - Added CLI live-control command surface `monitor pause|continue|stop --run-id ...` mapped to platform/API run-control registry semantics.
 - Added map2rec `pmp.population_id` continuation-default materialization so config-driven runs can map directly into continued population/run identity when explicit IDs are omitted.
+- Added explicit population lifecycle deletion path (`population delete --id ...`) mapped to genotype/store snapshot deletion for `delete_population` parity coverage.
 
 ## Highest-priority remaining gaps to reach strict parity
 

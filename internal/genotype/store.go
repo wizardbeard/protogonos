@@ -77,6 +77,23 @@ func LoadPopulationSnapshot(ctx context.Context, store storage.Store, population
 	return pop, genomes, nil
 }
 
+func DeletePopulationSnapshot(ctx context.Context, store storage.Store, populationID string) error {
+	if store == nil {
+		return fmt.Errorf("store is required")
+	}
+	if populationID == "" {
+		return fmt.Errorf("population id is required")
+	}
+	_, ok, err := store.GetPopulation(ctx, populationID)
+	if err != nil {
+		return err
+	}
+	if !ok {
+		return fmt.Errorf("population not found: %s", populationID)
+	}
+	return store.DeletePopulation(ctx, populationID)
+}
+
 func reconcilePopulationMembership(ctx context.Context, store storage.Store, populationID string, keep map[string]struct{}) error {
 	population, ok, err := store.GetPopulation(ctx, populationID)
 	if err != nil {

@@ -206,6 +206,10 @@ type MonitorControlRequest struct {
 	RunID string
 }
 
+type DeletePopulationRequest struct {
+	PopulationID string
+}
+
 type ScapeSummaryItem struct {
 	Name        string
 	Description string
@@ -1001,6 +1005,16 @@ func (c *Client) StopRun(ctx context.Context, req MonitorControlRequest) error {
 		return err
 	}
 	return p.StopRun(req.RunID)
+}
+
+func (c *Client) DeletePopulation(ctx context.Context, req DeletePopulationRequest) error {
+	if req.PopulationID == "" {
+		return errors.New("population id is required")
+	}
+	if _, err := c.ensurePolis(ctx); err != nil {
+		return err
+	}
+	return genotype.DeletePopulationSnapshot(ctx, c.store, req.PopulationID)
 }
 
 func (c *Client) ensurePolis(ctx context.Context) (*platform.Polis, error) {

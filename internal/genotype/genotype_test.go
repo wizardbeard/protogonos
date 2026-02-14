@@ -141,3 +141,27 @@ func TestLoadPopulationSnapshot(t *testing.T) {
 		t.Fatalf("unexpected loaded genome ordering: %+v", []string{loaded[0].ID, loaded[1].ID})
 	}
 }
+
+func TestDeletePopulationSnapshot(t *testing.T) {
+	ctx := context.Background()
+	store := storage.NewMemoryStore()
+	if err := store.Init(ctx); err != nil {
+		t.Fatalf("init store: %v", err)
+	}
+	genomes := []model.Genome{
+		{VersionedRecord: model.VersionedRecord{SchemaVersion: 1, CodecVersion: 1}, ID: "g1"},
+	}
+	if err := SavePopulationSnapshot(ctx, store, "pop-del", 1, genomes); err != nil {
+		t.Fatalf("seed snapshot: %v", err)
+	}
+	if err := DeletePopulationSnapshot(ctx, store, "pop-del"); err != nil {
+		t.Fatalf("delete snapshot: %v", err)
+	}
+	_, ok, err := store.GetPopulation(ctx, "pop-del")
+	if err != nil {
+		t.Fatalf("get after delete: %v", err)
+	}
+	if ok {
+		t.Fatal("expected deleted population to be missing")
+	}
+}

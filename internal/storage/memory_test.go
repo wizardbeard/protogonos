@@ -168,3 +168,26 @@ func TestMemoryStoreScapeSummaryRoundTrip(t *testing.T) {
 		t.Fatalf("unexpected scape summary: %+v", output)
 	}
 }
+
+func TestMemoryStoreDeletePopulation(t *testing.T) {
+	ctx := context.Background()
+	store := NewMemoryStore()
+	if err := store.Init(ctx); err != nil {
+		t.Fatalf("init: %v", err)
+	}
+
+	pop := model.Population{ID: "pop-del", AgentIDs: []string{"a1"}}
+	if err := store.SavePopulation(ctx, pop); err != nil {
+		t.Fatalf("save population: %v", err)
+	}
+	if err := store.DeletePopulation(ctx, pop.ID); err != nil {
+		t.Fatalf("delete population: %v", err)
+	}
+	_, ok, err := store.GetPopulation(ctx, pop.ID)
+	if err != nil {
+		t.Fatalf("get population after delete: %v", err)
+	}
+	if ok {
+		t.Fatal("expected deleted population to be missing")
+	}
+}
