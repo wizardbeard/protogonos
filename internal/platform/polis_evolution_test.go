@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"protogonos/internal/evo"
+	"protogonos/internal/genotype"
 	"protogonos/internal/model"
 	"protogonos/internal/scape"
 	"protogonos/internal/storage"
@@ -311,6 +312,84 @@ func TestPolisRunControlPauseContinueStop(t *testing.T) {
 	}
 	if err := p.ContinueRun(runID); err == nil {
 		t.Fatal("expected continue on inactive run to fail")
+	}
+}
+
+func TestPolisRunEvolutionSupportsGenerationOffset(t *testing.T) {
+	store := storage.NewMemoryStore()
+	p := NewPolis(Config{Store: store})
+	if err := p.Init(context.Background()); err != nil {
+		t.Fatalf("init: %v", err)
+	}
+	if err := p.RegisterScape(linearScape{}); err != nil {
+		t.Fatalf("register scape: %v", err)
+	}
+
+	initial := []model.Genome{
+		linearGenome("g0", -1.0),
+		linearGenome("g1", -0.8),
+		linearGenome("g2", -0.6),
+		linearGenome("g3", -0.4),
+	}
+
+	_, err := p.RunEvolution(context.Background(), EvolutionConfig{
+		RunID:           "offset-base",
+		ScapeName:       "linear",
+		PopulationSize:  len(initial),
+		Generations:     2,
+		EliteCount:      1,
+		Workers:         2,
+		Seed:            111,
+		InputNeuronIDs:  []string{"i"},
+		OutputNeuronIDs: []string{"o"},
+		Mutation:        &evo.PerturbRandomWeight{Rand: rand.New(rand.NewSource(4001)), MaxDelta: 0.35},
+		Initial:         initial,
+	})
+	if err != nil {
+		t.Fatalf("base run evolution: %v", err)
+	}
+
+	pop, continued, err := genotype.LoadPopulationSnapshot(context.Background(), store, "offset-base")
+	if err != nil {
+		t.Fatalf("load base population: %v", err)
+	}
+	if pop.Generation != 2 {
+		t.Fatalf("expected base generation=2, got %d", pop.Generation)
+	}
+
+	continuedResult, err := p.RunEvolution(context.Background(), EvolutionConfig{
+		RunID:             "offset-continued",
+		ScapeName:         "linear",
+		PopulationSize:    len(continued),
+		Generations:       2,
+		InitialGeneration: pop.Generation,
+		EliteCount:        1,
+		Workers:           2,
+		Seed:              112,
+		InputNeuronIDs:    []string{"i"},
+		OutputNeuronIDs:   []string{"o"},
+		Mutation:          &evo.PerturbRandomWeight{Rand: rand.New(rand.NewSource(4002)), MaxDelta: 0.35},
+		Initial:           continued,
+	})
+	if err != nil {
+		t.Fatalf("continued run evolution: %v", err)
+	}
+	if len(continuedResult.GenerationDiagnostics) != 2 {
+		t.Fatalf("expected 2 diagnostics in continued run, got %d", len(continuedResult.GenerationDiagnostics))
+	}
+	if continuedResult.GenerationDiagnostics[0].Generation != 3 {
+		t.Fatalf("expected continued first generation number=3, got %d", continuedResult.GenerationDiagnostics[0].Generation)
+	}
+
+	continuedPop, ok, err := store.GetPopulation(context.Background(), "offset-continued")
+	if err != nil {
+		t.Fatalf("load continued population: %v", err)
+	}
+	if !ok {
+		t.Fatal("expected continued population snapshot")
+	}
+	if continuedPop.Generation != 4 {
+		t.Fatalf("expected continued persisted generation=4, got %d", continuedPop.Generation)
 	}
 }
 

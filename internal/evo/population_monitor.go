@@ -81,6 +81,7 @@ type MonitorConfig struct {
 	SurvivalPercentage   float64
 	SpecieSizeLimit      int
 	Generations          int
+	GenerationOffset     int
 	FitnessGoal          float64
 	EvaluationsLimit     int
 	Workers              int
@@ -150,6 +151,9 @@ func NewPopulationMonitor(cfg MonitorConfig) (*PopulationMonitor, error) {
 	if cfg.Generations <= 0 {
 		return nil, fmt.Errorf("generations must be > 0")
 	}
+	if cfg.GenerationOffset < 0 {
+		return nil, fmt.Errorf("generation offset must be >= 0")
+	}
 	if cfg.SpecieSizeLimit < 0 {
 		return nil, fmt.Errorf("specie size limit must be >= 0")
 	}
@@ -203,11 +207,15 @@ func (m *PopulationMonitor) Run(ctx context.Context, initial []model.Genome) (Ru
 	prevSpeciesSet := map[string]struct{}{}
 	for _, genome := range population {
 		sig := ComputeGenomeSignature(genome)
+		operation := "seed"
+		if m.cfg.GenerationOffset > 0 {
+			operation = "continue_seed"
+		}
 		lineage = append(lineage, LineageRecord{
 			GenomeID:    genome.ID,
 			ParentID:    "",
-			Generation:  0,
-			Operation:   "seed",
+			Generation:  m.cfg.GenerationOffset,
+			Operation:   operation,
 			Fingerprint: sig.Fingerprint,
 			Summary:     sig.Summary,
 		})
@@ -227,7 +235,8 @@ func (m *PopulationMonitor) Run(ctx context.Context, initial []model.Genome) (Ru
 			break
 		}
 
-		scored, err = m.evaluatePopulation(ctx, population, gen)
+		logicalGeneration := m.cfg.GenerationOffset + gen
+		scored, err = m.evaluatePopulation(ctx, population, logicalGeneration)
 		if err != nil {
 			return RunResult{}, err
 		}
@@ -239,8 +248,8 @@ func (m *PopulationMonitor) Run(ctx context.Context, initial []model.Genome) (Ru
 		evaluations += len(scored)
 		bestHistory = append(bestHistory, scored[0].Fitness)
 		speciesByGenomeID, speciationStats := m.assignSpecies(scored)
-		diagnostics = append(diagnostics, summarizeGeneration(scored, gen+1, speciationStats))
-		history, currentSet := summarizeSpeciesGeneration(scored, speciesByGenomeID, gen+1, prevSpeciesSet)
+		diagnostics = append(diagnostics, summarizeGeneration(scored, logicalGeneration+1, speciationStats))
+		history, currentSet := summarizeSpeciesGeneration(scored, speciesByGenomeID, logicalGeneration+1, prevSpeciesSet)
 		speciesHistory = append(speciesHistory, history)
 		prevSpeciesSet = currentSet
 		if (m.cfg.FitnessGoal > 0 && scored[0].Fitness >= m.cfg.FitnessGoal) ||
@@ -256,7 +265,7 @@ func (m *PopulationMonitor) Run(ctx context.Context, initial []model.Genome) (Ru
 		}
 
 		var generationLineage []LineageRecord
-		population, generationLineage, err = m.nextGeneration(ctx, scored, speciesByGenomeID, gen)
+		population, generationLineage, err = m.nextGeneration(ctx, scored, speciesByGenomeID, logicalGeneration)
 		if err != nil {
 			return RunResult{}, err
 		}

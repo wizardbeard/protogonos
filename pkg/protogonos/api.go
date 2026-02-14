@@ -279,8 +279,9 @@ func (c *Client) Run(ctx context.Context, req RunRequest) (RunSummary, error) {
 		return RunSummary{}, err
 	}
 	initialPopulation := seedPopulation.Genomes
+	initialGeneration := 0
 	if req.ContinuePopulationID != "" {
-		_, continued, err := genotype.LoadPopulationSnapshot(ctx, c.store, req.ContinuePopulationID)
+		popSnapshot, continued, err := genotype.LoadPopulationSnapshot(ctx, c.store, req.ContinuePopulationID)
 		if err != nil {
 			return RunSummary{}, err
 		}
@@ -289,6 +290,7 @@ func (c *Client) Run(ctx context.Context, req RunRequest) (RunSummary, error) {
 		}
 		initialPopulation = continued
 		req.Population = len(continued)
+		initialGeneration = popSnapshot.Generation
 	}
 	if err := morphology.EnsureScapeCompatibility(req.Scape); err != nil {
 		return RunSummary{}, err
@@ -349,6 +351,7 @@ func (c *Client) Run(ctx context.Context, req RunRequest) (RunSummary, error) {
 			ScapeName:            req.Scape,
 			PopulationSize:       req.Population,
 			Generations:          req.Generations,
+			InitialGeneration:    initialGeneration,
 			SurvivalPercentage:   req.SurvivalPercentage,
 			SpecieSizeLimit:      req.SpecieSizeLimit,
 			FitnessGoal:          req.FitnessGoal,

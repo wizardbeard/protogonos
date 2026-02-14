@@ -23,6 +23,7 @@ type EvolutionConfig struct {
 	ScapeName            string
 	PopulationSize       int
 	Generations          int
+	InitialGeneration    int
 	SurvivalPercentage   float64
 	SpecieSizeLimit      int
 	FitnessGoal          float64
@@ -182,6 +183,7 @@ func (p *Polis) RunEvolution(ctx context.Context, cfg EvolutionConfig) (Evolutio
 		SurvivalPercentage:   cfg.SurvivalPercentage,
 		SpecieSizeLimit:      cfg.SpecieSizeLimit,
 		Generations:          cfg.Generations,
+		GenerationOffset:     cfg.InitialGeneration,
 		FitnessGoal:          cfg.FitnessGoal,
 		EvaluationsLimit:     cfg.EvaluationsLimit,
 		Workers:              cfg.Workers,
@@ -209,7 +211,7 @@ func (p *Polis) RunEvolution(ctx context.Context, cfg EvolutionConfig) (Evolutio
 	for _, scored := range result.FinalPopulation {
 		finalGenomes = append(finalGenomes, scored.Genome)
 	}
-	executedGenerations := len(result.BestByGeneration)
+	executedGenerations := len(result.BestByGeneration) + cfg.InitialGeneration
 	persistenceRunID := runID
 	populationID := persistenceRunID
 	if err := genotype.SavePopulationSnapshot(ctx, p.store, populationID, executedGenerations, finalGenomes); err != nil {

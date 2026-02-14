@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"protogonos/internal/model"
 	"protogonos/internal/stats"
 )
 
@@ -671,6 +672,21 @@ func TestClientRunCanContinueFromPopulationSnapshot(t *testing.T) {
 	}
 	if config.PopulationSize != 8 {
 		t.Fatalf("expected continued run to use snapshot population size 8, got %d", config.PopulationSize)
+	}
+
+	diagData, err := os.ReadFile(filepath.Join(base, "benchmarks", continued.RunID, "generation_diagnostics.json"))
+	if err != nil {
+		t.Fatalf("read continued diagnostics: %v", err)
+	}
+	var diags []model.GenerationDiagnostics
+	if err := json.Unmarshal(diagData, &diags); err != nil {
+		t.Fatalf("decode continued diagnostics: %v", err)
+	}
+	if len(diags) == 0 {
+		t.Fatal("expected continued diagnostics")
+	}
+	if diags[0].Generation != 3 {
+		t.Fatalf("expected continued diagnostics to start at generation 3, got %d", diags[0].Generation)
 	}
 }
 
