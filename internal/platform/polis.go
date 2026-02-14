@@ -207,12 +207,18 @@ func (p *Polis) RunEvolution(ctx context.Context, cfg EvolutionConfig) (Evolutio
 	if err != nil {
 		return EvolutionResult{}, err
 	}
+	if cfg.InitialGeneration > 0 {
+		result, err = p.mergeExistingRunHistory(ctx, persistenceRunID(cfg, runID), result)
+		if err != nil {
+			return EvolutionResult{}, err
+		}
+	}
 	finalGenomes := make([]model.Genome, 0, len(result.FinalPopulation))
 	for _, scored := range result.FinalPopulation {
 		finalGenomes = append(finalGenomes, scored.Genome)
 	}
 	executedGenerations := len(result.BestByGeneration) + cfg.InitialGeneration
-	persistenceRunID := runID
+	persistenceRunID := persistenceRunID(cfg, runID)
 	populationID := persistenceRunID
 	if err := genotype.SavePopulationSnapshot(ctx, p.store, populationID, executedGenerations, finalGenomes); err != nil {
 		return EvolutionResult{}, err
@@ -259,6 +265,125 @@ func (p *Polis) RunEvolution(ctx context.Context, cfg EvolutionConfig) (Evolutio
 		TopFinal:              topFinal,
 		Lineage:               result.Lineage,
 	}, nil
+}
+
+func persistenceRunID(cfg EvolutionConfig, fallback string) string {
+	if cfg.RunID != "" {
+		return cfg.RunID
+	}
+	return fallback
+}
+
+func (p *Polis) mergeExistingRunHistory(ctx context.Context, runID string, current evo.RunResult) (evo.RunResult, error) {
+	if runID == "" {
+		return current, nil
+	}
+
+	if history, ok, err := p.store.GetFitnessHistory(ctx, runID); err != nil {
+		return evo.RunResult{}, err
+	} else if ok {
+		current.BestByGeneration = append(append([]float64{}, history...), current.BestByGeneration...)
+	}
+
+	if diagnostics, ok, err := p.store.GetGenerationDiagnostics(ctx, runID); err != nil {
+		return evo.RunResult{}, err
+	} else if ok {
+		prefix := make([]evo.GenerationDiagnostics, 0, len(diagnostics))
+		for _, item := range diagnostics {
+			prefix = append(prefix, evo.GenerationDiagnostics{
+				Generation:           item.Generation,
+				BestFitness:          item.BestFitness,
+				MeanFitness:          item.MeanFitness,
+				MinFitness:           item.MinFitness,
+				SpeciesCount:         item.SpeciesCount,
+				FingerprintDiversity: item.FingerprintDiversity,
+				SpeciationThreshold:  item.SpeciationThreshold,
+				TargetSpeciesCount:   item.TargetSpeciesCount,
+				MeanSpeciesSize:      item.MeanSpeciesSize,
+				LargestSpeciesSize:   item.LargestSpeciesSize,
+			})
+		}
+		current.GenerationDiagnostics = append(prefix, current.GenerationDiagnostics...)
+	}
+
+	if speciesHistory, ok, err := p.store.GetSpeciesHistory(ctx, runID); err != nil {
+		return evo.RunResult{}, err
+	} else if ok {
+		prefix := make([]evo.SpeciesGeneration, 0, len(speciesHistory))
+		for _, generation := range speciesHistory {
+			species := make([]evo.SpeciesMetrics, 0, len(generation.Species))
+			for _, metric := range generation.Species {
+				species = append(species, evo.SpeciesMetrics{
+					Key:         metric.Key,
+					Size:        metric.Size,
+					MeanFitness: metric.MeanFitness,
+					BestFitness: metric.BestFitness,
+				})
+			}
+			prefix = append(prefix, evo.SpeciesGeneration{
+				Generation:     generation.Generation,
+				Species:        species,
+				NewSpecies:     append([]string{}, generation.NewSpecies...),
+				ExtinctSpecies: append([]string{}, generation.ExtinctSpecies...),
+			})
+		}
+		current.SpeciesHistory = append(prefix, current.SpeciesHistory...)
+	}
+
+	if lineage, ok, err := p.store.GetLineage(ctx, runID); err != nil {
+		return evo.RunResult{}, err
+	} else if ok {
+		prefix := make([]evo.LineageRecord, 0, len(lineage))
+		for _, rec := range lineage {
+			prefix = append(prefix, evo.LineageRecord{
+				GenomeID:    rec.GenomeID,
+				ParentID:    rec.ParentID,
+				Generation:  rec.Generation,
+				Operation:   rec.Operation,
+				Fingerprint: rec.Fingerprint,
+				Summary: evo.TopologySummary{
+					TotalNeurons:           rec.Summary.TotalNeurons,
+					TotalSynapses:          rec.Summary.TotalSynapses,
+					TotalRecurrentSynapses: rec.Summary.TotalRecurrentSynapses,
+					TotalSensors:           rec.Summary.TotalSensors,
+					TotalActuators:         rec.Summary.TotalActuators,
+					ActivationDistribution: rec.Summary.ActivationDistribution,
+					AggregatorDistribution: rec.Summary.AggregatorDistribution,
+				},
+			})
+		}
+		current.Lineage = append(prefix, current.Lineage...)
+	}
+
+	if top, ok, err := p.store.GetTopGenomes(ctx, runID); err != nil {
+		return evo.RunResult{}, err
+	} else if ok && len(top) > 0 {
+		merged := make([]evo.ScoredGenome, 0, len(top)+len(current.FinalPopulation))
+		for _, item := range top {
+			merged = append(merged, evo.ScoredGenome{
+				Genome:  item.Genome,
+				Fitness: item.Fitness,
+			})
+		}
+		merged = append(merged, current.FinalPopulation...)
+		sort.Slice(merged, func(i, j int) bool {
+			return merged[i].Fitness > merged[j].Fitness
+		})
+		seen := make(map[string]struct{}, len(merged))
+		unique := make([]evo.ScoredGenome, 0, len(merged))
+		for _, item := range merged {
+			if item.Genome.ID != "" {
+				if _, exists := seen[item.Genome.ID]; exists {
+					continue
+				}
+				seen[item.Genome.ID] = struct{}{}
+			}
+			unique = append(unique, item)
+		}
+		current.FinalPopulation = unique
+	}
+
+	return current, nil
 }
 
 func toModelLineage(lineage []evo.LineageRecord) []model.LineageRecord {

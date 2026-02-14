@@ -393,6 +393,78 @@ func TestPolisRunEvolutionSupportsGenerationOffset(t *testing.T) {
 	}
 }
 
+func TestPolisRunEvolutionAppendsHistoryForSameRunIDContinuation(t *testing.T) {
+	store := storage.NewMemoryStore()
+	p := NewPolis(Config{Store: store})
+	if err := p.Init(context.Background()); err != nil {
+		t.Fatalf("init: %v", err)
+	}
+	if err := p.RegisterScape(linearScape{}); err != nil {
+		t.Fatalf("register scape: %v", err)
+	}
+
+	initial := []model.Genome{
+		linearGenome("g0", -1.0),
+		linearGenome("g1", -0.8),
+		linearGenome("g2", -0.6),
+		linearGenome("g3", -0.4),
+	}
+	first, err := p.RunEvolution(context.Background(), EvolutionConfig{
+		RunID:           "append-run",
+		ScapeName:       "linear",
+		PopulationSize:  len(initial),
+		Generations:     2,
+		EliteCount:      1,
+		Workers:         2,
+		Seed:            211,
+		InputNeuronIDs:  []string{"i"},
+		OutputNeuronIDs: []string{"o"},
+		Mutation:        &evo.PerturbRandomWeight{Rand: rand.New(rand.NewSource(5001)), MaxDelta: 0.35},
+		Initial:         initial,
+	})
+	if err != nil {
+		t.Fatalf("first run: %v", err)
+	}
+	if len(first.BestByGeneration) != 2 {
+		t.Fatalf("expected first run 2 generations, got %d", len(first.BestByGeneration))
+	}
+
+	pop, continued, err := genotype.LoadPopulationSnapshot(context.Background(), store, "append-run")
+	if err != nil {
+		t.Fatalf("load persisted population for continuation: %v", err)
+	}
+
+	second, err := p.RunEvolution(context.Background(), EvolutionConfig{
+		RunID:             "append-run",
+		ScapeName:         "linear",
+		PopulationSize:    len(continued),
+		Generations:       2,
+		InitialGeneration: pop.Generation,
+		EliteCount:        1,
+		Workers:           2,
+		Seed:              212,
+		InputNeuronIDs:    []string{"i"},
+		OutputNeuronIDs:   []string{"o"},
+		Mutation:          &evo.PerturbRandomWeight{Rand: rand.New(rand.NewSource(5002)), MaxDelta: 0.35},
+		Initial:           continued,
+	})
+	if err != nil {
+		t.Fatalf("second run: %v", err)
+	}
+	if len(second.BestByGeneration) != 4 {
+		t.Fatalf("expected appended history length 4, got %d", len(second.BestByGeneration))
+	}
+	if len(second.GenerationDiagnostics) != 4 {
+		t.Fatalf("expected appended diagnostics length 4, got %d", len(second.GenerationDiagnostics))
+	}
+	if second.GenerationDiagnostics[0].Generation != 1 || second.GenerationDiagnostics[2].Generation != 3 {
+		t.Fatalf("unexpected generation numbering after append: %+v", second.GenerationDiagnostics)
+	}
+	if len(second.Lineage) <= len(first.Lineage) {
+		t.Fatalf("expected lineage to grow after continuation, first=%d second=%d", len(first.Lineage), len(second.Lineage))
+	}
+}
+
 func linearGenome(id string, weight float64) model.Genome {
 	return model.Genome{
 		VersionedRecord: model.VersionedRecord{SchemaVersion: storage.CurrentSchemaVersion, CodecVersion: storage.CurrentCodecVersion},
