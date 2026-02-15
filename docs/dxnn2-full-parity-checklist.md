@@ -123,6 +123,7 @@ Status keys:
 - Added `species-diff --json` for machine-readable diff output suitable for scripting/CI parity checks.
 - Added `diagnostics --json` for machine-readable per-generation diagnostics (including tuning telemetry and ratios) in scripts/CI.
 - Added `runs --json` for machine-readable run index/listing output, keeping analysis/reporting commands automation-friendly.
+- Added `lineage --json` and `top --json` for machine-readable lineage/top-genome analysis outputs.
 
 ## Highest-priority remaining gaps to reach strict parity
 

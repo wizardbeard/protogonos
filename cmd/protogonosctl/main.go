@@ -449,6 +449,7 @@ func runLineage(ctx context.Context, args []string) error {
 	runID := fs.String("run-id", "", "run id")
 	latest := fs.Bool("latest", false, "show lineage for the most recent run from run index")
 	limit := fs.Int("limit", 50, "max lineage rows to print (<=0 for all)")
+	jsonOut := fs.Bool("json", false, "emit lineage rows as JSON")
 	storeKind := fs.String("store", storage.DefaultStoreKind(), "store backend: memory|sqlite")
 	dbPath := fs.String("db-path", "protogonos.db", "sqlite database path")
 	if err := fs.Parse(args); err != nil {
@@ -485,6 +486,11 @@ func runLineage(ctx context.Context, args []string) error {
 	if len(lineage) == 0 {
 		fmt.Println("no lineage records")
 		return nil
+	}
+	if *jsonOut {
+		enc := json.NewEncoder(os.Stdout)
+		enc.SetIndent("", "  ")
+		return enc.Encode(lineage)
 	}
 
 	for _, rec := range lineage {
@@ -629,6 +635,7 @@ func runTop(ctx context.Context, args []string) error {
 	runID := fs.String("run-id", "", "run id")
 	latest := fs.Bool("latest", false, "show top genomes for the most recent run from run index")
 	limit := fs.Int("limit", 5, "max top genomes to print (<=0 for all)")
+	jsonOut := fs.Bool("json", false, "emit top genomes as JSON")
 	storeKind := fs.String("store", storage.DefaultStoreKind(), "store backend: memory|sqlite")
 	dbPath := fs.String("db-path", "protogonos.db", "sqlite database path")
 	if err := fs.Parse(args); err != nil {
@@ -665,6 +672,11 @@ func runTop(ctx context.Context, args []string) error {
 	if len(top) == 0 {
 		fmt.Println("no top genomes")
 		return nil
+	}
+	if *jsonOut {
+		enc := json.NewEncoder(os.Stdout)
+		enc.SetIndent("", "  ")
+		return enc.Encode(top)
 	}
 
 	for _, item := range top {

@@ -439,6 +439,30 @@ func TestLineageCommandSQLiteReadsPersistedLineage(t *testing.T) {
 	if !strings.Contains(out, "gen=") || !strings.Contains(out, "genome_id=") {
 		t.Fatalf("unexpected lineage output: %s", out)
 	}
+
+	jsonOut, err := captureStdout(func() error {
+		return run(context.Background(), []string{
+			"lineage",
+			"--store", "sqlite",
+			"--db-path", dbPath,
+			"--latest",
+			"--limit", "3",
+			"--json",
+		})
+	})
+	if err != nil {
+		t.Fatalf("lineage json command: %v", err)
+	}
+	var lineageJSON []map[string]any
+	if err := json.Unmarshal([]byte(jsonOut), &lineageJSON); err != nil {
+		t.Fatalf("decode lineage json output: %v\n%s", err, jsonOut)
+	}
+	if len(lineageJSON) == 0 {
+		t.Fatalf("expected non-empty lineage json output: %s", jsonOut)
+	}
+	if _, ok := lineageJSON[0]["GenomeID"]; !ok {
+		t.Fatalf("expected GenomeID in lineage json output: %v", lineageJSON[0])
+	}
 }
 
 func TestFitnessCommandSQLiteReadsPersistedHistory(t *testing.T) {
@@ -713,6 +737,30 @@ func TestTopCommandSQLiteReadsPersistedTopGenomes(t *testing.T) {
 	}
 	if !strings.Contains(out, "rank=1") || !strings.Contains(out, "genome_id=") {
 		t.Fatalf("unexpected top output: %s", out)
+	}
+
+	jsonOut, err := captureStdout(func() error {
+		return run(context.Background(), []string{
+			"top",
+			"--store", "sqlite",
+			"--db-path", dbPath,
+			"--latest",
+			"--limit", "2",
+			"--json",
+		})
+	})
+	if err != nil {
+		t.Fatalf("top json command: %v", err)
+	}
+	var topJSON []map[string]any
+	if err := json.Unmarshal([]byte(jsonOut), &topJSON); err != nil {
+		t.Fatalf("decode top json output: %v\n%s", err, jsonOut)
+	}
+	if len(topJSON) == 0 {
+		t.Fatalf("expected non-empty top json output: %s", jsonOut)
+	}
+	if _, ok := topJSON[0]["rank"]; !ok {
+		t.Fatalf("expected rank in top json output: %v", topJSON[0])
 	}
 }
 
