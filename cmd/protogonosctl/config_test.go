@@ -242,3 +242,29 @@ func TestLoadRunRequestFromConfigMapsSubstrateMutationAliases(t *testing.T) {
 		t.Fatalf("unexpected substrate alias weight total: got=%f want=16", req.WeightSubstrate)
 	}
 }
+
+func TestLoadRunRequestFromConfigMapsCutlinkNeuronToNeuronAlias(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "run_config_cutlink_n2n.json")
+	payload := map[string]any{
+		"constraint": map[string]any{
+			"mutation_operators": []any{
+				[]any{"cutlink_FromNeuronToNeuron", 2.25},
+			},
+		},
+	}
+	data, err := json.Marshal(payload)
+	if err != nil {
+		t.Fatalf("marshal payload: %v", err)
+	}
+	if err := os.WriteFile(path, data, 0o644); err != nil {
+		t.Fatalf("write config: %v", err)
+	}
+
+	req, err := loadRunRequestFromConfig(path)
+	if err != nil {
+		t.Fatalf("load run request: %v", err)
+	}
+	if req.WeightRemoveSynapse != 2.25 {
+		t.Fatalf("unexpected remove synapse alias weight total: got=%f want=2.25", req.WeightRemoveSynapse)
+	}
+}

@@ -486,6 +486,25 @@ func (o *RemoveRandomOutlink) Apply(_ context.Context, genome model.Genome) (mod
 	})
 }
 
+// CutlinkFromNeuronToNeuron mirrors the reference cutlink operator name for
+// neuron-to-neuron links. In the simplified model, this delegates to random
+// synapse removal.
+type CutlinkFromNeuronToNeuron struct {
+	Rand *rand.Rand
+}
+
+func (o *CutlinkFromNeuronToNeuron) Name() string {
+	return "cutlink_FromNeuronToNeuron"
+}
+
+func (o *CutlinkFromNeuronToNeuron) Applicable(genome model.Genome, _ string) bool {
+	return len(genome.Synapses) > 0
+}
+
+func (o *CutlinkFromNeuronToNeuron) Apply(ctx context.Context, genome model.Genome) (model.Genome, error) {
+	return (&RemoveRandomSynapse{Rand: o.Rand}).Apply(ctx, genome)
+}
+
 // AddRandomNeuron inserts a neuron by splitting a random synapse.
 type AddRandomNeuron struct {
 	Rand        *rand.Rand
