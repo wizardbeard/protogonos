@@ -1279,13 +1279,16 @@ func (o *AddRandomCPP) Name() string {
 	return "add_cpp"
 }
 
-func (o *AddRandomCPP) Applicable(_ model.Genome, _ string) bool {
-	return len(substrate.ListCPPs()) > 0
+func (o *AddRandomCPP) Applicable(genome model.Genome, _ string) bool {
+	return genome.Substrate != nil && len(substrate.ListCPPs()) > 0
 }
 
 func (o *AddRandomCPP) Apply(_ context.Context, genome model.Genome) (model.Genome, error) {
 	if o == nil || o.Rand == nil {
 		return model.Genome{}, errors.New("random source is required")
+	}
+	if genome.Substrate == nil {
+		return cloneGenome(genome), nil
 	}
 	candidates := substrate.ListCPPs()
 	if len(candidates) == 0 {
@@ -1303,14 +1306,6 @@ func (o *AddRandomCPP) Apply(_ context.Context, genome model.Genome) (model.Geno
 	selected := choices[o.Rand.Intn(len(choices))]
 
 	mutated := cloneGenome(genome)
-	if mutated.Substrate == nil {
-		mutated.Substrate = &model.SubstrateConfig{
-			CPPName:    selected,
-			CEPName:    substrate.DefaultCEPName,
-			Parameters: map[string]float64{},
-		}
-		return mutated, nil
-	}
 	mutated.Substrate.CPPName = selected
 	if mutated.Substrate.CEPName == "" {
 		mutated.Substrate.CEPName = substrate.DefaultCEPName
@@ -1330,13 +1325,16 @@ func (o *AddRandomCEP) Name() string {
 	return "add_cep"
 }
 
-func (o *AddRandomCEP) Applicable(_ model.Genome, _ string) bool {
-	return len(substrate.ListCEPs()) > 0
+func (o *AddRandomCEP) Applicable(genome model.Genome, _ string) bool {
+	return genome.Substrate != nil && len(substrate.ListCEPs()) > 0
 }
 
 func (o *AddRandomCEP) Apply(_ context.Context, genome model.Genome) (model.Genome, error) {
 	if o == nil || o.Rand == nil {
 		return model.Genome{}, errors.New("random source is required")
+	}
+	if genome.Substrate == nil {
+		return cloneGenome(genome), nil
 	}
 	candidates := substrate.ListCEPs()
 	if len(candidates) == 0 {
@@ -1354,14 +1352,6 @@ func (o *AddRandomCEP) Apply(_ context.Context, genome model.Genome) (model.Geno
 	selected := choices[o.Rand.Intn(len(choices))]
 
 	mutated := cloneGenome(genome)
-	if mutated.Substrate == nil {
-		mutated.Substrate = &model.SubstrateConfig{
-			CPPName:    substrate.DefaultCPPName,
-			CEPName:    selected,
-			Parameters: map[string]float64{},
-		}
-		return mutated, nil
-	}
 	mutated.Substrate.CEPName = selected
 	if mutated.Substrate.CPPName == "" {
 		mutated.Substrate.CPPName = substrate.DefaultCPPName
@@ -1421,18 +1411,19 @@ func (o *AddCircuitNode) Name() string {
 	return "add_CircuitNode"
 }
 
-func (o *AddCircuitNode) Applicable(_ model.Genome, _ string) bool {
-	return true
+func (o *AddCircuitNode) Applicable(genome model.Genome, _ string) bool {
+	return genome.Substrate != nil && len(genome.Substrate.Dimensions) > 0
 }
 
 func (o *AddCircuitNode) Apply(_ context.Context, genome model.Genome) (model.Genome, error) {
 	if o == nil || o.Rand == nil {
 		return model.Genome{}, errors.New("random source is required")
 	}
+	if genome.Substrate == nil {
+		return cloneGenome(genome), nil
+	}
 	mutated := cloneGenome(genome)
-	ensureSubstrateConfig(&mutated)
 	if len(mutated.Substrate.Dimensions) == 0 {
-		mutated.Substrate.Dimensions = []int{1, 1}
 		return mutated, nil
 	}
 	idx := o.Rand.Intn(len(mutated.Substrate.Dimensions))
@@ -1496,19 +1487,20 @@ func (o *AddCircuitLayer) Name() string {
 	return "add_CircuitLayer"
 }
 
-func (o *AddCircuitLayer) Applicable(_ model.Genome, _ string) bool {
-	return true
+func (o *AddCircuitLayer) Applicable(genome model.Genome, _ string) bool {
+	return genome.Substrate != nil && len(genome.Substrate.Dimensions) > 0
 }
 
 func (o *AddCircuitLayer) Apply(_ context.Context, genome model.Genome) (model.Genome, error) {
 	if o == nil || o.Rand == nil {
 		return model.Genome{}, errors.New("random source is required")
 	}
+	if genome.Substrate == nil {
+		return cloneGenome(genome), nil
+	}
 	mutated := cloneGenome(genome)
-	ensureSubstrateConfig(&mutated)
 	dims := append([]int(nil), mutated.Substrate.Dimensions...)
 	if len(dims) == 0 {
-		mutated.Substrate.Dimensions = []int{1, 1, 1}
 		return mutated, nil
 	}
 	if len(dims) == 1 {

@@ -654,7 +654,7 @@ func TestCutlinkFromNeuronToNeuronRemovesSynapse(t *testing.T) {
 	}
 }
 
-func TestAddRandomCPPCreatesSubstrateConfig(t *testing.T) {
+func TestAddRandomCPPRequiresSubstrateConfig(t *testing.T) {
 	genome := model.Genome{
 		Neurons: []model.Neuron{
 			{ID: "i", Activation: "identity"},
@@ -666,18 +666,28 @@ func TestAddRandomCPPCreatesSubstrateConfig(t *testing.T) {
 	if err != nil {
 		t.Fatalf("apply failed: %v", err)
 	}
-	if mutated.Substrate == nil {
-		t.Fatal("expected substrate config to be created")
+	if mutated.Substrate != nil {
+		t.Fatal("expected neural-encoded genome to remain without substrate config")
 	}
-	if mutated.Substrate.CPPName == "" {
-		t.Fatal("expected cpp name to be set")
+	withSubstrate := model.Genome{
+		Neurons: genome.Neurons,
+		Substrate: &model.SubstrateConfig{
+			CPPName:    substrate.DefaultCPPName,
+			CEPName:    substrate.DefaultCEPName,
+			Dimensions: []int{2, 2},
+			Parameters: map[string]float64{},
+		},
 	}
-	if mutated.Substrate.CEPName == "" {
-		t.Fatal("expected cep default name to be set")
+	mutated, err = op.Apply(context.Background(), withSubstrate)
+	if err != nil {
+		t.Fatalf("apply with substrate failed: %v", err)
+	}
+	if mutated.Substrate == nil || mutated.Substrate.CPPName == "" {
+		t.Fatal("expected cpp mutation on substrate-configured genome")
 	}
 }
 
-func TestAddRandomCEPCreatesSubstrateConfig(t *testing.T) {
+func TestAddRandomCEPRequiresSubstrateConfig(t *testing.T) {
 	genome := model.Genome{
 		Neurons: []model.Neuron{
 			{ID: "i", Activation: "identity"},
@@ -689,23 +699,47 @@ func TestAddRandomCEPCreatesSubstrateConfig(t *testing.T) {
 	if err != nil {
 		t.Fatalf("apply failed: %v", err)
 	}
-	if mutated.Substrate == nil {
-		t.Fatal("expected substrate config to be created")
+	if mutated.Substrate != nil {
+		t.Fatal("expected neural-encoded genome to remain without substrate config")
 	}
-	if mutated.Substrate.CEPName == "" {
-		t.Fatal("expected cep name to be set")
+	withSubstrate := model.Genome{
+		Neurons: genome.Neurons,
+		Substrate: &model.SubstrateConfig{
+			CPPName:    substrate.DefaultCPPName,
+			CEPName:    substrate.DefaultCEPName,
+			Dimensions: []int{2, 2},
+			Parameters: map[string]float64{},
+		},
 	}
-	if mutated.Substrate.CPPName == "" {
-		t.Fatal("expected cpp default name to be set")
+	mutated, err = op.Apply(context.Background(), withSubstrate)
+	if err != nil {
+		t.Fatalf("apply with substrate failed: %v", err)
+	}
+	if mutated.Substrate == nil || mutated.Substrate.CEPName == "" {
+		t.Fatal("expected cep mutation on substrate-configured genome")
 	}
 }
 
 func TestAddRandomCPPAndCEPApplicable(t *testing.T) {
-	if !(&AddRandomCPP{}).Applicable(model.Genome{}, "xor") {
-		t.Fatal("expected add cpp operator to be applicable with default registry")
+	if (&AddRandomCPP{}).Applicable(model.Genome{}, "xor") {
+		t.Fatal("expected add cpp operator to be inapplicable without substrate config")
 	}
-	if !(&AddRandomCEP{}).Applicable(model.Genome{}, "xor") {
-		t.Fatal("expected add cep operator to be applicable with default registry")
+	if (&AddRandomCEP{}).Applicable(model.Genome{}, "xor") {
+		t.Fatal("expected add cep operator to be inapplicable without substrate config")
+	}
+	genome := model.Genome{
+		Substrate: &model.SubstrateConfig{
+			CPPName:    substrate.DefaultCPPName,
+			CEPName:    substrate.DefaultCEPName,
+			Dimensions: []int{2, 2},
+			Parameters: map[string]float64{},
+		},
+	}
+	if !(&AddRandomCPP{}).Applicable(genome, "xor") {
+		t.Fatal("expected add cpp operator to be applicable with substrate config")
+	}
+	if !(&AddRandomCEP{}).Applicable(genome, "xor") {
+		t.Fatal("expected add cep operator to be applicable with substrate config")
 	}
 	if substrate.DefaultCPPName == "" || substrate.DefaultCEPName == "" {
 		t.Fatal("expected default substrate names")
@@ -761,6 +795,31 @@ func TestAddCircuitLayerMutatesDimensions(t *testing.T) {
 	}
 	if mutated.Substrate.Dimensions[1] != 1 {
 		t.Fatalf("expected inserted hidden layer width 1, got=%v", mutated.Substrate.Dimensions)
+	}
+}
+
+func TestCircuitMutationsRequireConfiguredDimensions(t *testing.T) {
+	withoutSubstrate := model.Genome{}
+	if (&AddCircuitNode{}).Applicable(withoutSubstrate, "xor") {
+		t.Fatal("expected add circuit node to be inapplicable without substrate config")
+	}
+	if (&AddCircuitLayer{}).Applicable(withoutSubstrate, "xor") {
+		t.Fatal("expected add circuit layer to be inapplicable without substrate config")
+	}
+
+	withEmptyDims := model.Genome{
+		Substrate: &model.SubstrateConfig{
+			CPPName:    substrate.DefaultCPPName,
+			CEPName:    substrate.DefaultCEPName,
+			Dimensions: nil,
+			Parameters: map[string]float64{},
+		},
+	}
+	if (&AddCircuitNode{}).Applicable(withEmptyDims, "xor") {
+		t.Fatal("expected add circuit node to be inapplicable with empty dimensions")
+	}
+	if (&AddCircuitLayer{}).Applicable(withEmptyDims, "xor") {
+		t.Fatal("expected add circuit layer to be inapplicable with empty dimensions")
 	}
 }
 
