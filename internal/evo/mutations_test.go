@@ -400,6 +400,26 @@ func TestAddRandomInlinkPrefersInputSource(t *testing.T) {
 	}
 }
 
+func TestAddRandomInlinkNoDirectionalCandidates(t *testing.T) {
+	genome := model.Genome{
+		Neurons: []model.Neuron{
+			{ID: "h1", Activation: "tanh"},
+			{ID: "o1", Activation: "sigmoid"},
+		},
+	}
+	op := &AddRandomInlink{
+		Rand:           rand.New(rand.NewSource(19)),
+		MaxAbsWeight:   1.0,
+		InputNeuronIDs: []string{"i1"},
+	}
+	if op.Applicable(genome, "xor") {
+		t.Fatal("expected add_inlink to be inapplicable without directional candidates")
+	}
+	if _, err := op.Apply(context.Background(), genome); !errors.Is(err, ErrNoSynapses) {
+		t.Fatalf("expected ErrNoSynapses, got %v", err)
+	}
+}
+
 func TestAddRandomOutlinkTargetsOutput(t *testing.T) {
 	genome := model.Genome{
 		Neurons: []model.Neuron{
@@ -422,6 +442,26 @@ func TestAddRandomOutlinkTargetsOutput(t *testing.T) {
 	}
 	if mutated.Synapses[0].To != "o1" {
 		t.Fatalf("expected outlink target o1, got=%s", mutated.Synapses[0].To)
+	}
+}
+
+func TestAddRandomOutlinkNoDirectionalCandidates(t *testing.T) {
+	genome := model.Genome{
+		Neurons: []model.Neuron{
+			{ID: "i1", Activation: "identity"},
+			{ID: "h1", Activation: "tanh"},
+		},
+	}
+	op := &AddRandomOutlink{
+		Rand:            rand.New(rand.NewSource(29)),
+		MaxAbsWeight:    1.0,
+		OutputNeuronIDs: []string{"o1"},
+	}
+	if op.Applicable(genome, "xor") {
+		t.Fatal("expected add_outlink to be inapplicable without directional candidates")
+	}
+	if _, err := op.Apply(context.Background(), genome); !errors.Is(err, ErrNoSynapses) {
+		t.Fatalf("expected ErrNoSynapses, got %v", err)
 	}
 }
 
@@ -454,6 +494,30 @@ func TestAddRandomOutsplicePrefersOutputEdge(t *testing.T) {
 	}
 }
 
+func TestAddRandomOutspliceNoDirectionalCandidates(t *testing.T) {
+	genome := model.Genome{
+		Neurons: []model.Neuron{
+			{ID: "i1", Activation: "identity"},
+			{ID: "h1", Activation: "tanh"},
+			{ID: "o1", Activation: "sigmoid"},
+		},
+		Synapses: []model.Synapse{
+			{ID: "s_in", From: "i1", To: "h1", Weight: 1, Enabled: true},
+		},
+	}
+	op := &AddRandomOutsplice{
+		Rand:            rand.New(rand.NewSource(111)),
+		OutputNeuronIDs: []string{"o1"},
+		Activations:     []string{"relu"},
+	}
+	if op.Applicable(genome, "xor") {
+		t.Fatal("expected outsplice to be inapplicable without output-directed edges")
+	}
+	if _, err := op.Apply(context.Background(), genome); !errors.Is(err, ErrNoSynapses) {
+		t.Fatalf("expected ErrNoSynapses, got %v", err)
+	}
+}
+
 func TestAddRandomInsplicePrefersInputEdge(t *testing.T) {
 	genome := model.Genome{
 		Neurons: []model.Neuron{
@@ -480,6 +544,30 @@ func TestAddRandomInsplicePrefersInputEdge(t *testing.T) {
 	}
 	if !hasSynapse(mutated, "s_out") {
 		t.Fatal("expected non-input-edge synapse to remain")
+	}
+}
+
+func TestAddRandomInspliceNoDirectionalCandidates(t *testing.T) {
+	genome := model.Genome{
+		Neurons: []model.Neuron{
+			{ID: "i1", Activation: "identity"},
+			{ID: "h1", Activation: "tanh"},
+			{ID: "o1", Activation: "sigmoid"},
+		},
+		Synapses: []model.Synapse{
+			{ID: "s_out", From: "h1", To: "o1", Weight: 1, Enabled: true},
+		},
+	}
+	op := &AddRandomInsplice{
+		Rand:           rand.New(rand.NewSource(113)),
+		InputNeuronIDs: []string{"i1"},
+		Activations:    []string{"relu"},
+	}
+	if op.Applicable(genome, "xor") {
+		t.Fatal("expected insplice to be inapplicable without input-directed edges")
+	}
+	if _, err := op.Apply(context.Background(), genome); !errors.Is(err, ErrNoSynapses) {
+		t.Fatalf("expected ErrNoSynapses, got %v", err)
 	}
 }
 
@@ -511,6 +599,28 @@ func TestRemoveRandomInlinkPrefersInputSource(t *testing.T) {
 	}
 }
 
+func TestRemoveRandomInlinkNoDirectionalCandidates(t *testing.T) {
+	genome := model.Genome{
+		Neurons: []model.Neuron{
+			{ID: "i1", Activation: "identity"},
+			{ID: "h1", Activation: "tanh"},
+		},
+		Synapses: []model.Synapse{
+			{ID: "s_other", From: "h1", To: "i1", Weight: 1, Enabled: true},
+		},
+	}
+	op := &RemoveRandomInlink{
+		Rand:           rand.New(rand.NewSource(33)),
+		InputNeuronIDs: []string{"i1"},
+	}
+	if op.Applicable(genome, "xor") {
+		t.Fatal("expected remove_inlink to be inapplicable without matching edges")
+	}
+	if _, err := op.Apply(context.Background(), genome); !errors.Is(err, ErrNoSynapses) {
+		t.Fatalf("expected ErrNoSynapses, got %v", err)
+	}
+}
+
 func TestRemoveRandomOutlinkTargetsOutput(t *testing.T) {
 	genome := model.Genome{
 		Neurons: []model.Neuron{
@@ -536,6 +646,28 @@ func TestRemoveRandomOutlinkTargetsOutput(t *testing.T) {
 	}
 	if hasSynapse(mutated, "s_out") {
 		t.Fatalf("expected output-oriented synapse to be removed")
+	}
+}
+
+func TestRemoveRandomOutlinkNoDirectionalCandidates(t *testing.T) {
+	genome := model.Genome{
+		Neurons: []model.Neuron{
+			{ID: "h1", Activation: "tanh"},
+			{ID: "o1", Activation: "sigmoid"},
+		},
+		Synapses: []model.Synapse{
+			{ID: "s_other", From: "o1", To: "h1", Weight: 1, Enabled: true},
+		},
+	}
+	op := &RemoveRandomOutlink{
+		Rand:            rand.New(rand.NewSource(39)),
+		OutputNeuronIDs: []string{"o1"},
+	}
+	if op.Applicable(genome, "xor") {
+		t.Fatal("expected remove_outlink to be inapplicable without matching edges")
+	}
+	if _, err := op.Apply(context.Background(), genome); !errors.Is(err, ErrNoSynapses) {
+		t.Fatalf("expected ErrNoSynapses, got %v", err)
 	}
 }
 

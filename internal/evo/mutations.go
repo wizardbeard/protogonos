@@ -426,7 +426,19 @@ func (o *AddRandomInlink) Name() string {
 }
 
 func (o *AddRandomInlink) Applicable(genome model.Genome, _ string) bool {
-	return len(genome.Neurons) > 1
+	if len(genome.Neurons) <= 1 {
+		return false
+	}
+	inputSet := toIDSet(o.InputNeuronIDs)
+	fromCandidates := filterNeuronIDs(genome, func(id string) bool {
+		_, ok := inputSet[id]
+		return ok
+	})
+	toCandidates := filterNeuronIDs(genome, func(id string) bool {
+		_, ok := inputSet[id]
+		return !ok
+	})
+	return len(fromCandidates) > 0 && len(toCandidates) > 0
 }
 
 func (o *AddRandomInlink) Apply(_ context.Context, genome model.Genome) (model.Genome, error) {
@@ -464,7 +476,19 @@ func (o *AddRandomOutlink) Name() string {
 }
 
 func (o *AddRandomOutlink) Applicable(genome model.Genome, _ string) bool {
-	return len(genome.Neurons) > 1
+	if len(genome.Neurons) <= 1 {
+		return false
+	}
+	outputSet := toIDSet(o.OutputNeuronIDs)
+	fromCandidates := filterNeuronIDs(genome, func(id string) bool {
+		_, ok := outputSet[id]
+		return !ok
+	})
+	toCandidates := filterNeuronIDs(genome, func(id string) bool {
+		_, ok := outputSet[id]
+		return ok
+	})
+	return len(fromCandidates) > 0 && len(toCandidates) > 0
 }
 
 func (o *AddRandomOutlink) Apply(_ context.Context, genome model.Genome) (model.Genome, error) {
@@ -528,7 +552,18 @@ func (o *RemoveRandomInlink) Name() string {
 }
 
 func (o *RemoveRandomInlink) Applicable(genome model.Genome, _ string) bool {
-	return len(genome.Synapses) > 0
+	if len(genome.Synapses) == 0 {
+		return false
+	}
+	inputSet := toIDSet(o.InputNeuronIDs)
+	for _, syn := range genome.Synapses {
+		_, fromInput := inputSet[syn.From]
+		_, toInput := inputSet[syn.To]
+		if fromInput && !toInput {
+			return true
+		}
+	}
+	return false
 }
 
 func (o *RemoveRandomInlink) Apply(_ context.Context, genome model.Genome) (model.Genome, error) {
@@ -557,7 +592,18 @@ func (o *RemoveRandomOutlink) Name() string {
 }
 
 func (o *RemoveRandomOutlink) Applicable(genome model.Genome, _ string) bool {
-	return len(genome.Synapses) > 0
+	if len(genome.Synapses) == 0 {
+		return false
+	}
+	outputSet := toIDSet(o.OutputNeuronIDs)
+	for _, syn := range genome.Synapses {
+		_, fromOutput := outputSet[syn.From]
+		_, toOutput := outputSet[syn.To]
+		if !fromOutput && toOutput {
+			return true
+		}
+	}
+	return false
 }
 
 func (o *RemoveRandomOutlink) Apply(_ context.Context, genome model.Genome) (model.Genome, error) {
@@ -643,7 +689,18 @@ func (o *AddRandomOutsplice) Name() string {
 }
 
 func (o *AddRandomOutsplice) Applicable(genome model.Genome, _ string) bool {
-	return len(genome.Synapses) > 0
+	if len(genome.Synapses) == 0 {
+		return false
+	}
+	outputSet := toIDSet(o.OutputNeuronIDs)
+	for _, syn := range genome.Synapses {
+		_, fromOutput := outputSet[syn.From]
+		_, toOutput := outputSet[syn.To]
+		if !fromOutput && toOutput {
+			return true
+		}
+	}
+	return false
 }
 
 func (o *AddRandomOutsplice) Apply(ctx context.Context, genome model.Genome) (model.Genome, error) {
@@ -668,7 +725,18 @@ func (o *AddRandomInsplice) Name() string {
 }
 
 func (o *AddRandomInsplice) Applicable(genome model.Genome, _ string) bool {
-	return len(genome.Synapses) > 0
+	if len(genome.Synapses) == 0 {
+		return false
+	}
+	inputSet := toIDSet(o.InputNeuronIDs)
+	for _, syn := range genome.Synapses {
+		_, fromInput := inputSet[syn.From]
+		_, toInput := inputSet[syn.To]
+		if fromInput && !toInput {
+			return true
+		}
+	}
+	return false
 }
 
 func (o *AddRandomInsplice) Apply(ctx context.Context, genome model.Genome) (model.Genome, error) {
@@ -705,9 +773,7 @@ func addRandomNeuronWithSynapseCandidates(
 		}
 	}
 	if len(candidates) == 0 {
-		for i := range genome.Synapses {
-			candidates = append(candidates, i)
-		}
+		return model.Genome{}, ErrNoSynapses
 	}
 
 	activation := activations[rng.Intn(len(activations))]
@@ -1819,14 +1885,8 @@ func filterNeuronIDs(g model.Genome, keep func(id string) bool) []string {
 }
 
 func addDirectedRandomSynapse(genome model.Genome, rng *rand.Rand, maxAbsWeight float64, fromCandidates, toCandidates []string) (model.Genome, error) {
-	if len(fromCandidates) == 0 {
-		fromCandidates = filterNeuronIDs(genome, nil)
-	}
-	if len(toCandidates) == 0 {
-		toCandidates = filterNeuronIDs(genome, nil)
-	}
 	if len(fromCandidates) == 0 || len(toCandidates) == 0 {
-		return model.Genome{}, ErrNoNeurons
+		return model.Genome{}, ErrNoSynapses
 	}
 
 	from := fromCandidates[rng.Intn(len(fromCandidates))]
@@ -1854,9 +1914,7 @@ func removeDirectedRandomSynapse(genome model.Genome, rng *rand.Rand, keep func(
 		}
 	}
 	if len(candidates) == 0 {
-		for i := range genome.Synapses {
-			candidates = append(candidates, i)
-		}
+		return model.Genome{}, ErrNoSynapses
 	}
 	idx := candidates[rng.Intn(len(candidates))]
 	mutated := cloneGenome(genome)
