@@ -81,22 +81,24 @@ type LineageRecord struct {
 }
 
 type GenerationDiagnostics struct {
-	Generation           int     `json:"generation"`
-	BestFitness          float64 `json:"best_fitness"`
-	MeanFitness          float64 `json:"mean_fitness"`
-	MinFitness           float64 `json:"min_fitness"`
-	SpeciesCount         int     `json:"species_count"`
-	FingerprintDiversity int     `json:"fingerprint_diversity"`
-	SpeciationThreshold  float64 `json:"speciation_threshold"`
-	TargetSpeciesCount   int     `json:"target_species_count"`
-	MeanSpeciesSize      float64 `json:"mean_species_size"`
-	LargestSpeciesSize   int     `json:"largest_species_size"`
-	TuningInvocations    int     `json:"tuning_invocations"`
-	TuningAttempts       int     `json:"tuning_attempts"`
-	TuningEvaluations    int     `json:"tuning_evaluations"`
-	TuningAccepted       int     `json:"tuning_accepted"`
-	TuningRejected       int     `json:"tuning_rejected"`
-	TuningGoalHits       int     `json:"tuning_goal_hits"`
+	Generation            int     `json:"generation"`
+	BestFitness           float64 `json:"best_fitness"`
+	MeanFitness           float64 `json:"mean_fitness"`
+	MinFitness            float64 `json:"min_fitness"`
+	SpeciesCount          int     `json:"species_count"`
+	FingerprintDiversity  int     `json:"fingerprint_diversity"`
+	SpeciationThreshold   float64 `json:"speciation_threshold"`
+	TargetSpeciesCount    int     `json:"target_species_count"`
+	MeanSpeciesSize       float64 `json:"mean_species_size"`
+	LargestSpeciesSize    int     `json:"largest_species_size"`
+	TuningInvocations     int     `json:"tuning_invocations"`
+	TuningAttempts        int     `json:"tuning_attempts"`
+	TuningEvaluations     int     `json:"tuning_evaluations"`
+	TuningAccepted        int     `json:"tuning_accepted"`
+	TuningRejected        int     `json:"tuning_rejected"`
+	TuningGoalHits        int     `json:"tuning_goal_hits"`
+	TuningAcceptRate      float64 `json:"tuning_accept_rate"`
+	TuningEvalsPerAttempt float64 `json:"tuning_evals_per_attempt"`
 }
 
 type SpeciesGeneration struct {

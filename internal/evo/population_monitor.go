@@ -48,22 +48,24 @@ type SpeciesMetrics struct {
 }
 
 type GenerationDiagnostics struct {
-	Generation           int     `json:"generation"`
-	BestFitness          float64 `json:"best_fitness"`
-	MeanFitness          float64 `json:"mean_fitness"`
-	MinFitness           float64 `json:"min_fitness"`
-	SpeciesCount         int     `json:"species_count"`
-	FingerprintDiversity int     `json:"fingerprint_diversity"`
-	SpeciationThreshold  float64 `json:"speciation_threshold"`
-	TargetSpeciesCount   int     `json:"target_species_count"`
-	MeanSpeciesSize      float64 `json:"mean_species_size"`
-	LargestSpeciesSize   int     `json:"largest_species_size"`
-	TuningInvocations    int     `json:"tuning_invocations"`
-	TuningAttempts       int     `json:"tuning_attempts"`
-	TuningEvaluations    int     `json:"tuning_evaluations"`
-	TuningAccepted       int     `json:"tuning_accepted"`
-	TuningRejected       int     `json:"tuning_rejected"`
-	TuningGoalHits       int     `json:"tuning_goal_hits"`
+	Generation            int     `json:"generation"`
+	BestFitness           float64 `json:"best_fitness"`
+	MeanFitness           float64 `json:"mean_fitness"`
+	MinFitness            float64 `json:"min_fitness"`
+	SpeciesCount          int     `json:"species_count"`
+	FingerprintDiversity  int     `json:"fingerprint_diversity"`
+	SpeciationThreshold   float64 `json:"speciation_threshold"`
+	TargetSpeciesCount    int     `json:"target_species_count"`
+	MeanSpeciesSize       float64 `json:"mean_species_size"`
+	LargestSpeciesSize    int     `json:"largest_species_size"`
+	TuningInvocations     int     `json:"tuning_invocations"`
+	TuningAttempts        int     `json:"tuning_attempts"`
+	TuningEvaluations     int     `json:"tuning_evaluations"`
+	TuningAccepted        int     `json:"tuning_accepted"`
+	TuningRejected        int     `json:"tuning_rejected"`
+	TuningGoalHits        int     `json:"tuning_goal_hits"`
+	TuningAcceptRate      float64 `json:"tuning_accept_rate"`
+	TuningEvalsPerAttempt float64 `json:"tuning_evals_per_attempt"`
 }
 
 type LineageRecord struct {
@@ -356,15 +358,18 @@ func (m *PopulationMonitor) handleCommand(cmd MonitorCommand) bool {
 }
 
 func summarizeGeneration(scored []ScoredGenome, generation int, speciationStats SpeciationStats, tuningStats tuningGenerationStats) GenerationDiagnostics {
+	acceptRate, evalsPerAttempt := tuningRatios(tuningStats)
 	if len(scored) == 0 {
 		return GenerationDiagnostics{
-			Generation:        generation,
-			TuningInvocations: tuningStats.Invocations,
-			TuningAttempts:    tuningStats.Attempts,
-			TuningEvaluations: tuningStats.Evaluations,
-			TuningAccepted:    tuningStats.Accepted,
-			TuningRejected:    tuningStats.Rejected,
-			TuningGoalHits:    tuningStats.GoalHits,
+			Generation:            generation,
+			TuningInvocations:     tuningStats.Invocations,
+			TuningAttempts:        tuningStats.Attempts,
+			TuningEvaluations:     tuningStats.Evaluations,
+			TuningAccepted:        tuningStats.Accepted,
+			TuningRejected:        tuningStats.Rejected,
+			TuningGoalHits:        tuningStats.GoalHits,
+			TuningAcceptRate:      acceptRate,
+			TuningEvalsPerAttempt: evalsPerAttempt,
 		}
 	}
 
@@ -381,23 +386,38 @@ func summarizeGeneration(scored []ScoredGenome, generation int, speciationStats 
 	}
 
 	return GenerationDiagnostics{
-		Generation:           generation,
-		BestFitness:          scored[0].Fitness,
-		MeanFitness:          total / float64(len(scored)),
-		MinFitness:           minFitness,
-		SpeciesCount:         speciationStats.SpeciesCount,
-		FingerprintDiversity: len(fingerprints),
-		SpeciationThreshold:  speciationStats.Threshold,
-		TargetSpeciesCount:   speciationStats.TargetSpeciesCount,
-		MeanSpeciesSize:      speciationStats.MeanSpeciesSize,
-		LargestSpeciesSize:   speciationStats.LargestSpeciesSize,
-		TuningInvocations:    tuningStats.Invocations,
-		TuningAttempts:       tuningStats.Attempts,
-		TuningEvaluations:    tuningStats.Evaluations,
-		TuningAccepted:       tuningStats.Accepted,
-		TuningRejected:       tuningStats.Rejected,
-		TuningGoalHits:       tuningStats.GoalHits,
+		Generation:            generation,
+		BestFitness:           scored[0].Fitness,
+		MeanFitness:           total / float64(len(scored)),
+		MinFitness:            minFitness,
+		SpeciesCount:          speciationStats.SpeciesCount,
+		FingerprintDiversity:  len(fingerprints),
+		SpeciationThreshold:   speciationStats.Threshold,
+		TargetSpeciesCount:    speciationStats.TargetSpeciesCount,
+		MeanSpeciesSize:       speciationStats.MeanSpeciesSize,
+		LargestSpeciesSize:    speciationStats.LargestSpeciesSize,
+		TuningInvocations:     tuningStats.Invocations,
+		TuningAttempts:        tuningStats.Attempts,
+		TuningEvaluations:     tuningStats.Evaluations,
+		TuningAccepted:        tuningStats.Accepted,
+		TuningRejected:        tuningStats.Rejected,
+		TuningGoalHits:        tuningStats.GoalHits,
+		TuningAcceptRate:      acceptRate,
+		TuningEvalsPerAttempt: evalsPerAttempt,
 	}
+}
+
+func tuningRatios(stats tuningGenerationStats) (float64, float64) {
+	acceptRate := 0.0
+	totalDecisions := stats.Accepted + stats.Rejected
+	if totalDecisions > 0 {
+		acceptRate = float64(stats.Accepted) / float64(totalDecisions)
+	}
+	evalsPerAttempt := 0.0
+	if stats.Attempts > 0 {
+		evalsPerAttempt = float64(stats.Evaluations) / float64(stats.Attempts)
+	}
+	return acceptRate, evalsPerAttempt
 }
 
 func (m *PopulationMonitor) assignSpecies(scored []ScoredGenome) (map[string]string, SpeciationStats) {

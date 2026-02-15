@@ -244,4 +244,10 @@ func TestPopulationMonitorAggregatesReportingTunerTelemetry(t *testing.T) {
 	if d.TuningInvocations != 2 || d.TuningAttempts != 4 || d.TuningEvaluations != 10 || d.TuningAccepted != 4 || d.TuningRejected != 6 || d.TuningGoalHits != 2 {
 		t.Fatalf("unexpected tuning telemetry: %+v", d)
 	}
+	if d.TuningAcceptRate != 0.4 {
+		t.Fatalf("unexpected tuning accept rate: got=%f want=0.4", d.TuningAcceptRate)
+	}
+	if d.TuningEvalsPerAttempt != 2.5 {
+		t.Fatalf("unexpected tuning evals per attempt: got=%f want=2.5", d.TuningEvalsPerAttempt)
+	}
 }
