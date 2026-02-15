@@ -22,7 +22,7 @@ Status keys:
 | `fitness_postprocessor.erl` | `done` | Reference postprocessor surface implemented: `none`, `size_proportional` (with `EFF=0.05` scaling), and `novelty_proportional` placeholder semantics aligned as no-op; `nsize_proportional` alias and map2rec `constraint.population_fitness_postprocessor_f` materialization wired through CLI/API. |
 | `specie_identifier.erl` | `done` | Reference `tot_n` specie distinguisher parity implemented, plus topology-based identifier support and adaptive species assignment continuity/threshold diagnostics. |
 | `tot_topological_mutations.erl` | `done` | Constant + count-scaled topological mutation count policies implemented/tested, with map2rec `constraint.tot_topological_mutations_fs` config materialization support. |
-| `tuning_selection.erl` | `partial` | Reference mode-name surface implemented (`dynamic`, `dynamic_random`, `active`, `active_random`, `current`, `current_random`, `all`, `all_random`) plus legacy aliases (`recent`, `recent_random`, `lastgen`, `lastgen_random`); random modes now use reference-style probabilistic subset selection (`1/sqrt(N)` with non-empty fallback), while age/spread semantics remain simplified versus source. |
+| `tuning_selection.erl` | `partial` | Reference mode-name surface implemented (`dynamic`, `dynamic_random`, `active`, `active_random`, `current`, `current_random`, `all`, `all_random`) plus legacy aliases (`recent`, `recent_random`, `lastgen`, `lastgen_random`); random modes use reference-style probabilistic subset selection (`1/sqrt(N)` with non-empty fallback) and age modes use generation-aware filtering inferred from genome IDs, while full per-neuron spread semantics remain simplified versus source. |
 | `tuning_duration.erl` | `done` | Fixed/linear decay/topology-scaled attempt policies implemented and tested, including reference aliases (`const`, `nsize_proportional`, `wsize_proportional`). |
 | `cortex.erl` | `partial` | Per-step orchestrator with sensor->nn->actuator loop implemented, including vector/chunked actuator dispatch semantics; distributed/OTP-specific process lifecycle/sync semantics remain simplified. |
 | `neuron.erl` | `partial` | Runtime neuron/synapse eval implemented with activation, aggregator modes, and reference-aligned output saturation (`[-1,1]`); complete reference semantics breadth (OTP actor lifecycle, weight backup/restore protocol) pending. |
@@ -113,6 +113,7 @@ Status keys:
 - Aligned tuning `*_random` selection behavior with reference probabilistic subset semantics (`1/sqrt(N)` + non-empty fallback) over the available candidate base pool.
 - Added goal-aware exoself short-circuit semantics so tuning attempts stop early when best fitness already reaches the configured run goal.
 - Added exoself perturbation controls (`tune_perturbation_range`, `tune_annealing_factor`) across runtime, CLI/config/API validation, and persisted run config artifacts.
+- Added generation-aware candidate-pool filtering for `dynamic`/`active`/`current` tuning-selection families by inferring generation from genome IDs.
 
 ## Highest-priority remaining gaps to reach strict parity
 

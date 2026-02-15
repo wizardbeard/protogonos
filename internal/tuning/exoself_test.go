@@ -324,3 +324,33 @@ func TestExoselfPerturbationRangeAffectsDelta(t *testing.T) {
 		t.Fatalf("expected perturbation range to increase magnitude: base=%f ranged=%f", baseDelta, rangedDelta)
 	}
 }
+
+func TestFilterCandidatesByAgeUsesInferredGeneration(t *testing.T) {
+	pool := []model.Genome{
+		{ID: "g0-root"},
+		{ID: "xor-g2-3"},
+		{ID: "xor-g5-9"},
+	}
+	currentOnly := filterCandidatesByAge(pool, 0)
+	if len(currentOnly) != 1 || currentOnly[0].ID != "xor-g5-9" {
+		ids := make([]string, 0, len(currentOnly))
+		for _, g := range currentOnly {
+			ids = append(ids, g.ID)
+		}
+		t.Fatalf("expected current generation candidate only, got=%v", ids)
+	}
+
+	active := filterCandidatesByAge(pool, 3)
+	if len(active) != 2 {
+		t.Fatalf("expected two active candidates, got=%d", len(active))
+	}
+}
+
+func TestInferGenomeGeneration(t *testing.T) {
+	if g, ok := inferGenomeGeneration("xor-g12-77"); !ok || g != 12 {
+		t.Fatalf("expected parse generation 12, got=%d ok=%t", g, ok)
+	}
+	if _, ok := inferGenomeGeneration("no-generation-here"); ok {
+		t.Fatal("expected missing generation parse failure")
+	}
+}

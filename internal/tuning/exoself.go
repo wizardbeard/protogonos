@@ -5,6 +5,8 @@ import (
 	"errors"
 	"math"
 	"math/rand"
+	"strconv"
+	"strings"
 	"sync"
 
 	"protogonos/internal/model"
@@ -201,17 +203,22 @@ func (e *Exoself) candidateBases(best, original, recent model.Genome) ([]model.G
 }
 
 func (e *Exoself) candidateBasesForMode(mode string, best, original, recent model.Genome) ([]model.Genome, error) {
+	candidates := uniqueCandidatePool(best, original, recent)
+	if len(candidates) == 0 {
+		return nil, errors.New("empty candidate pool")
+	}
 	switch mode {
 	case CandidateSelectBestSoFar:
 		return []model.Genome{cloneGenome(best)}, nil
 	case CandidateSelectOriginal, CandidateSelectLastGen:
 		return []model.Genome{cloneGenome(original)}, nil
 	case CandidateSelectDynamicA:
-		return []model.Genome{cloneGenome(best), cloneGenome(original)}, nil
+		limit := dynamicAgeLimit(e.randFloat64())
+		return filterCandidatesByAge(candidates, limit), nil
 	case CandidateSelectActive, CandidateSelectRecent:
-		return []model.Genome{cloneGenome(recent)}, nil
+		return filterCandidatesByAge(candidates, 3), nil
 	case CandidateSelectCurrent, CandidateSelectAll:
-		return []model.Genome{cloneGenome(best), cloneGenome(original), cloneGenome(recent)}, nil
+		return filterCandidatesByAge(candidates, 0), nil
 	default:
 		return nil, errors.New("unsupported candidate selection")
 	}
@@ -243,6 +250,80 @@ func nonRandomModeFor(mode string) string {
 	default:
 		return mode
 	}
+}
+
+func dynamicAgeLimit(u float64) float64 {
+	// Mirror tuning_selection.erl dynamic age-limit shape: sqrt(1/U).
+	if u <= 0 {
+		u = math.SmallestNonzeroFloat64
+	}
+	return math.Sqrt(1 / u)
+}
+
+func uniqueCandidatePool(best, original, recent model.Genome) []model.Genome {
+	seen := map[string]struct{}{}
+	out := make([]model.Genome, 0, 3)
+	for _, g := range []model.Genome{best, original, recent} {
+		key := g.ID
+		if key == "" {
+			key = strconv.Itoa(len(out))
+		}
+		if _, ok := seen[key]; ok {
+			continue
+		}
+		seen[key] = struct{}{}
+		out = append(out, cloneGenome(g))
+	}
+	return out
+}
+
+func filterCandidatesByAge(pool []model.Genome, maxAge float64) []model.Genome {
+	if len(pool) == 0 {
+		return nil
+	}
+	currentGen := 0
+	knownCurrent := false
+	for _, g := range pool {
+		gen, ok := inferGenomeGeneration(g.ID)
+		if !ok {
+			continue
+		}
+		if !knownCurrent || gen > currentGen {
+			currentGen = gen
+			knownCurrent = true
+		}
+	}
+	filtered := make([]model.Genome, 0, len(pool))
+	for _, g := range pool {
+		gen, ok := inferGenomeGeneration(g.ID)
+		if !knownCurrent || !ok {
+			filtered = append(filtered, cloneGenome(g))
+			continue
+		}
+		age := currentGen - gen
+		if float64(age) <= maxAge {
+			filtered = append(filtered, cloneGenome(g))
+		}
+	}
+	if len(filtered) > 0 {
+		return filtered
+	}
+	return []model.Genome{cloneGenome(pool[0])}
+}
+
+func inferGenomeGeneration(id string) (int, bool) {
+	if id == "" {
+		return 0, false
+	}
+	parts := strings.Split(id, "-")
+	for _, part := range parts {
+		if len(part) > 1 && part[0] == 'g' {
+			if gen, err := strconv.Atoi(part[1:]); err == nil {
+				return gen, true
+			}
+		}
+	}
+	return 0, false
 }
 
 func (e *Exoself) randomSubset(pool []model.Genome) []model.Genome {
