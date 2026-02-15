@@ -1274,12 +1274,13 @@ func defaultMutationPolicy(seed int64, inputNeuronIDs, outputNeuronIDs []string,
 		{Operator: &evo.ChangeRandomAggregator{Rand: rand.New(rand.NewSource(seed + 1009))}, Weight: req.WeightAggregator},
 		{Operator: &evo.AddRandomInlink{Rand: rand.New(rand.NewSource(seed + 1001)), MaxAbsWeight: 1.0, InputNeuronIDs: inputNeuronIDs}, Weight: req.WeightAddSynapse / 2},
 		{Operator: &evo.AddRandomOutlink{Rand: rand.New(rand.NewSource(seed + 1002)), MaxAbsWeight: 1.0, OutputNeuronIDs: outputNeuronIDs}, Weight: req.WeightAddSynapse / 2},
-		{Operator: &evo.RemoveRandomSynapse{Rand: rand.New(rand.NewSource(seed + 1003))}, Weight: req.WeightRemoveSynapse},
-		{Operator: &evo.AddRandomNeuron{Rand: rand.New(rand.NewSource(seed + 1004))}, Weight: req.WeightAddNeuron},
-		{Operator: &evo.RemoveRandomNeuron{Rand: rand.New(rand.NewSource(seed + 1005)), Protected: protected}, Weight: req.WeightRemoveNeuron},
+		{Operator: &evo.RemoveRandomInlink{Rand: rand.New(rand.NewSource(seed + 1003)), InputNeuronIDs: inputNeuronIDs}, Weight: req.WeightRemoveSynapse / 2},
+		{Operator: &evo.RemoveRandomOutlink{Rand: rand.New(rand.NewSource(seed + 1004)), OutputNeuronIDs: outputNeuronIDs}, Weight: req.WeightRemoveSynapse / 2},
+		{Operator: &evo.AddRandomNeuron{Rand: rand.New(rand.NewSource(seed + 1005))}, Weight: req.WeightAddNeuron},
+		{Operator: &evo.RemoveRandomNeuron{Rand: rand.New(rand.NewSource(seed + 1006)), Protected: protected}, Weight: req.WeightRemoveNeuron},
 		{Operator: &evo.ChangePlasticityRule{Rand: rand.New(rand.NewSource(seed + 1012))}, Weight: req.WeightPlasticityRule},
-		{Operator: &evo.PerturbPlasticityRate{Rand: rand.New(rand.NewSource(seed + 1006)), MaxDelta: 0.15}, Weight: req.WeightPlasticity},
-		{Operator: &evo.PerturbSubstrateParameter{Rand: rand.New(rand.NewSource(seed + 1007)), MaxDelta: 0.15}, Weight: req.WeightSubstrate},
+		{Operator: &evo.PerturbPlasticityRate{Rand: rand.New(rand.NewSource(seed + 1007)), MaxDelta: 0.15}, Weight: req.WeightPlasticity},
+		{Operator: &evo.PerturbSubstrateParameter{Rand: rand.New(rand.NewSource(seed + 1008)), MaxDelta: 0.15}, Weight: req.WeightSubstrate},
 	}
 }
 

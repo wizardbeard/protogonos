@@ -425,6 +425,64 @@ func (o *RemoveRandomSynapse) Apply(_ context.Context, genome model.Genome) (mod
 	return mutated, nil
 }
 
+// RemoveRandomInlink removes a synapse biased toward input->non-input direction.
+type RemoveRandomInlink struct {
+	Rand           *rand.Rand
+	InputNeuronIDs []string
+}
+
+func (o *RemoveRandomInlink) Name() string {
+	return "remove_random_inlink"
+}
+
+func (o *RemoveRandomInlink) Applicable(genome model.Genome, _ string) bool {
+	return len(genome.Synapses) > 0
+}
+
+func (o *RemoveRandomInlink) Apply(_ context.Context, genome model.Genome) (model.Genome, error) {
+	if o == nil || o.Rand == nil {
+		return model.Genome{}, errors.New("random source is required")
+	}
+	if len(genome.Synapses) == 0 {
+		return model.Genome{}, ErrNoSynapses
+	}
+	inputSet := toIDSet(o.InputNeuronIDs)
+	return removeDirectedRandomSynapse(genome, o.Rand, func(s model.Synapse) bool {
+		_, fromInput := inputSet[s.From]
+		_, toInput := inputSet[s.To]
+		return fromInput && !toInput
+	})
+}
+
+// RemoveRandomOutlink removes a synapse biased toward non-output->output direction.
+type RemoveRandomOutlink struct {
+	Rand            *rand.Rand
+	OutputNeuronIDs []string
+}
+
+func (o *RemoveRandomOutlink) Name() string {
+	return "remove_random_outlink"
+}
+
+func (o *RemoveRandomOutlink) Applicable(genome model.Genome, _ string) bool {
+	return len(genome.Synapses) > 0
+}
+
+func (o *RemoveRandomOutlink) Apply(_ context.Context, genome model.Genome) (model.Genome, error) {
+	if o == nil || o.Rand == nil {
+		return model.Genome{}, errors.New("random source is required")
+	}
+	if len(genome.Synapses) == 0 {
+		return model.Genome{}, ErrNoSynapses
+	}
+	outputSet := toIDSet(o.OutputNeuronIDs)
+	return removeDirectedRandomSynapse(genome, o.Rand, func(s model.Synapse) bool {
+		_, fromOutput := outputSet[s.From]
+		_, toOutput := outputSet[s.To]
+		return !fromOutput && toOutput
+	})
+}
+
 // AddRandomNeuron inserts a neuron by splitting a random synapse.
 type AddRandomNeuron struct {
 	Rand        *rand.Rand
@@ -906,5 +964,23 @@ func addDirectedRandomSynapse(genome model.Genome, rng *rand.Rand, maxAbsWeight 
 		Enabled:   true,
 		Recurrent: from == to,
 	})
+	return mutated, nil
+}
+
+func removeDirectedRandomSynapse(genome model.Genome, rng *rand.Rand, keep func(s model.Synapse) bool) (model.Genome, error) {
+	candidates := make([]int, 0, len(genome.Synapses))
+	for i, syn := range genome.Synapses {
+		if keep == nil || keep(syn) {
+			candidates = append(candidates, i)
+		}
+	}
+	if len(candidates) == 0 {
+		for i := range genome.Synapses {
+			candidates = append(candidates, i)
+		}
+	}
+	idx := candidates[rng.Intn(len(candidates))]
+	mutated := cloneGenome(genome)
+	mutated.Synapses = append(mutated.Synapses[:idx], mutated.Synapses[idx+1:]...)
 	return mutated, nil
 }

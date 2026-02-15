@@ -423,6 +423,62 @@ func TestAddRandomOutlinkTargetsOutput(t *testing.T) {
 	}
 }
 
+func TestRemoveRandomInlinkPrefersInputSource(t *testing.T) {
+	genome := model.Genome{
+		Neurons: []model.Neuron{
+			{ID: "i1", Activation: "identity"},
+			{ID: "h1", Activation: "tanh"},
+			{ID: "o1", Activation: "sigmoid"},
+		},
+		Synapses: []model.Synapse{
+			{ID: "s_in", From: "i1", To: "h1", Weight: 1, Enabled: true},
+			{ID: "s_other", From: "h1", To: "o1", Weight: 1, Enabled: true},
+		},
+	}
+	op := &RemoveRandomInlink{
+		Rand:           rand.New(rand.NewSource(31)),
+		InputNeuronIDs: []string{"i1"},
+	}
+	mutated, err := op.Apply(context.Background(), genome)
+	if err != nil {
+		t.Fatalf("apply failed: %v", err)
+	}
+	if len(mutated.Synapses) != 1 {
+		t.Fatalf("expected one removed synapse, got=%d", len(genome.Synapses)-len(mutated.Synapses))
+	}
+	if hasSynapse(mutated, "s_in") {
+		t.Fatalf("expected input-oriented synapse to be removed")
+	}
+}
+
+func TestRemoveRandomOutlinkTargetsOutput(t *testing.T) {
+	genome := model.Genome{
+		Neurons: []model.Neuron{
+			{ID: "i1", Activation: "identity"},
+			{ID: "h1", Activation: "tanh"},
+			{ID: "o1", Activation: "sigmoid"},
+		},
+		Synapses: []model.Synapse{
+			{ID: "s_out", From: "h1", To: "o1", Weight: 1, Enabled: true},
+			{ID: "s_other", From: "i1", To: "h1", Weight: 1, Enabled: true},
+		},
+	}
+	op := &RemoveRandomOutlink{
+		Rand:            rand.New(rand.NewSource(37)),
+		OutputNeuronIDs: []string{"o1"},
+	}
+	mutated, err := op.Apply(context.Background(), genome)
+	if err != nil {
+		t.Fatalf("apply failed: %v", err)
+	}
+	if len(mutated.Synapses) != 1 {
+		t.Fatalf("expected one removed synapse, got=%d", len(genome.Synapses)-len(mutated.Synapses))
+	}
+	if hasSynapse(mutated, "s_out") {
+		t.Fatalf("expected output-oriented synapse to be removed")
+	}
+}
+
 func TestPerturbSubstrateParameterMutation(t *testing.T) {
 	genome := randomGenome(rand.New(rand.NewSource(3)))
 	genome.Substrate = &model.SubstrateConfig{
