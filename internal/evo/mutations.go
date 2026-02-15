@@ -322,6 +322,82 @@ func (o *AddRandomSynapse) Apply(_ context.Context, genome model.Genome) (model.
 	return mutated, nil
 }
 
+// AddRandomInlink adds a synapse biased toward input->non-input direction.
+type AddRandomInlink struct {
+	Rand           *rand.Rand
+	MaxAbsWeight   float64
+	InputNeuronIDs []string
+}
+
+func (o *AddRandomInlink) Name() string {
+	return "add_random_inlink"
+}
+
+func (o *AddRandomInlink) Applicable(genome model.Genome, _ string) bool {
+	return len(genome.Neurons) > 1
+}
+
+func (o *AddRandomInlink) Apply(_ context.Context, genome model.Genome) (model.Genome, error) {
+	if o == nil || o.Rand == nil {
+		return model.Genome{}, errors.New("random source is required")
+	}
+	if len(genome.Neurons) == 0 {
+		return model.Genome{}, ErrNoNeurons
+	}
+	if o.MaxAbsWeight <= 0 {
+		return model.Genome{}, errors.New("max abs weight must be > 0")
+	}
+
+	inputSet := toIDSet(o.InputNeuronIDs)
+	fromCandidates := filterNeuronIDs(genome, func(id string) bool {
+		_, ok := inputSet[id]
+		return ok
+	})
+	toCandidates := filterNeuronIDs(genome, func(id string) bool {
+		_, ok := inputSet[id]
+		return !ok
+	})
+	return addDirectedRandomSynapse(genome, o.Rand, o.MaxAbsWeight, fromCandidates, toCandidates)
+}
+
+// AddRandomOutlink adds a synapse biased toward non-output->output direction.
+type AddRandomOutlink struct {
+	Rand            *rand.Rand
+	MaxAbsWeight    float64
+	OutputNeuronIDs []string
+}
+
+func (o *AddRandomOutlink) Name() string {
+	return "add_random_outlink"
+}
+
+func (o *AddRandomOutlink) Applicable(genome model.Genome, _ string) bool {
+	return len(genome.Neurons) > 1
+}
+
+func (o *AddRandomOutlink) Apply(_ context.Context, genome model.Genome) (model.Genome, error) {
+	if o == nil || o.Rand == nil {
+		return model.Genome{}, errors.New("random source is required")
+	}
+	if len(genome.Neurons) == 0 {
+		return model.Genome{}, ErrNoNeurons
+	}
+	if o.MaxAbsWeight <= 0 {
+		return model.Genome{}, errors.New("max abs weight must be > 0")
+	}
+
+	outputSet := toIDSet(o.OutputNeuronIDs)
+	fromCandidates := filterNeuronIDs(genome, func(id string) bool {
+		_, ok := outputSet[id]
+		return !ok
+	})
+	toCandidates := filterNeuronIDs(genome, func(id string) bool {
+		_, ok := outputSet[id]
+		return ok
+	})
+	return addDirectedRandomSynapse(genome, o.Rand, o.MaxAbsWeight, fromCandidates, toCandidates)
+}
+
 // RemoveRandomSynapse removes a random synapse.
 type RemoveRandomSynapse struct {
 	Rand *rand.Rand
@@ -782,4 +858,53 @@ func uniqueNeuronID(g model.Genome, rng *rand.Rand) string {
 			return candidate
 		}
 	}
+}
+
+func toIDSet(ids []string) map[string]struct{} {
+	out := make(map[string]struct{}, len(ids))
+	for _, id := range ids {
+		if id == "" {
+			continue
+		}
+		out[id] = struct{}{}
+	}
+	return out
+}
+
+func filterNeuronIDs(g model.Genome, keep func(id string) bool) []string {
+	out := make([]string, 0, len(g.Neurons))
+	for _, n := range g.Neurons {
+		if keep == nil || keep(n.ID) {
+			out = append(out, n.ID)
+		}
+	}
+	return out
+}
+
+func addDirectedRandomSynapse(genome model.Genome, rng *rand.Rand, maxAbsWeight float64, fromCandidates, toCandidates []string) (model.Genome, error) {
+	if len(fromCandidates) == 0 {
+		fromCandidates = filterNeuronIDs(genome, nil)
+	}
+	if len(toCandidates) == 0 {
+		toCandidates = filterNeuronIDs(genome, nil)
+	}
+	if len(fromCandidates) == 0 || len(toCandidates) == 0 {
+		return model.Genome{}, ErrNoNeurons
+	}
+
+	from := fromCandidates[rng.Intn(len(fromCandidates))]
+	to := toCandidates[rng.Intn(len(toCandidates))]
+	id := uniqueSynapseID(genome, rng)
+	weight := (rng.Float64()*2 - 1) * maxAbsWeight
+
+	mutated := cloneGenome(genome)
+	mutated.Synapses = append(mutated.Synapses, model.Synapse{
+		ID:        id,
+		From:      from,
+		To:        to,
+		Weight:    weight,
+		Enabled:   true,
+		Recurrent: from == to,
+	})
+	return mutated, nil
 }

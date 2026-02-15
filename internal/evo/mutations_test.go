@@ -370,6 +370,59 @@ func TestPerturbWeightsProportionalNoSynapses(t *testing.T) {
 	}
 }
 
+func TestAddRandomInlinkPrefersInputSource(t *testing.T) {
+	genome := model.Genome{
+		Neurons: []model.Neuron{
+			{ID: "i1", Activation: "identity"},
+			{ID: "h1", Activation: "tanh"},
+			{ID: "o1", Activation: "sigmoid"},
+		},
+	}
+	op := &AddRandomInlink{
+		Rand:           rand.New(rand.NewSource(17)),
+		MaxAbsWeight:   1.0,
+		InputNeuronIDs: []string{"i1"},
+	}
+	mutated, err := op.Apply(context.Background(), genome)
+	if err != nil {
+		t.Fatalf("apply failed: %v", err)
+	}
+	if len(mutated.Synapses) != 1 {
+		t.Fatalf("expected one added synapse, got=%d", len(mutated.Synapses))
+	}
+	if mutated.Synapses[0].From != "i1" {
+		t.Fatalf("expected inlink source i1, got=%s", mutated.Synapses[0].From)
+	}
+	if mutated.Synapses[0].To == "i1" {
+		t.Fatalf("expected inlink target to be non-input neuron, got=%s", mutated.Synapses[0].To)
+	}
+}
+
+func TestAddRandomOutlinkTargetsOutput(t *testing.T) {
+	genome := model.Genome{
+		Neurons: []model.Neuron{
+			{ID: "i1", Activation: "identity"},
+			{ID: "h1", Activation: "tanh"},
+			{ID: "o1", Activation: "sigmoid"},
+		},
+	}
+	op := &AddRandomOutlink{
+		Rand:            rand.New(rand.NewSource(23)),
+		MaxAbsWeight:    1.0,
+		OutputNeuronIDs: []string{"o1"},
+	}
+	mutated, err := op.Apply(context.Background(), genome)
+	if err != nil {
+		t.Fatalf("apply failed: %v", err)
+	}
+	if len(mutated.Synapses) != 1 {
+		t.Fatalf("expected one added synapse, got=%d", len(mutated.Synapses))
+	}
+	if mutated.Synapses[0].To != "o1" {
+		t.Fatalf("expected outlink target o1, got=%s", mutated.Synapses[0].To)
+	}
+}
+
 func TestPerturbSubstrateParameterMutation(t *testing.T) {
 	genome := randomGenome(rand.New(rand.NewSource(3)))
 	genome.Substrate = &model.SubstrateConfig{
