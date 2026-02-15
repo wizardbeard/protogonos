@@ -1400,13 +1400,15 @@ func defaultMutationPolicy(
 		{Operator: &evo.RemoveRandomNeuron{Rand: rand.New(rand.NewSource(seed + 1006)), Protected: protected}, Weight: wRemoveNeuron},
 		{Operator: &evo.ChangePlasticityRule{Rand: rand.New(rand.NewSource(seed + 1012))}, Weight: wPlasticityRule},
 		{Operator: &evo.PerturbPlasticityRate{Rand: rand.New(rand.NewSource(seed + 1007)), MaxDelta: 0.15}, Weight: wPlasticity},
-		{Operator: &evo.AddRandomSensor{Rand: rand.New(rand.NewSource(seed + 1008)), ScapeName: scapeName}, Weight: wSubstrate * 0.22},
-		{Operator: &evo.AddRandomSensorLink{Rand: rand.New(rand.NewSource(seed + 1009)), ScapeName: scapeName}, Weight: wSubstrate * 0.22},
-		{Operator: &evo.AddRandomActuator{Rand: rand.New(rand.NewSource(seed + 1010)), ScapeName: scapeName}, Weight: wSubstrate * 0.22},
-		{Operator: &evo.AddRandomActuatorLink{Rand: rand.New(rand.NewSource(seed + 1011)), ScapeName: scapeName}, Weight: wSubstrate * 0.14},
+		{Operator: &evo.AddRandomSensor{Rand: rand.New(rand.NewSource(seed + 1008)), ScapeName: scapeName}, Weight: wSubstrate * 0.16},
+		{Operator: &evo.AddRandomSensorLink{Rand: rand.New(rand.NewSource(seed + 1009)), ScapeName: scapeName}, Weight: wSubstrate * 0.16},
+		{Operator: &evo.AddRandomActuator{Rand: rand.New(rand.NewSource(seed + 1010)), ScapeName: scapeName}, Weight: wSubstrate * 0.16},
+		{Operator: &evo.AddRandomActuatorLink{Rand: rand.New(rand.NewSource(seed + 1011)), ScapeName: scapeName}, Weight: wSubstrate * 0.10},
 		{Operator: &evo.AddRandomCPP{Rand: rand.New(rand.NewSource(seed + 1012))}, Weight: wSubstrate * 0.08},
 		{Operator: &evo.AddRandomCEP{Rand: rand.New(rand.NewSource(seed + 1013))}, Weight: wSubstrate * 0.08},
-		{Operator: &evo.PerturbSubstrateParameter{Rand: rand.New(rand.NewSource(seed + 1014)), MaxDelta: 0.15}, Weight: wSubstrate * 0.04},
+		{Operator: &evo.AddCircuitNode{Rand: rand.New(rand.NewSource(seed + 1014))}, Weight: wSubstrate * 0.08},
+		{Operator: &evo.AddCircuitLayer{Rand: rand.New(rand.NewSource(seed + 1015))}, Weight: wSubstrate * 0.08},
+		{Operator: &evo.PerturbSubstrateParameter{Rand: rand.New(rand.NewSource(seed + 1016)), MaxDelta: 0.15}, Weight: wSubstrate * 0.10},
 	}
 }
 

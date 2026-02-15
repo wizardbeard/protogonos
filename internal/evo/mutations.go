@@ -886,6 +886,74 @@ func (o *AddRandomCEP) Apply(_ context.Context, genome model.Genome) (model.Geno
 	return mutated, nil
 }
 
+// AddCircuitNode mutates substrate dimensions by adding one node to a random layer.
+type AddCircuitNode struct {
+	Rand *rand.Rand
+}
+
+func (o *AddCircuitNode) Name() string {
+	return "add_circuit_node"
+}
+
+func (o *AddCircuitNode) Applicable(_ model.Genome, _ string) bool {
+	return true
+}
+
+func (o *AddCircuitNode) Apply(_ context.Context, genome model.Genome) (model.Genome, error) {
+	if o == nil || o.Rand == nil {
+		return model.Genome{}, errors.New("random source is required")
+	}
+	mutated := cloneGenome(genome)
+	ensureSubstrateConfig(&mutated)
+	if len(mutated.Substrate.Dimensions) == 0 {
+		mutated.Substrate.Dimensions = []int{1, 1}
+		return mutated, nil
+	}
+	idx := o.Rand.Intn(len(mutated.Substrate.Dimensions))
+	if mutated.Substrate.Dimensions[idx] < 1 {
+		mutated.Substrate.Dimensions[idx] = 1
+	}
+	mutated.Substrate.Dimensions[idx]++
+	return mutated, nil
+}
+
+// AddCircuitLayer mutates substrate dimensions by inserting a new layer.
+type AddCircuitLayer struct {
+	Rand *rand.Rand
+}
+
+func (o *AddCircuitLayer) Name() string {
+	return "add_circuit_layer"
+}
+
+func (o *AddCircuitLayer) Applicable(_ model.Genome, _ string) bool {
+	return true
+}
+
+func (o *AddCircuitLayer) Apply(_ context.Context, genome model.Genome) (model.Genome, error) {
+	if o == nil || o.Rand == nil {
+		return model.Genome{}, errors.New("random source is required")
+	}
+	mutated := cloneGenome(genome)
+	ensureSubstrateConfig(&mutated)
+	dims := append([]int(nil), mutated.Substrate.Dimensions...)
+	if len(dims) == 0 {
+		mutated.Substrate.Dimensions = []int{1, 1, 1}
+		return mutated, nil
+	}
+	if len(dims) == 1 {
+		mutated.Substrate.Dimensions = []int{dims[0], 1}
+		return mutated, nil
+	}
+	insertAt := len(dims) - 1
+	updated := make([]int, 0, len(dims)+1)
+	updated = append(updated, dims[:insertAt]...)
+	updated = append(updated, 1)
+	updated = append(updated, dims[insertAt:]...)
+	mutated.Substrate.Dimensions = updated
+	return mutated, nil
+}
+
 // ChangeActivationAt mutates one neuron's activation function label.
 type ChangeActivationAt struct {
 	Index      int
@@ -1220,4 +1288,25 @@ func filterOutString(values []string, drop string) []string {
 		out = append(out, item)
 	}
 	return out
+}
+
+func ensureSubstrateConfig(genome *model.Genome) {
+	if genome.Substrate != nil {
+		if genome.Substrate.CPPName == "" {
+			genome.Substrate.CPPName = substrate.DefaultCPPName
+		}
+		if genome.Substrate.CEPName == "" {
+			genome.Substrate.CEPName = substrate.DefaultCEPName
+		}
+		if genome.Substrate.Parameters == nil {
+			genome.Substrate.Parameters = map[string]float64{}
+		}
+		return
+	}
+	genome.Substrate = &model.SubstrateConfig{
+		CPPName:    substrate.DefaultCPPName,
+		CEPName:    substrate.DefaultCEPName,
+		Dimensions: []int{1, 1},
+		Parameters: map[string]float64{},
+	}
 }

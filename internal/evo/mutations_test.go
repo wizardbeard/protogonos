@@ -583,6 +583,58 @@ func TestAddRandomCPPAndCEPApplicable(t *testing.T) {
 	}
 }
 
+func TestAddCircuitNodeMutatesDimensions(t *testing.T) {
+	genome := model.Genome{
+		Substrate: &model.SubstrateConfig{
+			CPPName:    substrate.DefaultCPPName,
+			CEPName:    substrate.DefaultCEPName,
+			Dimensions: []int{2, 3, 1},
+			Parameters: map[string]float64{},
+		},
+	}
+	op := &AddCircuitNode{Rand: rand.New(rand.NewSource(97))}
+	mutated, err := op.Apply(context.Background(), genome)
+	if err != nil {
+		t.Fatalf("apply failed: %v", err)
+	}
+	if len(mutated.Substrate.Dimensions) != 3 {
+		t.Fatalf("expected same layer count, got=%d", len(mutated.Substrate.Dimensions))
+	}
+	before := 0
+	after := 0
+	for _, d := range genome.Substrate.Dimensions {
+		before += d
+	}
+	for _, d := range mutated.Substrate.Dimensions {
+		after += d
+	}
+	if after != before+1 {
+		t.Fatalf("expected exactly one added node, before=%d after=%d", before, after)
+	}
+}
+
+func TestAddCircuitLayerMutatesDimensions(t *testing.T) {
+	genome := model.Genome{
+		Substrate: &model.SubstrateConfig{
+			CPPName:    substrate.DefaultCPPName,
+			CEPName:    substrate.DefaultCEPName,
+			Dimensions: []int{2, 1},
+			Parameters: map[string]float64{},
+		},
+	}
+	op := &AddCircuitLayer{Rand: rand.New(rand.NewSource(101))}
+	mutated, err := op.Apply(context.Background(), genome)
+	if err != nil {
+		t.Fatalf("apply failed: %v", err)
+	}
+	if len(mutated.Substrate.Dimensions) != len(genome.Substrate.Dimensions)+1 {
+		t.Fatalf("expected one added layer, before=%d after=%d", len(genome.Substrate.Dimensions), len(mutated.Substrate.Dimensions))
+	}
+	if mutated.Substrate.Dimensions[1] != 1 {
+		t.Fatalf("expected inserted hidden layer width 1, got=%v", mutated.Substrate.Dimensions)
+	}
+}
+
 func TestPerturbSubstrateParameterMutation(t *testing.T) {
 	genome := randomGenome(rand.New(rand.NewSource(3)))
 	genome.Substrate = &model.SubstrateConfig{
