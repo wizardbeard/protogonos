@@ -728,7 +728,7 @@ func runSpeciesDiff(ctx context.Context, args []string) error {
 		return err
 	}
 
-	fmt.Printf("run_id=%s from=%d to=%d added=%d removed=%d changed=%d unchanged=%d\n",
+	fmt.Printf("run_id=%s from=%d to=%d added=%d removed=%d changed=%d unchanged=%d tuning_delta_invocations=%+d tuning_delta_attempts=%+d tuning_delta_evaluations=%+d tuning_delta_accepted=%+d tuning_delta_rejected=%+d tuning_delta_goal_hits=%+d tuning_delta_accept_rate=%+.4f tuning_delta_evals_per_attempt=%+.4f\n",
 		diff.RunID,
 		diff.FromGeneration,
 		diff.ToGeneration,
@@ -736,6 +736,14 @@ func runSpeciesDiff(ctx context.Context, args []string) error {
 		len(diff.Removed),
 		len(diff.Changed),
 		diff.UnchangedCount,
+		diff.TuningInvocationsDelta,
+		diff.TuningAttemptsDelta,
+		diff.TuningEvaluationsDelta,
+		diff.TuningAcceptedDelta,
+		diff.TuningRejectedDelta,
+		diff.TuningGoalHitsDelta,
+		diff.TuningAcceptRateDelta,
+		diff.TuningEvalsPerAttemptDelta,
 	)
 	for _, item := range diff.Added {
 		fmt.Printf("added species_key=%s size=%d mean=%.6f best=%.6f\n", item.Key, item.Size, item.MeanFitness, item.BestFitness)

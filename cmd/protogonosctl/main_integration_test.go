@@ -594,7 +594,7 @@ func TestSpeciesDiffCommandSQLiteReadsPersistedSpeciesHistory(t *testing.T) {
 	if err != nil {
 		t.Fatalf("species-diff command: %v", err)
 	}
-	if !strings.Contains(out, "run_id=") || !strings.Contains(out, "changed") {
+	if !strings.Contains(out, "run_id=") || !strings.Contains(out, "changed") || !strings.Contains(out, "tuning_delta_attempts=") {
 		t.Fatalf("unexpected species-diff output: %s", out)
 	}
 }

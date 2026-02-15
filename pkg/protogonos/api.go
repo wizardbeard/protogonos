@@ -191,13 +191,23 @@ type SpeciesDelta struct {
 }
 
 type SpeciesDiff struct {
-	RunID          string
-	FromGeneration int
-	ToGeneration   int
-	Added          []model.SpeciesMetrics
-	Removed        []model.SpeciesMetrics
-	Changed        []SpeciesDelta
-	UnchangedCount int
+	RunID                      string
+	FromGeneration             int
+	ToGeneration               int
+	Added                      []model.SpeciesMetrics
+	Removed                    []model.SpeciesMetrics
+	Changed                    []SpeciesDelta
+	UnchangedCount             int
+	FromDiagnostics            model.GenerationDiagnostics
+	ToDiagnostics              model.GenerationDiagnostics
+	TuningInvocationsDelta     int
+	TuningAttemptsDelta        int
+	TuningEvaluationsDelta     int
+	TuningAcceptedDelta        int
+	TuningRejectedDelta        int
+	TuningGoalHitsDelta        int
+	TuningAcceptRateDelta      float64
+	TuningEvalsPerAttemptDelta float64
 }
 
 type TopGenomesRequest struct {
@@ -884,6 +894,24 @@ func (c *Client) SpeciesDiff(ctx context.Context, req SpeciesDiffRequest) (Speci
 		RunID:          runID,
 		FromGeneration: fromGen,
 		ToGeneration:   toGen,
+	}
+	if diagnostics, ok, err := c.store.GetGenerationDiagnostics(ctx, runID); err != nil {
+		return SpeciesDiff{}, err
+	} else if ok {
+		diagByGen := make(map[int]model.GenerationDiagnostics, len(diagnostics))
+		for _, d := range diagnostics {
+			diagByGen[d.Generation] = d
+		}
+		diff.FromDiagnostics = diagByGen[fromGen]
+		diff.ToDiagnostics = diagByGen[toGen]
+		diff.TuningInvocationsDelta = diff.ToDiagnostics.TuningInvocations - diff.FromDiagnostics.TuningInvocations
+		diff.TuningAttemptsDelta = diff.ToDiagnostics.TuningAttempts - diff.FromDiagnostics.TuningAttempts
+		diff.TuningEvaluationsDelta = diff.ToDiagnostics.TuningEvaluations - diff.FromDiagnostics.TuningEvaluations
+		diff.TuningAcceptedDelta = diff.ToDiagnostics.TuningAccepted - diff.FromDiagnostics.TuningAccepted
+		diff.TuningRejectedDelta = diff.ToDiagnostics.TuningRejected - diff.FromDiagnostics.TuningRejected
+		diff.TuningGoalHitsDelta = diff.ToDiagnostics.TuningGoalHits - diff.FromDiagnostics.TuningGoalHits
+		diff.TuningAcceptRateDelta = diff.ToDiagnostics.TuningAcceptRate - diff.FromDiagnostics.TuningAcceptRate
+		diff.TuningEvalsPerAttemptDelta = diff.ToDiagnostics.TuningEvalsPerAttempt - diff.FromDiagnostics.TuningEvalsPerAttempt
 	}
 	for key, from := range fromByKey {
 		to, ok := toByKey[key]

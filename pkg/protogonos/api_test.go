@@ -93,6 +93,12 @@ func TestClientRunRunsAndExport(t *testing.T) {
 	if speciesDiff.FromGeneration <= 0 || speciesDiff.ToGeneration <= speciesDiff.FromGeneration {
 		t.Fatalf("unexpected species diff generations: from=%d to=%d", speciesDiff.FromGeneration, speciesDiff.ToGeneration)
 	}
+	if speciesDiff.FromDiagnostics.Generation != speciesDiff.FromGeneration {
+		t.Fatalf("species diff from diagnostics generation mismatch: got=%d want=%d", speciesDiff.FromDiagnostics.Generation, speciesDiff.FromGeneration)
+	}
+	if speciesDiff.ToDiagnostics.Generation != speciesDiff.ToGeneration {
+		t.Fatalf("species diff to diagnostics generation mismatch: got=%d want=%d", speciesDiff.ToDiagnostics.Generation, speciesDiff.ToGeneration)
+	}
 	top, err := client.TopGenomes(context.Background(), TopGenomesRequest{RunID: summary.RunID, Limit: 5})
 	if err != nil {
 		t.Fatalf("top genomes: %v", err)
