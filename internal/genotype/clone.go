@@ -24,5 +24,9 @@ func CloneGenome(g model.Genome) model.Genome {
 		p := *g.Plasticity
 		out.Plasticity = &p
 	}
+	if g.Strategy != nil {
+		s := *g.Strategy
+		out.Strategy = &s
+	}
 	return out
 }

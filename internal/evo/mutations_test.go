@@ -796,6 +796,49 @@ func TestRemoveRandomCPPAndCEP(t *testing.T) {
 	}
 }
 
+func TestSearchParameterMutators(t *testing.T) {
+	base := model.Genome{
+		Strategy: &model.StrategyConfig{
+			TuningSelection: "best_so_far",
+			AnnealingFactor: 1.0,
+			TopologicalMode: "const",
+			HeredityType:    "asexual",
+		},
+	}
+
+	tuningMutated, err := (&MutateTuningSelection{Rand: rand.New(rand.NewSource(151))}).Apply(context.Background(), base)
+	if err != nil {
+		t.Fatalf("mutate tuning selection failed: %v", err)
+	}
+	if tuningMutated.Strategy == nil || tuningMutated.Strategy.TuningSelection == "" || tuningMutated.Strategy.TuningSelection == "best_so_far" {
+		t.Fatalf("expected tuning selection change, got=%+v", tuningMutated.Strategy)
+	}
+
+	annealingMutated, err := (&MutateTuningAnnealing{Rand: rand.New(rand.NewSource(157))}).Apply(context.Background(), base)
+	if err != nil {
+		t.Fatalf("mutate tuning annealing failed: %v", err)
+	}
+	if annealingMutated.Strategy == nil || annealingMutated.Strategy.AnnealingFactor == 1.0 {
+		t.Fatalf("expected annealing change, got=%+v", annealingMutated.Strategy)
+	}
+
+	topologyMutated, err := (&MutateTotTopologicalMutations{Rand: rand.New(rand.NewSource(163))}).Apply(context.Background(), base)
+	if err != nil {
+		t.Fatalf("mutate topological mutations failed: %v", err)
+	}
+	if topologyMutated.Strategy == nil || topologyMutated.Strategy.TopologicalMode == "" || topologyMutated.Strategy.TopologicalMode == "const" {
+		t.Fatalf("expected topological mode change, got=%+v", topologyMutated.Strategy)
+	}
+
+	heredityMutated, err := (&MutateHeredityType{Rand: rand.New(rand.NewSource(167))}).Apply(context.Background(), base)
+	if err != nil {
+		t.Fatalf("mutate heredity type failed: %v", err)
+	}
+	if heredityMutated.Strategy == nil || heredityMutated.Strategy.HeredityType == "" || heredityMutated.Strategy.HeredityType == "asexual" {
+		t.Fatalf("expected heredity type change, got=%+v", heredityMutated.Strategy)
+	}
+}
+
 func TestMutationOperatorReferenceNames(t *testing.T) {
 	if (&AddRandomInlink{}).Name() != "add_inlink" {
 		t.Fatalf("unexpected add_inlink name")
@@ -859,6 +902,18 @@ func TestMutationOperatorReferenceNames(t *testing.T) {
 	}
 	if (&DeleteCircuitNode{}).Name() != "delete_CircuitNode" {
 		t.Fatalf("unexpected delete_CircuitNode name")
+	}
+	if (&MutateTuningSelection{}).Name() != "mutate_tuning_selection" {
+		t.Fatalf("unexpected mutate_tuning_selection name")
+	}
+	if (&MutateTuningAnnealing{}).Name() != "mutate_tuning_annealing" {
+		t.Fatalf("unexpected mutate_tuning_annealing name")
+	}
+	if (&MutateTotTopologicalMutations{}).Name() != "mutate_tot_topological_mutations" {
+		t.Fatalf("unexpected mutate_tot_topological_mutations name")
+	}
+	if (&MutateHeredityType{}).Name() != "mutate_heredity_type" {
+		t.Fatalf("unexpected mutate_heredity_type name")
 	}
 }
 

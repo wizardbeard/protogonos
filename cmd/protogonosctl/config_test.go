@@ -219,6 +219,10 @@ func TestLoadRunRequestFromConfigMapsSubstrateMutationAliases(t *testing.T) {
 				[]any{"remove_cpp", 1.25},
 				[]any{"remove_cep", 0.75},
 				[]any{"delete_CircuitNode", 4.0},
+				[]any{"mutate_tuning_selection", 1.0},
+				[]any{"mutate_tuning_annealing", 1.0},
+				[]any{"mutate_tot_topological_mutations", 1.0},
+				[]any{"mutate_heredity_type", 1.0},
 			},
 		},
 	}
@@ -234,7 +238,7 @@ func TestLoadRunRequestFromConfigMapsSubstrateMutationAliases(t *testing.T) {
 	if err != nil {
 		t.Fatalf("load run request: %v", err)
 	}
-	if req.WeightSubstrate != 12.0 {
-		t.Fatalf("unexpected substrate alias weight total: got=%f want=12", req.WeightSubstrate)
+	if req.WeightSubstrate != 16.0 {
+		t.Fatalf("unexpected substrate alias weight total: got=%f want=16", req.WeightSubstrate)
 	}
 }

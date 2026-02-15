@@ -12,6 +12,7 @@ import (
 	"protogonos/internal/model"
 	"protogonos/internal/nn"
 	"protogonos/internal/substrate"
+	"protogonos/internal/tuning"
 )
 
 var (
@@ -763,6 +764,168 @@ func (o *PerturbSubstrateParameter) Apply(_ context.Context, genome model.Genome
 	return mutated, nil
 }
 
+// MutateTuningSelection mirrors mutate_tuning_selection.
+type MutateTuningSelection struct {
+	Rand  *rand.Rand
+	Modes []string
+}
+
+func (o *MutateTuningSelection) Name() string {
+	return "mutate_tuning_selection"
+}
+
+func (o *MutateTuningSelection) Applicable(_ model.Genome, _ string) bool {
+	return true
+}
+
+func (o *MutateTuningSelection) Apply(_ context.Context, genome model.Genome) (model.Genome, error) {
+	if o == nil || o.Rand == nil {
+		return model.Genome{}, errors.New("random source is required")
+	}
+	modes := append([]string(nil), o.Modes...)
+	if len(modes) == 0 {
+		modes = []string{
+			tuning.CandidateSelectBestSoFar,
+			tuning.CandidateSelectOriginal,
+			tuning.CandidateSelectDynamicA,
+			tuning.CandidateSelectDynamic,
+			tuning.CandidateSelectAll,
+			tuning.CandidateSelectAllRandom,
+			tuning.CandidateSelectCurrent,
+			tuning.CandidateSelectCurrentRd,
+		}
+	}
+	for i := range modes {
+		modes[i] = tuning.NormalizeCandidateSelectionName(modes[i])
+	}
+	mutated := cloneGenome(genome)
+	ensureStrategyConfig(&mutated)
+	current := tuning.NormalizeCandidateSelectionName(mutated.Strategy.TuningSelection)
+	choices := filterOutString(modes, current)
+	if len(choices) == 0 {
+		return mutated, nil
+	}
+	mutated.Strategy.TuningSelection = choices[o.Rand.Intn(len(choices))]
+	return mutated, nil
+}
+
+// MutateTuningAnnealing mirrors mutate_tuning_annealing.
+type MutateTuningAnnealing struct {
+	Rand   *rand.Rand
+	Values []float64
+}
+
+func (o *MutateTuningAnnealing) Name() string {
+	return "mutate_tuning_annealing"
+}
+
+func (o *MutateTuningAnnealing) Applicable(_ model.Genome, _ string) bool {
+	return true
+}
+
+func (o *MutateTuningAnnealing) Apply(_ context.Context, genome model.Genome) (model.Genome, error) {
+	if o == nil || o.Rand == nil {
+		return model.Genome{}, errors.New("random source is required")
+	}
+	values := append([]float64(nil), o.Values...)
+	if len(values) == 0 {
+		values = []float64{0.5, 0.65, 0.8, 0.9, 0.95, 1.0}
+	}
+	mutated := cloneGenome(genome)
+	ensureStrategyConfig(&mutated)
+	current := mutated.Strategy.AnnealingFactor
+	if current == 0 {
+		current = 1.0
+	}
+	choices := make([]float64, 0, len(values))
+	for _, value := range values {
+		if value <= 0 {
+			continue
+		}
+		if math.Abs(value-current) < 1e-9 {
+			continue
+		}
+		choices = append(choices, value)
+	}
+	if len(choices) == 0 {
+		return mutated, nil
+	}
+	mutated.Strategy.AnnealingFactor = choices[o.Rand.Intn(len(choices))]
+	return mutated, nil
+}
+
+// MutateTotTopologicalMutations mirrors mutate_tot_topological_mutations.
+type MutateTotTopologicalMutations struct {
+	Rand     *rand.Rand
+	Policies []string
+}
+
+func (o *MutateTotTopologicalMutations) Name() string {
+	return "mutate_tot_topological_mutations"
+}
+
+func (o *MutateTotTopologicalMutations) Applicable(_ model.Genome, _ string) bool {
+	return true
+}
+
+func (o *MutateTotTopologicalMutations) Apply(_ context.Context, genome model.Genome) (model.Genome, error) {
+	if o == nil || o.Rand == nil {
+		return model.Genome{}, errors.New("random source is required")
+	}
+	policies := append([]string(nil), o.Policies...)
+	if len(policies) == 0 {
+		policies = []string{"const", "ncount_linear", "ncount_exponential"}
+	}
+	mutated := cloneGenome(genome)
+	ensureStrategyConfig(&mutated)
+	current := mutated.Strategy.TopologicalMode
+	if current == "" {
+		current = "const"
+	}
+	choices := filterOutString(policies, current)
+	if len(choices) == 0 {
+		return mutated, nil
+	}
+	mutated.Strategy.TopologicalMode = choices[o.Rand.Intn(len(choices))]
+	return mutated, nil
+}
+
+// MutateHeredityType mirrors mutate_heredity_type.
+type MutateHeredityType struct {
+	Rand  *rand.Rand
+	Types []string
+}
+
+func (o *MutateHeredityType) Name() string {
+	return "mutate_heredity_type"
+}
+
+func (o *MutateHeredityType) Applicable(_ model.Genome, _ string) bool {
+	return true
+}
+
+func (o *MutateHeredityType) Apply(_ context.Context, genome model.Genome) (model.Genome, error) {
+	if o == nil || o.Rand == nil {
+		return model.Genome{}, errors.New("random source is required")
+	}
+	types := append([]string(nil), o.Types...)
+	if len(types) == 0 {
+		types = []string{"asexual", "crossover", "competition"}
+	}
+	mutated := cloneGenome(genome)
+	ensureStrategyConfig(&mutated)
+	current := mutated.Strategy.HeredityType
+	if current == "" {
+		current = "asexual"
+	}
+	choices := filterOutString(types, current)
+	if len(choices) == 0 {
+		return mutated, nil
+	}
+	mutated.Strategy.HeredityType = choices[o.Rand.Intn(len(choices))]
+	return mutated, nil
+}
+
 // AddRandomSensor adds one compatible sensor id to genome.SensorIDs.
 type AddRandomSensor struct {
 	Rand      *rand.Rand
@@ -1436,6 +1599,33 @@ func toIDSet(ids []string) map[string]struct{} {
 		out[id] = struct{}{}
 	}
 	return out
+}
+
+func ensureStrategyConfig(g *model.Genome) {
+	if g == nil {
+		return
+	}
+	if g.Strategy == nil {
+		g.Strategy = &model.StrategyConfig{
+			TuningSelection: tuning.CandidateSelectBestSoFar,
+			AnnealingFactor: 1.0,
+			TopologicalMode: "const",
+			HeredityType:    "asexual",
+		}
+		return
+	}
+	if g.Strategy.TuningSelection == "" {
+		g.Strategy.TuningSelection = tuning.CandidateSelectBestSoFar
+	}
+	if g.Strategy.AnnealingFactor == 0 {
+		g.Strategy.AnnealingFactor = 1.0
+	}
+	if g.Strategy.TopologicalMode == "" {
+		g.Strategy.TopologicalMode = "const"
+	}
+	if g.Strategy.HeredityType == "" {
+		g.Strategy.HeredityType = "asexual"
+	}
 }
 
 func filterNeuronIDs(g model.Genome, keep func(id string) bool) []string {

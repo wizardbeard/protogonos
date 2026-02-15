@@ -15,6 +15,14 @@ type Genome struct {
 	ActuatorIDs []string          `json:"actuator_ids"`
 	Substrate   *SubstrateConfig  `json:"substrate,omitempty"`
 	Plasticity  *PlasticityConfig `json:"plasticity,omitempty"`
+	Strategy    *StrategyConfig   `json:"strategy,omitempty"`
+}
+
+type StrategyConfig struct {
+	TuningSelection string  `json:"tuning_selection"`
+	AnnealingFactor float64 `json:"annealing_factor"`
+	TopologicalMode string  `json:"topological_mode"`
+	HeredityType    string  `json:"heredity_type"`
 }
 
 type SubstrateConfig struct {
