@@ -552,7 +552,16 @@ func runDiagnostics(ctx context.Context, args []string) error {
 	}
 
 	for _, d := range diagnostics {
-		fmt.Printf("generation=%d best=%.6f mean=%.6f min=%.6f species=%d fingerprints=%d threshold=%.4f target_species=%d mean_species_size=%.2f largest_species=%d tuning_invocations=%d tuning_attempts=%d tuning_evaluations=%d tuning_accepted=%d tuning_rejected=%d tuning_goal_hits=%d\n",
+		acceptRate := 0.0
+		totalDecisions := d.TuningAccepted + d.TuningRejected
+		if totalDecisions > 0 {
+			acceptRate = float64(d.TuningAccepted) / float64(totalDecisions)
+		}
+		evalsPerAttempt := 0.0
+		if d.TuningAttempts > 0 {
+			evalsPerAttempt = float64(d.TuningEvaluations) / float64(d.TuningAttempts)
+		}
+		fmt.Printf("generation=%d best=%.6f mean=%.6f min=%.6f species=%d fingerprints=%d threshold=%.4f target_species=%d mean_species_size=%.2f largest_species=%d tuning_invocations=%d tuning_attempts=%d tuning_evaluations=%d tuning_accepted=%d tuning_rejected=%d tuning_goal_hits=%d tuning_accept_rate=%.4f tuning_evals_per_attempt=%.4f\n",
 			d.Generation,
 			d.BestFitness,
 			d.MeanFitness,
@@ -569,6 +578,8 @@ func runDiagnostics(ctx context.Context, args []string) error {
 			d.TuningAccepted,
 			d.TuningRejected,
 			d.TuningGoalHits,
+			acceptRate,
+			evalsPerAttempt,
 		)
 	}
 	return nil

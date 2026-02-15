@@ -116,6 +116,7 @@ Status keys:
 - Added generation-aware candidate-pool filtering for `dynamic`/`active`/`current` tuning-selection families by inferring generation from genome IDs.
 - Added per-generation tuning telemetry (`invocations`, attempts, candidate evaluations, accepted/rejected counts, goal hits) to diagnostics and persisted artifacts via optional reporting tuner support.
 - Exposed tuning telemetry fields in `protogonosctl diagnostics` output for direct CLI parity introspection.
+- Added derived tuning efficiency ratios in `protogonosctl diagnostics` (`tuning_accept_rate`, `tuning_evals_per_attempt`) to aid parity comparisons against reference runs.
 
 ## Highest-priority remaining gaps to reach strict parity
 
