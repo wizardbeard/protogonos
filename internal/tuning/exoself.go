@@ -3,6 +3,7 @@ package tuning
 import (
 	"context"
 	"errors"
+	"math"
 	"math/rand"
 	"sync"
 
@@ -160,43 +161,78 @@ func NormalizeCandidateSelectionName(name string) string {
 }
 
 func (e *Exoself) candidateBases(best, original, recent model.Genome) ([]model.Genome, error) {
-	switch NormalizeCandidateSelectionName(e.CandidateSelection) {
+	mode := NormalizeCandidateSelectionName(e.CandidateSelection)
+	if isRandomSelection(mode) {
+		baseMode := nonRandomModeFor(mode)
+		pool, err := e.candidateBasesForMode(baseMode, best, original, recent)
+		if err != nil {
+			return nil, err
+		}
+		return e.randomSubset(pool), nil
+	}
+	return e.candidateBasesForMode(mode, best, original, recent)
+}
+
+func (e *Exoself) candidateBasesForMode(mode string, best, original, recent model.Genome) ([]model.Genome, error) {
+	switch mode {
 	case CandidateSelectBestSoFar:
 		return []model.Genome{cloneGenome(best)}, nil
 	case CandidateSelectOriginal, CandidateSelectLastGen:
 		return []model.Genome{cloneGenome(original)}, nil
 	case CandidateSelectDynamicA:
 		return []model.Genome{cloneGenome(best), cloneGenome(original)}, nil
-	case CandidateSelectDynamic, CandidateSelectLastGenRd:
-		if e.randIntn(2) == 0 {
-			return []model.Genome{cloneGenome(best)}, nil
-		}
-		return []model.Genome{cloneGenome(original)}, nil
 	case CandidateSelectActive, CandidateSelectRecent:
 		return []model.Genome{cloneGenome(recent)}, nil
-	case CandidateSelectActiveRnd, CandidateSelectRecentRnd:
-		switch e.randIntn(3) {
-		case 0:
-			return []model.Genome{cloneGenome(recent)}, nil
-		case 1:
-			return []model.Genome{cloneGenome(best)}, nil
-		default:
-			return []model.Genome{cloneGenome(original)}, nil
-		}
 	case CandidateSelectCurrent, CandidateSelectAll:
 		return []model.Genome{cloneGenome(best), cloneGenome(original), cloneGenome(recent)}, nil
-	case CandidateSelectCurrentRd, CandidateSelectAllRandom:
-		switch e.randIntn(3) {
-		case 0:
-			return []model.Genome{cloneGenome(best)}, nil
-		case 1:
-			return []model.Genome{cloneGenome(original)}, nil
-		default:
-			return []model.Genome{cloneGenome(recent)}, nil
-		}
 	default:
 		return nil, errors.New("unsupported candidate selection")
 	}
+}
+
+func isRandomSelection(mode string) bool {
+	switch mode {
+	case CandidateSelectDynamic, CandidateSelectAllRandom, CandidateSelectActiveRnd, CandidateSelectRecentRnd, CandidateSelectCurrentRd, CandidateSelectLastGenRd:
+		return true
+	default:
+		return false
+	}
+}
+
+func nonRandomModeFor(mode string) string {
+	switch mode {
+	case CandidateSelectDynamic:
+		return CandidateSelectDynamicA
+	case CandidateSelectAllRandom:
+		return CandidateSelectAll
+	case CandidateSelectActiveRnd:
+		return CandidateSelectActive
+	case CandidateSelectRecentRnd:
+		return CandidateSelectRecent
+	case CandidateSelectCurrentRd:
+		return CandidateSelectCurrent
+	case CandidateSelectLastGenRd:
+		return CandidateSelectLastGen
+	default:
+		return mode
+	}
+}
+
+func (e *Exoself) randomSubset(pool []model.Genome) []model.Genome {
+	if len(pool) <= 1 {
+		return pool
+	}
+	mutationP := 1 / math.Sqrt(float64(len(pool)))
+	chosen := make([]model.Genome, 0, len(pool))
+	for i := range pool {
+		if e.randFloat64() < mutationP {
+			chosen = append(chosen, cloneGenome(pool[i]))
+		}
+	}
+	if len(chosen) > 0 {
+		return chosen
+	}
+	return []model.Genome{cloneGenome(pool[e.randIntn(len(pool))])}
 }
 
 func (e *Exoself) perturbCandidate(ctx context.Context, base model.Genome) (model.Genome, error) {

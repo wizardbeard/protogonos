@@ -227,3 +227,31 @@ func TestExoselfConcurrentTuneSafe(t *testing.T) {
 		t.Fatalf("unexpected tuning error: %v", err)
 	}
 }
+
+func TestExoselfRandomSelectionModesReturnNonEmptyPool(t *testing.T) {
+	tuner := &Exoself{
+		Rand: rand.New(rand.NewSource(11)),
+	}
+	best := model.Genome{ID: "best"}
+	original := model.Genome{ID: "original"}
+	recent := model.Genome{ID: "recent"}
+
+	randomModes := []string{
+		CandidateSelectDynamic,
+		CandidateSelectAllRandom,
+		CandidateSelectActiveRnd,
+		CandidateSelectRecentRnd,
+		CandidateSelectCurrentRd,
+		CandidateSelectLastGenRd,
+	}
+	for _, mode := range randomModes {
+		tuner.CandidateSelection = mode
+		pool, err := tuner.candidateBases(best, original, recent)
+		if err != nil {
+			t.Fatalf("candidateBases(%s): %v", mode, err)
+		}
+		if len(pool) == 0 {
+			t.Fatalf("candidateBases(%s) returned empty pool", mode)
+		}
+	}
+}
