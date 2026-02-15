@@ -101,6 +101,10 @@ type PopulationMonitor struct {
 	paused     bool
 }
 
+type goalAwareTuner interface {
+	SetGoalFitness(goal float64)
+}
+
 type MonitorCommand string
 
 const (
@@ -174,6 +178,11 @@ func NewPopulationMonitor(cfg MonitorConfig) (*PopulationMonitor, error) {
 	}
 	if cfg.Tuner != nil && cfg.TuneAttemptPolicy == nil {
 		cfg.TuneAttemptPolicy = tuning.FixedAttemptPolicy{}
+	}
+	if cfg.Tuner != nil && cfg.FitnessGoal > 0 {
+		if tuner, ok := cfg.Tuner.(goalAwareTuner); ok {
+			tuner.SetGoalFitness(cfg.FitnessGoal)
+		}
 	}
 	if cfg.Selector == nil {
 		cfg.Selector = EliteSelector{}

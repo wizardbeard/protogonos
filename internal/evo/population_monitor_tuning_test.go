@@ -26,6 +26,15 @@ func (r *recordingTuner) Tune(_ context.Context, genome model.Genome, attempts i
 	return genome, nil
 }
 
+type goalRecordingTuner struct {
+	recordingTuner
+	goal float64
+}
+
+func (g *goalRecordingTuner) SetGoalFitness(goal float64) {
+	g.goal = goal
+}
+
 func TestPopulationMonitorTuningImprovesFirstGeneration(t *testing.T) {
 	initial := []model.Genome{
 		newLinearGenome("g0", -2.0),
@@ -137,5 +146,36 @@ func TestPopulationMonitorTuneAttemptPolicy(t *testing.T) {
 	}
 	if !seen4 || !seen2 || !seen1 {
 		t.Fatalf("expected attempts to include 4,2,1; got=%v", rec.attempts)
+	}
+}
+
+func TestPopulationMonitorSetsGoalOnGoalAwareTuner(t *testing.T) {
+	initial := []model.Genome{
+		newLinearGenome("g0", -1.0),
+		newLinearGenome("g1", -0.8),
+	}
+	rec := &goalRecordingTuner{}
+	monitor, err := NewPopulationMonitor(MonitorConfig{
+		Scape:           oneDimScape{},
+		Mutation:        PerturbWeightAt{Index: 0, Delta: 0},
+		PopulationSize:  len(initial),
+		EliteCount:      1,
+		Generations:     1,
+		Workers:         1,
+		Seed:            1,
+		InputNeuronIDs:  []string{"i"},
+		OutputNeuronIDs: []string{"o"},
+		FitnessGoal:     0.75,
+		Tuner:           rec,
+		TuneAttempts:    2,
+	})
+	if err != nil {
+		t.Fatalf("new monitor: %v", err)
+	}
+	if rec.goal != 0.75 {
+		t.Fatalf("expected goal injected into tuner, got %f", rec.goal)
+	}
+	if _, err := monitor.Run(context.Background(), initial); err != nil {
+		t.Fatalf("run: %v", err)
 	}
 }

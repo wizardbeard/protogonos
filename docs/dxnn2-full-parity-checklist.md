@@ -30,7 +30,7 @@ Status keys:
 | `derivatives.erl` | `done` | Derivative registry and tests implemented. |
 | `plasticity.erl` | `partial` | Runtime plasticity integration + mutation hooks implemented with Hebbian/Oja updates, saturation bounds, and reference rule-alias compatibility (`hebbian_w`, `ojas`, `ojas_w`); full self-modulation rule set parity pending. |
 | `signal_aggregator.erl` | `partial` | Aggregator support present (`dot_product`, `mult_product`, `diff_product`) with `mult_product` updated to reference-style multiplicative semantics; full stateful `diff_product` history parity still pending. |
-| `exoself.erl` | `partial` | Bounded exoself tuning loop integrated with attempts/policies and minimum-improvement acceptance threshold (`MIN_PIMPROVEMENT`-style gating); full orchestration parity still pending. |
+| `exoself.erl` | `partial` | Bounded exoself tuning loop integrated with attempts/policies, minimum-improvement acceptance threshold (`MIN_PIMPROVEMENT`-style gating), and goal-aware early stop (mapped to `fitness_goal`); full orchestration parity still pending. |
 | `scape.erl` | `partial` | XOR/regression/cart-pole-lite/flatland/gtsa scapes implemented; full reference scape family breadth pending. |
 | `flatland.erl` | `partial` | Baseline Go flatland scape added; not full behavioral parity with reference world simulation yet. |
 | `scape_GTSA.erl` | `partial` | Baseline GTSA scape added; not full ETS/time-series workflow parity yet. |
@@ -111,6 +111,7 @@ Status keys:
 - Added exoself minimum-improvement gating (`tune_min_improvement`) across tuner runtime, CLI/config/API wiring, and validation coverage.
 - Added tuning-selection alias parity for reference mode names (`dynamic`, `active`, `active_random`, `current`, `current_random`) with CLI/API/config normalization and runtime support.
 - Aligned tuning `*_random` selection behavior with reference probabilistic subset semantics (`1/sqrt(N)` + non-empty fallback) over the available candidate base pool.
+- Added goal-aware exoself short-circuit semantics so tuning attempts stop early when best fitness already reaches the configured run goal.
 
 ## Highest-priority remaining gaps to reach strict parity
 

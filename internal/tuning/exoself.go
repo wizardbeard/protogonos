@@ -15,6 +15,7 @@ type Exoself struct {
 	Steps              int
 	StepSize           float64
 	MinImprovement     float64
+	GoalFitness        float64
 	CandidateSelection string
 	mu                 sync.Mutex
 }
@@ -38,6 +39,10 @@ const (
 
 func (e *Exoself) Name() string {
 	return "exoself_hillclimb"
+}
+
+func (e *Exoself) SetGoalFitness(goal float64) {
+	e.GoalFitness = goal
 }
 
 func (e *Exoself) Tune(ctx context.Context, genome model.Genome, attempts int, fitness FitnessFn) (model.Genome, error) {
@@ -71,6 +76,9 @@ func (e *Exoself) Tune(ctx context.Context, genome model.Genome, attempts int, f
 	if err != nil {
 		return model.Genome{}, err
 	}
+	if e.GoalFitness > 0 && bestFitness >= e.GoalFitness {
+		return best, nil
+	}
 	recentBase := cloneGenome(best)
 
 	for a := 0; a < attempts; a++ {
@@ -98,6 +106,9 @@ func (e *Exoself) Tune(ctx context.Context, genome model.Genome, attempts int, f
 		if localBestFitness > bestFitness+e.MinImprovement {
 			best = localBest
 			bestFitness = localBestFitness
+		}
+		if e.GoalFitness > 0 && bestFitness >= e.GoalFitness {
+			break
 		}
 	}
 

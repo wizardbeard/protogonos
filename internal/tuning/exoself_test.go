@@ -255,3 +255,27 @@ func TestExoselfRandomSelectionModesReturnNonEmptyPool(t *testing.T) {
 		}
 	}
 }
+
+func TestExoselfStopsEarlyWhenGoalReached(t *testing.T) {
+	genome := model.Genome{
+		ID:       "g",
+		Synapses: []model.Synapse{{ID: "s", Weight: 0.5, Enabled: true}},
+	}
+	calls := 0
+	tuner := &Exoself{
+		Rand:        rand.New(rand.NewSource(19)),
+		Steps:       4,
+		StepSize:    0.2,
+		GoalFitness: 0.9,
+	}
+	fitnessFn := func(_ context.Context, _ model.Genome) (float64, error) {
+		calls++
+		return 1.0, nil
+	}
+	if _, err := tuner.Tune(context.Background(), genome, 25, fitnessFn); err != nil {
+		t.Fatalf("tune: %v", err)
+	}
+	if calls != 1 {
+		t.Fatalf("expected one fitness evaluation due to goal short-circuit, got %d", calls)
+	}
+}
