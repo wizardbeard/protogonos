@@ -208,3 +208,33 @@ func TestLoadRunRequestFromConfigTreatsPMPInfiniteFitnessGoalAsDisabled(t *testi
 		t.Fatalf("expected evaluations_limit to map from pmp, got %d", req.EvaluationsLimit)
 	}
 }
+
+func TestLoadRunRequestFromConfigMapsSubstrateMutationAliases(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "run_config_substrate_aliases.json")
+	payload := map[string]any{
+		"constraint": map[string]any{
+			"mutation_operators": []any{
+				[]any{"cutlink_FromSensorToNeuron", 2.5},
+				[]any{"cutlink_FromNeuronToActuator", 3.5},
+				[]any{"remove_cpp", 1.25},
+				[]any{"remove_cep", 0.75},
+				[]any{"delete_CircuitNode", 4.0},
+			},
+		},
+	}
+	data, err := json.Marshal(payload)
+	if err != nil {
+		t.Fatalf("marshal payload: %v", err)
+	}
+	if err := os.WriteFile(path, data, 0o644); err != nil {
+		t.Fatalf("write config: %v", err)
+	}
+
+	req, err := loadRunRequestFromConfig(path)
+	if err != nil {
+		t.Fatalf("load run request: %v", err)
+	}
+	if req.WeightSubstrate != 12.0 {
+		t.Fatalf("unexpected substrate alias weight total: got=%f want=12", req.WeightSubstrate)
+	}
+}

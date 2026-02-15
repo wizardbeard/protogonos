@@ -161,7 +161,7 @@ func resolveParityProfile(profileID string) (parityProfileResolved, error) {
 				resolved.WeightPlasticity += op.Weight
 			case "mutate_pf":
 				resolved.WeightPlasticityRule += op.Weight
-			case "add_sensor", "add_sensorlink", "add_actuator", "add_cpp", "add_cep", "add_CircuitNode", "add_CircuitLayer", "add_circuit_node", "add_circuit_layer", "remove_sensor", "remove_actuator", "cutlink_FromSensorToNeuron", "cutlink_FromNeuronToActuator":
+			case "add_sensor", "add_sensorlink", "add_actuator", "add_cpp", "remove_cpp", "add_cep", "remove_cep", "add_CircuitNode", "delete_CircuitNode", "add_CircuitLayer", "add_circuit_node", "delete_circuit_node", "add_circuit_layer", "remove_sensor", "remove_actuator", "cutlink_FromSensorToNeuron", "cutlink_FromNeuronToActuator":
 				resolved.WeightSubstrate += op.Weight
 			}
 		}

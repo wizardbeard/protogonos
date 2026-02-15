@@ -611,6 +611,29 @@ func TestRemoveRandomActuatorRemovesOneActuator(t *testing.T) {
 	}
 }
 
+func TestCutlinkAliasesRemoveSensorAndActuatorLinks(t *testing.T) {
+	genome := model.Genome{
+		SensorIDs:   []string{protoio.XORInputLeftSensorName, protoio.XORInputRightSensorName},
+		ActuatorIDs: []string{protoio.XOROutputActuatorName, protoio.FXTradeActuatorName},
+	}
+
+	mutatedSensor, err := (&CutlinkFromSensorToNeuron{Rand: rand.New(rand.NewSource(139))}).Apply(context.Background(), genome)
+	if err != nil {
+		t.Fatalf("cutlink sensor apply failed: %v", err)
+	}
+	if len(mutatedSensor.SensorIDs) != len(genome.SensorIDs)-1 {
+		t.Fatalf("expected one sensor link removed, before=%d after=%d", len(genome.SensorIDs), len(mutatedSensor.SensorIDs))
+	}
+
+	mutatedActuator, err := (&CutlinkFromNeuronToActuator{Rand: rand.New(rand.NewSource(149))}).Apply(context.Background(), genome)
+	if err != nil {
+		t.Fatalf("cutlink actuator apply failed: %v", err)
+	}
+	if len(mutatedActuator.ActuatorIDs) != len(genome.ActuatorIDs)-1 {
+		t.Fatalf("expected one actuator link removed, before=%d after=%d", len(genome.ActuatorIDs), len(mutatedActuator.ActuatorIDs))
+	}
+}
+
 func TestAddRandomCPPCreatesSubstrateConfig(t *testing.T) {
 	genome := model.Genome{
 		Neurons: []model.Neuron{
@@ -721,6 +744,58 @@ func TestAddCircuitLayerMutatesDimensions(t *testing.T) {
 	}
 }
 
+func TestDeleteCircuitNodeMutatesDimensions(t *testing.T) {
+	genome := model.Genome{
+		Substrate: &model.SubstrateConfig{
+			CPPName:    substrate.DefaultCPPName,
+			CEPName:    substrate.DefaultCEPName,
+			Dimensions: []int{2, 3, 1},
+			Parameters: map[string]float64{},
+		},
+	}
+	op := &DeleteCircuitNode{Rand: rand.New(rand.NewSource(131))}
+	mutated, err := op.Apply(context.Background(), genome)
+	if err != nil {
+		t.Fatalf("apply failed: %v", err)
+	}
+	before := 0
+	after := 0
+	for _, d := range genome.Substrate.Dimensions {
+		before += d
+	}
+	for _, d := range mutated.Substrate.Dimensions {
+		after += d
+	}
+	if after != before-1 {
+		t.Fatalf("expected exactly one removed node, before=%d after=%d", before, after)
+	}
+}
+
+func TestRemoveRandomCPPAndCEP(t *testing.T) {
+	genome := model.Genome{
+		Substrate: &model.SubstrateConfig{
+			CPPName:    substrate.DefaultCPPName,
+			CEPName:    substrate.DefaultCEPName,
+			Dimensions: []int{1, 1},
+			Parameters: map[string]float64{},
+		},
+	}
+	cppMutated, err := (&RemoveRandomCPP{}).Apply(context.Background(), genome)
+	if err != nil {
+		t.Fatalf("remove cpp: %v", err)
+	}
+	if cppMutated.Substrate.CPPName != "" {
+		t.Fatalf("expected cleared cpp name, got=%q", cppMutated.Substrate.CPPName)
+	}
+	cepMutated, err := (&RemoveRandomCEP{}).Apply(context.Background(), genome)
+	if err != nil {
+		t.Fatalf("remove cep: %v", err)
+	}
+	if cepMutated.Substrate.CEPName != "" {
+		t.Fatalf("expected cleared cep name, got=%q", cepMutated.Substrate.CEPName)
+	}
+}
+
 func TestMutationOperatorReferenceNames(t *testing.T) {
 	if (&AddRandomInlink{}).Name() != "add_inlink" {
 		t.Fatalf("unexpected add_inlink name")
@@ -758,17 +833,32 @@ func TestMutationOperatorReferenceNames(t *testing.T) {
 	if (&RemoveRandomActuator{}).Name() != "remove_actuator" {
 		t.Fatalf("unexpected remove_actuator name")
 	}
+	if (&CutlinkFromSensorToNeuron{}).Name() != "cutlink_FromSensorToNeuron" {
+		t.Fatalf("unexpected cutlink_FromSensorToNeuron name")
+	}
+	if (&CutlinkFromNeuronToActuator{}).Name() != "cutlink_FromNeuronToActuator" {
+		t.Fatalf("unexpected cutlink_FromNeuronToActuator name")
+	}
 	if (&AddRandomCPP{}).Name() != "add_cpp" {
 		t.Fatalf("unexpected add_cpp name")
 	}
 	if (&AddRandomCEP{}).Name() != "add_cep" {
 		t.Fatalf("unexpected add_cep name")
 	}
+	if (&RemoveRandomCPP{}).Name() != "remove_cpp" {
+		t.Fatalf("unexpected remove_cpp name")
+	}
+	if (&RemoveRandomCEP{}).Name() != "remove_cep" {
+		t.Fatalf("unexpected remove_cep name")
+	}
 	if (&AddCircuitNode{}).Name() != "add_CircuitNode" {
 		t.Fatalf("unexpected add_CircuitNode name")
 	}
 	if (&AddCircuitLayer{}).Name() != "add_CircuitLayer" {
 		t.Fatalf("unexpected add_CircuitLayer name")
+	}
+	if (&DeleteCircuitNode{}).Name() != "delete_CircuitNode" {
+		t.Fatalf("unexpected delete_CircuitNode name")
 	}
 }
 

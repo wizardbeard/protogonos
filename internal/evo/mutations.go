@@ -881,6 +881,25 @@ func (o *RemoveRandomSensor) Apply(_ context.Context, genome model.Genome) (mode
 	return mutated, nil
 }
 
+// CutlinkFromSensorToNeuron mirrors the reference cutlink operator name.
+// In the simplified genome model, sensor links are represented by membership
+// in SensorIDs, so this delegates to RemoveRandomSensor.
+type CutlinkFromSensorToNeuron struct {
+	Rand *rand.Rand
+}
+
+func (o *CutlinkFromSensorToNeuron) Name() string {
+	return "cutlink_FromSensorToNeuron"
+}
+
+func (o *CutlinkFromSensorToNeuron) Applicable(genome model.Genome, _ string) bool {
+	return len(genome.SensorIDs) > 0
+}
+
+func (o *CutlinkFromSensorToNeuron) Apply(ctx context.Context, genome model.Genome) (model.Genome, error) {
+	return (&RemoveRandomSensor{Rand: o.Rand}).Apply(ctx, genome)
+}
+
 // RemoveRandomActuator removes one actuator id from genome.ActuatorIDs.
 type RemoveRandomActuator struct {
 	Rand *rand.Rand
@@ -905,6 +924,25 @@ func (o *RemoveRandomActuator) Apply(_ context.Context, genome model.Genome) (mo
 	mutated := cloneGenome(genome)
 	mutated.ActuatorIDs = append(mutated.ActuatorIDs[:idx], mutated.ActuatorIDs[idx+1:]...)
 	return mutated, nil
+}
+
+// CutlinkFromNeuronToActuator mirrors the reference cutlink operator name.
+// In the simplified genome model, actuator links are represented by membership
+// in ActuatorIDs, so this delegates to RemoveRandomActuator.
+type CutlinkFromNeuronToActuator struct {
+	Rand *rand.Rand
+}
+
+func (o *CutlinkFromNeuronToActuator) Name() string {
+	return "cutlink_FromNeuronToActuator"
+}
+
+func (o *CutlinkFromNeuronToActuator) Applicable(genome model.Genome, _ string) bool {
+	return len(genome.ActuatorIDs) > 0
+}
+
+func (o *CutlinkFromNeuronToActuator) Apply(ctx context.Context, genome model.Genome) (model.Genome, error) {
+	return (&RemoveRandomActuator{Rand: o.Rand}).Apply(ctx, genome)
 }
 
 // AddRandomCPP mutates substrate CPP selection from the registered CPP set.
@@ -1009,6 +1047,46 @@ func (o *AddRandomCEP) Apply(_ context.Context, genome model.Genome) (model.Geno
 	return mutated, nil
 }
 
+// RemoveRandomCPP clears substrate CPP selection.
+type RemoveRandomCPP struct{}
+
+func (o *RemoveRandomCPP) Name() string {
+	return "remove_cpp"
+}
+
+func (o *RemoveRandomCPP) Applicable(genome model.Genome, _ string) bool {
+	return genome.Substrate != nil && genome.Substrate.CPPName != ""
+}
+
+func (o *RemoveRandomCPP) Apply(_ context.Context, genome model.Genome) (model.Genome, error) {
+	if genome.Substrate == nil {
+		return cloneGenome(genome), nil
+	}
+	mutated := cloneGenome(genome)
+	mutated.Substrate.CPPName = ""
+	return mutated, nil
+}
+
+// RemoveRandomCEP clears substrate CEP selection.
+type RemoveRandomCEP struct{}
+
+func (o *RemoveRandomCEP) Name() string {
+	return "remove_cep"
+}
+
+func (o *RemoveRandomCEP) Applicable(genome model.Genome, _ string) bool {
+	return genome.Substrate != nil && genome.Substrate.CEPName != ""
+}
+
+func (o *RemoveRandomCEP) Apply(_ context.Context, genome model.Genome) (model.Genome, error) {
+	if genome.Substrate == nil {
+		return cloneGenome(genome), nil
+	}
+	mutated := cloneGenome(genome)
+	mutated.Substrate.CEPName = ""
+	return mutated, nil
+}
+
 // AddCircuitNode mutates substrate dimensions by adding one node to a random layer.
 type AddCircuitNode struct {
 	Rand *rand.Rand
@@ -1037,6 +1115,50 @@ func (o *AddCircuitNode) Apply(_ context.Context, genome model.Genome) (model.Ge
 		mutated.Substrate.Dimensions[idx] = 1
 	}
 	mutated.Substrate.Dimensions[idx]++
+	return mutated, nil
+}
+
+// DeleteCircuitNode mutates substrate dimensions by removing one node from a
+// random layer where width > 1.
+type DeleteCircuitNode struct {
+	Rand *rand.Rand
+}
+
+func (o *DeleteCircuitNode) Name() string {
+	return "delete_CircuitNode"
+}
+
+func (o *DeleteCircuitNode) Applicable(genome model.Genome, _ string) bool {
+	if genome.Substrate == nil || len(genome.Substrate.Dimensions) == 0 {
+		return false
+	}
+	for _, width := range genome.Substrate.Dimensions {
+		if width > 1 {
+			return true
+		}
+	}
+	return false
+}
+
+func (o *DeleteCircuitNode) Apply(_ context.Context, genome model.Genome) (model.Genome, error) {
+	if o == nil || o.Rand == nil {
+		return model.Genome{}, errors.New("random source is required")
+	}
+	if genome.Substrate == nil || len(genome.Substrate.Dimensions) == 0 {
+		return cloneGenome(genome), nil
+	}
+	candidates := make([]int, 0, len(genome.Substrate.Dimensions))
+	for i, width := range genome.Substrate.Dimensions {
+		if width > 1 {
+			candidates = append(candidates, i)
+		}
+	}
+	if len(candidates) == 0 {
+		return cloneGenome(genome), nil
+	}
+	mutated := cloneGenome(genome)
+	idx := candidates[o.Rand.Intn(len(candidates))]
+	mutated.Substrate.Dimensions[idx]--
 	return mutated, nil
 }
 
