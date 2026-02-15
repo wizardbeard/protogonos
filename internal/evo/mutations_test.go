@@ -863,6 +863,21 @@ func TestMutationOperatorReferenceNames(t *testing.T) {
 	if (&AddRandomInlink{}).Name() != "add_inlink" {
 		t.Fatalf("unexpected add_inlink name")
 	}
+	if (&MutateWeights{}).Name() != "mutate_weights" {
+		t.Fatalf("unexpected mutate_weights name")
+	}
+	if (&AddBias{}).Name() != "add_bias" {
+		t.Fatalf("unexpected add_bias name")
+	}
+	if (&RemoveBias{}).Name() != "remove_bias" {
+		t.Fatalf("unexpected remove_bias name")
+	}
+	if (&MutateAF{}).Name() != "mutate_af" {
+		t.Fatalf("unexpected mutate_af name")
+	}
+	if (&MutateAggrF{}).Name() != "mutate_aggrf" {
+		t.Fatalf("unexpected mutate_aggrf name")
+	}
 	if (&AddRandomOutlink{}).Name() != "add_outlink" {
 		t.Fatalf("unexpected add_outlink name")
 	}
@@ -925,6 +940,15 @@ func TestMutationOperatorReferenceNames(t *testing.T) {
 	}
 	if (&DeleteCircuitNode{}).Name() != "delete_CircuitNode" {
 		t.Fatalf("unexpected delete_CircuitNode name")
+	}
+	if (&MutatePF{}).Name() != "mutate_pf" {
+		t.Fatalf("unexpected mutate_pf name")
+	}
+	if (&MutatePlasticityParameters{}).Name() != "mutate_plasticity_parameters" {
+		t.Fatalf("unexpected mutate_plasticity_parameters name")
+	}
+	if (&AddNeuron{}).Name() != "add_neuron" {
+		t.Fatalf("unexpected add_neuron name")
 	}
 	if (&MutateTuningSelection{}).Name() != "mutate_tuning_selection" {
 		t.Fatalf("unexpected mutate_tuning_selection name")

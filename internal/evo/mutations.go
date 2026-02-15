@@ -138,6 +138,24 @@ func (o *PerturbWeightsProportional) Apply(_ context.Context, genome model.Genom
 	return mutated, nil
 }
 
+// MutateWeights mirrors the reference mutate_weights operator name.
+type MutateWeights struct {
+	Rand     *rand.Rand
+	MaxDelta float64
+}
+
+func (o *MutateWeights) Name() string {
+	return "mutate_weights"
+}
+
+func (o *MutateWeights) Applicable(genome model.Genome, _ string) bool {
+	return len(genome.Synapses) > 0
+}
+
+func (o *MutateWeights) Apply(ctx context.Context, genome model.Genome) (model.Genome, error) {
+	return (&PerturbWeightsProportional{Rand: o.Rand, MaxDelta: o.MaxDelta}).Apply(ctx, genome)
+}
+
 // PerturbRandomBias mutates a random neuron bias using uniform delta in [-MaxDelta, MaxDelta].
 type PerturbRandomBias struct {
 	Rand     *rand.Rand
@@ -171,6 +189,24 @@ func (o *PerturbRandomBias) Apply(_ context.Context, genome model.Genome) (model
 	return mutated, nil
 }
 
+// AddBias mirrors the reference add_bias operator name.
+type AddBias struct {
+	Rand     *rand.Rand
+	MaxDelta float64
+}
+
+func (o *AddBias) Name() string {
+	return "add_bias"
+}
+
+func (o *AddBias) Applicable(genome model.Genome, _ string) bool {
+	return len(genome.Neurons) > 0
+}
+
+func (o *AddBias) Apply(ctx context.Context, genome model.Genome) (model.Genome, error) {
+	return (&PerturbRandomBias{Rand: o.Rand, MaxDelta: o.MaxDelta}).Apply(ctx, genome)
+}
+
 // RemoveRandomBias clears one random neuron bias.
 type RemoveRandomBias struct {
 	Rand *rand.Rand
@@ -195,6 +231,23 @@ func (o *RemoveRandomBias) Apply(_ context.Context, genome model.Genome) (model.
 	mutated := cloneGenome(genome)
 	mutated.Neurons[idx].Bias = 0
 	return mutated, nil
+}
+
+// RemoveBias mirrors the reference remove_bias operator name.
+type RemoveBias struct {
+	Rand *rand.Rand
+}
+
+func (o *RemoveBias) Name() string {
+	return "remove_bias"
+}
+
+func (o *RemoveBias) Applicable(genome model.Genome, _ string) bool {
+	return len(genome.Neurons) > 0
+}
+
+func (o *RemoveBias) Apply(ctx context.Context, genome model.Genome) (model.Genome, error) {
+	return (&RemoveRandomBias{Rand: o.Rand}).Apply(ctx, genome)
 }
 
 // ChangeRandomActivation mutates one neuron's activation function.
@@ -240,6 +293,24 @@ func (o *ChangeRandomActivation) Apply(_ context.Context, genome model.Genome) (
 	return mutated, nil
 }
 
+// MutateAF mirrors the reference mutate_af operator name.
+type MutateAF struct {
+	Rand        *rand.Rand
+	Activations []string
+}
+
+func (o *MutateAF) Name() string {
+	return "mutate_af"
+}
+
+func (o *MutateAF) Applicable(genome model.Genome, _ string) bool {
+	return len(genome.Neurons) > 0
+}
+
+func (o *MutateAF) Apply(ctx context.Context, genome model.Genome) (model.Genome, error) {
+	return (&ChangeRandomActivation{Rand: o.Rand, Activations: o.Activations}).Apply(ctx, genome)
+}
+
 // ChangeRandomAggregator mutates one neuron's aggregation function.
 type ChangeRandomAggregator struct {
 	Rand        *rand.Rand
@@ -281,6 +352,24 @@ func (o *ChangeRandomAggregator) Apply(_ context.Context, genome model.Genome) (
 	mutated := cloneGenome(genome)
 	mutated.Neurons[idx].Aggregator = choices[o.Rand.Intn(len(choices))]
 	return mutated, nil
+}
+
+// MutateAggrF mirrors the reference mutate_aggrf operator name.
+type MutateAggrF struct {
+	Rand        *rand.Rand
+	Aggregators []string
+}
+
+func (o *MutateAggrF) Name() string {
+	return "mutate_aggrf"
+}
+
+func (o *MutateAggrF) Applicable(genome model.Genome, _ string) bool {
+	return len(genome.Neurons) > 0
+}
+
+func (o *MutateAggrF) Apply(ctx context.Context, genome model.Genome) (model.Genome, error) {
+	return (&ChangeRandomAggregator{Rand: o.Rand, Aggregators: o.Aggregators}).Apply(ctx, genome)
 }
 
 // AddRandomSynapse adds a random synapse between existing neurons.
@@ -523,6 +612,24 @@ func (o *AddRandomNeuron) Apply(ctx context.Context, genome model.Genome) (model
 	return addRandomNeuronWithSynapseCandidates(ctx, genome, o.Rand, o.Activations, nil)
 }
 
+// AddNeuron mirrors the reference add_neuron operator name.
+type AddNeuron struct {
+	Rand        *rand.Rand
+	Activations []string
+}
+
+func (o *AddNeuron) Name() string {
+	return "add_neuron"
+}
+
+func (o *AddNeuron) Applicable(genome model.Genome, _ string) bool {
+	return len(genome.Synapses) > 0
+}
+
+func (o *AddNeuron) Apply(ctx context.Context, genome model.Genome) (model.Genome, error) {
+	return (&AddRandomNeuron{Rand: o.Rand, Activations: o.Activations}).Apply(ctx, genome)
+}
+
 // AddRandomOutsplice inserts a neuron by splitting a synapse biased toward
 // non-output->output direction.
 type AddRandomOutsplice struct {
@@ -691,6 +798,24 @@ func (o *PerturbPlasticityRate) Apply(_ context.Context, genome model.Genome) (m
 	return mutated, nil
 }
 
+// MutatePlasticityParameters mirrors mutate_plasticity_parameters.
+type MutatePlasticityParameters struct {
+	Rand     *rand.Rand
+	MaxDelta float64
+}
+
+func (o *MutatePlasticityParameters) Name() string {
+	return "mutate_plasticity_parameters"
+}
+
+func (o *MutatePlasticityParameters) Applicable(genome model.Genome, _ string) bool {
+	return genome.Plasticity != nil
+}
+
+func (o *MutatePlasticityParameters) Apply(ctx context.Context, genome model.Genome) (model.Genome, error) {
+	return (&PerturbPlasticityRate{Rand: o.Rand, MaxDelta: o.MaxDelta}).Apply(ctx, genome)
+}
+
 // ChangePlasticityRule mutates the configured plasticity rule.
 type ChangePlasticityRule struct {
 	Rand  *rand.Rand
@@ -732,6 +857,24 @@ func (o *ChangePlasticityRule) Apply(_ context.Context, genome model.Genome) (mo
 	mutated := cloneGenome(genome)
 	mutated.Plasticity.Rule = choices[o.Rand.Intn(len(choices))]
 	return mutated, nil
+}
+
+// MutatePF mirrors mutate_pf in the reference source.
+type MutatePF struct {
+	Rand  *rand.Rand
+	Rules []string
+}
+
+func (o *MutatePF) Name() string {
+	return "mutate_pf"
+}
+
+func (o *MutatePF) Applicable(genome model.Genome, _ string) bool {
+	return genome.Plasticity != nil
+}
+
+func (o *MutatePF) Apply(ctx context.Context, genome model.Genome) (model.Genome, error) {
+	return (&ChangePlasticityRule{Rand: o.Rand, Rules: o.Rules}).Apply(ctx, genome)
 }
 
 // PerturbSubstrateParameter mutates one substrate parameter when configured.
