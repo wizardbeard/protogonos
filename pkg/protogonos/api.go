@@ -1280,7 +1280,7 @@ func defaultMutationPolicy(seed int64, scapeName string, inputNeuronIDs, outputN
 		{Operator: &evo.AddNeuron{Rand: rand.New(rand.NewSource(seed + 1005))}, Weight: req.WeightAddNeuron * 0.40},
 		{Operator: &evo.AddRandomOutsplice{Rand: rand.New(rand.NewSource(seed + 1006)), OutputNeuronIDs: outputNeuronIDs}, Weight: req.WeightAddNeuron * 0.30},
 		{Operator: &evo.AddRandomInsplice{Rand: rand.New(rand.NewSource(seed + 1007)), InputNeuronIDs: inputNeuronIDs}, Weight: req.WeightAddNeuron * 0.30},
-		{Operator: &evo.RemoveRandomNeuron{Rand: rand.New(rand.NewSource(seed + 1020)), Protected: protected}, Weight: req.WeightRemoveNeuron},
+		{Operator: &evo.RemoveNeuronMutation{Rand: rand.New(rand.NewSource(seed + 1020)), Protected: protected}, Weight: req.WeightRemoveNeuron},
 		{Operator: &evo.MutatePF{Rand: rand.New(rand.NewSource(seed + 1021))}, Weight: req.WeightPlasticityRule},
 		{Operator: &evo.MutatePlasticityParameters{Rand: rand.New(rand.NewSource(seed + 1022)), MaxDelta: 0.15}, Weight: req.WeightPlasticity},
 		{Operator: &evo.AddRandomSensor{Rand: rand.New(rand.NewSource(seed + 1008)), ScapeName: scapeName}, Weight: req.WeightSubstrate * 0.07},

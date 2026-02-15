@@ -765,6 +765,32 @@ func (o *RemoveRandomNeuron) Apply(ctx context.Context, genome model.Genome) (mo
 	return RemoveNeuron{ID: target}.Apply(ctx, genome)
 }
 
+// RemoveNeuronMutation mirrors the reference remove_neuron operator name.
+type RemoveNeuronMutation struct {
+	Rand      *rand.Rand
+	Protected map[string]struct{}
+}
+
+func (o *RemoveNeuronMutation) Name() string {
+	return "remove_neuron"
+}
+
+func (o *RemoveNeuronMutation) Applicable(genome model.Genome, _ string) bool {
+	if len(genome.Neurons) == 0 {
+		return false
+	}
+	for _, neuron := range genome.Neurons {
+		if _, protected := o.Protected[neuron.ID]; !protected {
+			return true
+		}
+	}
+	return false
+}
+
+func (o *RemoveNeuronMutation) Apply(ctx context.Context, genome model.Genome) (model.Genome, error) {
+	return (&RemoveRandomNeuron{Rand: o.Rand, Protected: o.Protected}).Apply(ctx, genome)
+}
+
 // PerturbPlasticityRate mutates the plasticity learning rate when configured.
 type PerturbPlasticityRate struct {
 	Rand     *rand.Rand

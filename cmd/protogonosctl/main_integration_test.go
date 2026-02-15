@@ -75,7 +75,7 @@ func TestRunCommandSQLiteCreatesArtifacts(t *testing.T) {
 	seenStructural := false
 	for _, record := range lineage {
 		switch record.Operation {
-		case "add_random_synapse", "remove_random_synapse", "add_random_neuron", "remove_random_neuron":
+		case "add_outlink", "add_inlink", "remove_outlink", "remove_inlink", "add_neuron", "remove_neuron", "outsplice", "insplice":
 			seenStructural = true
 		}
 	}

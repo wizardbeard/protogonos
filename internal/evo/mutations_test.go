@@ -946,6 +946,9 @@ func TestMutationOperatorReferenceNames(t *testing.T) {
 	if (&RemoveRandomOutlink{}).Name() != "remove_outlink" {
 		t.Fatalf("unexpected remove_outlink name")
 	}
+	if (&RemoveNeuronMutation{}).Name() != "remove_neuron" {
+		t.Fatalf("unexpected remove_neuron name")
+	}
 	if (&CutlinkFromNeuronToNeuron{}).Name() != "cutlink_FromNeuronToNeuron" {
 		t.Fatalf("unexpected cutlink_FromNeuronToNeuron name")
 	}
