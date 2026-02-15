@@ -50,35 +50,41 @@ func (e *Exoself) SetGoalFitness(goal float64) {
 }
 
 func (e *Exoself) Tune(ctx context.Context, genome model.Genome, attempts int, fitness FitnessFn) (model.Genome, error) {
+	tuned, _, err := e.TuneWithReport(ctx, genome, attempts, fitness)
+	return tuned, err
+}
+
+func (e *Exoself) TuneWithReport(ctx context.Context, genome model.Genome, attempts int, fitness FitnessFn) (model.Genome, TuneReport, error) {
+	report := TuneReport{AttemptsPlanned: attempts}
 	if err := ctx.Err(); err != nil {
-		return model.Genome{}, err
+		return model.Genome{}, report, err
 	}
 	if e == nil || e.Rand == nil {
-		return model.Genome{}, errors.New("random source is required")
+		return model.Genome{}, report, errors.New("random source is required")
 	}
 	if attempts <= 0 {
-		return cloneGenome(genome), nil
+		return cloneGenome(genome), report, nil
 	}
 	if e.Steps <= 0 {
-		return model.Genome{}, errors.New("steps must be > 0")
+		return model.Genome{}, report, errors.New("steps must be > 0")
 	}
 	if e.StepSize <= 0 {
-		return model.Genome{}, errors.New("step size must be > 0")
+		return model.Genome{}, report, errors.New("step size must be > 0")
 	}
 	if e.PerturbationRange < 0 {
-		return model.Genome{}, errors.New("perturbation range must be >= 0")
+		return model.Genome{}, report, errors.New("perturbation range must be >= 0")
 	}
 	if e.AnnealingFactor < 0 {
-		return model.Genome{}, errors.New("annealing factor must be >= 0")
+		return model.Genome{}, report, errors.New("annealing factor must be >= 0")
 	}
 	if e.MinImprovement < 0 {
-		return model.Genome{}, errors.New("min improvement must be >= 0")
+		return model.Genome{}, report, errors.New("min improvement must be >= 0")
 	}
 	if fitness == nil {
-		return model.Genome{}, errors.New("fitness function is required")
+		return model.Genome{}, report, errors.New("fitness function is required")
 	}
 	if len(genome.Synapses) == 0 {
-		return cloneGenome(genome), nil
+		return cloneGenome(genome), report, nil
 	}
 	perturbationRange := e.PerturbationRange
 	if perturbationRange == 0 {
@@ -92,32 +98,39 @@ func (e *Exoself) Tune(ctx context.Context, genome model.Genome, attempts int, f
 	best := cloneGenome(genome)
 	bestFitness, err := fitness(ctx, best)
 	if err != nil {
-		return model.Genome{}, err
+		return model.Genome{}, report, err
 	}
+	report.CandidateEvaluations++
 	if e.GoalFitness > 0 && bestFitness >= e.GoalFitness {
-		return best, nil
+		report.GoalReached = true
+		return best, report, nil
 	}
 	recentBase := cloneGenome(best)
 
 	for a := 0; a < attempts; a++ {
+		report.AttemptsExecuted++
 		bases, err := e.candidateBases(best, genome, recentBase)
 		if err != nil {
-			return model.Genome{}, err
+			return model.Genome{}, report, err
 		}
 		localBest := cloneGenome(best)
 		localBestFitness := bestFitness
 		for _, base := range bases {
 			candidate, err := e.perturbCandidate(ctx, base, perturbationRange, annealingFactor)
 			if err != nil {
-				return model.Genome{}, err
+				return model.Genome{}, report, err
 			}
 			candidateFitness, err := fitness(ctx, candidate)
 			if err != nil {
-				return model.Genome{}, err
+				return model.Genome{}, report, err
 			}
+			report.CandidateEvaluations++
 			if candidateFitness > localBestFitness+e.MinImprovement {
+				report.AcceptedCandidates++
 				localBest = candidate
 				localBestFitness = candidateFitness
+			} else {
+				report.RejectedCandidates++
 			}
 		}
 		recentBase = cloneGenome(localBest)
@@ -126,11 +139,12 @@ func (e *Exoself) Tune(ctx context.Context, genome model.Genome, attempts int, f
 			bestFitness = localBestFitness
 		}
 		if e.GoalFitness > 0 && bestFitness >= e.GoalFitness {
+			report.GoalReached = true
 			break
 		}
 	}
 
-	return best, nil
+	return best, report, nil
 }
 
 func (e *Exoself) randIntn(n int) int {

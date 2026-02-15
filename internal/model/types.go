@@ -91,6 +91,12 @@ type GenerationDiagnostics struct {
 	TargetSpeciesCount   int     `json:"target_species_count"`
 	MeanSpeciesSize      float64 `json:"mean_species_size"`
 	LargestSpeciesSize   int     `json:"largest_species_size"`
+	TuningInvocations    int     `json:"tuning_invocations"`
+	TuningAttempts       int     `json:"tuning_attempts"`
+	TuningEvaluations    int     `json:"tuning_evaluations"`
+	TuningAccepted       int     `json:"tuning_accepted"`
+	TuningRejected       int     `json:"tuning_rejected"`
+	TuningGoalHits       int     `json:"tuning_goal_hits"`
 }
 
 type SpeciesGeneration struct {

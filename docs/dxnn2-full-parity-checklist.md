@@ -30,7 +30,7 @@ Status keys:
 | `derivatives.erl` | `done` | Derivative registry and tests implemented. |
 | `plasticity.erl` | `partial` | Runtime plasticity integration + mutation hooks implemented with Hebbian/Oja updates, saturation bounds, and reference rule-alias compatibility (`hebbian_w`, `ojas`, `ojas_w`); full self-modulation rule set parity pending. |
 | `signal_aggregator.erl` | `partial` | Aggregator support present (`dot_product`, `mult_product`, `diff_product`) with `mult_product` updated to reference-style multiplicative semantics; full stateful `diff_product` history parity still pending. |
-| `exoself.erl` | `partial` | Bounded exoself tuning loop integrated with attempts/policies, minimum-improvement acceptance threshold (`MIN_PIMPROVEMENT`-style gating), goal-aware early stop (mapped to `fitness_goal`), and perturbation controls (`perturbation_range`, `annealing_factor`); full orchestration parity still pending. |
+| `exoself.erl` | `partial` | Bounded exoself tuning loop integrated with attempts/policies, minimum-improvement acceptance threshold (`MIN_PIMPROVEMENT`-style gating), goal-aware early stop (mapped to `fitness_goal`), perturbation controls (`perturbation_range`, `annealing_factor`), and per-generation tuning telemetry surfaced in diagnostics/artifacts; full orchestration parity still pending. |
 | `scape.erl` | `partial` | XOR/regression/cart-pole-lite/flatland/gtsa scapes implemented; full reference scape family breadth pending. |
 | `flatland.erl` | `partial` | Baseline Go flatland scape added; not full behavioral parity with reference world simulation yet. |
 | `scape_GTSA.erl` | `partial` | Baseline GTSA scape added; not full ETS/time-series workflow parity yet. |
@@ -114,6 +114,7 @@ Status keys:
 - Added goal-aware exoself short-circuit semantics so tuning attempts stop early when best fitness already reaches the configured run goal.
 - Added exoself perturbation controls (`tune_perturbation_range`, `tune_annealing_factor`) across runtime, CLI/config/API validation, and persisted run config artifacts.
 - Added generation-aware candidate-pool filtering for `dynamic`/`active`/`current` tuning-selection families by inferring generation from genome IDs.
+- Added per-generation tuning telemetry (`invocations`, attempts, candidate evaluations, accepted/rejected counts, goal hits) to diagnostics and persisted artifacts via optional reporting tuner support.
 
 ## Highest-priority remaining gaps to reach strict parity
 

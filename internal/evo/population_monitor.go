@@ -58,6 +58,12 @@ type GenerationDiagnostics struct {
 	TargetSpeciesCount   int     `json:"target_species_count"`
 	MeanSpeciesSize      float64 `json:"mean_species_size"`
 	LargestSpeciesSize   int     `json:"largest_species_size"`
+	TuningInvocations    int     `json:"tuning_invocations"`
+	TuningAttempts       int     `json:"tuning_attempts"`
+	TuningEvaluations    int     `json:"tuning_evaluations"`
+	TuningAccepted       int     `json:"tuning_accepted"`
+	TuningRejected       int     `json:"tuning_rejected"`
+	TuningGoalHits       int     `json:"tuning_goal_hits"`
 }
 
 type LineageRecord struct {
@@ -103,6 +109,15 @@ type PopulationMonitor struct {
 
 type goalAwareTuner interface {
 	SetGoalFitness(goal float64)
+}
+
+type tuningGenerationStats struct {
+	Invocations int
+	Attempts    int
+	Evaluations int
+	Accepted    int
+	Rejected    int
+	GoalHits    int
 }
 
 type MonitorCommand string
@@ -245,7 +260,8 @@ func (m *PopulationMonitor) Run(ctx context.Context, initial []model.Genome) (Ru
 		}
 
 		logicalGeneration := m.cfg.GenerationOffset + gen
-		scored, err = m.evaluatePopulation(ctx, population, logicalGeneration)
+		var tuningStats tuningGenerationStats
+		scored, tuningStats, err = m.evaluatePopulation(ctx, population, logicalGeneration)
 		if err != nil {
 			return RunResult{}, err
 		}
@@ -257,7 +273,7 @@ func (m *PopulationMonitor) Run(ctx context.Context, initial []model.Genome) (Ru
 		evaluations += len(scored)
 		bestHistory = append(bestHistory, scored[0].Fitness)
 		speciesByGenomeID, speciationStats := m.assignSpecies(scored)
-		diagnostics = append(diagnostics, summarizeGeneration(scored, logicalGeneration+1, speciationStats))
+		diagnostics = append(diagnostics, summarizeGeneration(scored, logicalGeneration+1, speciationStats, tuningStats))
 		history, currentSet := summarizeSpeciesGeneration(scored, speciesByGenomeID, logicalGeneration+1, prevSpeciesSet)
 		speciesHistory = append(speciesHistory, history)
 		prevSpeciesSet = currentSet
@@ -339,9 +355,17 @@ func (m *PopulationMonitor) handleCommand(cmd MonitorCommand) bool {
 	return false
 }
 
-func summarizeGeneration(scored []ScoredGenome, generation int, speciationStats SpeciationStats) GenerationDiagnostics {
+func summarizeGeneration(scored []ScoredGenome, generation int, speciationStats SpeciationStats, tuningStats tuningGenerationStats) GenerationDiagnostics {
 	if len(scored) == 0 {
-		return GenerationDiagnostics{Generation: generation}
+		return GenerationDiagnostics{
+			Generation:        generation,
+			TuningInvocations: tuningStats.Invocations,
+			TuningAttempts:    tuningStats.Attempts,
+			TuningEvaluations: tuningStats.Evaluations,
+			TuningAccepted:    tuningStats.Accepted,
+			TuningRejected:    tuningStats.Rejected,
+			TuningGoalHits:    tuningStats.GoalHits,
+		}
 	}
 
 	total := 0.0
@@ -367,6 +391,12 @@ func summarizeGeneration(scored []ScoredGenome, generation int, speciationStats 
 		TargetSpeciesCount:   speciationStats.TargetSpeciesCount,
 		MeanSpeciesSize:      speciationStats.MeanSpeciesSize,
 		LargestSpeciesSize:   speciationStats.LargestSpeciesSize,
+		TuningInvocations:    tuningStats.Invocations,
+		TuningAttempts:       tuningStats.Attempts,
+		TuningEvaluations:    tuningStats.Evaluations,
+		TuningAccepted:       tuningStats.Accepted,
+		TuningRejected:       tuningStats.Rejected,
+		TuningGoalHits:       tuningStats.GoalHits,
 	}
 }
 
@@ -385,7 +415,7 @@ func (m *PopulationMonitor) assignSpecies(scored []ScoredGenome) (map[string]str
 	return speciesByGenomeID, stats
 }
 
-func (m *PopulationMonitor) evaluatePopulation(ctx context.Context, population []model.Genome, generation int) ([]ScoredGenome, error) {
+func (m *PopulationMonitor) evaluatePopulation(ctx context.Context, population []model.Genome, generation int) ([]ScoredGenome, tuningGenerationStats, error) {
 	type job struct {
 		idx    int
 		genome model.Genome
@@ -393,6 +423,7 @@ func (m *PopulationMonitor) evaluatePopulation(ctx context.Context, population [
 	type result struct {
 		idx    int
 		scored ScoredGenome
+		tune   tuning.TuneReport
 		err    error
 	}
 
@@ -416,23 +447,42 @@ func (m *PopulationMonitor) evaluatePopulation(ctx context.Context, population [
 				}
 
 				candidate := j.genome
+				tuneReport := tuning.TuneReport{}
 				attempts := m.cfg.TuneAttempts
 				if m.cfg.TuneAttemptPolicy != nil {
 					attempts = m.cfg.TuneAttemptPolicy.Attempts(m.cfg.TuneAttempts, generation, m.cfg.Generations, j.genome)
 				}
 				if m.cfg.Tuner != nil && attempts > 0 {
-					tuned, err := m.cfg.Tuner.Tune(ctx, j.genome, attempts, func(ctx context.Context, g model.Genome) (float64, error) {
-						fitness, _, err := m.evaluateGenome(ctx, g)
+					if reporting, ok := m.cfg.Tuner.(tuning.ReportingTuner); ok {
+						tuned, report, err := reporting.TuneWithReport(ctx, j.genome, attempts, func(ctx context.Context, g model.Genome) (float64, error) {
+							fitness, _, err := m.evaluateGenome(ctx, g)
+							if err != nil {
+								return 0, err
+							}
+							return fitness, nil
+						})
+						tuneReport = report
 						if err != nil {
-							return 0, err
+							results <- result{idx: j.idx, err: err}
+							continue
 						}
-						return fitness, nil
-					})
-					if err != nil {
-						results <- result{idx: j.idx, err: err}
-						continue
+						candidate = tuned
+					} else {
+						tuned, err := m.cfg.Tuner.Tune(ctx, j.genome, attempts, func(ctx context.Context, g model.Genome) (float64, error) {
+							fitness, _, err := m.evaluateGenome(ctx, g)
+							if err != nil {
+								return 0, err
+							}
+							return fitness, nil
+						})
+						if err != nil {
+							results <- result{idx: j.idx, err: err}
+							continue
+						}
+						tuneReport.AttemptsPlanned = attempts
+						tuneReport.AttemptsExecuted = attempts
+						candidate = tuned
 					}
-					candidate = tuned
 				}
 
 				fitness, trace, err := m.evaluateGenome(ctx, candidate)
@@ -440,7 +490,7 @@ func (m *PopulationMonitor) evaluatePopulation(ctx context.Context, population [
 					results <- result{idx: j.idx, err: err}
 					continue
 				}
-				results <- result{idx: j.idx, scored: ScoredGenome{Genome: candidate, Fitness: fitness, Trace: trace}}
+				results <- result{idx: j.idx, scored: ScoredGenome{Genome: candidate, Fitness: fitness, Trace: trace}, tune: tuneReport}
 			}
 		}()
 	}
@@ -454,14 +504,25 @@ func (m *PopulationMonitor) evaluatePopulation(ctx context.Context, population [
 	close(results)
 
 	scored := make([]ScoredGenome, len(population))
+	tuningStats := tuningGenerationStats{}
 	for res := range results {
 		if res.err != nil {
-			return nil, res.err
+			return nil, tuningGenerationStats{}, res.err
 		}
 		scored[res.idx] = res.scored
+		if res.tune.AttemptsPlanned > 0 || res.tune.AttemptsExecuted > 0 || res.tune.CandidateEvaluations > 0 {
+			tuningStats.Invocations++
+		}
+		tuningStats.Attempts += res.tune.AttemptsExecuted
+		tuningStats.Evaluations += res.tune.CandidateEvaluations
+		tuningStats.Accepted += res.tune.AcceptedCandidates
+		tuningStats.Rejected += res.tune.RejectedCandidates
+		if res.tune.GoalReached {
+			tuningStats.GoalHits++
+		}
 	}
 
-	return scored, nil
+	return scored, tuningStats, nil
 }
 
 func (m *PopulationMonitor) evaluateGenome(ctx context.Context, genome model.Genome) (float64, scape.Trace, error) {

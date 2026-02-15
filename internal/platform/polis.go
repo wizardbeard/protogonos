@@ -301,6 +301,12 @@ func (p *Polis) mergeExistingRunHistory(ctx context.Context, runID string, curre
 				TargetSpeciesCount:   item.TargetSpeciesCount,
 				MeanSpeciesSize:      item.MeanSpeciesSize,
 				LargestSpeciesSize:   item.LargestSpeciesSize,
+				TuningInvocations:    item.TuningInvocations,
+				TuningAttempts:       item.TuningAttempts,
+				TuningEvaluations:    item.TuningEvaluations,
+				TuningAccepted:       item.TuningAccepted,
+				TuningRejected:       item.TuningRejected,
+				TuningGoalHits:       item.TuningGoalHits,
 			})
 		}
 		current.GenerationDiagnostics = append(prefix, current.GenerationDiagnostics...)
@@ -427,6 +433,12 @@ func toModelDiagnostics(diags []evo.GenerationDiagnostics) []model.GenerationDia
 			TargetSpeciesCount:   d.TargetSpeciesCount,
 			MeanSpeciesSize:      d.MeanSpeciesSize,
 			LargestSpeciesSize:   d.LargestSpeciesSize,
+			TuningInvocations:    d.TuningInvocations,
+			TuningAttempts:       d.TuningAttempts,
+			TuningEvaluations:    d.TuningEvaluations,
+			TuningAccepted:       d.TuningAccepted,
+			TuningRejected:       d.TuningRejected,
+			TuningGoalHits:       d.TuningGoalHits,
 		})
 	}
 	return out

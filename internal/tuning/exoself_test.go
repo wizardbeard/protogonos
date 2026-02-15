@@ -123,6 +123,32 @@ func TestExoselfAttemptsZeroReturnsClone(t *testing.T) {
 	}
 }
 
+func TestExoselfTuneWithReportProvidesTelemetry(t *testing.T) {
+	genome := model.Genome{
+		ID:       "g",
+		Synapses: []model.Synapse{{ID: "s", Weight: 0.2, Enabled: true}},
+	}
+	tuner := &Exoself{
+		Rand:               rand.New(rand.NewSource(41)),
+		Steps:              2,
+		StepSize:           0.2,
+		CandidateSelection: CandidateSelectOriginal,
+	}
+	fitnessFn := func(_ context.Context, g model.Genome) (float64, error) {
+		return g.Synapses[0].Weight, nil
+	}
+	_, report, err := tuner.TuneWithReport(context.Background(), genome, 2, fitnessFn)
+	if err != nil {
+		t.Fatalf("tune with report: %v", err)
+	}
+	if report.AttemptsPlanned != 2 || report.AttemptsExecuted == 0 {
+		t.Fatalf("unexpected attempt telemetry: %+v", report)
+	}
+	if report.CandidateEvaluations == 0 {
+		t.Fatalf("expected candidate evaluations in report: %+v", report)
+	}
+}
+
 func TestExoselfDynamicRandomSelectionSupported(t *testing.T) {
 	genome := model.Genome{
 		ID:       "g",

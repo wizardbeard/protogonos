@@ -35,6 +35,22 @@ func (g *goalRecordingTuner) SetGoalFitness(goal float64) {
 	g.goal = goal
 }
 
+type reportingTuner struct {
+	report tuning.TuneReport
+}
+
+func (r *reportingTuner) Name() string {
+	return "reporting_tuner"
+}
+
+func (r *reportingTuner) Tune(_ context.Context, genome model.Genome, _ int, _ tuning.FitnessFn) (model.Genome, error) {
+	return genome, nil
+}
+
+func (r *reportingTuner) TuneWithReport(_ context.Context, genome model.Genome, _ int, _ tuning.FitnessFn) (model.Genome, tuning.TuneReport, error) {
+	return genome, r.report, nil
+}
+
 func TestPopulationMonitorTuningImprovesFirstGeneration(t *testing.T) {
 	initial := []model.Genome{
 		newLinearGenome("g0", -2.0),
@@ -93,6 +109,12 @@ func TestPopulationMonitorTuningImprovesFirstGeneration(t *testing.T) {
 	}
 	if withTuning.BestByGeneration[0] <= baseline.BestByGeneration[0] {
 		t.Fatalf("expected tuning to improve generation-1 best: baseline=%f tuned=%f", baseline.BestByGeneration[0], withTuning.BestByGeneration[0])
+	}
+	if len(withTuning.GenerationDiagnostics) != 1 {
+		t.Fatalf("expected one generation diagnostics entry, got %d", len(withTuning.GenerationDiagnostics))
+	}
+	if withTuning.GenerationDiagnostics[0].TuningInvocations == 0 {
+		t.Fatalf("expected tuning telemetry to be recorded: %+v", withTuning.GenerationDiagnostics[0])
 	}
 }
 
@@ -177,5 +199,49 @@ func TestPopulationMonitorSetsGoalOnGoalAwareTuner(t *testing.T) {
 	}
 	if _, err := monitor.Run(context.Background(), initial); err != nil {
 		t.Fatalf("run: %v", err)
+	}
+}
+
+func TestPopulationMonitorAggregatesReportingTunerTelemetry(t *testing.T) {
+	initial := []model.Genome{
+		newLinearGenome("g0", -1.0),
+		newLinearGenome("g1", -0.8),
+	}
+	rt := &reportingTuner{
+		report: tuning.TuneReport{
+			AttemptsPlanned:      3,
+			AttemptsExecuted:     2,
+			CandidateEvaluations: 5,
+			AcceptedCandidates:   2,
+			RejectedCandidates:   3,
+			GoalReached:          true,
+		},
+	}
+	monitor, err := NewPopulationMonitor(MonitorConfig{
+		Scape:           oneDimScape{},
+		Mutation:        PerturbWeightAt{Index: 0, Delta: 0},
+		PopulationSize:  len(initial),
+		EliteCount:      1,
+		Generations:     1,
+		Workers:         1,
+		Seed:            1,
+		InputNeuronIDs:  []string{"i"},
+		OutputNeuronIDs: []string{"o"},
+		Tuner:           rt,
+		TuneAttempts:    3,
+	})
+	if err != nil {
+		t.Fatalf("new monitor: %v", err)
+	}
+	result, err := monitor.Run(context.Background(), initial)
+	if err != nil {
+		t.Fatalf("run: %v", err)
+	}
+	if len(result.GenerationDiagnostics) != 1 {
+		t.Fatalf("expected one diagnostics row, got %d", len(result.GenerationDiagnostics))
+	}
+	d := result.GenerationDiagnostics[0]
+	if d.TuningInvocations != 2 || d.TuningAttempts != 4 || d.TuningEvaluations != 10 || d.TuningAccepted != 4 || d.TuningRejected != 6 || d.TuningGoalHits != 2 {
+		t.Fatalf("unexpected tuning telemetry: %+v", d)
 	}
 }
