@@ -119,6 +119,7 @@ Status keys:
 - Added derived tuning efficiency ratios in `protogonosctl diagnostics` (`tuning_accept_rate`, `tuning_evals_per_attempt`) to aid parity comparisons against reference runs.
 - Promoted tuning efficiency ratios to first-class diagnostics fields persisted through store/API/export (`generation_diagnostics.json`), with CLI consuming stored values directly.
 - Extended `species-diff` output to include tuning telemetry deltas between compared generations for combined speciation+tuning analysis.
+- Added `species-diff --show-diagnostics` to print full from/to diagnostics snapshots (including tuning telemetry and ratios) alongside deltas.
 
 ## Highest-priority remaining gaps to reach strict parity
 

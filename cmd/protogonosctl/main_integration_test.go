@@ -589,12 +589,13 @@ func TestSpeciesDiffCommandSQLiteReadsPersistedSpeciesHistory(t *testing.T) {
 			"--store", "sqlite",
 			"--db-path", dbPath,
 			"--latest",
+			"--show-diagnostics",
 		})
 	})
 	if err != nil {
 		t.Fatalf("species-diff command: %v", err)
 	}
-	if !strings.Contains(out, "run_id=") || !strings.Contains(out, "changed") || !strings.Contains(out, "tuning_delta_attempts=") {
+	if !strings.Contains(out, "run_id=") || !strings.Contains(out, "changed") || !strings.Contains(out, "tuning_delta_attempts=") || !strings.Contains(out, "from_diag generation=") || !strings.Contains(out, "to_diag generation=") {
 		t.Fatalf("unexpected species-diff output: %s", out)
 	}
 }

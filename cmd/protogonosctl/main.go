@@ -693,6 +693,7 @@ func runSpeciesDiff(ctx context.Context, args []string) error {
 	latest := fs.Bool("latest", false, "diff species history for the most recent run from run index")
 	fromGen := fs.Int("from-gen", 0, "from generation (default: previous generation)")
 	toGen := fs.Int("to-gen", 0, "to generation (default: latest generation)")
+	showDiagnostics := fs.Bool("show-diagnostics", false, "print from/to generation diagnostics snapshots alongside species diff")
 	storeKind := fs.String("store", storage.DefaultStoreKind(), "store backend: memory|sqlite")
 	dbPath := fs.String("db-path", "protogonos.db", "sqlite database path")
 	if err := fs.Parse(args); err != nil {
@@ -745,6 +746,40 @@ func runSpeciesDiff(ctx context.Context, args []string) error {
 		diff.TuningAcceptRateDelta,
 		diff.TuningEvalsPerAttemptDelta,
 	)
+	if *showDiagnostics {
+		fmt.Printf("from_diag generation=%d best=%.6f mean=%.6f min=%.6f species=%d fingerprints=%d tuning_invocations=%d tuning_attempts=%d tuning_evaluations=%d tuning_accepted=%d tuning_rejected=%d tuning_goal_hits=%d tuning_accept_rate=%.4f tuning_evals_per_attempt=%.4f\n",
+			diff.FromDiagnostics.Generation,
+			diff.FromDiagnostics.BestFitness,
+			diff.FromDiagnostics.MeanFitness,
+			diff.FromDiagnostics.MinFitness,
+			diff.FromDiagnostics.SpeciesCount,
+			diff.FromDiagnostics.FingerprintDiversity,
+			diff.FromDiagnostics.TuningInvocations,
+			diff.FromDiagnostics.TuningAttempts,
+			diff.FromDiagnostics.TuningEvaluations,
+			diff.FromDiagnostics.TuningAccepted,
+			diff.FromDiagnostics.TuningRejected,
+			diff.FromDiagnostics.TuningGoalHits,
+			diff.FromDiagnostics.TuningAcceptRate,
+			diff.FromDiagnostics.TuningEvalsPerAttempt,
+		)
+		fmt.Printf("to_diag generation=%d best=%.6f mean=%.6f min=%.6f species=%d fingerprints=%d tuning_invocations=%d tuning_attempts=%d tuning_evaluations=%d tuning_accepted=%d tuning_rejected=%d tuning_goal_hits=%d tuning_accept_rate=%.4f tuning_evals_per_attempt=%.4f\n",
+			diff.ToDiagnostics.Generation,
+			diff.ToDiagnostics.BestFitness,
+			diff.ToDiagnostics.MeanFitness,
+			diff.ToDiagnostics.MinFitness,
+			diff.ToDiagnostics.SpeciesCount,
+			diff.ToDiagnostics.FingerprintDiversity,
+			diff.ToDiagnostics.TuningInvocations,
+			diff.ToDiagnostics.TuningAttempts,
+			diff.ToDiagnostics.TuningEvaluations,
+			diff.ToDiagnostics.TuningAccepted,
+			diff.ToDiagnostics.TuningRejected,
+			diff.ToDiagnostics.TuningGoalHits,
+			diff.ToDiagnostics.TuningAcceptRate,
+			diff.ToDiagnostics.TuningEvalsPerAttempt,
+		)
+	}
 	for _, item := range diff.Added {
 		fmt.Printf("added species_key=%s size=%d mean=%.6f best=%.6f\n", item.Key, item.Size, item.MeanFitness, item.BestFitness)
 	}
