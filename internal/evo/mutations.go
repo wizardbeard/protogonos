@@ -8,6 +8,7 @@ import (
 	"math/rand"
 
 	"protogonos/internal/genotype"
+	protoio "protogonos/internal/io"
 	"protogonos/internal/model"
 	"protogonos/internal/nn"
 )
@@ -690,6 +691,98 @@ func (o *PerturbSubstrateParameter) Apply(_ context.Context, genome model.Genome
 	return mutated, nil
 }
 
+// AddRandomSensor adds one compatible sensor id to genome.SensorIDs.
+type AddRandomSensor struct {
+	Rand      *rand.Rand
+	ScapeName string
+}
+
+func (o *AddRandomSensor) Name() string {
+	return "add_random_sensor"
+}
+
+func (o *AddRandomSensor) Applicable(genome model.Genome, _ string) bool {
+	return len(sensorCandidates(genome, o.ScapeName)) > 0
+}
+
+func (o *AddRandomSensor) Apply(_ context.Context, genome model.Genome) (model.Genome, error) {
+	if o == nil || o.Rand == nil {
+		return model.Genome{}, errors.New("random source is required")
+	}
+	candidates := sensorCandidates(genome, o.ScapeName)
+	if len(candidates) == 0 {
+		return cloneGenome(genome), nil
+	}
+	choice := candidates[o.Rand.Intn(len(candidates))]
+	mutated := cloneGenome(genome)
+	mutated.SensorIDs = append(mutated.SensorIDs, choice)
+	return mutated, nil
+}
+
+// AddRandomSensorLink mirrors add_sensorlink in the simplified genome model.
+type AddRandomSensorLink struct {
+	Rand      *rand.Rand
+	ScapeName string
+}
+
+func (o *AddRandomSensorLink) Name() string {
+	return "add_random_sensorlink"
+}
+
+func (o *AddRandomSensorLink) Applicable(genome model.Genome, _ string) bool {
+	return len(sensorCandidates(genome, o.ScapeName)) > 0
+}
+
+func (o *AddRandomSensorLink) Apply(ctx context.Context, genome model.Genome) (model.Genome, error) {
+	return (&AddRandomSensor{Rand: o.Rand, ScapeName: o.ScapeName}).Apply(ctx, genome)
+}
+
+// AddRandomActuator adds one compatible actuator id to genome.ActuatorIDs.
+type AddRandomActuator struct {
+	Rand      *rand.Rand
+	ScapeName string
+}
+
+func (o *AddRandomActuator) Name() string {
+	return "add_random_actuator"
+}
+
+func (o *AddRandomActuator) Applicable(genome model.Genome, _ string) bool {
+	return len(actuatorCandidates(genome, o.ScapeName)) > 0
+}
+
+func (o *AddRandomActuator) Apply(_ context.Context, genome model.Genome) (model.Genome, error) {
+	if o == nil || o.Rand == nil {
+		return model.Genome{}, errors.New("random source is required")
+	}
+	candidates := actuatorCandidates(genome, o.ScapeName)
+	if len(candidates) == 0 {
+		return cloneGenome(genome), nil
+	}
+	choice := candidates[o.Rand.Intn(len(candidates))]
+	mutated := cloneGenome(genome)
+	mutated.ActuatorIDs = append(mutated.ActuatorIDs, choice)
+	return mutated, nil
+}
+
+// AddRandomActuatorLink mirrors add_actuatorlink in the simplified genome model.
+type AddRandomActuatorLink struct {
+	Rand      *rand.Rand
+	ScapeName string
+}
+
+func (o *AddRandomActuatorLink) Name() string {
+	return "add_random_actuatorlink"
+}
+
+func (o *AddRandomActuatorLink) Applicable(genome model.Genome, _ string) bool {
+	return len(actuatorCandidates(genome, o.ScapeName)) > 0
+}
+
+func (o *AddRandomActuatorLink) Apply(ctx context.Context, genome model.Genome) (model.Genome, error) {
+	return (&AddRandomActuator{Rand: o.Rand, ScapeName: o.ScapeName}).Apply(ctx, genome)
+}
+
 // ChangeActivationAt mutates one neuron's activation function label.
 type ChangeActivationAt struct {
 	Index      int
@@ -983,4 +1076,34 @@ func removeDirectedRandomSynapse(genome model.Genome, rng *rand.Rand, keep func(
 	mutated := cloneGenome(genome)
 	mutated.Synapses = append(mutated.Synapses[:idx], mutated.Synapses[idx+1:]...)
 	return mutated, nil
+}
+
+func sensorCandidates(genome model.Genome, scapeName string) []string {
+	existing := toIDSet(genome.SensorIDs)
+	candidates := make([]string, 0)
+	for _, name := range protoio.ListSensors() {
+		if _, ok := existing[name]; ok {
+			continue
+		}
+		if _, err := protoio.ResolveSensor(name, scapeName); err != nil {
+			continue
+		}
+		candidates = append(candidates, name)
+	}
+	return candidates
+}
+
+func actuatorCandidates(genome model.Genome, scapeName string) []string {
+	existing := toIDSet(genome.ActuatorIDs)
+	candidates := make([]string, 0)
+	for _, name := range protoio.ListActuators() {
+		if _, ok := existing[name]; ok {
+			continue
+		}
+		if _, err := protoio.ResolveActuator(name, scapeName); err != nil {
+			continue
+		}
+		candidates = append(candidates, name)
+	}
+	return candidates
 }

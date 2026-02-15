@@ -11,6 +11,7 @@ import (
 	"strconv"
 	"testing"
 
+	protoio "protogonos/internal/io"
 	"protogonos/internal/model"
 	"protogonos/internal/storage"
 )
@@ -476,6 +477,50 @@ func TestRemoveRandomOutlinkTargetsOutput(t *testing.T) {
 	}
 	if hasSynapse(mutated, "s_out") {
 		t.Fatalf("expected output-oriented synapse to be removed")
+	}
+}
+
+func TestAddRandomSensorAddsCompatibleSensor(t *testing.T) {
+	genome := model.Genome{
+		Neurons:     []model.Neuron{{ID: "i", Activation: "identity"}, {ID: "o", Activation: "identity"}},
+		SensorIDs:   []string{protoio.XORInputLeftSensorName},
+		ActuatorIDs: []string{protoio.XOROutputActuatorName},
+	}
+	op := &AddRandomSensor{
+		Rand:      rand.New(rand.NewSource(73)),
+		ScapeName: "xor",
+	}
+	mutated, err := op.Apply(context.Background(), genome)
+	if err != nil {
+		t.Fatalf("apply failed: %v", err)
+	}
+	if len(mutated.SensorIDs) != len(genome.SensorIDs)+1 {
+		t.Fatalf("expected one added sensor, got=%d", len(mutated.SensorIDs)-len(genome.SensorIDs))
+	}
+	if mutated.SensorIDs[len(mutated.SensorIDs)-1] != protoio.XORInputRightSensorName {
+		t.Fatalf("expected xor right sensor to be added, got=%s", mutated.SensorIDs[len(mutated.SensorIDs)-1])
+	}
+}
+
+func TestAddRandomActuatorAddsCompatibleActuator(t *testing.T) {
+	genome := model.Genome{
+		Neurons:     []model.Neuron{{ID: "i", Activation: "identity"}, {ID: "o", Activation: "identity"}},
+		SensorIDs:   []string{protoio.FXPriceSensorName, protoio.FXSignalSensorName},
+		ActuatorIDs: []string{},
+	}
+	op := &AddRandomActuator{
+		Rand:      rand.New(rand.NewSource(79)),
+		ScapeName: "fx",
+	}
+	mutated, err := op.Apply(context.Background(), genome)
+	if err != nil {
+		t.Fatalf("apply failed: %v", err)
+	}
+	if len(mutated.ActuatorIDs) != 1 {
+		t.Fatalf("expected one added actuator, got=%d", len(mutated.ActuatorIDs))
+	}
+	if mutated.ActuatorIDs[0] != protoio.FXTradeActuatorName {
+		t.Fatalf("expected fx trade actuator to be added, got=%s", mutated.ActuatorIDs[0])
 	}
 }
 

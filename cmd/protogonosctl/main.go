@@ -1374,6 +1374,7 @@ func registerDefaultScapes(p *platform.Polis) error {
 
 func defaultMutationPolicy(
 	seed int64,
+	scapeName string,
 	inputNeuronIDs, outputNeuronIDs []string,
 	wPerturb, wBias, wRemoveBias, wActivation, wAggregator, wAddSynapse, wRemoveSynapse, wAddNeuron, wRemoveNeuron, wPlasticityRule, wPlasticity, wSubstrate float64,
 ) []evo.WeightedMutation {
@@ -1386,18 +1387,24 @@ func defaultMutationPolicy(
 	}
 
 	return []evo.WeightedMutation{
-		{Operator: &evo.PerturbRandomWeight{Rand: rand.New(rand.NewSource(seed + 1000)), MaxDelta: 1.0}, Weight: wPerturb},
+		{Operator: &evo.PerturbWeightsProportional{Rand: rand.New(rand.NewSource(seed + 1000)), MaxDelta: 1.0}, Weight: wPerturb},
 		{Operator: &evo.PerturbRandomBias{Rand: rand.New(rand.NewSource(seed + 1007)), MaxDelta: 0.3}, Weight: wBias},
 		{Operator: &evo.RemoveRandomBias{Rand: rand.New(rand.NewSource(seed + 1010))}, Weight: wRemoveBias},
 		{Operator: &evo.ChangeRandomActivation{Rand: rand.New(rand.NewSource(seed + 1008))}, Weight: wActivation},
 		{Operator: &evo.ChangeRandomAggregator{Rand: rand.New(rand.NewSource(seed + 1009))}, Weight: wAggregator},
-		{Operator: &evo.AddRandomSynapse{Rand: rand.New(rand.NewSource(seed + 1001)), MaxAbsWeight: 1.0}, Weight: wAddSynapse},
-		{Operator: &evo.RemoveRandomSynapse{Rand: rand.New(rand.NewSource(seed + 1002))}, Weight: wRemoveSynapse},
-		{Operator: &evo.AddRandomNeuron{Rand: rand.New(rand.NewSource(seed + 1003))}, Weight: wAddNeuron},
-		{Operator: &evo.RemoveRandomNeuron{Rand: rand.New(rand.NewSource(seed + 1004)), Protected: protected}, Weight: wRemoveNeuron},
-		{Operator: &evo.ChangePlasticityRule{Rand: rand.New(rand.NewSource(seed + 1011))}, Weight: wPlasticityRule},
-		{Operator: &evo.PerturbPlasticityRate{Rand: rand.New(rand.NewSource(seed + 1005)), MaxDelta: 0.15}, Weight: wPlasticity},
-		{Operator: &evo.PerturbSubstrateParameter{Rand: rand.New(rand.NewSource(seed + 1006)), MaxDelta: 0.15}, Weight: wSubstrate},
+		{Operator: &evo.AddRandomInlink{Rand: rand.New(rand.NewSource(seed + 1001)), MaxAbsWeight: 1.0, InputNeuronIDs: inputNeuronIDs}, Weight: wAddSynapse / 2},
+		{Operator: &evo.AddRandomOutlink{Rand: rand.New(rand.NewSource(seed + 1002)), MaxAbsWeight: 1.0, OutputNeuronIDs: outputNeuronIDs}, Weight: wAddSynapse / 2},
+		{Operator: &evo.RemoveRandomInlink{Rand: rand.New(rand.NewSource(seed + 1003)), InputNeuronIDs: inputNeuronIDs}, Weight: wRemoveSynapse / 2},
+		{Operator: &evo.RemoveRandomOutlink{Rand: rand.New(rand.NewSource(seed + 1004)), OutputNeuronIDs: outputNeuronIDs}, Weight: wRemoveSynapse / 2},
+		{Operator: &evo.AddRandomNeuron{Rand: rand.New(rand.NewSource(seed + 1005))}, Weight: wAddNeuron},
+		{Operator: &evo.RemoveRandomNeuron{Rand: rand.New(rand.NewSource(seed + 1006)), Protected: protected}, Weight: wRemoveNeuron},
+		{Operator: &evo.ChangePlasticityRule{Rand: rand.New(rand.NewSource(seed + 1012))}, Weight: wPlasticityRule},
+		{Operator: &evo.PerturbPlasticityRate{Rand: rand.New(rand.NewSource(seed + 1007)), MaxDelta: 0.15}, Weight: wPlasticity},
+		{Operator: &evo.AddRandomSensor{Rand: rand.New(rand.NewSource(seed + 1008)), ScapeName: scapeName}, Weight: wSubstrate * 0.25},
+		{Operator: &evo.AddRandomSensorLink{Rand: rand.New(rand.NewSource(seed + 1009)), ScapeName: scapeName}, Weight: wSubstrate * 0.25},
+		{Operator: &evo.AddRandomActuator{Rand: rand.New(rand.NewSource(seed + 1010)), ScapeName: scapeName}, Weight: wSubstrate * 0.25},
+		{Operator: &evo.AddRandomActuatorLink{Rand: rand.New(rand.NewSource(seed + 1011)), ScapeName: scapeName}, Weight: wSubstrate * 0.20},
+		{Operator: &evo.PerturbSubstrateParameter{Rand: rand.New(rand.NewSource(seed + 1013)), MaxDelta: 0.15}, Weight: wSubstrate * 0.05},
 	}
 }
 

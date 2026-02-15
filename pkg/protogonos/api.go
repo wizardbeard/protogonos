@@ -335,7 +335,7 @@ func (c *Client) Run(ctx context.Context, req RunRequest) (RunSummary, error) {
 
 	runEvolution := func(useTuning bool) (platform.EvolutionResult, error) {
 		mutation := &evo.PerturbWeightsProportional{Rand: rand.New(rand.NewSource(req.Seed + 1000)), MaxDelta: 1.0}
-		policy := defaultMutationPolicy(req.Seed, seedPopulation.InputNeuronIDs, seedPopulation.OutputNeuronIDs, req)
+		policy := defaultMutationPolicy(req.Seed, req.Scape, seedPopulation.InputNeuronIDs, seedPopulation.OutputNeuronIDs, req)
 		var tuner tuning.Tuner
 		var attemptPolicy tuning.AttemptPolicy
 		if useTuning {
@@ -1257,7 +1257,7 @@ func materializeRunConfigFromRequest(req RunRequest) (materializedRunConfig, err
 	}, nil
 }
 
-func defaultMutationPolicy(seed int64, inputNeuronIDs, outputNeuronIDs []string, req RunRequest) []evo.WeightedMutation {
+func defaultMutationPolicy(seed int64, scapeName string, inputNeuronIDs, outputNeuronIDs []string, req RunRequest) []evo.WeightedMutation {
 	protected := make(map[string]struct{}, len(inputNeuronIDs)+len(outputNeuronIDs))
 	for _, id := range inputNeuronIDs {
 		protected[id] = struct{}{}
@@ -1280,7 +1280,11 @@ func defaultMutationPolicy(seed int64, inputNeuronIDs, outputNeuronIDs []string,
 		{Operator: &evo.RemoveRandomNeuron{Rand: rand.New(rand.NewSource(seed + 1006)), Protected: protected}, Weight: req.WeightRemoveNeuron},
 		{Operator: &evo.ChangePlasticityRule{Rand: rand.New(rand.NewSource(seed + 1012))}, Weight: req.WeightPlasticityRule},
 		{Operator: &evo.PerturbPlasticityRate{Rand: rand.New(rand.NewSource(seed + 1007)), MaxDelta: 0.15}, Weight: req.WeightPlasticity},
-		{Operator: &evo.PerturbSubstrateParameter{Rand: rand.New(rand.NewSource(seed + 1008)), MaxDelta: 0.15}, Weight: req.WeightSubstrate},
+		{Operator: &evo.AddRandomSensor{Rand: rand.New(rand.NewSource(seed + 1008)), ScapeName: scapeName}, Weight: req.WeightSubstrate * 0.25},
+		{Operator: &evo.AddRandomSensorLink{Rand: rand.New(rand.NewSource(seed + 1009)), ScapeName: scapeName}, Weight: req.WeightSubstrate * 0.25},
+		{Operator: &evo.AddRandomActuator{Rand: rand.New(rand.NewSource(seed + 1010)), ScapeName: scapeName}, Weight: req.WeightSubstrate * 0.25},
+		{Operator: &evo.AddRandomActuatorLink{Rand: rand.New(rand.NewSource(seed + 1011)), ScapeName: scapeName}, Weight: req.WeightSubstrate * 0.20},
+		{Operator: &evo.PerturbSubstrateParameter{Rand: rand.New(rand.NewSource(seed + 1013)), MaxDelta: 0.15}, Weight: req.WeightSubstrate * 0.05},
 	}
 }
 
