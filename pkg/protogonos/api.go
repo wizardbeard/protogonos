@@ -178,36 +178,36 @@ type SpeciesDiffRequest struct {
 }
 
 type SpeciesDelta struct {
-	Key             string
-	FromSize        int
-	ToSize          int
-	SizeDelta       int
-	FromMeanFitness float64
-	ToMeanFitness   float64
-	MeanDelta       float64
-	FromBestFitness float64
-	ToBestFitness   float64
-	BestDelta       float64
+	Key             string  `json:"key"`
+	FromSize        int     `json:"from_size"`
+	ToSize          int     `json:"to_size"`
+	SizeDelta       int     `json:"size_delta"`
+	FromMeanFitness float64 `json:"from_mean_fitness"`
+	ToMeanFitness   float64 `json:"to_mean_fitness"`
+	MeanDelta       float64 `json:"mean_delta"`
+	FromBestFitness float64 `json:"from_best_fitness"`
+	ToBestFitness   float64 `json:"to_best_fitness"`
+	BestDelta       float64 `json:"best_delta"`
 }
 
 type SpeciesDiff struct {
-	RunID                      string
-	FromGeneration             int
-	ToGeneration               int
-	Added                      []model.SpeciesMetrics
-	Removed                    []model.SpeciesMetrics
-	Changed                    []SpeciesDelta
-	UnchangedCount             int
-	FromDiagnostics            model.GenerationDiagnostics
-	ToDiagnostics              model.GenerationDiagnostics
-	TuningInvocationsDelta     int
-	TuningAttemptsDelta        int
-	TuningEvaluationsDelta     int
-	TuningAcceptedDelta        int
-	TuningRejectedDelta        int
-	TuningGoalHitsDelta        int
-	TuningAcceptRateDelta      float64
-	TuningEvalsPerAttemptDelta float64
+	RunID                      string                      `json:"run_id"`
+	FromGeneration             int                         `json:"from_generation"`
+	ToGeneration               int                         `json:"to_generation"`
+	Added                      []model.SpeciesMetrics      `json:"added"`
+	Removed                    []model.SpeciesMetrics      `json:"removed"`
+	Changed                    []SpeciesDelta              `json:"changed"`
+	UnchangedCount             int                         `json:"unchanged_count"`
+	FromDiagnostics            model.GenerationDiagnostics `json:"from_diagnostics"`
+	ToDiagnostics              model.GenerationDiagnostics `json:"to_diagnostics"`
+	TuningInvocationsDelta     int                         `json:"tuning_invocations_delta"`
+	TuningAttemptsDelta        int                         `json:"tuning_attempts_delta"`
+	TuningEvaluationsDelta     int                         `json:"tuning_evaluations_delta"`
+	TuningAcceptedDelta        int                         `json:"tuning_accepted_delta"`
+	TuningRejectedDelta        int                         `json:"tuning_rejected_delta"`
+	TuningGoalHitsDelta        int                         `json:"tuning_goal_hits_delta"`
+	TuningAcceptRateDelta      float64                     `json:"tuning_accept_rate_delta"`
+	TuningEvalsPerAttemptDelta float64                     `json:"tuning_evals_per_attempt_delta"`
 }
 
 type TopGenomesRequest struct {

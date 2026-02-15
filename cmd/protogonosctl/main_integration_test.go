@@ -598,6 +598,29 @@ func TestSpeciesDiffCommandSQLiteReadsPersistedSpeciesHistory(t *testing.T) {
 	if !strings.Contains(out, "run_id=") || !strings.Contains(out, "changed") || !strings.Contains(out, "tuning_delta_attempts=") || !strings.Contains(out, "from_diag generation=") || !strings.Contains(out, "to_diag generation=") {
 		t.Fatalf("unexpected species-diff output: %s", out)
 	}
+
+	jsonOut, err := captureStdout(func() error {
+		return run(context.Background(), []string{
+			"species-diff",
+			"--store", "sqlite",
+			"--db-path", dbPath,
+			"--latest",
+			"--json",
+		})
+	})
+	if err != nil {
+		t.Fatalf("species-diff json command: %v", err)
+	}
+	var parsed map[string]any
+	if err := json.Unmarshal([]byte(jsonOut), &parsed); err != nil {
+		t.Fatalf("decode species-diff json output: %v\n%s", err, jsonOut)
+	}
+	if _, ok := parsed["run_id"]; !ok {
+		t.Fatalf("expected run_id in species-diff json: %v", parsed)
+	}
+	if _, ok := parsed["tuning_attempts_delta"]; !ok {
+		t.Fatalf("expected tuning delta in species-diff json: %v", parsed)
+	}
 }
 
 func TestTopCommandSQLiteReadsPersistedTopGenomes(t *testing.T) {

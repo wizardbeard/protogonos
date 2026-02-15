@@ -694,6 +694,7 @@ func runSpeciesDiff(ctx context.Context, args []string) error {
 	fromGen := fs.Int("from-gen", 0, "from generation (default: previous generation)")
 	toGen := fs.Int("to-gen", 0, "to generation (default: latest generation)")
 	showDiagnostics := fs.Bool("show-diagnostics", false, "print from/to generation diagnostics snapshots alongside species diff")
+	jsonOut := fs.Bool("json", false, "emit species diff as JSON")
 	storeKind := fs.String("store", storage.DefaultStoreKind(), "store backend: memory|sqlite")
 	dbPath := fs.String("db-path", "protogonos.db", "sqlite database path")
 	if err := fs.Parse(args); err != nil {
@@ -727,6 +728,11 @@ func runSpeciesDiff(ctx context.Context, args []string) error {
 	})
 	if err != nil {
 		return err
+	}
+	if *jsonOut {
+		enc := json.NewEncoder(os.Stdout)
+		enc.SetIndent("", "  ")
+		return enc.Encode(diff)
 	}
 
 	fmt.Printf("run_id=%s from=%d to=%d added=%d removed=%d changed=%d unchanged=%d tuning_delta_invocations=%+d tuning_delta_attempts=%+d tuning_delta_evaluations=%+d tuning_delta_accepted=%+d tuning_delta_rejected=%+d tuning_delta_goal_hits=%+d tuning_delta_accept_rate=%+.4f tuning_delta_evals_per_attempt=%+.4f\n",
