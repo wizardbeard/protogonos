@@ -8,14 +8,16 @@ type VersionedRecord struct {
 
 type Genome struct {
 	VersionedRecord
-	ID          string            `json:"id"`
-	Neurons     []Neuron          `json:"neurons"`
-	Synapses    []Synapse         `json:"synapses"`
-	SensorIDs   []string          `json:"sensor_ids"`
-	ActuatorIDs []string          `json:"actuator_ids"`
-	Substrate   *SubstrateConfig  `json:"substrate,omitempty"`
-	Plasticity  *PlasticityConfig `json:"plasticity,omitempty"`
-	Strategy    *StrategyConfig   `json:"strategy,omitempty"`
+	ID            string            `json:"id"`
+	Neurons       []Neuron          `json:"neurons"`
+	Synapses      []Synapse         `json:"synapses"`
+	SensorIDs     []string          `json:"sensor_ids"`
+	ActuatorIDs   []string          `json:"actuator_ids"`
+	SensorLinks   int               `json:"sensor_links,omitempty"`
+	ActuatorLinks int               `json:"actuator_links,omitempty"`
+	Substrate     *SubstrateConfig  `json:"substrate,omitempty"`
+	Plasticity    *PlasticityConfig `json:"plasticity,omitempty"`
+	Strategy      *StrategyConfig   `json:"strategy,omitempty"`
 }
 
 type StrategyConfig struct {

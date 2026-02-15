@@ -1219,11 +1219,19 @@ func (o *AddRandomSensorLink) Name() string {
 }
 
 func (o *AddRandomSensorLink) Applicable(genome model.Genome, _ string) bool {
-	return len(sensorCandidates(genome, o.ScapeName)) > 0
+	return len(genome.SensorIDs) > 0
 }
 
 func (o *AddRandomSensorLink) Apply(ctx context.Context, genome model.Genome) (model.Genome, error) {
-	return (&AddRandomSensor{Rand: o.Rand, ScapeName: o.ScapeName}).Apply(ctx, genome)
+	if o == nil || o.Rand == nil {
+		return model.Genome{}, errors.New("random source is required")
+	}
+	if len(genome.SensorIDs) == 0 {
+		return model.Genome{}, ErrNoSynapses
+	}
+	mutated := cloneGenome(genome)
+	mutated.SensorLinks++
+	return mutated, nil
 }
 
 // AddRandomActuator adds one compatible actuator id to genome.ActuatorIDs.
@@ -1265,11 +1273,19 @@ func (o *AddRandomActuatorLink) Name() string {
 }
 
 func (o *AddRandomActuatorLink) Applicable(genome model.Genome, _ string) bool {
-	return len(actuatorCandidates(genome, o.ScapeName)) > 0
+	return len(genome.ActuatorIDs) > 0
 }
 
 func (o *AddRandomActuatorLink) Apply(ctx context.Context, genome model.Genome) (model.Genome, error) {
-	return (&AddRandomActuator{Rand: o.Rand, ScapeName: o.ScapeName}).Apply(ctx, genome)
+	if o == nil || o.Rand == nil {
+		return model.Genome{}, errors.New("random source is required")
+	}
+	if len(genome.ActuatorIDs) == 0 {
+		return model.Genome{}, ErrNoSynapses
+	}
+	mutated := cloneGenome(genome)
+	mutated.ActuatorLinks++
+	return mutated, nil
 }
 
 // RemoveRandomSensor removes one sensor id from genome.SensorIDs.
@@ -1292,9 +1308,17 @@ func (o *RemoveRandomSensor) Apply(_ context.Context, genome model.Genome) (mode
 	if len(genome.SensorIDs) == 0 {
 		return cloneGenome(genome), nil
 	}
-	idx := o.Rand.Intn(len(genome.SensorIDs))
+	selected := genome.SensorIDs[o.Rand.Intn(len(genome.SensorIDs))]
 	mutated := cloneGenome(genome)
-	mutated.SensorIDs = append(mutated.SensorIDs[:idx], mutated.SensorIDs[idx+1:]...)
+	filtered := mutated.SensorIDs[:0]
+	for _, id := range mutated.SensorIDs {
+		if id == selected {
+			continue
+		}
+		filtered = append(filtered, id)
+	}
+	mutated.SensorIDs = filtered
+	mutated.SensorLinks = 0
 	return mutated, nil
 }
 
@@ -1310,11 +1334,16 @@ func (o *CutlinkFromSensorToNeuron) Name() string {
 }
 
 func (o *CutlinkFromSensorToNeuron) Applicable(genome model.Genome, _ string) bool {
-	return len(genome.SensorIDs) > 0
+	return genome.SensorLinks > 0
 }
 
 func (o *CutlinkFromSensorToNeuron) Apply(ctx context.Context, genome model.Genome) (model.Genome, error) {
-	return (&RemoveRandomSensor{Rand: o.Rand}).Apply(ctx, genome)
+	if genome.SensorLinks <= 0 {
+		return model.Genome{}, ErrNoSynapses
+	}
+	mutated := cloneGenome(genome)
+	mutated.SensorLinks--
+	return mutated, nil
 }
 
 // RemoveRandomActuator removes one actuator id from genome.ActuatorIDs.
@@ -1337,9 +1366,17 @@ func (o *RemoveRandomActuator) Apply(_ context.Context, genome model.Genome) (mo
 	if len(genome.ActuatorIDs) == 0 {
 		return cloneGenome(genome), nil
 	}
-	idx := o.Rand.Intn(len(genome.ActuatorIDs))
+	selected := genome.ActuatorIDs[o.Rand.Intn(len(genome.ActuatorIDs))]
 	mutated := cloneGenome(genome)
-	mutated.ActuatorIDs = append(mutated.ActuatorIDs[:idx], mutated.ActuatorIDs[idx+1:]...)
+	filtered := mutated.ActuatorIDs[:0]
+	for _, id := range mutated.ActuatorIDs {
+		if id == selected {
+			continue
+		}
+		filtered = append(filtered, id)
+	}
+	mutated.ActuatorIDs = filtered
+	mutated.ActuatorLinks = 0
 	return mutated, nil
 }
 
@@ -1355,11 +1392,16 @@ func (o *CutlinkFromNeuronToActuator) Name() string {
 }
 
 func (o *CutlinkFromNeuronToActuator) Applicable(genome model.Genome, _ string) bool {
-	return len(genome.ActuatorIDs) > 0
+	return genome.ActuatorLinks > 0
 }
 
 func (o *CutlinkFromNeuronToActuator) Apply(ctx context.Context, genome model.Genome) (model.Genome, error) {
-	return (&RemoveRandomActuator{Rand: o.Rand}).Apply(ctx, genome)
+	if genome.ActuatorLinks <= 0 {
+		return model.Genome{}, ErrNoSynapses
+	}
+	mutated := cloneGenome(genome)
+	mutated.ActuatorLinks--
+	return mutated, nil
 }
 
 // AddRandomCPP mutates substrate CPP selection from the registered CPP set.
