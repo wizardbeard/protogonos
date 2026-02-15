@@ -508,6 +508,33 @@ func TestDiagnosticsCommandSQLiteReadsPersistedDiagnostics(t *testing.T) {
 	if !strings.Contains(out, "generation=1") || !strings.Contains(out, "species=") || !strings.Contains(out, "tuning_invocations=") || !strings.Contains(out, "tuning_accept_rate=") || !strings.Contains(out, "tuning_evals_per_attempt=") {
 		t.Fatalf("unexpected diagnostics output: %s", out)
 	}
+
+	jsonOut, err := captureStdout(func() error {
+		return run(context.Background(), []string{
+			"diagnostics",
+			"--store", "sqlite",
+			"--db-path", dbPath,
+			"--latest",
+			"--limit", "2",
+			"--json",
+		})
+	})
+	if err != nil {
+		t.Fatalf("diagnostics json command: %v", err)
+	}
+	var parsed []map[string]any
+	if err := json.Unmarshal([]byte(jsonOut), &parsed); err != nil {
+		t.Fatalf("decode diagnostics json output: %v\n%s", err, jsonOut)
+	}
+	if len(parsed) == 0 {
+		t.Fatalf("expected non-empty diagnostics json output: %s", jsonOut)
+	}
+	if _, ok := parsed[0]["generation"]; !ok {
+		t.Fatalf("expected generation field in diagnostics json: %v", parsed[0])
+	}
+	if _, ok := parsed[0]["tuning_attempts"]; !ok {
+		t.Fatalf("expected tuning telemetry field in diagnostics json: %v", parsed[0])
+	}
 }
 
 func TestSpeciesCommandSQLiteReadsPersistedSpeciesHistory(t *testing.T) {

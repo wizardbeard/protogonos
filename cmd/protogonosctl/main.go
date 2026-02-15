@@ -513,6 +513,7 @@ func runDiagnostics(ctx context.Context, args []string) error {
 	runID := fs.String("run-id", "", "run id")
 	latest := fs.Bool("latest", false, "show diagnostics for the most recent run from run index")
 	limit := fs.Int("limit", 50, "max generations to print (<=0 for all)")
+	jsonOut := fs.Bool("json", false, "emit diagnostics as JSON")
 	storeKind := fs.String("store", storage.DefaultStoreKind(), "store backend: memory|sqlite")
 	dbPath := fs.String("db-path", "protogonos.db", "sqlite database path")
 	if err := fs.Parse(args); err != nil {
@@ -549,6 +550,11 @@ func runDiagnostics(ctx context.Context, args []string) error {
 	if len(diagnostics) == 0 {
 		fmt.Println("no diagnostics")
 		return nil
+	}
+	if *jsonOut {
+		enc := json.NewEncoder(os.Stdout)
+		enc.SetIndent("", "  ")
+		return enc.Encode(diagnostics)
 	}
 
 	for _, d := range diagnostics {

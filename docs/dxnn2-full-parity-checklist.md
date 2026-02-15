@@ -121,6 +121,7 @@ Status keys:
 - Extended `species-diff` output to include tuning telemetry deltas between compared generations for combined speciation+tuning analysis.
 - Added `species-diff --show-diagnostics` to print full from/to diagnostics snapshots (including tuning telemetry and ratios) alongside deltas.
 - Added `species-diff --json` for machine-readable diff output suitable for scripting/CI parity checks.
+- Added `diagnostics --json` for machine-readable per-generation diagnostics (including tuning telemetry and ratios) in scripts/CI.
 
 ## Highest-priority remaining gaps to reach strict parity
 
