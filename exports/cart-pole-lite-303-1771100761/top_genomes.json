@@ -1,0 +1,257 @@
+[
+  {
+    "rank": 1,
+    "fitness": 0.9466451545272846,
+    "genome": {
+      "schema_version": 1,
+      "codec_version": 1,
+      "id": "cp-g0-0-g1-i10-g3-i5-g4-i2-g5-i4",
+      "neurons": [
+        {
+          "id": "x",
+          "activation": "identity",
+          "bias": 0
+        },
+        {
+          "id": "v",
+          "activation": "identity",
+          "bias": 0
+        },
+        {
+          "id": "f",
+          "activation": "identity",
+          "bias": 0.19809410947208145
+        }
+      ],
+      "synapses": [
+        {
+          "id": "s1",
+          "from": "x",
+          "to": "f",
+          "weight": -2.663418471345649,
+          "enabled": true,
+          "recurrent": false
+        },
+        {
+          "id": "s2",
+          "from": "v",
+          "to": "f",
+          "weight": -1.4798807159127143,
+          "enabled": true,
+          "recurrent": false
+        }
+      ],
+      "sensor_ids": [
+        "cart_pole_position",
+        "cart_pole_velocity"
+      ],
+      "actuator_ids": [
+        "cart_pole_force"
+      ]
+    }
+  },
+  {
+    "rank": 2,
+    "fitness": 0.9453003259322562,
+    "genome": {
+      "schema_version": 1,
+      "codec_version": 1,
+      "id": "cp-g0-0-g1-i10-g3-i5-g4-i2-g5-i3",
+      "neurons": [
+        {
+          "id": "x",
+          "activation": "identity",
+          "bias": 0
+        },
+        {
+          "id": "v",
+          "activation": "identity",
+          "bias": 0
+        },
+        {
+          "id": "f",
+          "activation": "identity",
+          "bias": 0.19809410947208145
+        }
+      ],
+      "synapses": [
+        {
+          "id": "s1",
+          "from": "x",
+          "to": "f",
+          "weight": -2.5382595281701548,
+          "enabled": true,
+          "recurrent": false
+        },
+        {
+          "id": "s2",
+          "from": "v",
+          "to": "f",
+          "weight": -1.4798807159127143,
+          "enabled": true,
+          "recurrent": false
+        }
+      ],
+      "sensor_ids": [
+        "cart_pole_position",
+        "cart_pole_velocity"
+      ],
+      "actuator_ids": [
+        "cart_pole_force"
+      ]
+    }
+  },
+  {
+    "rank": 3,
+    "fitness": 0.9379464304175156,
+    "genome": {
+      "schema_version": 1,
+      "codec_version": 1,
+      "id": "cp-g0-0-g1-i10-g3-i5-g4-i2",
+      "neurons": [
+        {
+          "id": "x",
+          "activation": "identity",
+          "bias": 0
+        },
+        {
+          "id": "v",
+          "activation": "identity",
+          "bias": 0
+        },
+        {
+          "id": "f",
+          "activation": "identity",
+          "bias": 0.19809410947208145
+        }
+      ],
+      "synapses": [
+        {
+          "id": "s1",
+          "from": "x",
+          "to": "f",
+          "weight": -2.033428660054896,
+          "enabled": true,
+          "recurrent": false
+        },
+        {
+          "id": "s2",
+          "from": "v",
+          "to": "f",
+          "weight": -1.4798807159127143,
+          "enabled": true,
+          "recurrent": false
+        }
+      ],
+      "sensor_ids": [
+        "cart_pole_position",
+        "cart_pole_velocity"
+      ],
+      "actuator_ids": [
+        "cart_pole_force"
+      ]
+    }
+  },
+  {
+    "rank": 4,
+    "fitness": 0.9377073702357069,
+    "genome": {
+      "schema_version": 1,
+      "codec_version": 1,
+      "id": "cp-g0-0-g1-i10-g3-i5-g5-i2",
+      "neurons": [
+        {
+          "id": "x",
+          "activation": "identity",
+          "bias": 0
+        },
+        {
+          "id": "v",
+          "activation": "identity",
+          "bias": 0
+        },
+        {
+          "id": "f",
+          "activation": "identity",
+          "bias": 0.19809410947208145
+        }
+      ],
+      "synapses": [
+        {
+          "id": "s1",
+          "from": "x",
+          "to": "f",
+          "weight": -2.2682752238578185,
+          "enabled": true,
+          "recurrent": false
+        },
+        {
+          "id": "s2",
+          "from": "v",
+          "to": "f",
+          "weight": -0.8435138940975684,
+          "enabled": true,
+          "recurrent": false
+        }
+      ],
+      "sensor_ids": [
+        "cart_pole_position",
+        "cart_pole_velocity"
+      ],
+      "actuator_ids": [
+        "cart_pole_force"
+      ]
+    }
+  },
+  {
+    "rank": 5,
+    "fitness": 0.9349191332545828,
+    "genome": {
+      "schema_version": 1,
+      "codec_version": 1,
+      "id": "cp-g0-0-g1-i10-g3-i5",
+      "neurons": [
+        {
+          "id": "x",
+          "activation": "identity",
+          "bias": 0
+        },
+        {
+          "id": "v",
+          "activation": "identity",
+          "bias": 0
+        },
+        {
+          "id": "f",
+          "activation": "identity",
+          "bias": 0.19809410947208145
+        }
+      ],
+      "synapses": [
+        {
+          "id": "s1",
+          "from": "x",
+          "to": "f",
+          "weight": -2.033428660054896,
+          "enabled": true,
+          "recurrent": false
+        },
+        {
+          "id": "s2",
+          "from": "v",
+          "to": "f",
+          "weight": -0.8435138940975684,
+          "enabled": true,
+          "recurrent": false
+        }
+      ],
+      "sensor_ids": [
+        "cart_pole_position",
+        "cart_pole_velocity"
+      ],
+      "actuator_ids": [
+        "cart_pole_force"
+      ]
+    }
+  }
+]

@@ -1,0 +1,12 @@
+{
+  "run_id": "regression-mimic-202-1771100921",
+  "scape": "regression-mimic",
+  "population_size": 12,
+  "generations": 6,
+  "seed": 202,
+  "initial_best": 0.9906343981403964,
+  "final_best": 0.9999391368620766,
+  "improvement": 0.00930473872168014,
+  "min_improvement": 0.0001,
+  "passed": true
+}
