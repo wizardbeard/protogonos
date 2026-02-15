@@ -64,10 +64,30 @@ func TestNormalizeAttemptPolicyName(t *testing.T) {
 	if got := NormalizeAttemptPolicyName("const"); got != "fixed" {
 		t.Fatalf("unexpected const normalization: %s", got)
 	}
-	if got := NormalizeAttemptPolicyName("nsize_proportional"); got != "topology_scaled" {
+	if got := NormalizeAttemptPolicyName("nsize_proportional"); got != "nsize_proportional" {
 		t.Fatalf("unexpected nsize_proportional normalization: %s", got)
 	}
-	if got := NormalizeAttemptPolicyName("wsize_proportional"); got != "topology_scaled" {
+	if got := NormalizeAttemptPolicyName("wsize_proportional"); got != "wsize_proportional" {
 		t.Fatalf("unexpected wsize_proportional normalization: %s", got)
+	}
+}
+
+func TestNSizeProportionalAttemptPolicy(t *testing.T) {
+	p := NSizeProportionalAttemptPolicy{Power: 1.0}
+	genome := model.Genome{
+		Neurons: make([]model.Neuron, 6),
+	}
+	if got := p.Attempts(4, 0, 1, genome); got != 26 {
+		t.Fatalf("expected nsize attempts=26, got=%d", got)
+	}
+}
+
+func TestWSizeProportionalAttemptPolicy(t *testing.T) {
+	p := WSizeProportionalAttemptPolicy{Power: 1.0}
+	genome := model.Genome{
+		Synapses: make([]model.Synapse, 7),
+	}
+	if got := p.Attempts(4, 0, 1, genome); got != 17 {
+		t.Fatalf("expected wsize attempts=17, got=%d", got)
 	}
 }

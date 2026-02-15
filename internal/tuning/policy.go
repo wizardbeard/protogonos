@@ -2,6 +2,7 @@ package tuning
 
 import (
 	"fmt"
+	"math"
 
 	"protogonos/internal/model"
 )
@@ -75,6 +76,44 @@ func (p TopologyScaledAttemptPolicy) Attempts(baseAttempts, _generation, _totalG
 	return attempts
 }
 
+type NSizeProportionalAttemptPolicy struct {
+	Power float64
+}
+
+func (NSizeProportionalAttemptPolicy) Name() string { return "nsize_proportional" }
+
+func (p NSizeProportionalAttemptPolicy) Attempts(baseAttempts, _generation, _totalGenerations int, genome model.Genome) int {
+	if baseAttempts <= 0 {
+		return 0
+	}
+	power := p.Power
+	if power <= 0 {
+		power = 1.0
+	}
+	recentNeuronCount := len(genome.Neurons)
+	scaled := satInt(int(math.Round(math.Pow(float64(recentNeuronCount), power))), 0, 100)
+	return 20 + scaled
+}
+
+type WSizeProportionalAttemptPolicy struct {
+	Power float64
+}
+
+func (WSizeProportionalAttemptPolicy) Name() string { return "wsize_proportional" }
+
+func (p WSizeProportionalAttemptPolicy) Attempts(baseAttempts, _generation, _totalGenerations int, genome model.Genome) int {
+	if baseAttempts <= 0 {
+		return 0
+	}
+	power := p.Power
+	if power <= 0 {
+		power = 1.0
+	}
+	recentWeightCount := len(genome.Synapses)
+	scaled := satInt(int(math.Round(math.Pow(float64(recentWeightCount), power))), 0, 100)
+	return 10 + scaled
+}
+
 func AttemptPolicyFromConfig(name string, param float64) (AttemptPolicy, error) {
 	switch NormalizeAttemptPolicyName(name) {
 	case "", "fixed":
@@ -91,6 +130,18 @@ func AttemptPolicyFromConfig(name string, param float64) (AttemptPolicy, error) 
 			scale = 1.0
 		}
 		return TopologyScaledAttemptPolicy{Scale: scale, MinAttempts: 1, MaxAttempts: 0}, nil
+	case "nsize_proportional":
+		power := param
+		if power <= 0 {
+			power = 1.0
+		}
+		return NSizeProportionalAttemptPolicy{Power: power}, nil
+	case "wsize_proportional":
+		power := param
+		if power <= 0 {
+			power = 1.0
+		}
+		return WSizeProportionalAttemptPolicy{Power: power}, nil
 	default:
 		return nil, fmt.Errorf("unsupported tune duration policy: %s", name)
 	}
@@ -102,9 +153,23 @@ func NormalizeAttemptPolicyName(name string) string {
 		return "fixed"
 	case "linear_decay":
 		return "linear_decay"
-	case "topology_scaled", "nsize_proportional", "wsize_proportional":
+	case "topology_scaled":
 		return "topology_scaled"
+	case "nsize_proportional":
+		return "nsize_proportional"
+	case "wsize_proportional":
+		return "wsize_proportional"
 	default:
 		return name
 	}
+}
+
+func satInt(v, minV, maxV int) int {
+	if v < minV {
+		return minV
+	}
+	if v > maxV {
+		return maxV
+	}
+	return v
 }
