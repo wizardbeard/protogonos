@@ -262,6 +262,27 @@ func TestRunsCommandSQLiteListsPersistedRun(t *testing.T) {
 	if !strings.Contains(output, "run_id="+expectedRunID) {
 		t.Fatalf("runs output missing expected run id %s: %s", expectedRunID, output)
 	}
+
+	jsonOutput, err := captureStdout(func() error {
+		return run(context.Background(), []string{
+			"runs",
+			"--limit", "1",
+			"--json",
+		})
+	})
+	if err != nil {
+		t.Fatalf("runs json command failed: %v", err)
+	}
+	var parsed []map[string]any
+	if err := json.Unmarshal([]byte(jsonOutput), &parsed); err != nil {
+		t.Fatalf("decode runs json output: %v\n%s", err, jsonOutput)
+	}
+	if len(parsed) == 0 {
+		t.Fatalf("expected at least one item in runs json output: %s", jsonOutput)
+	}
+	if _, ok := parsed[0]["run_id"]; !ok {
+		t.Fatalf("expected run_id field in runs json output: %v", parsed[0])
+	}
 }
 
 func TestRunCommandSQLiteCanContinueFromPopulationSnapshot(t *testing.T) {

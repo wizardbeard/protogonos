@@ -355,6 +355,7 @@ func runRuns(_ context.Context, args []string) error {
 	fs := flag.NewFlagSet("runs", flag.ContinueOnError)
 	limit := fs.Int("limit", 20, "max runs to list")
 	showCompare := fs.Bool("show-compare", false, "show compare-tuning improvement when available")
+	jsonOut := fs.Bool("json", false, "emit runs list as JSON")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
@@ -373,6 +374,47 @@ func runRuns(_ context.Context, args []string) error {
 
 	if len(entries) > *limit {
 		entries = entries[:*limit]
+	}
+	if *jsonOut {
+		type runsItem struct {
+			RunID              string   `json:"run_id"`
+			CreatedAtUTC       string   `json:"created_at_utc"`
+			Scape              string   `json:"scape"`
+			Seed               int64    `json:"seed"`
+			PopulationSize     int      `json:"population_size"`
+			Generations        int      `json:"generations"`
+			TuningEnabled      bool     `json:"tuning_enabled"`
+			FinalBestFitness   float64  `json:"final_best_fitness"`
+			CompareImprovement *float64 `json:"compare_improvement,omitempty"`
+		}
+		items := make([]runsItem, 0, len(entries))
+		for _, e := range entries {
+			var compare *float64
+			if *showCompare {
+				report, ok, err := stats.ReadTuningComparison(benchmarksDir, e.RunID)
+				if err != nil {
+					return err
+				}
+				if ok {
+					v := report.FinalImprovement
+					compare = &v
+				}
+			}
+			items = append(items, runsItem{
+				RunID:              e.RunID,
+				CreatedAtUTC:       e.CreatedAtUTC,
+				Scape:              e.Scape,
+				Seed:               e.Seed,
+				PopulationSize:     e.PopulationSize,
+				Generations:        e.Generations,
+				TuningEnabled:      e.TuningEnabled,
+				FinalBestFitness:   e.FinalBestFitness,
+				CompareImprovement: compare,
+			})
+		}
+		enc := json.NewEncoder(os.Stdout)
+		enc.SetIndent("", "  ")
+		return enc.Encode(items)
 	}
 
 	for _, e := range entries {
