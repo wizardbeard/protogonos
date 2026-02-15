@@ -210,8 +210,10 @@ func (e *Exoself) candidateBasesForMode(mode string, best, original, recent mode
 	switch mode {
 	case CandidateSelectBestSoFar:
 		return []model.Genome{cloneGenome(best)}, nil
-	case CandidateSelectOriginal, CandidateSelectLastGen:
+	case CandidateSelectOriginal:
 		return []model.Genome{cloneGenome(original)}, nil
+	case CandidateSelectLastGen:
+		return filterCandidatesByAge(candidates, 0), nil
 	case CandidateSelectDynamicA:
 		limit := dynamicAgeLimit(e.randFloat64())
 		return filterCandidatesByAge(candidates, limit), nil
@@ -246,7 +248,7 @@ func nonRandomModeFor(mode string) string {
 	case CandidateSelectCurrentRd:
 		return CandidateSelectCurrent
 	case CandidateSelectLastGenRd:
-		return CandidateSelectLastGen
+		return CandidateSelectCurrent
 	default:
 		return mode
 	}

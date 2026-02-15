@@ -354,3 +354,21 @@ func TestInferGenomeGeneration(t *testing.T) {
 		t.Fatal("expected missing generation parse failure")
 	}
 }
+
+func TestExoselfLastGenAliasUsesCurrentGenerationPool(t *testing.T) {
+	tuner := &Exoself{
+		Rand:               rand.New(rand.NewSource(29)),
+		CandidateSelection: CandidateSelectLastGen,
+	}
+	best := model.Genome{ID: "xor-g5-best"}
+	original := model.Genome{ID: "xor-g2-original"}
+	recent := model.Genome{ID: "xor-g4-recent"}
+
+	pool, err := tuner.candidateBases(best, original, recent)
+	if err != nil {
+		t.Fatalf("candidateBases(lastgen): %v", err)
+	}
+	if len(pool) != 1 || pool[0].ID != best.ID {
+		t.Fatalf("expected lastgen to resolve to current-generation pool; got=%v", pool)
+	}
+}
