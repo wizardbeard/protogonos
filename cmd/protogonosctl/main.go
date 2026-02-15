@@ -552,7 +552,7 @@ func runDiagnostics(ctx context.Context, args []string) error {
 	}
 
 	for _, d := range diagnostics {
-		fmt.Printf("generation=%d best=%.6f mean=%.6f min=%.6f species=%d fingerprints=%d threshold=%.4f target_species=%d mean_species_size=%.2f largest_species=%d\n",
+		fmt.Printf("generation=%d best=%.6f mean=%.6f min=%.6f species=%d fingerprints=%d threshold=%.4f target_species=%d mean_species_size=%.2f largest_species=%d tuning_invocations=%d tuning_attempts=%d tuning_evaluations=%d tuning_accepted=%d tuning_rejected=%d tuning_goal_hits=%d\n",
 			d.Generation,
 			d.BestFitness,
 			d.MeanFitness,
@@ -563,6 +563,12 @@ func runDiagnostics(ctx context.Context, args []string) error {
 			d.TargetSpeciesCount,
 			d.MeanSpeciesSize,
 			d.LargestSpeciesSize,
+			d.TuningInvocations,
+			d.TuningAttempts,
+			d.TuningEvaluations,
+			d.TuningAccepted,
+			d.TuningRejected,
+			d.TuningGoalHits,
 		)
 	}
 	return nil

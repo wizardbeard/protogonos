@@ -505,7 +505,7 @@ func TestDiagnosticsCommandSQLiteReadsPersistedDiagnostics(t *testing.T) {
 	if err != nil {
 		t.Fatalf("diagnostics command: %v", err)
 	}
-	if !strings.Contains(out, "generation=1") || !strings.Contains(out, "species=") {
+	if !strings.Contains(out, "generation=1") || !strings.Contains(out, "species=") || !strings.Contains(out, "tuning_invocations=") {
 		t.Fatalf("unexpected diagnostics output: %s", out)
 	}
 }

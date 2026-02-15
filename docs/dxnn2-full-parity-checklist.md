@@ -115,6 +115,7 @@ Status keys:
 - Added exoself perturbation controls (`tune_perturbation_range`, `tune_annealing_factor`) across runtime, CLI/config/API validation, and persisted run config artifacts.
 - Added generation-aware candidate-pool filtering for `dynamic`/`active`/`current` tuning-selection families by inferring generation from genome IDs.
 - Added per-generation tuning telemetry (`invocations`, attempts, candidate evaluations, accepted/rejected counts, goal hits) to diagnostics and persisted artifacts via optional reporting tuner support.
+- Exposed tuning telemetry fields in `protogonosctl diagnostics` output for direct CLI parity introspection.
 
 ## Highest-priority remaining gaps to reach strict parity
 
