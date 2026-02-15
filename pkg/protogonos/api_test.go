@@ -499,6 +499,30 @@ func TestClientRunRejectsNegativeNumericConfig(t *testing.T) {
 	}
 
 	_, err = client.Run(context.Background(), RunRequest{
+		Scape:                 "xor",
+		Population:            6,
+		Generations:           2,
+		TunePerturbationRange: -1,
+		EnableTuning:          true,
+		TuneDurationParam:     1,
+	})
+	if err == nil {
+		t.Fatal("expected tune perturbation range validation error")
+	}
+
+	_, err = client.Run(context.Background(), RunRequest{
+		Scape:               "xor",
+		Population:          6,
+		Generations:         2,
+		TuneAnnealingFactor: -0.1,
+		EnableTuning:        true,
+		TuneDurationParam:   1,
+	})
+	if err == nil {
+		t.Fatal("expected tune annealing factor validation error")
+	}
+
+	_, err = client.Run(context.Background(), RunRequest{
 		Scape:              "xor",
 		Population:         6,
 		Generations:        2,

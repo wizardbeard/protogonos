@@ -66,6 +66,12 @@ func TestExoselfInputValidation(t *testing.T) {
 	if _, err := (&Exoself{Rand: rand.New(rand.NewSource(1)), Steps: 1, StepSize: 0}).Tune(context.Background(), genome, 1, fitnessFn); err == nil {
 		t.Fatal("expected step size validation error")
 	}
+	if _, err := (&Exoself{Rand: rand.New(rand.NewSource(1)), Steps: 1, StepSize: 1, PerturbationRange: -1}).Tune(context.Background(), genome, 1, fitnessFn); err == nil {
+		t.Fatal("expected perturbation range validation error")
+	}
+	if _, err := (&Exoself{Rand: rand.New(rand.NewSource(1)), Steps: 1, StepSize: 1, AnnealingFactor: -1}).Tune(context.Background(), genome, 1, fitnessFn); err == nil {
+		t.Fatal("expected annealing factor validation error")
+	}
 	if _, err := (&Exoself{Rand: rand.New(rand.NewSource(1)), Steps: 1, StepSize: 1}).Tune(context.Background(), genome, 1, nil); err == nil {
 		t.Fatal("expected fitness validation error")
 	}
@@ -277,5 +283,44 @@ func TestExoselfStopsEarlyWhenGoalReached(t *testing.T) {
 	}
 	if calls != 1 {
 		t.Fatalf("expected one fitness evaluation due to goal short-circuit, got %d", calls)
+	}
+}
+
+func TestExoselfPerturbationRangeAffectsDelta(t *testing.T) {
+	genome := model.Genome{
+		ID:       "g",
+		Synapses: []model.Synapse{{ID: "s", Weight: 0, Enabled: true}},
+	}
+	fitnessFn := func(_ context.Context, g model.Genome) (float64, error) {
+		return g.Synapses[0].Weight, nil
+	}
+
+	base := Exoself{
+		Rand:               rand.New(rand.NewSource(23)),
+		Steps:              1,
+		StepSize:           0.25,
+		CandidateSelection: CandidateSelectOriginal,
+	}
+	tunedBase, err := base.Tune(context.Background(), genome, 1, fitnessFn)
+	if err != nil {
+		t.Fatalf("base tune: %v", err)
+	}
+
+	ranged := Exoself{
+		Rand:               rand.New(rand.NewSource(23)),
+		Steps:              1,
+		StepSize:           0.25,
+		PerturbationRange:  2.0,
+		CandidateSelection: CandidateSelectOriginal,
+	}
+	tunedRanged, err := ranged.Tune(context.Background(), genome, 1, fitnessFn)
+	if err != nil {
+		t.Fatalf("ranged tune: %v", err)
+	}
+
+	baseDelta := math.Abs(tunedBase.Synapses[0].Weight - genome.Synapses[0].Weight)
+	rangedDelta := math.Abs(tunedRanged.Synapses[0].Weight - genome.Synapses[0].Weight)
+	if rangedDelta <= baseDelta {
+		t.Fatalf("expected perturbation range to increase magnitude: base=%f ranged=%f", baseDelta, rangedDelta)
 	}
 }

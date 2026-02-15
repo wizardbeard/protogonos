@@ -42,47 +42,49 @@ type Client struct {
 }
 
 type RunRequest struct {
-	RunID                string
-	ContinuePopulationID string
-	SpecieIdentifier     string
-	Scape                string
-	Population           int
-	Generations          int
-	SurvivalPercentage   float64
-	SpecieSizeLimit      int
-	FitnessGoal          float64
-	EvaluationsLimit     int
-	StartPaused          bool
-	AutoContinueAfter    time.Duration
-	Seed                 int64
-	Workers              int
-	Selection            string
-	FitnessPostprocessor string
-	TopologicalPolicy    string
-	TopologicalCount     int
-	TopologicalParam     float64
-	TopologicalMax       int
-	EnableTuning         bool
-	CompareTuning        bool
-	TuneSelection        string
-	TuneDurationPolicy   string
-	TuneDurationParam    float64
-	TuneAttempts         int
-	TuneSteps            int
-	TuneStepSize         float64
-	TuneMinImprovement   float64
-	WeightPerturb        float64
-	WeightBias           float64
-	WeightRemoveBias     float64
-	WeightActivation     float64
-	WeightAggregator     float64
-	WeightAddSynapse     float64
-	WeightRemoveSynapse  float64
-	WeightAddNeuron      float64
-	WeightRemoveNeuron   float64
-	WeightPlasticityRule float64
-	WeightPlasticity     float64
-	WeightSubstrate      float64
+	RunID                 string
+	ContinuePopulationID  string
+	SpecieIdentifier      string
+	Scape                 string
+	Population            int
+	Generations           int
+	SurvivalPercentage    float64
+	SpecieSizeLimit       int
+	FitnessGoal           float64
+	EvaluationsLimit      int
+	StartPaused           bool
+	AutoContinueAfter     time.Duration
+	Seed                  int64
+	Workers               int
+	Selection             string
+	FitnessPostprocessor  string
+	TopologicalPolicy     string
+	TopologicalCount      int
+	TopologicalParam      float64
+	TopologicalMax        int
+	EnableTuning          bool
+	CompareTuning         bool
+	TuneSelection         string
+	TuneDurationPolicy    string
+	TuneDurationParam     float64
+	TuneAttempts          int
+	TuneSteps             int
+	TuneStepSize          float64
+	TunePerturbationRange float64
+	TuneAnnealingFactor   float64
+	TuneMinImprovement    float64
+	WeightPerturb         float64
+	WeightBias            float64
+	WeightRemoveBias      float64
+	WeightActivation      float64
+	WeightAggregator      float64
+	WeightAddSynapse      float64
+	WeightRemoveSynapse   float64
+	WeightAddNeuron       float64
+	WeightRemoveNeuron    float64
+	WeightPlasticityRule  float64
+	WeightPlasticity      float64
+	WeightSubstrate       float64
 }
 
 type CompareSummary struct {
@@ -332,6 +334,8 @@ func (c *Client) Run(ctx context.Context, req RunRequest) (RunSummary, error) {
 				Rand:               rand.New(rand.NewSource(req.Seed + 2000)),
 				Steps:              req.TuneSteps,
 				StepSize:           req.TuneStepSize,
+				PerturbationRange:  req.TunePerturbationRange,
+				AnnealingFactor:    req.TuneAnnealingFactor,
 				MinImprovement:     req.TuneMinImprovement,
 				CandidateSelection: req.TuneSelection,
 			}
@@ -463,48 +467,50 @@ func (c *Client) Run(ctx context.Context, req RunRequest) (RunSummary, error) {
 
 	runDir, err := stats.WriteRunArtifacts(c.benchmarksDir, stats.RunArtifacts{
 		Config: stats.RunConfig{
-			RunID:                runID,
-			Scape:                req.Scape,
-			ContinuePopulationID: req.ContinuePopulationID,
-			SpecieIdentifier:     req.SpecieIdentifier,
-			InitialGeneration:    initialGeneration,
-			PopulationSize:       req.Population,
-			Generations:          req.Generations,
-			SurvivalPercentage:   req.SurvivalPercentage,
-			SpecieSizeLimit:      req.SpecieSizeLimit,
-			FitnessGoal:          req.FitnessGoal,
-			EvaluationsLimit:     req.EvaluationsLimit,
-			StartPaused:          req.StartPaused,
-			AutoContinueAfterMS:  req.AutoContinueAfter.Milliseconds(),
-			Seed:                 req.Seed,
-			Workers:              req.Workers,
-			EliteCount:           eliteCount,
-			Selection:            req.Selection,
-			FitnessPostprocessor: req.FitnessPostprocessor,
-			TopologicalPolicy:    req.TopologicalPolicy,
-			TopologicalCount:     req.TopologicalCount,
-			TopologicalParam:     req.TopologicalParam,
-			TopologicalMax:       req.TopologicalMax,
-			TuningEnabled:        req.EnableTuning,
-			TuneSelection:        req.TuneSelection,
-			TuneDurationPolicy:   req.TuneDurationPolicy,
-			TuneDurationParam:    req.TuneDurationParam,
-			TuneAttempts:         req.TuneAttempts,
-			TuneSteps:            req.TuneSteps,
-			TuneStepSize:         req.TuneStepSize,
-			TuneMinImprovement:   req.TuneMinImprovement,
-			WeightPerturb:        req.WeightPerturb,
-			WeightBias:           req.WeightBias,
-			WeightRemoveBias:     req.WeightRemoveBias,
-			WeightActivation:     req.WeightActivation,
-			WeightAggregator:     req.WeightAggregator,
-			WeightAddSynapse:     req.WeightAddSynapse,
-			WeightRemoveSynapse:  req.WeightRemoveSynapse,
-			WeightAddNeuron:      req.WeightAddNeuron,
-			WeightRemoveNeuron:   req.WeightRemoveNeuron,
-			WeightPlasticityRule: req.WeightPlasticityRule,
-			WeightPlasticity:     req.WeightPlasticity,
-			WeightSubstrate:      req.WeightSubstrate,
+			RunID:                 runID,
+			Scape:                 req.Scape,
+			ContinuePopulationID:  req.ContinuePopulationID,
+			SpecieIdentifier:      req.SpecieIdentifier,
+			InitialGeneration:     initialGeneration,
+			PopulationSize:        req.Population,
+			Generations:           req.Generations,
+			SurvivalPercentage:    req.SurvivalPercentage,
+			SpecieSizeLimit:       req.SpecieSizeLimit,
+			FitnessGoal:           req.FitnessGoal,
+			EvaluationsLimit:      req.EvaluationsLimit,
+			StartPaused:           req.StartPaused,
+			AutoContinueAfterMS:   req.AutoContinueAfter.Milliseconds(),
+			Seed:                  req.Seed,
+			Workers:               req.Workers,
+			EliteCount:            eliteCount,
+			Selection:             req.Selection,
+			FitnessPostprocessor:  req.FitnessPostprocessor,
+			TopologicalPolicy:     req.TopologicalPolicy,
+			TopologicalCount:      req.TopologicalCount,
+			TopologicalParam:      req.TopologicalParam,
+			TopologicalMax:        req.TopologicalMax,
+			TuningEnabled:         req.EnableTuning,
+			TuneSelection:         req.TuneSelection,
+			TuneDurationPolicy:    req.TuneDurationPolicy,
+			TuneDurationParam:     req.TuneDurationParam,
+			TuneAttempts:          req.TuneAttempts,
+			TuneSteps:             req.TuneSteps,
+			TuneStepSize:          req.TuneStepSize,
+			TunePerturbationRange: req.TunePerturbationRange,
+			TuneAnnealingFactor:   req.TuneAnnealingFactor,
+			TuneMinImprovement:    req.TuneMinImprovement,
+			WeightPerturb:         req.WeightPerturb,
+			WeightBias:            req.WeightBias,
+			WeightRemoveBias:      req.WeightRemoveBias,
+			WeightActivation:      req.WeightActivation,
+			WeightAggregator:      req.WeightAggregator,
+			WeightAddSynapse:      req.WeightAddSynapse,
+			WeightRemoveSynapse:   req.WeightRemoveSynapse,
+			WeightAddNeuron:       req.WeightAddNeuron,
+			WeightRemoveNeuron:    req.WeightRemoveNeuron,
+			WeightPlasticityRule:  req.WeightPlasticityRule,
+			WeightPlasticity:      req.WeightPlasticity,
+			WeightSubstrate:       req.WeightSubstrate,
 		},
 		BestByGeneration:      result.BestByGeneration,
 		GenerationDiagnostics: result.GenerationDiagnostics,
@@ -1148,6 +1154,18 @@ func materializeRunConfigFromRequest(req RunRequest) (materializedRunConfig, err
 	}
 	if req.TuneStepSize == 0 {
 		req.TuneStepSize = 0.35
+	}
+	if req.TunePerturbationRange < 0 {
+		return materializedRunConfig{}, errors.New("tune perturbation range must be >= 0")
+	}
+	if req.TunePerturbationRange == 0 {
+		req.TunePerturbationRange = 1.0
+	}
+	if req.TuneAnnealingFactor < 0 {
+		return materializedRunConfig{}, errors.New("tune annealing factor must be >= 0")
+	}
+	if req.TuneAnnealingFactor == 0 {
+		req.TuneAnnealingFactor = 1.0
 	}
 	if req.TuneMinImprovement < 0 {
 		return materializedRunConfig{}, errors.New("tune min improvement must be >= 0")

@@ -11,14 +11,16 @@ import (
 func TestLoadRunRequestFromConfigUsesConstraintAndPMP(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "run_config.json")
 	payload := map[string]any{
-		"run_id":                 "cfg-run-1",
-		"continue_population_id": "pop-prev",
-		"scape":                  "gtsa",
-		"seed":                   77,
-		"workers":                3,
-		"start_paused":           true,
-		"auto_continue_ms":       25,
-		"tune_min_improvement":   0.015,
+		"run_id":                  "cfg-run-1",
+		"continue_population_id":  "pop-prev",
+		"scape":                   "gtsa",
+		"seed":                    77,
+		"workers":                 3,
+		"start_paused":            true,
+		"auto_continue_ms":        25,
+		"tune_perturbation_range": 1.8,
+		"tune_annealing_factor":   0.95,
+		"tune_min_improvement":    0.015,
 		"pmp": map[string]any{
 			"survival_percentage": 0.6,
 			"specie_size_limit":   3,
@@ -86,6 +88,9 @@ func TestLoadRunRequestFromConfigUsesConstraintAndPMP(t *testing.T) {
 	}
 	if req.TuneDurationPolicy != "const" || req.TuneDurationParam != 7 {
 		t.Fatalf("unexpected tune duration mapping: policy=%s param=%f", req.TuneDurationPolicy, req.TuneDurationParam)
+	}
+	if req.TunePerturbationRange != 1.8 || req.TuneAnnealingFactor != 0.95 {
+		t.Fatalf("unexpected tuning spread params: range=%f annealing=%f", req.TunePerturbationRange, req.TuneAnnealingFactor)
 	}
 	if req.TuneMinImprovement != 0.015 {
 		t.Fatalf("unexpected tune min improvement mapping: %f", req.TuneMinImprovement)

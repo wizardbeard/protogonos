@@ -79,6 +79,12 @@ func loadRunRequestFromConfig(path string) (protoapi.RunRequest, error) {
 	if v, ok := asFloat64(raw["tune_step_size"]); ok {
 		req.TuneStepSize = v
 	}
+	if v, ok := asFloat64(raw["tune_perturbation_range"]); ok {
+		req.TunePerturbationRange = v
+	}
+	if v, ok := asFloat64(raw["tune_annealing_factor"]); ok {
+		req.TuneAnnealingFactor = v
+	}
 	if v, ok := asFloat64(raw["tune_min_improvement"]); ok {
 		req.TuneMinImprovement = v
 	}
@@ -295,6 +301,10 @@ func overrideFromFlags(req *protoapi.RunRequest, set map[string]bool, flagValue 
 			req.TuneSteps = v.(int)
 		case "tune-step-size":
 			req.TuneStepSize = v.(float64)
+		case "tune-perturbation-range":
+			req.TunePerturbationRange = v.(float64)
+		case "tune-annealing-factor":
+			req.TuneAnnealingFactor = v.(float64)
 		case "tune-min-improvement":
 			req.TuneMinImprovement = v.(float64)
 		case "tune-selection":

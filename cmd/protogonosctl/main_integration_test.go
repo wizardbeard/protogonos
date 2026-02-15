@@ -99,10 +99,12 @@ func TestRunCommandSQLiteConfigLoadsMap2RecAndAllowsFlagOverrides(t *testing.T) 
 
 	configPath := filepath.Join(workdir, "run_config.json")
 	cfg := map[string]any{
-		"scape":                "xor",
-		"seed":                 71,
-		"enable_tuning":        true,
-		"tune_min_improvement": 0.02,
+		"scape":                   "xor",
+		"seed":                    71,
+		"enable_tuning":           true,
+		"tune_perturbation_range": 1.6,
+		"tune_annealing_factor":   0.9,
+		"tune_min_improvement":    0.02,
 		"pmp": map[string]any{
 			"init_specie_size":    8,
 			"specie_size_limit":   2,
@@ -203,6 +205,9 @@ func TestRunCommandSQLiteConfigLoadsMap2RecAndAllowsFlagOverrides(t *testing.T) 
 	}
 	if runCfg.TuneMinImprovement != 0.02 {
 		t.Fatalf("expected tune min improvement from config 0.02, got %f", runCfg.TuneMinImprovement)
+	}
+	if runCfg.TunePerturbationRange != 1.6 || runCfg.TuneAnnealingFactor != 0.9 {
+		t.Fatalf("expected tune spread params from config range=1.6 annealing=0.9, got range=%f annealing=%f", runCfg.TunePerturbationRange, runCfg.TuneAnnealingFactor)
 	}
 }
 

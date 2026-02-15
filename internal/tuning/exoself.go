@@ -14,6 +14,8 @@ type Exoself struct {
 	Rand               *rand.Rand
 	Steps              int
 	StepSize           float64
+	PerturbationRange  float64
+	AnnealingFactor    float64
 	MinImprovement     float64
 	GoalFitness        float64
 	CandidateSelection string
@@ -61,6 +63,12 @@ func (e *Exoself) Tune(ctx context.Context, genome model.Genome, attempts int, f
 	if e.StepSize <= 0 {
 		return model.Genome{}, errors.New("step size must be > 0")
 	}
+	if e.PerturbationRange < 0 {
+		return model.Genome{}, errors.New("perturbation range must be >= 0")
+	}
+	if e.AnnealingFactor < 0 {
+		return model.Genome{}, errors.New("annealing factor must be >= 0")
+	}
 	if e.MinImprovement < 0 {
 		return model.Genome{}, errors.New("min improvement must be >= 0")
 	}
@@ -69,6 +77,14 @@ func (e *Exoself) Tune(ctx context.Context, genome model.Genome, attempts int, f
 	}
 	if len(genome.Synapses) == 0 {
 		return cloneGenome(genome), nil
+	}
+	perturbationRange := e.PerturbationRange
+	if perturbationRange == 0 {
+		perturbationRange = 1.0
+	}
+	annealingFactor := e.AnnealingFactor
+	if annealingFactor == 0 {
+		annealingFactor = 1.0
 	}
 
 	best := cloneGenome(genome)
@@ -89,7 +105,7 @@ func (e *Exoself) Tune(ctx context.Context, genome model.Genome, attempts int, f
 		localBest := cloneGenome(best)
 		localBestFitness := bestFitness
 		for _, base := range bases {
-			candidate, err := e.perturbCandidate(ctx, base)
+			candidate, err := e.perturbCandidate(ctx, base, perturbationRange, annealingFactor)
 			if err != nil {
 				return model.Genome{}, err
 			}
@@ -246,7 +262,7 @@ func (e *Exoself) randomSubset(pool []model.Genome) []model.Genome {
 	return []model.Genome{cloneGenome(pool[e.randIntn(len(pool))])}
 }
 
-func (e *Exoself) perturbCandidate(ctx context.Context, base model.Genome) (model.Genome, error) {
+func (e *Exoself) perturbCandidate(ctx context.Context, base model.Genome, perturbationRange, annealingFactor float64) (model.Genome, error) {
 	candidate := cloneGenome(base)
 	for s := 0; s < e.Steps; s++ {
 		if err := ctx.Err(); err != nil {
@@ -256,7 +272,8 @@ func (e *Exoself) perturbCandidate(ctx context.Context, base model.Genome) (mode
 			break
 		}
 		idx := e.randIntn(len(candidate.Synapses))
-		delta := (e.randFloat64()*2 - 1) * e.StepSize
+		spread := e.StepSize * perturbationRange * math.Pow(annealingFactor, float64(s))
+		delta := (e.randFloat64()*2 - 1) * spread
 		candidate.Synapses[idx].Weight += delta
 	}
 	return candidate, nil
