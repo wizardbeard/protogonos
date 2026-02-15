@@ -583,6 +583,34 @@ func TestAddRandomActuatorAddsCompatibleActuator(t *testing.T) {
 	}
 }
 
+func TestRemoveRandomSensorRemovesOneSensor(t *testing.T) {
+	genome := model.Genome{
+		SensorIDs: []string{protoio.XORInputLeftSensorName, protoio.XORInputRightSensorName},
+	}
+	op := &RemoveRandomSensor{Rand: rand.New(rand.NewSource(113))}
+	mutated, err := op.Apply(context.Background(), genome)
+	if err != nil {
+		t.Fatalf("apply failed: %v", err)
+	}
+	if len(mutated.SensorIDs) != 1 {
+		t.Fatalf("expected one remaining sensor, got=%d", len(mutated.SensorIDs))
+	}
+}
+
+func TestRemoveRandomActuatorRemovesOneActuator(t *testing.T) {
+	genome := model.Genome{
+		ActuatorIDs: []string{protoio.XOROutputActuatorName, protoio.FXTradeActuatorName},
+	}
+	op := &RemoveRandomActuator{Rand: rand.New(rand.NewSource(127))}
+	mutated, err := op.Apply(context.Background(), genome)
+	if err != nil {
+		t.Fatalf("apply failed: %v", err)
+	}
+	if len(mutated.ActuatorIDs) != 1 {
+		t.Fatalf("expected one remaining actuator, got=%d", len(mutated.ActuatorIDs))
+	}
+}
+
 func TestAddRandomCPPCreatesSubstrateConfig(t *testing.T) {
 	genome := model.Genome{
 		Neurons: []model.Neuron{
@@ -723,6 +751,12 @@ func TestMutationOperatorReferenceNames(t *testing.T) {
 	}
 	if (&AddRandomActuatorLink{}).Name() != "add_actuatorlink" {
 		t.Fatalf("unexpected add_actuatorlink name")
+	}
+	if (&RemoveRandomSensor{}).Name() != "remove_sensor" {
+		t.Fatalf("unexpected remove_sensor name")
+	}
+	if (&RemoveRandomActuator{}).Name() != "remove_actuator" {
+		t.Fatalf("unexpected remove_actuator name")
 	}
 	if (&AddRandomCPP{}).Name() != "add_cpp" {
 		t.Fatalf("unexpected add_cpp name")

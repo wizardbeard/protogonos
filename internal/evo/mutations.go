@@ -855,6 +855,58 @@ func (o *AddRandomActuatorLink) Apply(ctx context.Context, genome model.Genome) 
 	return (&AddRandomActuator{Rand: o.Rand, ScapeName: o.ScapeName}).Apply(ctx, genome)
 }
 
+// RemoveRandomSensor removes one sensor id from genome.SensorIDs.
+type RemoveRandomSensor struct {
+	Rand *rand.Rand
+}
+
+func (o *RemoveRandomSensor) Name() string {
+	return "remove_sensor"
+}
+
+func (o *RemoveRandomSensor) Applicable(genome model.Genome, _ string) bool {
+	return len(genome.SensorIDs) > 0
+}
+
+func (o *RemoveRandomSensor) Apply(_ context.Context, genome model.Genome) (model.Genome, error) {
+	if o == nil || o.Rand == nil {
+		return model.Genome{}, errors.New("random source is required")
+	}
+	if len(genome.SensorIDs) == 0 {
+		return cloneGenome(genome), nil
+	}
+	idx := o.Rand.Intn(len(genome.SensorIDs))
+	mutated := cloneGenome(genome)
+	mutated.SensorIDs = append(mutated.SensorIDs[:idx], mutated.SensorIDs[idx+1:]...)
+	return mutated, nil
+}
+
+// RemoveRandomActuator removes one actuator id from genome.ActuatorIDs.
+type RemoveRandomActuator struct {
+	Rand *rand.Rand
+}
+
+func (o *RemoveRandomActuator) Name() string {
+	return "remove_actuator"
+}
+
+func (o *RemoveRandomActuator) Applicable(genome model.Genome, _ string) bool {
+	return len(genome.ActuatorIDs) > 0
+}
+
+func (o *RemoveRandomActuator) Apply(_ context.Context, genome model.Genome) (model.Genome, error) {
+	if o == nil || o.Rand == nil {
+		return model.Genome{}, errors.New("random source is required")
+	}
+	if len(genome.ActuatorIDs) == 0 {
+		return cloneGenome(genome), nil
+	}
+	idx := o.Rand.Intn(len(genome.ActuatorIDs))
+	mutated := cloneGenome(genome)
+	mutated.ActuatorIDs = append(mutated.ActuatorIDs[:idx], mutated.ActuatorIDs[idx+1:]...)
+	return mutated, nil
+}
+
 // AddRandomCPP mutates substrate CPP selection from the registered CPP set.
 type AddRandomCPP struct {
 	Rand *rand.Rand
