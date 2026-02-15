@@ -512,6 +512,7 @@ func runFitness(ctx context.Context, args []string) error {
 	runID := fs.String("run-id", "", "run id")
 	latest := fs.Bool("latest", false, "show fitness history for the most recent run from run index")
 	limit := fs.Int("limit", 50, "max generations to print (<=0 for all)")
+	jsonOut := fs.Bool("json", false, "emit fitness history as JSON")
 	storeKind := fs.String("store", storage.DefaultStoreKind(), "store backend: memory|sqlite")
 	dbPath := fs.String("db-path", "protogonos.db", "sqlite database path")
 	if err := fs.Parse(args); err != nil {
@@ -548,6 +549,11 @@ func runFitness(ctx context.Context, args []string) error {
 	if len(history) == 0 {
 		fmt.Println("no fitness history")
 		return nil
+	}
+	if *jsonOut {
+		enc := json.NewEncoder(os.Stdout)
+		enc.SetIndent("", "  ")
+		return enc.Encode(history)
 	}
 
 	for i, best := range history {
@@ -696,6 +702,7 @@ func runSpecies(ctx context.Context, args []string) error {
 	runID := fs.String("run-id", "", "run id")
 	latest := fs.Bool("latest", false, "show species history for the most recent run from run index")
 	limit := fs.Int("limit", 50, "max generations to print (<=0 for all)")
+	jsonOut := fs.Bool("json", false, "emit species history as JSON")
 	storeKind := fs.String("store", storage.DefaultStoreKind(), "store backend: memory|sqlite")
 	dbPath := fs.String("db-path", "protogonos.db", "sqlite database path")
 	if err := fs.Parse(args); err != nil {
@@ -732,6 +739,11 @@ func runSpecies(ctx context.Context, args []string) error {
 	if len(history) == 0 {
 		fmt.Println("no species history")
 		return nil
+	}
+	if *jsonOut {
+		enc := json.NewEncoder(os.Stdout)
+		enc.SetIndent("", "  ")
+		return enc.Encode(history)
 	}
 	for _, generation := range history {
 		fmt.Printf("generation=%d species=%d new=%d extinct=%d\n",

@@ -508,6 +508,27 @@ func TestFitnessCommandSQLiteReadsPersistedHistory(t *testing.T) {
 	if !strings.Contains(out, "generation=1") || !strings.Contains(out, "best_fitness=") {
 		t.Fatalf("unexpected fitness output: %s", out)
 	}
+
+	jsonOut, err := captureStdout(func() error {
+		return run(context.Background(), []string{
+			"fitness",
+			"--store", "sqlite",
+			"--db-path", dbPath,
+			"--latest",
+			"--limit", "2",
+			"--json",
+		})
+	})
+	if err != nil {
+		t.Fatalf("fitness json command: %v", err)
+	}
+	var parsed []float64
+	if err := json.Unmarshal([]byte(jsonOut), &parsed); err != nil {
+		t.Fatalf("decode fitness json output: %v\n%s", err, jsonOut)
+	}
+	if len(parsed) == 0 {
+		t.Fatalf("expected non-empty fitness json output: %s", jsonOut)
+	}
 }
 
 func TestDiagnosticsCommandSQLiteReadsPersistedDiagnostics(t *testing.T) {
@@ -624,6 +645,33 @@ func TestSpeciesCommandSQLiteReadsPersistedSpeciesHistory(t *testing.T) {
 	}
 	if !strings.Contains(out, "generation=1") || !strings.Contains(out, "species_key=") {
 		t.Fatalf("unexpected species output: %s", out)
+	}
+
+	jsonOut, err := captureStdout(func() error {
+		return run(context.Background(), []string{
+			"species",
+			"--store", "sqlite",
+			"--db-path", dbPath,
+			"--latest",
+			"--limit", "1",
+			"--json",
+		})
+	})
+	if err != nil {
+		t.Fatalf("species json command: %v", err)
+	}
+	var parsed []map[string]any
+	if err := json.Unmarshal([]byte(jsonOut), &parsed); err != nil {
+		t.Fatalf("decode species json output: %v\n%s", err, jsonOut)
+	}
+	if len(parsed) == 0 {
+		t.Fatalf("expected non-empty species json output: %s", jsonOut)
+	}
+	if _, ok := parsed[0]["generation"]; !ok {
+		t.Fatalf("expected generation field in species json: %v", parsed[0])
+	}
+	if _, ok := parsed[0]["species"]; !ok {
+		t.Fatalf("expected species field in species json: %v", parsed[0])
 	}
 }
 

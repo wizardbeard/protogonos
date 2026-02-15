@@ -124,6 +124,7 @@ Status keys:
 - Added `diagnostics --json` for machine-readable per-generation diagnostics (including tuning telemetry and ratios) in scripts/CI.
 - Added `runs --json` for machine-readable run index/listing output, keeping analysis/reporting commands automation-friendly.
 - Added `lineage --json` and `top --json` for machine-readable lineage/top-genome analysis outputs.
+- Added `fitness --json` and `species --json` for machine-readable history output parity across reporting commands.
 
 ## Highest-priority remaining gaps to reach strict parity
 
