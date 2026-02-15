@@ -500,22 +500,93 @@ func (o *AddRandomNeuron) Applicable(genome model.Genome, _ string) bool {
 }
 
 func (o *AddRandomNeuron) Apply(ctx context.Context, genome model.Genome) (model.Genome, error) {
-	if o == nil || o.Rand == nil {
+	return addRandomNeuronWithSynapseCandidates(ctx, genome, o.Rand, o.Activations, nil)
+}
+
+// AddRandomOutsplice inserts a neuron by splitting a synapse biased toward
+// non-output->output direction.
+type AddRandomOutsplice struct {
+	Rand            *rand.Rand
+	Activations     []string
+	OutputNeuronIDs []string
+}
+
+func (o *AddRandomOutsplice) Name() string {
+	return "add_random_outsplice"
+}
+
+func (o *AddRandomOutsplice) Applicable(genome model.Genome, _ string) bool {
+	return len(genome.Synapses) > 0
+}
+
+func (o *AddRandomOutsplice) Apply(ctx context.Context, genome model.Genome) (model.Genome, error) {
+	outputSet := toIDSet(o.OutputNeuronIDs)
+	return addRandomNeuronWithSynapseCandidates(ctx, genome, o.Rand, o.Activations, func(s model.Synapse) bool {
+		_, fromOutput := outputSet[s.From]
+		_, toOutput := outputSet[s.To]
+		return !fromOutput && toOutput
+	})
+}
+
+// AddRandomInsplice inserts a neuron by splitting a synapse biased toward
+// input->non-input direction.
+type AddRandomInsplice struct {
+	Rand           *rand.Rand
+	Activations    []string
+	InputNeuronIDs []string
+}
+
+func (o *AddRandomInsplice) Name() string {
+	return "add_random_insplice"
+}
+
+func (o *AddRandomInsplice) Applicable(genome model.Genome, _ string) bool {
+	return len(genome.Synapses) > 0
+}
+
+func (o *AddRandomInsplice) Apply(ctx context.Context, genome model.Genome) (model.Genome, error) {
+	inputSet := toIDSet(o.InputNeuronIDs)
+	return addRandomNeuronWithSynapseCandidates(ctx, genome, o.Rand, o.Activations, func(s model.Synapse) bool {
+		_, fromInput := inputSet[s.From]
+		_, toInput := inputSet[s.To]
+		return fromInput && !toInput
+	})
+}
+
+func addRandomNeuronWithSynapseCandidates(
+	ctx context.Context,
+	genome model.Genome,
+	rng *rand.Rand,
+	activations []string,
+	filter func(model.Synapse) bool,
+) (model.Genome, error) {
+	if rng == nil {
 		return model.Genome{}, errors.New("random source is required")
 	}
 	if len(genome.Synapses) == 0 {
 		return model.Genome{}, ErrNoSynapses
 	}
 
-	activations := o.Activations
 	if len(activations) == 0 {
 		activations = []string{"identity", "relu", "tanh", "sigmoid"}
 	}
 
-	activation := activations[o.Rand.Intn(len(activations))]
+	candidates := make([]int, 0, len(genome.Synapses))
+	for i, syn := range genome.Synapses {
+		if filter == nil || filter(syn) {
+			candidates = append(candidates, i)
+		}
+	}
+	if len(candidates) == 0 {
+		for i := range genome.Synapses {
+			candidates = append(candidates, i)
+		}
+	}
+
+	activation := activations[rng.Intn(len(activations))]
 	op := AddNeuronAtSynapse{
-		SynapseIndex: o.Rand.Intn(len(genome.Synapses)),
-		NeuronID:     uniqueNeuronID(genome, o.Rand),
+		SynapseIndex: candidates[rng.Intn(len(candidates))],
+		NeuronID:     uniqueNeuronID(genome, rng),
 		Activation:   activation,
 		Bias:         0,
 	}

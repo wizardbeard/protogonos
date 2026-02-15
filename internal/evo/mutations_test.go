@@ -425,6 +425,64 @@ func TestAddRandomOutlinkTargetsOutput(t *testing.T) {
 	}
 }
 
+func TestAddRandomOutsplicePrefersOutputEdge(t *testing.T) {
+	genome := model.Genome{
+		Neurons: []model.Neuron{
+			{ID: "i1", Activation: "identity"},
+			{ID: "h1", Activation: "tanh"},
+			{ID: "o1", Activation: "sigmoid"},
+		},
+		Synapses: []model.Synapse{
+			{ID: "s_in", From: "i1", To: "h1", Weight: 1, Enabled: true},
+			{ID: "s_out", From: "h1", To: "o1", Weight: 1, Enabled: true},
+		},
+	}
+	op := &AddRandomOutsplice{
+		Rand:            rand.New(rand.NewSource(107)),
+		OutputNeuronIDs: []string{"o1"},
+		Activations:     []string{"relu"},
+	}
+	mutated, err := op.Apply(context.Background(), genome)
+	if err != nil {
+		t.Fatalf("apply failed: %v", err)
+	}
+	if hasSynapse(mutated, "s_out") {
+		t.Fatal("expected output-edge synapse to be spliced out")
+	}
+	if !hasSynapse(mutated, "s_in") {
+		t.Fatal("expected non-output-edge synapse to remain")
+	}
+}
+
+func TestAddRandomInsplicePrefersInputEdge(t *testing.T) {
+	genome := model.Genome{
+		Neurons: []model.Neuron{
+			{ID: "i1", Activation: "identity"},
+			{ID: "h1", Activation: "tanh"},
+			{ID: "o1", Activation: "sigmoid"},
+		},
+		Synapses: []model.Synapse{
+			{ID: "s_in", From: "i1", To: "h1", Weight: 1, Enabled: true},
+			{ID: "s_out", From: "h1", To: "o1", Weight: 1, Enabled: true},
+		},
+	}
+	op := &AddRandomInsplice{
+		Rand:           rand.New(rand.NewSource(109)),
+		InputNeuronIDs: []string{"i1"},
+		Activations:    []string{"relu"},
+	}
+	mutated, err := op.Apply(context.Background(), genome)
+	if err != nil {
+		t.Fatalf("apply failed: %v", err)
+	}
+	if hasSynapse(mutated, "s_in") {
+		t.Fatal("expected input-edge synapse to be spliced out")
+	}
+	if !hasSynapse(mutated, "s_out") {
+		t.Fatal("expected non-input-edge synapse to remain")
+	}
+}
+
 func TestRemoveRandomInlinkPrefersInputSource(t *testing.T) {
 	genome := model.Genome{
 		Neurons: []model.Neuron{
