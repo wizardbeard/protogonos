@@ -33,6 +33,28 @@ func (o failingMutation) Apply(_ context.Context, _ model.Genome) (model.Genome,
 	return model.Genome{}, errors.New("forced failure")
 }
 
+type flakyNoSynapsesMutation struct {
+	name           string
+	failuresBefore int
+	calls          int
+}
+
+func (o *flakyNoSynapsesMutation) Name() string { return o.name }
+
+func (o *flakyNoSynapsesMutation) Apply(_ context.Context, genome model.Genome) (model.Genome, error) {
+	o.calls++
+	if o.calls <= o.failuresBefore {
+		return model.Genome{}, ErrNoSynapses
+	}
+	mutated := genome
+	if len(mutated.Synapses) == 0 {
+		return model.Genome{}, ErrNoSynapses
+	}
+	mutated.Synapses = append([]model.Synapse(nil), genome.Synapses...)
+	mutated.Synapses[0].Weight += 1.0
+	return mutated, nil
+}
+
 type captureSpeciesSelector struct {
 	gotSpeciesByGenomeID map[string]string
 }
@@ -604,6 +626,40 @@ func TestPopulationMonitorMutationPolicyCustomWeights(t *testing.T) {
 		if record.Operation == "op_b" {
 			t.Fatalf("unexpected op_b in lineage with zero weight: %+v", result.Lineage)
 		}
+	}
+}
+
+func TestPopulationMonitorMutationRetriesUntilSuccessCount(t *testing.T) {
+	parent := newLinearGenome("g3", -0.4)
+	flaky := &flakyNoSynapsesMutation{name: "flaky", failuresBefore: 2}
+
+	monitor, err := NewPopulationMonitor(MonitorConfig{
+		Scape:                oneDimScape{},
+		MutationPolicy:       []WeightedMutation{{Operator: flaky, Weight: 1}},
+		TopologicalMutations: ConstTopologicalMutations{Count: 3},
+		PopulationSize:       2,
+		EliteCount:           1,
+		Generations:          1,
+		Workers:              1,
+		Seed:                 3,
+		InputNeuronIDs:       []string{"i"},
+		OutputNeuronIDs:      []string{"o"},
+	})
+	if err != nil {
+		t.Fatalf("new monitor: %v", err)
+	}
+
+	child, record, err := monitor.mutateFromParent(context.Background(), parent, 0, 0)
+	if err != nil {
+		t.Fatalf("mutateFromParent: %v", err)
+	}
+	if record.Operation != "flaky+flaky+flaky" {
+		t.Fatalf("expected 3 successful flaky mutations, got operation=%s", record.Operation)
+	}
+	// Parent g3 has initial weight -0.4. With 3 successful mutations (+1 each),
+	// the child should reach 2.6.
+	if got := child.Synapses[0].Weight; got != 2.6 {
+		t.Fatalf("expected 3 successful mutation applications, got weight=%f want=2.6", got)
 	}
 }
 

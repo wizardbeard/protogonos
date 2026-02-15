@@ -755,7 +755,17 @@ func (m *PopulationMonitor) mutateFromParent(ctx context.Context, parent model.G
 
 	mutated := child
 	operationNames := make([]string, 0, mutationCount)
-	for step := 0; step < mutationCount; step++ {
+	successes := 0
+	attempts := 0
+	maxAttempts := mutationCount * m.maxMutationAttemptsPerStep()
+	for successes < mutationCount {
+		if err := ctx.Err(); err != nil {
+			return model.Genome{}, LineageRecord{}, err
+		}
+		attempts++
+		if attempts > maxAttempts {
+			return model.Genome{}, LineageRecord{}, fmt.Errorf("failed to apply %d successful mutations after %d attempts", mutationCount, attempts-1)
+		}
 		operator := m.chooseMutation(mutated)
 		next, opErr := operator.Apply(ctx, mutated)
 		operationName := operator.Name()
@@ -766,14 +776,14 @@ func (m *PopulationMonitor) mutateFromParent(ctx context.Context, parent model.G
 			}
 		}
 		if opErr != nil {
-			if errors.Is(opErr, ErrNoSynapses) {
-				operationNames = append(operationNames, "noop(no_synapses)")
+			if errors.Is(opErr, ErrNoSynapses) || errors.Is(opErr, ErrNoNeurons) {
 				continue
 			}
 			return model.Genome{}, LineageRecord{}, opErr
 		}
 		mutated = next
 		operationNames = append(operationNames, operationName)
+		successes++
 	}
 
 	sig := ComputeGenomeSignature(mutated)
@@ -785,6 +795,15 @@ func (m *PopulationMonitor) mutateFromParent(ctx context.Context, parent model.G
 		Fingerprint: sig.Fingerprint,
 		Summary:     sig.Summary,
 	}, nil
+}
+
+func (m *PopulationMonitor) maxMutationAttemptsPerStep() int {
+	// Keep retries finite when configured operators are systematically inapplicable.
+	base := 4
+	if len(m.cfg.MutationPolicy) > 0 {
+		base += len(m.cfg.MutationPolicy) * 4
+	}
+	return base
 }
 
 type speciesQuota struct {
