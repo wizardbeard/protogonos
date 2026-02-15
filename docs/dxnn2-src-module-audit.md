@@ -34,7 +34,7 @@ Status legend:
 | `selection_algorithm.erl` | selection strategy variants | `internal/evo/selection.go` + monitor integration + CLI/API alias mapping (`hof_competition`/`hof_rank`/`hof_top3`/`hof_efficiency`/`hof_random`/`competition`/`top3`) and map2rec config materialization via `constraint.population_selection_f` | `implemented` | `internal/evo/selection.go`, `internal/evo/population_monitor.go`, `cmd/protogonosctl/main.go`, `cmd/protogonosctl/config.go`, `cmd/protogonosctl/profiles.go`, `pkg/protogonos/api.go`, `.ref/src/selection_algorithm.erl` |
 | `tuning_selection.erl` | exoself selection schedule variants | `internal/tuning/exoself.go` with reference mode-name coverage (`dynamic`/`dynamic_random`/`active`/`active_random`/`current`/`current_random`/`all`/`all_random`) and legacy aliases (`recent`/`recent_random`/`lastgen`/`lastgen_random`) via CLI/API/config normalization, including probabilistic `*_random` subset selection (`1/sqrt(N)` + non-empty fallback), generation-aware age filtering inferred from genome IDs, and `lastgen*` alias alignment to current-generation selection semantics | `partial` | `internal/tuning/exoself.go`, `internal/tuning/exoself_test.go`, `cmd/protogonosctl/main.go`, `pkg/protogonos/api.go`, `cmd/protogonosctl/config.go`, `.ref/src/tuning_selection.erl` |
 | `tuning_duration.erl` | tuning-attempt duration policies | `internal/tuning/policy.go` + API/CLI/config alias normalization (`const`/`nsize_proportional`/`wsize_proportional`) | `partial` | `internal/tuning/policy.go`, `pkg/protogonos/api.go`, `cmd/protogonosctl/config.go`, `.ref/src/tuning_duration.erl` |
-| `tot_topological_mutations.erl` | mutation-count policy functions | `internal/evo/topological_mutations.go` + monitor integration + map2rec constraint materialization into run config | `partial` | `internal/evo/topological_mutations.go`, `internal/evo/population_monitor.go`, `cmd/protogonosctl/config.go`, `.ref/src/tot_topological_mutations.erl` |
+| `tot_topological_mutations.erl` | mutation-count policy functions | `internal/evo/topological_mutations.go` + monitor integration + map2rec constraint materialization into run config, including stochastic `ncount_exponential` range semantics aligned to reference (`uniform(1..round(n^power))`) | `implemented` | `internal/evo/topological_mutations.go`, `internal/evo/topological_mutations_test.go`, `internal/evo/population_monitor.go`, `cmd/protogonosctl/config.go`, `.ref/src/tot_topological_mutations.erl` |
 | `functions.erl` | activation/math utility set | `internal/nn/registry.go` built-ins with expanded reference-style activation catalog (sin/cos/gaussian/sqrt/log/threshold families) | `partial` | `internal/nn/registry.go`, `internal/nn/registry_test.go`, `.ref/src/functions.erl` |
 | `derivatives.erl` | derivative functions for activations | `internal/nn/derivatives.go` with expanded reference-style derivative surface (`linear`/`sigmoid1`/`multiquadric`/`sqrt`/`log` plus clipping parity for `sigmoid`/`gaussian`) | `implemented` | `internal/nn/derivatives.go`, `internal/nn/derivatives_test.go`, `.ref/src/derivatives.erl` |
 | `plasticity.erl` | Hebbian/Oja/etc plasticity rules | `internal/nn/plasticity.go` + cortex integration with runtime alias normalization for reference PF names (`hebbian_w`, `ojas`, `ojas_w`) | `partial` | `internal/nn/plasticity.go`, `internal/nn/plasticity_test.go`, `internal/agent/cortex.go`, `.ref/src/plasticity.erl` |
@@ -58,8 +58,8 @@ Status legend:
 
 ## Summary
 
-- `implemented`: 4
-- `partial`: 25
+- `implemented`: 5
+- `partial`: 24
 - `missing`: 0
 - `out-of-scope-now`: 4
 

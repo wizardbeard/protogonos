@@ -62,16 +62,26 @@ func (NCountExponentialTopologicalMutations) Name() string {
 	return "ncount_exponential"
 }
 
-func (p NCountExponentialTopologicalMutations) MutationCount(genome model.Genome, _ int, _ *rand.Rand) (int, error) {
+func (p NCountExponentialTopologicalMutations) MutationCount(genome model.Genome, _ int, rng *rand.Rand) (int, error) {
 	if p.Power <= 0 {
 		return 0, fmt.Errorf("exponential power must be > 0")
 	}
-	count := int(math.Round(math.Pow(float64(max(1, len(genome.Neurons))), p.Power)))
-	if count < 1 {
-		count = 1
+	maxCount := int(math.Round(math.Pow(float64(max(1, len(genome.Neurons))), p.Power)))
+	if maxCount < 1 {
+		maxCount = 1
 	}
-	if p.MaxCount > 0 && count > p.MaxCount {
-		count = p.MaxCount
+	if p.MaxCount > 0 && maxCount > p.MaxCount {
+		maxCount = p.MaxCount
 	}
-	return count, nil
+	return randomRangeCount(maxCount, rng), nil
+}
+
+func randomRangeCount(maxCount int, rng *rand.Rand) int {
+	if maxCount <= 1 {
+		return 1
+	}
+	if rng == nil {
+		rng = rand.New(rand.NewSource(1))
+	}
+	return rng.Intn(maxCount) + 1
 }

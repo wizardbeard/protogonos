@@ -2,6 +2,7 @@ package evo
 
 import (
 	"context"
+	"math/rand"
 	"strings"
 	"testing"
 
@@ -24,6 +25,28 @@ func TestTopologicalMutationPolicies(t *testing.T) {
 	e, err := (NCountExponentialTopologicalMutations{Power: 0.5, MaxCount: 10}).MutationCount(genome, 0, nil)
 	if err != nil || e < 1 {
 		t.Fatalf("exponential policy invalid count=%d err=%v", e, err)
+	}
+}
+
+func TestNCountExponentialTopologicalMutationsRandomRange(t *testing.T) {
+	genome := newComplexLinearGenome("g", 1.0)
+	maxCount := int(float64(len(genome.Neurons)))
+	policy := NCountExponentialTopologicalMutations{Power: 1.0, MaxCount: 0}
+
+	seen := map[int]struct{}{}
+	rng := rand.New(rand.NewSource(7))
+	for i := 0; i < 128; i++ {
+		count, err := policy.MutationCount(genome, 0, rng)
+		if err != nil {
+			t.Fatalf("mutation count: %v", err)
+		}
+		if count < 1 || count > maxCount {
+			t.Fatalf("count out of expected range: got=%d want=[1,%d]", count, maxCount)
+		}
+		seen[count] = struct{}{}
+	}
+	if len(seen) < 2 && maxCount > 1 {
+		t.Fatalf("expected stochastic distribution with at least 2 distinct counts, got=%v", seen)
 	}
 }
 
