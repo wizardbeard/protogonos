@@ -1500,7 +1500,7 @@ type AddCircuitNode struct {
 }
 
 func (o *AddCircuitNode) Name() string {
-	return "add_CircuitNode"
+	return "add_circuit_node"
 }
 
 func (o *AddCircuitNode) Applicable(genome model.Genome, _ string) bool {
@@ -1576,7 +1576,7 @@ type AddCircuitLayer struct {
 }
 
 func (o *AddCircuitLayer) Name() string {
-	return "add_CircuitLayer"
+	return "add_circuit_layer"
 }
 
 func (o *AddCircuitLayer) Applicable(genome model.Genome, _ string) bool {

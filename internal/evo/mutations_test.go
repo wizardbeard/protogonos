@@ -1126,11 +1126,11 @@ func TestMutationOperatorReferenceNames(t *testing.T) {
 	if (&RemoveRandomCEP{}).Name() != "remove_cep" {
 		t.Fatalf("unexpected remove_cep name")
 	}
-	if (&AddCircuitNode{}).Name() != "add_CircuitNode" {
-		t.Fatalf("unexpected add_CircuitNode name")
+	if (&AddCircuitNode{}).Name() != "add_circuit_node" {
+		t.Fatalf("unexpected add_circuit_node name")
 	}
-	if (&AddCircuitLayer{}).Name() != "add_CircuitLayer" {
-		t.Fatalf("unexpected add_CircuitLayer name")
+	if (&AddCircuitLayer{}).Name() != "add_circuit_layer" {
+		t.Fatalf("unexpected add_circuit_layer name")
 	}
 	if (&DeleteCircuitNode{}).Name() != "delete_CircuitNode" {
 		t.Fatalf("unexpected delete_CircuitNode name")
