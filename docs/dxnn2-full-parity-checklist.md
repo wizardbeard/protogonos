@@ -29,7 +29,7 @@ Status keys:
 | `functions.erl` | `partial` | Expanded activation/math catalog implemented (`tanh`/`sigmoid`/`sigmoid1`/`sin`/`cos`/`gaussian`/`sqrt`/`log`/threshold families, etc.); broader non-activation utility helper surface still pending. |
 | `derivatives.erl` | `done` | Derivative registry and tests implemented. |
 | `plasticity.erl` | `partial` | Runtime plasticity integration + mutation hooks implemented with Hebbian/Oja updates, saturation bounds, and reference rule-alias compatibility (`hebbian_w`, `ojas`, `ojas_w`); full self-modulation rule set parity pending. |
-| `signal_aggregator.erl` | `partial` | Aggregator support present (`dot_product`, `mult_product`, `diff_product`) with `mult_product` updated to reference-style multiplicative semantics; full stateful `diff_product` history parity still pending. |
+| `signal_aggregator.erl` | `done` | Aggregator support present (`dot_product`, `mult_product`, `diff_product`) with reference-style multiplicative `mult_product` semantics and stateful `diff_product` previous-input differencing parity across cortex steps. |
 | `exoself.erl` | `partial` | Bounded exoself tuning loop integrated with attempts/policies, minimum-improvement acceptance threshold (`MIN_PIMPROVEMENT`-style gating), goal-aware early stop (mapped to `fitness_goal`), perturbation controls (`perturbation_range`, `annealing_factor`), and per-generation tuning telemetry surfaced in diagnostics/artifacts; full orchestration parity still pending. |
 | `scape.erl` | `partial` | XOR/regression/cart-pole-lite/flatland/gtsa scapes implemented; full reference scape family breadth pending. |
 | `flatland.erl` | `partial` | Baseline Go flatland scape added; not full behavioral parity with reference world simulation yet. |

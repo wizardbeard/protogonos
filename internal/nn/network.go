@@ -9,7 +9,19 @@ import (
 
 const outputSaturationLimit = 1.0
 
+type ForwardState struct {
+	prevDiffInputs map[string][]float64
+}
+
+func NewForwardState() *ForwardState {
+	return &ForwardState{prevDiffInputs: map[string][]float64{}}
+}
+
 func Forward(genome model.Genome, inputByNeuron map[string]float64) (map[string]float64, error) {
+	return ForwardWithState(genome, inputByNeuron, nil)
+}
+
+func ForwardWithState(genome model.Genome, inputByNeuron map[string]float64, state *ForwardState) (map[string]float64, error) {
 	values := make(map[string]float64, len(genome.Neurons))
 	for neuronID, value := range inputByNeuron {
 		values[neuronID] = value
@@ -28,7 +40,7 @@ func Forward(genome model.Genome, inputByNeuron map[string]float64) (map[string]
 			continue
 		}
 
-		total, err := aggregateIncoming(neuron.Aggregator, neuron.Bias, incoming[neuron.ID], values)
+		total, err := aggregateIncoming(neuron.ID, neuron.Aggregator, neuron.Bias, incoming[neuron.ID], values, state)
 		if err != nil {
 			return nil, fmt.Errorf("neuron %s: %w", neuron.ID, err)
 		}
@@ -61,7 +73,13 @@ func applyActivation(name string, x float64) (float64, error) {
 	return fn(x), nil
 }
 
-func aggregateIncoming(mode string, bias float64, synapses []model.Synapse, values map[string]float64) (float64, error) {
+func aggregateIncoming(
+	neuronID, mode string,
+	bias float64,
+	synapses []model.Synapse,
+	values map[string]float64,
+	state *ForwardState,
+) (float64, error) {
 	switch mode {
 	case "", "dot_product":
 		total := bias
@@ -87,15 +105,30 @@ func aggregateIncoming(mode string, bias float64, synapses []model.Synapse, valu
 		if len(synapses) == 0 {
 			return bias, nil
 		}
-		total := values[synapses[0].From] * synapses[0].Weight
-		for _, synapse := range synapses[1:] {
-			total -= values[synapse.From] * synapse.Weight
+		rawInputs := make([]float64, len(synapses))
+		for i, synapse := range synapses {
+			rawInputs[i] = values[synapse.From]
+		}
+		diffInputs := rawInputs
+		if state != nil {
+			if prev, ok := state.prevDiffInputs[neuronID]; ok && len(prev) == len(rawInputs) {
+				diffInputs = make([]float64, len(rawInputs))
+				for i := range rawInputs {
+					diffInputs[i] = rawInputs[i] - prev[i]
+				}
+			}
+			state.prevDiffInputs[neuronID] = append([]float64(nil), rawInputs...)
+		}
+
+		total := bias
+		for i, synapse := range synapses {
+			total += diffInputs[i] * synapse.Weight
 		}
 		// keep numerical behavior stable near +-Inf in pathological genomes
 		if math.IsInf(total, 0) || math.IsNaN(total) {
 			return 0, fmt.Errorf("invalid diff_product aggregate")
 		}
-		return total + bias, nil
+		return total, nil
 	default:
 		return 0, fmt.Errorf("unsupported aggregator: %s", mode)
 	}

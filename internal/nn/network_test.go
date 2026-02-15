@@ -119,7 +119,7 @@ func TestForwardAggregatorModes(t *testing.T) {
 	if err != nil {
 		t.Fatalf("forward diff: %v", err)
 	}
-	if values["o"] != -1 {
+	if values["o"] != 1 {
 		t.Fatalf("unexpected diff output: %f", values["o"])
 	}
 }
@@ -160,5 +160,39 @@ func TestMultProductUsesMultiplicativeBiasParity(t *testing.T) {
 	// (0.1*1)*(0.2*2)*3 = 0.12
 	if math.Abs(values["o"]-0.12) > 1e-9 {
 		t.Fatalf("unexpected mult_product output with multiplicative bias: got=%f want=0.12", values["o"])
+	}
+}
+
+func TestDiffProductUsesPreviousInputsWhenStateProvided(t *testing.T) {
+	genome := model.Genome{
+		Neurons: []model.Neuron{
+			{ID: "i1", Activation: "identity"},
+			{ID: "i2", Activation: "identity"},
+			{ID: "o", Activation: "identity", Aggregator: "diff_product", Bias: 0},
+		},
+		Synapses: []model.Synapse{
+			{ID: "s1", From: "i1", To: "o", Weight: 1, Enabled: true},
+			{ID: "s2", From: "i2", To: "o", Weight: 1, Enabled: true},
+		},
+	}
+
+	state := NewForwardState()
+
+	values, err := ForwardWithState(genome, map[string]float64{"i1": 0.6, "i2": 0.2}, state)
+	if err != nil {
+		t.Fatalf("first forward: %v", err)
+	}
+	// First call has no previous input, so this is equivalent to dot_product.
+	if math.Abs(values["o"]-0.8) > 1e-9 {
+		t.Fatalf("unexpected first diff_product output: got=%f want=0.8", values["o"])
+	}
+
+	values, err = ForwardWithState(genome, map[string]float64{"i1": 0.7, "i2": 0.4}, state)
+	if err != nil {
+		t.Fatalf("second forward: %v", err)
+	}
+	// Second call uses input deltas: (0.7-0.6)+(0.4-0.2) = 0.3.
+	if math.Abs(values["o"]-0.3) > 1e-9 {
+		t.Fatalf("unexpected second diff_product output: got=%f want=0.3", values["o"])
 	}
 }

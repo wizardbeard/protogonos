@@ -18,6 +18,7 @@ type Cortex struct {
 	inputNeuronIDs  []string
 	outputNeuronIDs []string
 	substrate       substrate.Runtime
+	nnState         *nn.ForwardState
 }
 
 func NewCortex(
@@ -47,6 +48,7 @@ func NewCortex(
 		inputNeuronIDs:  append([]string(nil), inputNeuronIDs...),
 		outputNeuronIDs: append([]string(nil), outputNeuronIDs...),
 		substrate:       substrateRuntime,
+		nnState:         nn.NewForwardState(),
 	}, nil
 }
 
@@ -104,7 +106,7 @@ func (c *Cortex) execute(ctx context.Context, inputs []float64) ([]float64, erro
 		inputByNeuron[neuronID] = inputs[i]
 	}
 
-	values, err := nn.Forward(c.genome, inputByNeuron)
+	values, err := nn.ForwardWithState(c.genome, inputByNeuron, c.nnState)
 	if err != nil {
 		return nil, err
 	}

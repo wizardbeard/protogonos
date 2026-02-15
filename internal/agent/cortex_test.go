@@ -2,6 +2,7 @@ package agent
 
 import (
 	"context"
+	"math"
 	"testing"
 
 	protoio "protogonos/internal/io"
@@ -274,5 +275,40 @@ func TestCortexTickRejectsUnevenActuatorOutputShape(t *testing.T) {
 	}
 	if _, err := c.Tick(context.Background()); err == nil {
 		t.Fatal("expected uneven actuator/output shape error")
+	}
+}
+
+func TestCortexDiffProductUsesStepInputDeltas(t *testing.T) {
+	genome := model.Genome{
+		Neurons: []model.Neuron{
+			{ID: "i1", Activation: "identity"},
+			{ID: "i2", Activation: "identity"},
+			{ID: "o", Activation: "identity", Aggregator: "diff_product"},
+		},
+		Synapses: []model.Synapse{
+			{ID: "s1", From: "i1", To: "o", Weight: 1.0, Enabled: true},
+			{ID: "s2", From: "i2", To: "o", Weight: 1.0, Enabled: true},
+		},
+	}
+
+	c, err := NewCortex("agent-diff", genome, nil, nil, []string{"i1", "i2"}, []string{"o"}, nil)
+	if err != nil {
+		t.Fatalf("new cortex: %v", err)
+	}
+
+	out1, err := c.RunStep(context.Background(), []float64{0.6, 0.2})
+	if err != nil {
+		t.Fatalf("run step 1: %v", err)
+	}
+	if len(out1) != 1 || math.Abs(out1[0]-0.8) > 1e-9 {
+		t.Fatalf("unexpected output 1: %+v", out1)
+	}
+
+	out2, err := c.RunStep(context.Background(), []float64{0.7, 0.4})
+	if err != nil {
+		t.Fatalf("run step 2: %v", err)
+	}
+	if len(out2) != 1 || math.Abs(out2[0]-0.3) > 1e-9 {
+		t.Fatalf("unexpected output 2: %+v", out2)
 	}
 }
