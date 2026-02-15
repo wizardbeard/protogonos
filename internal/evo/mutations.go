@@ -11,6 +11,7 @@ import (
 	protoio "protogonos/internal/io"
 	"protogonos/internal/model"
 	"protogonos/internal/nn"
+	"protogonos/internal/substrate"
 )
 
 var (
@@ -783,6 +784,108 @@ func (o *AddRandomActuatorLink) Apply(ctx context.Context, genome model.Genome) 
 	return (&AddRandomActuator{Rand: o.Rand, ScapeName: o.ScapeName}).Apply(ctx, genome)
 }
 
+// AddRandomCPP mutates substrate CPP selection from the registered CPP set.
+type AddRandomCPP struct {
+	Rand *rand.Rand
+}
+
+func (o *AddRandomCPP) Name() string {
+	return "add_random_cpp"
+}
+
+func (o *AddRandomCPP) Applicable(_ model.Genome, _ string) bool {
+	return len(substrate.ListCPPs()) > 0
+}
+
+func (o *AddRandomCPP) Apply(_ context.Context, genome model.Genome) (model.Genome, error) {
+	if o == nil || o.Rand == nil {
+		return model.Genome{}, errors.New("random source is required")
+	}
+	candidates := substrate.ListCPPs()
+	if len(candidates) == 0 {
+		return cloneGenome(genome), nil
+	}
+
+	current := ""
+	if genome.Substrate != nil {
+		current = genome.Substrate.CPPName
+	}
+	choices := filterOutString(candidates, current)
+	if len(choices) == 0 {
+		choices = candidates
+	}
+	selected := choices[o.Rand.Intn(len(choices))]
+
+	mutated := cloneGenome(genome)
+	if mutated.Substrate == nil {
+		mutated.Substrate = &model.SubstrateConfig{
+			CPPName:    selected,
+			CEPName:    substrate.DefaultCEPName,
+			Parameters: map[string]float64{},
+		}
+		return mutated, nil
+	}
+	mutated.Substrate.CPPName = selected
+	if mutated.Substrate.CEPName == "" {
+		mutated.Substrate.CEPName = substrate.DefaultCEPName
+	}
+	if mutated.Substrate.Parameters == nil {
+		mutated.Substrate.Parameters = map[string]float64{}
+	}
+	return mutated, nil
+}
+
+// AddRandomCEP mutates substrate CEP selection from the registered CEP set.
+type AddRandomCEP struct {
+	Rand *rand.Rand
+}
+
+func (o *AddRandomCEP) Name() string {
+	return "add_random_cep"
+}
+
+func (o *AddRandomCEP) Applicable(_ model.Genome, _ string) bool {
+	return len(substrate.ListCEPs()) > 0
+}
+
+func (o *AddRandomCEP) Apply(_ context.Context, genome model.Genome) (model.Genome, error) {
+	if o == nil || o.Rand == nil {
+		return model.Genome{}, errors.New("random source is required")
+	}
+	candidates := substrate.ListCEPs()
+	if len(candidates) == 0 {
+		return cloneGenome(genome), nil
+	}
+
+	current := ""
+	if genome.Substrate != nil {
+		current = genome.Substrate.CEPName
+	}
+	choices := filterOutString(candidates, current)
+	if len(choices) == 0 {
+		choices = candidates
+	}
+	selected := choices[o.Rand.Intn(len(choices))]
+
+	mutated := cloneGenome(genome)
+	if mutated.Substrate == nil {
+		mutated.Substrate = &model.SubstrateConfig{
+			CPPName:    substrate.DefaultCPPName,
+			CEPName:    selected,
+			Parameters: map[string]float64{},
+		}
+		return mutated, nil
+	}
+	mutated.Substrate.CEPName = selected
+	if mutated.Substrate.CPPName == "" {
+		mutated.Substrate.CPPName = substrate.DefaultCPPName
+	}
+	if mutated.Substrate.Parameters == nil {
+		mutated.Substrate.Parameters = map[string]float64{}
+	}
+	return mutated, nil
+}
+
 // ChangeActivationAt mutates one neuron's activation function label.
 type ChangeActivationAt struct {
 	Index      int
@@ -1106,4 +1209,15 @@ func actuatorCandidates(genome model.Genome, scapeName string) []string {
 		candidates = append(candidates, name)
 	}
 	return candidates
+}
+
+func filterOutString(values []string, drop string) []string {
+	out := make([]string, 0, len(values))
+	for _, item := range values {
+		if item == drop {
+			continue
+		}
+		out = append(out, item)
+	}
+	return out
 }

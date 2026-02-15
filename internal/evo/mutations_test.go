@@ -14,6 +14,7 @@ import (
 	protoio "protogonos/internal/io"
 	"protogonos/internal/model"
 	"protogonos/internal/storage"
+	"protogonos/internal/substrate"
 )
 
 func TestPerturbWeightAtMatchesFixture(t *testing.T) {
@@ -521,6 +522,64 @@ func TestAddRandomActuatorAddsCompatibleActuator(t *testing.T) {
 	}
 	if mutated.ActuatorIDs[0] != protoio.FXTradeActuatorName {
 		t.Fatalf("expected fx trade actuator to be added, got=%s", mutated.ActuatorIDs[0])
+	}
+}
+
+func TestAddRandomCPPCreatesSubstrateConfig(t *testing.T) {
+	genome := model.Genome{
+		Neurons: []model.Neuron{
+			{ID: "i", Activation: "identity"},
+			{ID: "o", Activation: "identity"},
+		},
+	}
+	op := &AddRandomCPP{Rand: rand.New(rand.NewSource(83))}
+	mutated, err := op.Apply(context.Background(), genome)
+	if err != nil {
+		t.Fatalf("apply failed: %v", err)
+	}
+	if mutated.Substrate == nil {
+		t.Fatal("expected substrate config to be created")
+	}
+	if mutated.Substrate.CPPName == "" {
+		t.Fatal("expected cpp name to be set")
+	}
+	if mutated.Substrate.CEPName == "" {
+		t.Fatal("expected cep default name to be set")
+	}
+}
+
+func TestAddRandomCEPCreatesSubstrateConfig(t *testing.T) {
+	genome := model.Genome{
+		Neurons: []model.Neuron{
+			{ID: "i", Activation: "identity"},
+			{ID: "o", Activation: "identity"},
+		},
+	}
+	op := &AddRandomCEP{Rand: rand.New(rand.NewSource(89))}
+	mutated, err := op.Apply(context.Background(), genome)
+	if err != nil {
+		t.Fatalf("apply failed: %v", err)
+	}
+	if mutated.Substrate == nil {
+		t.Fatal("expected substrate config to be created")
+	}
+	if mutated.Substrate.CEPName == "" {
+		t.Fatal("expected cep name to be set")
+	}
+	if mutated.Substrate.CPPName == "" {
+		t.Fatal("expected cpp default name to be set")
+	}
+}
+
+func TestAddRandomCPPAndCEPApplicable(t *testing.T) {
+	if !(&AddRandomCPP{}).Applicable(model.Genome{}, "xor") {
+		t.Fatal("expected add cpp operator to be applicable with default registry")
+	}
+	if !(&AddRandomCEP{}).Applicable(model.Genome{}, "xor") {
+		t.Fatal("expected add cep operator to be applicable with default registry")
+	}
+	if substrate.DefaultCPPName == "" || substrate.DefaultCEPName == "" {
+		t.Fatal("expected default substrate names")
 	}
 }
 
