@@ -17,7 +17,7 @@ Status keys:
 | `genotype.erl` | `partial` | Seed/clone/lifecycle/store flows implemented; full reference operation surface still broader. |
 | `records.hrl` | `partial` | Core record equivalents implemented with versioned codecs; full field-level parity still pending. |
 | `map2rec.erl` | `partial` | Baseline conversion parity implemented for `constraint`/`pmp`/`sensor`/`actuator`/`neuron`/`agent`/`cortex`/`specie`/`population` plus `trace`/`stat`/`topology_summary`/`signature`/`champion`; broader record coverage still pending. |
-| `genome_mutator.erl` | `partial` | Core topology/weight operators plus plasticity/substrate parameter mutations implemented, with dedicated `add_bias`/`remove_bias` parity via random bias perturb/remove operators, dedicated `mutate_af`/`mutate_aggrf` parity via random activation/aggregator mutations, and dedicated `mutate_pf` parity via plasticity-rule mutation; full operator breadth pending. |
+| `genome_mutator.erl` | `partial` | Core topology/weight operators plus plasticity/substrate parameter mutations implemented, with dedicated `add_bias`/`remove_bias` parity via random bias perturb/remove operators, dedicated `mutate_af`/`mutate_aggrf` parity via random activation/aggregator mutations, dedicated `mutate_pf` parity via plasticity-rule mutation, and reference-closer `mutate_weights` behavior via proportional multi-weight perturbation (`1/sqrt(total_weights)` with non-empty fallback); full operator breadth pending. |
 | `selection_algorithm.erl` | `done` | Elite/tournament/species/shared species plus reference HOF strategy surface (`hof_competition`/`hof_rank`/`hof_top3`/`hof_efficiency`/`hof_random`) and aliases (`competition`/`top3`) implemented across CLI/API and map2rec `constraint.population_selection_f` config materialization. |
 | `fitness_postprocessor.erl` | `done` | Reference postprocessor surface implemented: `none`, `size_proportional` (with `EFF=0.05` scaling), and `novelty_proportional` placeholder semantics aligned as no-op; `nsize_proportional` alias and map2rec `constraint.population_fitness_postprocessor_f` materialization wired through CLI/API. |
 | `specie_identifier.erl` | `done` | Reference `tot_n` specie distinguisher parity implemented, plus topology-based identifier support and adaptive species assignment continuity/threshold diagnostics. |
@@ -125,6 +125,7 @@ Status keys:
 - Added `runs --json` for machine-readable run index/listing output, keeping analysis/reporting commands automation-friendly.
 - Added `lineage --json` and `top --json` for machine-readable lineage/top-genome analysis outputs.
 - Added `fitness --json` and `species --json` for machine-readable history output parity across reporting commands.
+- Aligned default `mutate_weights` path closer to reference by perturbing a proportional subset of weights (`1/sqrt(total_weights)`) with guaranteed non-empty mutation fallback.
 
 ## Highest-priority remaining gaps to reach strict parity
 

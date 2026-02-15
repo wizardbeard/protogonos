@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math"
 	"math/rand"
 
 	"protogonos/internal/genotype"
@@ -85,6 +86,52 @@ func (o *PerturbRandomWeight) Apply(_ context.Context, genome model.Genome) (mod
 
 	mutated := cloneGenome(genome)
 	mutated.Synapses[idx].Weight += delta
+	return mutated, nil
+}
+
+// PerturbWeightsProportional mutates a random subset of synapses using the
+// reference-style mutate probability 1/sqrt(total_weights). At least one
+// synapse is always perturbed when synapses are present.
+type PerturbWeightsProportional struct {
+	Rand     *rand.Rand
+	MaxDelta float64
+}
+
+func (o *PerturbWeightsProportional) Name() string {
+	return "perturb_weights_proportional"
+}
+
+func (o *PerturbWeightsProportional) Applicable(genome model.Genome, _ string) bool {
+	return len(genome.Synapses) > 0
+}
+
+func (o *PerturbWeightsProportional) Apply(_ context.Context, genome model.Genome) (model.Genome, error) {
+	if len(genome.Synapses) == 0 {
+		return model.Genome{}, ErrNoSynapses
+	}
+	if o == nil || o.Rand == nil {
+		return model.Genome{}, errors.New("random source is required")
+	}
+	if o.MaxDelta <= 0 {
+		return model.Genome{}, errors.New("max delta must be > 0")
+	}
+
+	mutated := cloneGenome(genome)
+	mp := 1 / math.Sqrt(float64(len(mutated.Synapses)))
+	mutatedCount := 0
+	for i := range mutated.Synapses {
+		if o.Rand.Float64() >= mp {
+			continue
+		}
+		delta := (o.Rand.Float64()*2 - 1) * o.MaxDelta
+		mutated.Synapses[i].Weight += delta
+		mutatedCount++
+	}
+	if mutatedCount == 0 {
+		idx := o.Rand.Intn(len(mutated.Synapses))
+		delta := (o.Rand.Float64()*2 - 1) * o.MaxDelta
+		mutated.Synapses[idx].Weight += delta
+	}
 	return mutated, nil
 }
 

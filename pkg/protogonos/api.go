@@ -334,7 +334,7 @@ func (c *Client) Run(ctx context.Context, req RunRequest) (RunSummary, error) {
 	}
 
 	runEvolution := func(useTuning bool) (platform.EvolutionResult, error) {
-		mutation := &evo.PerturbRandomWeight{Rand: rand.New(rand.NewSource(req.Seed + 1000)), MaxDelta: 1.0}
+		mutation := &evo.PerturbWeightsProportional{Rand: rand.New(rand.NewSource(req.Seed + 1000)), MaxDelta: 1.0}
 		policy := defaultMutationPolicy(req.Seed, seedPopulation.InputNeuronIDs, seedPopulation.OutputNeuronIDs, req)
 		var tuner tuning.Tuner
 		var attemptPolicy tuning.AttemptPolicy
@@ -1267,7 +1267,7 @@ func defaultMutationPolicy(seed int64, inputNeuronIDs, outputNeuronIDs []string,
 	}
 
 	return []evo.WeightedMutation{
-		{Operator: &evo.PerturbRandomWeight{Rand: rand.New(rand.NewSource(seed + 1000)), MaxDelta: 1.0}, Weight: req.WeightPerturb},
+		{Operator: &evo.PerturbWeightsProportional{Rand: rand.New(rand.NewSource(seed + 1000)), MaxDelta: 1.0}, Weight: req.WeightPerturb},
 		{Operator: &evo.PerturbRandomBias{Rand: rand.New(rand.NewSource(seed + 1007)), MaxDelta: 0.3}, Weight: req.WeightBias},
 		{Operator: &evo.RemoveRandomBias{Rand: rand.New(rand.NewSource(seed + 1010))}, Weight: req.WeightRemoveBias},
 		{Operator: &evo.ChangeRandomActivation{Rand: rand.New(rand.NewSource(seed + 1008))}, Weight: req.WeightActivation},

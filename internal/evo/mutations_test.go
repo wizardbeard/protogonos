@@ -2,6 +2,7 @@ package evo
 
 import (
 	"context"
+	"errors"
 	"math"
 	"math/rand"
 	"os"
@@ -326,6 +327,46 @@ func TestPerturbPlasticityRateMutation(t *testing.T) {
 	}
 	if mutated.Plasticity.Rate < 0 {
 		t.Fatalf("expected non-negative plasticity rate, got=%f", mutated.Plasticity.Rate)
+	}
+}
+
+func TestPerturbWeightsProportionalMutation(t *testing.T) {
+	genome := randomGenome(rand.New(rand.NewSource(41)))
+	op := &PerturbWeightsProportional{
+		Rand:     rand.New(rand.NewSource(42)),
+		MaxDelta: 0.5,
+	}
+	mutated, err := op.Apply(context.Background(), genome)
+	if err != nil {
+		t.Fatalf("apply failed: %v", err)
+	}
+
+	if len(mutated.Synapses) != len(genome.Synapses) {
+		t.Fatalf("synapse count changed: got=%d want=%d", len(mutated.Synapses), len(genome.Synapses))
+	}
+	if len(mutated.Neurons) != len(genome.Neurons) {
+		t.Fatalf("neuron count changed: got=%d want=%d", len(mutated.Neurons), len(genome.Neurons))
+	}
+
+	changed := 0
+	for i := range genome.Synapses {
+		if mutated.Synapses[i].Weight != genome.Synapses[i].Weight {
+			changed++
+		}
+	}
+	if changed == 0 {
+		t.Fatal("expected at least one perturbed weight")
+	}
+}
+
+func TestPerturbWeightsProportionalNoSynapses(t *testing.T) {
+	op := &PerturbWeightsProportional{
+		Rand:     rand.New(rand.NewSource(7)),
+		MaxDelta: 0.5,
+	}
+	_, err := op.Apply(context.Background(), model.Genome{})
+	if !errors.Is(err, ErrNoSynapses) {
+		t.Fatalf("expected ErrNoSynapses, got=%v", err)
 	}
 }
 
