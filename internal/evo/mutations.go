@@ -332,7 +332,7 @@ type AddRandomInlink struct {
 }
 
 func (o *AddRandomInlink) Name() string {
-	return "add_random_inlink"
+	return "add_inlink"
 }
 
 func (o *AddRandomInlink) Applicable(genome model.Genome, _ string) bool {
@@ -370,7 +370,7 @@ type AddRandomOutlink struct {
 }
 
 func (o *AddRandomOutlink) Name() string {
-	return "add_random_outlink"
+	return "add_outlink"
 }
 
 func (o *AddRandomOutlink) Applicable(genome model.Genome, _ string) bool {
@@ -434,7 +434,7 @@ type RemoveRandomInlink struct {
 }
 
 func (o *RemoveRandomInlink) Name() string {
-	return "remove_random_inlink"
+	return "remove_inlink"
 }
 
 func (o *RemoveRandomInlink) Applicable(genome model.Genome, _ string) bool {
@@ -463,7 +463,7 @@ type RemoveRandomOutlink struct {
 }
 
 func (o *RemoveRandomOutlink) Name() string {
-	return "remove_random_outlink"
+	return "remove_outlink"
 }
 
 func (o *RemoveRandomOutlink) Applicable(genome model.Genome, _ string) bool {
@@ -512,7 +512,7 @@ type AddRandomOutsplice struct {
 }
 
 func (o *AddRandomOutsplice) Name() string {
-	return "add_random_outsplice"
+	return "outsplice"
 }
 
 func (o *AddRandomOutsplice) Applicable(genome model.Genome, _ string) bool {
@@ -537,7 +537,7 @@ type AddRandomInsplice struct {
 }
 
 func (o *AddRandomInsplice) Name() string {
-	return "add_random_insplice"
+	return "insplice"
 }
 
 func (o *AddRandomInsplice) Applicable(genome model.Genome, _ string) bool {
@@ -770,7 +770,7 @@ type AddRandomSensor struct {
 }
 
 func (o *AddRandomSensor) Name() string {
-	return "add_random_sensor"
+	return "add_sensor"
 }
 
 func (o *AddRandomSensor) Applicable(genome model.Genome, _ string) bool {
@@ -798,7 +798,7 @@ type AddRandomSensorLink struct {
 }
 
 func (o *AddRandomSensorLink) Name() string {
-	return "add_random_sensorlink"
+	return "add_sensorlink"
 }
 
 func (o *AddRandomSensorLink) Applicable(genome model.Genome, _ string) bool {
@@ -816,7 +816,7 @@ type AddRandomActuator struct {
 }
 
 func (o *AddRandomActuator) Name() string {
-	return "add_random_actuator"
+	return "add_actuator"
 }
 
 func (o *AddRandomActuator) Applicable(genome model.Genome, _ string) bool {
@@ -844,7 +844,7 @@ type AddRandomActuatorLink struct {
 }
 
 func (o *AddRandomActuatorLink) Name() string {
-	return "add_random_actuatorlink"
+	return "add_actuatorlink"
 }
 
 func (o *AddRandomActuatorLink) Applicable(genome model.Genome, _ string) bool {
@@ -861,7 +861,7 @@ type AddRandomCPP struct {
 }
 
 func (o *AddRandomCPP) Name() string {
-	return "add_random_cpp"
+	return "add_cpp"
 }
 
 func (o *AddRandomCPP) Applicable(_ model.Genome, _ string) bool {
@@ -912,7 +912,7 @@ type AddRandomCEP struct {
 }
 
 func (o *AddRandomCEP) Name() string {
-	return "add_random_cep"
+	return "add_cep"
 }
 
 func (o *AddRandomCEP) Applicable(_ model.Genome, _ string) bool {
@@ -963,7 +963,7 @@ type AddCircuitNode struct {
 }
 
 func (o *AddCircuitNode) Name() string {
-	return "add_circuit_node"
+	return "add_CircuitNode"
 }
 
 func (o *AddCircuitNode) Applicable(_ model.Genome, _ string) bool {
@@ -994,7 +994,7 @@ type AddCircuitLayer struct {
 }
 
 func (o *AddCircuitLayer) Name() string {
-	return "add_circuit_layer"
+	return "add_CircuitLayer"
 }
 
 func (o *AddCircuitLayer) Applicable(_ model.Genome, _ string) bool {

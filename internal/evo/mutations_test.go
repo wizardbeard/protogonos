@@ -693,6 +693,51 @@ func TestAddCircuitLayerMutatesDimensions(t *testing.T) {
 	}
 }
 
+func TestMutationOperatorReferenceNames(t *testing.T) {
+	if (&AddRandomInlink{}).Name() != "add_inlink" {
+		t.Fatalf("unexpected add_inlink name")
+	}
+	if (&AddRandomOutlink{}).Name() != "add_outlink" {
+		t.Fatalf("unexpected add_outlink name")
+	}
+	if (&RemoveRandomInlink{}).Name() != "remove_inlink" {
+		t.Fatalf("unexpected remove_inlink name")
+	}
+	if (&RemoveRandomOutlink{}).Name() != "remove_outlink" {
+		t.Fatalf("unexpected remove_outlink name")
+	}
+	if (&AddRandomOutsplice{}).Name() != "outsplice" {
+		t.Fatalf("unexpected outsplice name")
+	}
+	if (&AddRandomInsplice{}).Name() != "insplice" {
+		t.Fatalf("unexpected insplice name")
+	}
+	if (&AddRandomSensor{}).Name() != "add_sensor" {
+		t.Fatalf("unexpected add_sensor name")
+	}
+	if (&AddRandomSensorLink{}).Name() != "add_sensorlink" {
+		t.Fatalf("unexpected add_sensorlink name")
+	}
+	if (&AddRandomActuator{}).Name() != "add_actuator" {
+		t.Fatalf("unexpected add_actuator name")
+	}
+	if (&AddRandomActuatorLink{}).Name() != "add_actuatorlink" {
+		t.Fatalf("unexpected add_actuatorlink name")
+	}
+	if (&AddRandomCPP{}).Name() != "add_cpp" {
+		t.Fatalf("unexpected add_cpp name")
+	}
+	if (&AddRandomCEP{}).Name() != "add_cep" {
+		t.Fatalf("unexpected add_cep name")
+	}
+	if (&AddCircuitNode{}).Name() != "add_CircuitNode" {
+		t.Fatalf("unexpected add_CircuitNode name")
+	}
+	if (&AddCircuitLayer{}).Name() != "add_CircuitLayer" {
+		t.Fatalf("unexpected add_CircuitLayer name")
+	}
+}
+
 func TestPerturbSubstrateParameterMutation(t *testing.T) {
 	genome := randomGenome(rand.New(rand.NewSource(3)))
 	genome.Substrate = &model.SubstrateConfig{
