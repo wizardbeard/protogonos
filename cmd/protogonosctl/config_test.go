@@ -269,3 +269,17 @@ func TestLoadRunRequestFromConfigMapsCutlinkNeuronToNeuronAlias(t *testing.T) {
 		t.Fatalf("unexpected remove synapse alias weight total: got=%f want=4.0", req.WeightRemoveSynapse)
 	}
 }
+
+func TestNormalizeMutationOperatorNameLegacyCircuitAliases(t *testing.T) {
+	cases := map[string]string{
+		"add_CircuitNode":    "add_circuit_node",
+		"delete_CircuitNode": "delete_circuit_node",
+		"add_CircuitLayer":   "add_circuit_layer",
+		"mutate_weights":     "mutate_weights",
+	}
+	for in, want := range cases {
+		if got := normalizeMutationOperatorName(in); got != want {
+			t.Fatalf("normalizeMutationOperatorName(%q)=%q want=%q", in, got, want)
+		}
+	}
+}

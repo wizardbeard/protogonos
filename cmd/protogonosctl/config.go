@@ -137,7 +137,7 @@ func loadRunRequestFromConfig(path string) (protoapi.RunRequest, error) {
 			}
 		}
 		for _, op := range constraint.MutationOperators {
-			switch op.Name {
+			switch normalizeMutationOperatorName(op.Name) {
 			case "mutate_weights":
 				req.WeightPerturb += op.Weight
 			case "add_bias":
@@ -160,7 +160,7 @@ func loadRunRequestFromConfig(path string) (protoapi.RunRequest, error) {
 				req.WeightPlasticity += op.Weight
 			case "mutate_pf":
 				req.WeightPlasticityRule += op.Weight
-			case "add_sensor", "add_sensorlink", "add_actuator", "add_cpp", "remove_cpp", "add_cep", "remove_cep", "add_CircuitNode", "delete_CircuitNode", "add_CircuitLayer", "add_circuit_node", "delete_circuit_node", "add_circuit_layer", "remove_sensor", "remove_actuator", "cutlink_FromSensorToNeuron", "cutlink_FromNeuronToActuator", "mutate_tuning_selection", "mutate_tuning_annealing", "mutate_tot_topological_mutations", "mutate_heredity_type":
+			case "add_sensor", "add_sensorlink", "add_actuator", "add_cpp", "remove_cpp", "add_cep", "remove_cep", "add_circuit_node", "delete_circuit_node", "add_circuit_layer", "remove_sensor", "remove_actuator", "cutlink_FromSensorToNeuron", "cutlink_FromNeuronToActuator", "mutate_tuning_selection", "mutate_tuning_annealing", "mutate_tot_topological_mutations", "mutate_heredity_type":
 				req.WeightSubstrate += op.Weight
 			}
 		}
@@ -241,6 +241,19 @@ func asFloat64(v any) (float64, bool) {
 		return float64(x), true
 	default:
 		return 0, false
+	}
+}
+
+func normalizeMutationOperatorName(name string) string {
+	switch name {
+	case "add_CircuitNode":
+		return "add_circuit_node"
+	case "delete_CircuitNode":
+		return "delete_circuit_node"
+	case "add_CircuitLayer":
+		return "add_circuit_layer"
+	default:
+		return name
 	}
 }
 

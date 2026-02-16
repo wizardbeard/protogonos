@@ -134,6 +134,7 @@ Status keys:
 - Added explicit splice mutation paths (`outsplice`/`insplice`) via dedicated operators (`add_random_outsplice`/`add_random_insplice`) in the add-neuron policy bucket.
 - Aligned mutation operator names with reference tags (for example: `add_inlink`, `outsplice`, `add_cpp`, `add_circuit_node`) to improve lineage parity.
 - Added explicit sensor/actuator removal mutation paths (`remove_sensor`/`remove_actuator`) and mapped sensor/actuator cutlink-style names into substrate mutation weighting.
+- Canonicalized legacy circuit mutation aliases (`add_CircuitNode`/`delete_CircuitNode`/`add_CircuitLayer`) during config/profile ingestion while preserving compatibility.
 
 ## Highest-priority remaining gaps to reach strict parity
 
