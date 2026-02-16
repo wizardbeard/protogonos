@@ -416,9 +416,10 @@ func (o *AddRandomSynapse) Apply(_ context.Context, genome model.Genome) (model.
 
 // AddRandomInlink adds a synapse biased toward input->non-input direction.
 type AddRandomInlink struct {
-	Rand           *rand.Rand
-	MaxAbsWeight   float64
-	InputNeuronIDs []string
+	Rand            *rand.Rand
+	MaxAbsWeight    float64
+	InputNeuronIDs  []string
+	FeedForwardOnly bool
 }
 
 func (o *AddRandomInlink) Name() string {
@@ -430,6 +431,7 @@ func (o *AddRandomInlink) Applicable(genome model.Genome, _ string) bool {
 		return false
 	}
 	inputSet := toIDSet(o.InputNeuronIDs)
+	layers := inferFeedforwardLayers(genome, o.InputNeuronIDs, nil)
 	fromCandidates := filterNeuronIDs(genome, func(id string) bool {
 		_, ok := inputSet[id]
 		return ok
@@ -438,6 +440,9 @@ func (o *AddRandomInlink) Applicable(genome model.Genome, _ string) bool {
 		_, ok := inputSet[id]
 		return !ok
 	})
+	if o.FeedForwardOnly {
+		fromCandidates, toCandidates = filterDirectedFeedforwardCandidates(fromCandidates, toCandidates, layers)
+	}
 	return len(fromCandidates) > 0 && len(toCandidates) > 0
 }
 
@@ -453,6 +458,7 @@ func (o *AddRandomInlink) Apply(_ context.Context, genome model.Genome) (model.G
 	}
 
 	inputSet := toIDSet(o.InputNeuronIDs)
+	layers := inferFeedforwardLayers(genome, o.InputNeuronIDs, nil)
 	fromCandidates := filterNeuronIDs(genome, func(id string) bool {
 		_, ok := inputSet[id]
 		return ok
@@ -461,6 +467,9 @@ func (o *AddRandomInlink) Apply(_ context.Context, genome model.Genome) (model.G
 		_, ok := inputSet[id]
 		return !ok
 	})
+	if o.FeedForwardOnly {
+		fromCandidates, toCandidates = filterDirectedFeedforwardCandidates(fromCandidates, toCandidates, layers)
+	}
 	return addDirectedRandomSynapse(genome, o.Rand, o.MaxAbsWeight, fromCandidates, toCandidates)
 }
 
@@ -469,6 +478,7 @@ type AddRandomOutlink struct {
 	Rand            *rand.Rand
 	MaxAbsWeight    float64
 	OutputNeuronIDs []string
+	FeedForwardOnly bool
 }
 
 func (o *AddRandomOutlink) Name() string {
@@ -480,6 +490,7 @@ func (o *AddRandomOutlink) Applicable(genome model.Genome, _ string) bool {
 		return false
 	}
 	outputSet := toIDSet(o.OutputNeuronIDs)
+	layers := inferFeedforwardLayers(genome, nil, o.OutputNeuronIDs)
 	fromCandidates := filterNeuronIDs(genome, func(id string) bool {
 		_, ok := outputSet[id]
 		return !ok
@@ -488,6 +499,9 @@ func (o *AddRandomOutlink) Applicable(genome model.Genome, _ string) bool {
 		_, ok := outputSet[id]
 		return ok
 	})
+	if o.FeedForwardOnly {
+		fromCandidates, toCandidates = filterDirectedFeedforwardCandidates(fromCandidates, toCandidates, layers)
+	}
 	return len(fromCandidates) > 0 && len(toCandidates) > 0
 }
 
@@ -503,6 +517,7 @@ func (o *AddRandomOutlink) Apply(_ context.Context, genome model.Genome) (model.
 	}
 
 	outputSet := toIDSet(o.OutputNeuronIDs)
+	layers := inferFeedforwardLayers(genome, nil, o.OutputNeuronIDs)
 	fromCandidates := filterNeuronIDs(genome, func(id string) bool {
 		_, ok := outputSet[id]
 		return !ok
@@ -511,6 +526,9 @@ func (o *AddRandomOutlink) Apply(_ context.Context, genome model.Genome) (model.
 		_, ok := outputSet[id]
 		return ok
 	})
+	if o.FeedForwardOnly {
+		fromCandidates, toCandidates = filterDirectedFeedforwardCandidates(fromCandidates, toCandidates, layers)
+	}
 	return addDirectedRandomSynapse(genome, o.Rand, o.MaxAbsWeight, fromCandidates, toCandidates)
 }
 
@@ -543,8 +561,9 @@ func (o *RemoveRandomSynapse) Apply(_ context.Context, genome model.Genome) (mod
 
 // RemoveRandomInlink removes a synapse biased toward input->non-input direction.
 type RemoveRandomInlink struct {
-	Rand           *rand.Rand
-	InputNeuronIDs []string
+	Rand            *rand.Rand
+	InputNeuronIDs  []string
+	FeedForwardOnly bool
 }
 
 func (o *RemoveRandomInlink) Name() string {
@@ -556,10 +575,11 @@ func (o *RemoveRandomInlink) Applicable(genome model.Genome, _ string) bool {
 		return false
 	}
 	inputSet := toIDSet(o.InputNeuronIDs)
+	layers := inferFeedforwardLayers(genome, o.InputNeuronIDs, nil)
 	for _, syn := range genome.Synapses {
 		_, fromInput := inputSet[syn.From]
 		_, toInput := inputSet[syn.To]
-		if fromInput && !toInput {
+		if fromInput && !toInput && (!o.FeedForwardOnly || isFeedforwardEdge(layers, syn.From, syn.To)) {
 			return true
 		}
 	}
@@ -574,10 +594,11 @@ func (o *RemoveRandomInlink) Apply(_ context.Context, genome model.Genome) (mode
 		return model.Genome{}, ErrNoSynapses
 	}
 	inputSet := toIDSet(o.InputNeuronIDs)
+	layers := inferFeedforwardLayers(genome, o.InputNeuronIDs, nil)
 	return removeDirectedRandomSynapse(genome, o.Rand, func(s model.Synapse) bool {
 		_, fromInput := inputSet[s.From]
 		_, toInput := inputSet[s.To]
-		return fromInput && !toInput
+		return fromInput && !toInput && (!o.FeedForwardOnly || isFeedforwardEdge(layers, s.From, s.To))
 	})
 }
 
@@ -585,6 +606,7 @@ func (o *RemoveRandomInlink) Apply(_ context.Context, genome model.Genome) (mode
 type RemoveRandomOutlink struct {
 	Rand            *rand.Rand
 	OutputNeuronIDs []string
+	FeedForwardOnly bool
 }
 
 func (o *RemoveRandomOutlink) Name() string {
@@ -596,10 +618,11 @@ func (o *RemoveRandomOutlink) Applicable(genome model.Genome, _ string) bool {
 		return false
 	}
 	outputSet := toIDSet(o.OutputNeuronIDs)
+	layers := inferFeedforwardLayers(genome, nil, o.OutputNeuronIDs)
 	for _, syn := range genome.Synapses {
 		_, fromOutput := outputSet[syn.From]
 		_, toOutput := outputSet[syn.To]
-		if !fromOutput && toOutput {
+		if !fromOutput && toOutput && (!o.FeedForwardOnly || isFeedforwardEdge(layers, syn.From, syn.To)) {
 			return true
 		}
 	}
@@ -614,10 +637,11 @@ func (o *RemoveRandomOutlink) Apply(_ context.Context, genome model.Genome) (mod
 		return model.Genome{}, ErrNoSynapses
 	}
 	outputSet := toIDSet(o.OutputNeuronIDs)
+	layers := inferFeedforwardLayers(genome, nil, o.OutputNeuronIDs)
 	return removeDirectedRandomSynapse(genome, o.Rand, func(s model.Synapse) bool {
 		_, fromOutput := outputSet[s.From]
 		_, toOutput := outputSet[s.To]
-		return !fromOutput && toOutput
+		return !fromOutput && toOutput && (!o.FeedForwardOnly || isFeedforwardEdge(layers, s.From, s.To))
 	})
 }
 
@@ -776,6 +800,7 @@ type AddRandomOutsplice struct {
 	Rand            *rand.Rand
 	Activations     []string
 	OutputNeuronIDs []string
+	FeedForwardOnly bool
 }
 
 func (o *AddRandomOutsplice) Name() string {
@@ -787,10 +812,11 @@ func (o *AddRandomOutsplice) Applicable(genome model.Genome, _ string) bool {
 		return false
 	}
 	outputSet := toIDSet(o.OutputNeuronIDs)
+	layers := inferFeedforwardLayers(genome, nil, o.OutputNeuronIDs)
 	for _, syn := range genome.Synapses {
 		_, fromOutput := outputSet[syn.From]
 		_, toOutput := outputSet[syn.To]
-		if !fromOutput && toOutput {
+		if !fromOutput && toOutput && (!o.FeedForwardOnly || isFeedforwardEdge(layers, syn.From, syn.To)) {
 			return true
 		}
 	}
@@ -799,19 +825,21 @@ func (o *AddRandomOutsplice) Applicable(genome model.Genome, _ string) bool {
 
 func (o *AddRandomOutsplice) Apply(ctx context.Context, genome model.Genome) (model.Genome, error) {
 	outputSet := toIDSet(o.OutputNeuronIDs)
+	layers := inferFeedforwardLayers(genome, nil, o.OutputNeuronIDs)
 	return addRandomNeuronWithSynapseCandidates(ctx, genome, o.Rand, o.Activations, func(s model.Synapse) bool {
 		_, fromOutput := outputSet[s.From]
 		_, toOutput := outputSet[s.To]
-		return !fromOutput && toOutput
+		return !fromOutput && toOutput && (!o.FeedForwardOnly || isFeedforwardEdge(layers, s.From, s.To))
 	})
 }
 
 // AddRandomInsplice inserts a neuron by splitting a synapse biased toward
 // input->non-input direction.
 type AddRandomInsplice struct {
-	Rand           *rand.Rand
-	Activations    []string
-	InputNeuronIDs []string
+	Rand            *rand.Rand
+	Activations     []string
+	InputNeuronIDs  []string
+	FeedForwardOnly bool
 }
 
 func (o *AddRandomInsplice) Name() string {
@@ -823,10 +851,11 @@ func (o *AddRandomInsplice) Applicable(genome model.Genome, _ string) bool {
 		return false
 	}
 	inputSet := toIDSet(o.InputNeuronIDs)
+	layers := inferFeedforwardLayers(genome, o.InputNeuronIDs, nil)
 	for _, syn := range genome.Synapses {
 		_, fromInput := inputSet[syn.From]
 		_, toInput := inputSet[syn.To]
-		if fromInput && !toInput {
+		if fromInput && !toInput && (!o.FeedForwardOnly || isFeedforwardEdge(layers, syn.From, syn.To)) {
 			return true
 		}
 	}
@@ -835,10 +864,11 @@ func (o *AddRandomInsplice) Applicable(genome model.Genome, _ string) bool {
 
 func (o *AddRandomInsplice) Apply(ctx context.Context, genome model.Genome) (model.Genome, error) {
 	inputSet := toIDSet(o.InputNeuronIDs)
+	layers := inferFeedforwardLayers(genome, o.InputNeuronIDs, nil)
 	return addRandomNeuronWithSynapseCandidates(ctx, genome, o.Rand, o.Activations, func(s model.Synapse) bool {
 		_, fromInput := inputSet[s.From]
 		_, toInput := inputSet[s.To]
-		return fromInput && !toInput
+		return fromInput && !toInput && (!o.FeedForwardOnly || isFeedforwardEdge(layers, s.From, s.To))
 	})
 }
 
@@ -1981,6 +2011,82 @@ func toIDSet(ids []string) map[string]struct{} {
 		out[id] = struct{}{}
 	}
 	return out
+}
+
+func inferFeedforwardLayers(genome model.Genome, inputNeuronIDs, outputNeuronIDs []string) map[string]int {
+	layers := make(map[string]int, len(genome.Neurons))
+	inputSet := toIDSet(inputNeuronIDs)
+	outputSet := toIDSet(outputNeuronIDs)
+	for _, n := range genome.Neurons {
+		switch {
+		case containsID(inputSet, n.ID):
+			layers[n.ID] = 0
+		case containsID(outputSet, n.ID):
+			layers[n.ID] = 2
+		default:
+			layers[n.ID] = 1
+		}
+	}
+	// Relax edge ordering to infer a monotonic feedforward layer ranking.
+	for i := 0; i < len(genome.Neurons); i++ {
+		changed := false
+		for _, s := range genome.Synapses {
+			fromLayer, okFrom := layers[s.From]
+			toLayer, okTo := layers[s.To]
+			if !okFrom || !okTo {
+				continue
+			}
+			candidate := fromLayer + 1
+			if candidate > toLayer {
+				layers[s.To] = candidate
+				changed = true
+			}
+		}
+		if !changed {
+			break
+		}
+	}
+	return layers
+}
+
+func isFeedforwardEdge(layers map[string]int, fromID, toID string) bool {
+	fromLayer, okFrom := layers[fromID]
+	toLayer, okTo := layers[toID]
+	if !okFrom || !okTo {
+		return false
+	}
+	return fromLayer < toLayer
+}
+
+func filterDirectedFeedforwardCandidates(fromCandidates, toCandidates []string, layers map[string]int) ([]string, []string) {
+	allowedFrom := make(map[string]struct{}, len(fromCandidates))
+	allowedTo := make(map[string]struct{}, len(toCandidates))
+	for _, from := range fromCandidates {
+		for _, to := range toCandidates {
+			if isFeedforwardEdge(layers, from, to) {
+				allowedFrom[from] = struct{}{}
+				allowedTo[to] = struct{}{}
+			}
+		}
+	}
+	filteredFrom := make([]string, 0, len(allowedFrom))
+	for _, from := range fromCandidates {
+		if containsID(allowedFrom, from) {
+			filteredFrom = append(filteredFrom, from)
+		}
+	}
+	filteredTo := make([]string, 0, len(allowedTo))
+	for _, to := range toCandidates {
+		if containsID(allowedTo, to) {
+			filteredTo = append(filteredTo, to)
+		}
+	}
+	return filteredFrom, filteredTo
+}
+
+func containsID(set map[string]struct{}, id string) bool {
+	_, ok := set[id]
+	return ok
 }
 
 func ensureStrategyConfig(g *model.Genome) {

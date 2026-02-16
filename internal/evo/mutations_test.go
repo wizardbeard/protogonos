@@ -465,6 +465,80 @@ func TestAddRandomOutlinkNoDirectionalCandidates(t *testing.T) {
 	}
 }
 
+func TestDirectionalMutationsRespectFeedforwardLayers(t *testing.T) {
+	genome := model.Genome{
+		Neurons: []model.Neuron{
+			{ID: "i1", Activation: "identity"},
+			{ID: "h1", Activation: "tanh"},
+			{ID: "o1", Activation: "sigmoid"},
+		},
+		Synapses: []model.Synapse{
+			{ID: "s_backward", From: "h1", To: "i1", Weight: 1, Enabled: true},
+			{ID: "s_forward", From: "i1", To: "h1", Weight: 1, Enabled: true},
+		},
+	}
+
+	addIn := &AddRandomInlink{
+		Rand:            rand.New(rand.NewSource(211)),
+		MaxAbsWeight:    1.0,
+		InputNeuronIDs:  []string{"i1"},
+		FeedForwardOnly: true,
+	}
+	added, err := addIn.Apply(context.Background(), model.Genome{Neurons: genome.Neurons})
+	if err != nil {
+		t.Fatalf("apply add_inlink failed: %v", err)
+	}
+	if len(added.Synapses) != 1 || added.Synapses[0].From != "i1" || added.Synapses[0].To == "i1" {
+		t.Fatalf("unexpected feedforward add_inlink result: %+v", added.Synapses)
+	}
+
+	removeIn := &RemoveRandomInlink{
+		Rand:            rand.New(rand.NewSource(223)),
+		InputNeuronIDs:  []string{"i1"},
+		FeedForwardOnly: true,
+	}
+	removed, err := removeIn.Apply(context.Background(), genome)
+	if err != nil {
+		t.Fatalf("apply remove_inlink failed: %v", err)
+	}
+	if hasSynapse(removed, "s_forward") {
+		t.Fatal("expected remove_inlink to remove only forward input edge")
+	}
+	if !hasSynapse(removed, "s_backward") {
+		t.Fatal("expected non-feedforward edge to remain")
+	}
+}
+
+func TestSpliceMutationsRespectFeedforwardLayers(t *testing.T) {
+	genome := model.Genome{
+		Neurons: []model.Neuron{
+			{ID: "i1", Activation: "identity"},
+			{ID: "h1", Activation: "tanh"},
+			{ID: "o1", Activation: "sigmoid"},
+		},
+		Synapses: []model.Synapse{
+			{ID: "s_backward", From: "h1", To: "i1", Weight: 1, Enabled: true},
+			{ID: "s_out", From: "h1", To: "o1", Weight: 1, Enabled: true},
+		},
+	}
+	op := &AddRandomOutsplice{
+		Rand:            rand.New(rand.NewSource(227)),
+		OutputNeuronIDs: []string{"o1"},
+		FeedForwardOnly: true,
+		Activations:     []string{"relu"},
+	}
+	mutated, err := op.Apply(context.Background(), genome)
+	if err != nil {
+		t.Fatalf("apply outsplice failed: %v", err)
+	}
+	if hasSynapse(mutated, "s_out") {
+		t.Fatal("expected feedforward out edge to be spliced")
+	}
+	if !hasSynapse(mutated, "s_backward") {
+		t.Fatal("expected backward edge to remain untouched")
+	}
+}
+
 func TestAddRandomOutsplicePrefersOutputEdge(t *testing.T) {
 	genome := model.Genome{
 		Neurons: []model.Neuron{
