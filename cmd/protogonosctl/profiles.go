@@ -153,7 +153,7 @@ func resolveParityProfile(profileID string) (parityProfileResolved, error) {
 				resolved.WeightAddSyn += op.Weight
 			case "add_neuron", "outsplice", "insplice":
 				resolved.WeightAddNeuro += op.Weight
-			case "remove_outlink", "remove_inlink", "cutlink_FromNeuronToNeuron":
+			case "remove_outlink", "remove_inlink", "cutlink_FromNeuronToNeuron", "cutlink_FromElementToElement":
 				resolved.WeightRemoveSyn += op.Weight
 			case "remove_neuron":
 				resolved.WeightRemoveNeuro += op.Weight

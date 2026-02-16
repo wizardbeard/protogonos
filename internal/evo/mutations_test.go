@@ -874,6 +874,25 @@ func TestCutlinkFromNeuronToNeuronRemovesSynapse(t *testing.T) {
 	}
 }
 
+func TestCutlinkFromElementToElementRemovesSynapse(t *testing.T) {
+	genome := model.Genome{
+		Neurons: []model.Neuron{
+			{ID: "i1", Activation: "identity"},
+			{ID: "h1", Activation: "tanh"},
+		},
+		Synapses: []model.Synapse{
+			{ID: "s1", From: "i1", To: "h1", Weight: 1, Enabled: true},
+		},
+	}
+	mutated, err := (&CutlinkFromElementToElement{Rand: rand.New(rand.NewSource(179))}).Apply(context.Background(), genome)
+	if err != nil {
+		t.Fatalf("apply failed: %v", err)
+	}
+	if len(mutated.Synapses) != 0 {
+		t.Fatalf("expected one removed synapse, got=%d", len(genome.Synapses)-len(mutated.Synapses))
+	}
+}
+
 func TestAddRandomCPPRequiresSubstrateConfig(t *testing.T) {
 	genome := model.Genome{
 		Neurons: []model.Neuron{
@@ -1171,6 +1190,9 @@ func TestMutationOperatorReferenceNames(t *testing.T) {
 	}
 	if (&CutlinkFromNeuronToNeuron{}).Name() != "cutlink_FromNeuronToNeuron" {
 		t.Fatalf("unexpected cutlink_FromNeuronToNeuron name")
+	}
+	if (&CutlinkFromElementToElement{}).Name() != "cutlink_FromElementToElement" {
+		t.Fatalf("unexpected cutlink_FromElementToElement name")
 	}
 	if (&AddRandomOutsplice{}).Name() != "outsplice" {
 		t.Fatalf("unexpected outsplice name")

@@ -640,6 +640,24 @@ func (o *CutlinkFromNeuronToNeuron) Apply(ctx context.Context, genome model.Geno
 	return (&RemoveRandomSynapse{Rand: o.Rand}).Apply(ctx, genome)
 }
 
+// CutlinkFromElementToElement mirrors the generic reference helper mutator
+// name used by genome_mutator for directional cutlink paths.
+type CutlinkFromElementToElement struct {
+	Rand *rand.Rand
+}
+
+func (o *CutlinkFromElementToElement) Name() string {
+	return "cutlink_FromElementToElement"
+}
+
+func (o *CutlinkFromElementToElement) Applicable(genome model.Genome, _ string) bool {
+	return len(genome.Synapses) > 0
+}
+
+func (o *CutlinkFromElementToElement) Apply(ctx context.Context, genome model.Genome) (model.Genome, error) {
+	return (&RemoveRandomSynapse{Rand: o.Rand}).Apply(ctx, genome)
+}
+
 // AddRandomNeuron inserts a neuron by splitting a random synapse.
 type AddRandomNeuron struct {
 	Rand        *rand.Rand

@@ -249,6 +249,7 @@ func TestLoadRunRequestFromConfigMapsCutlinkNeuronToNeuronAlias(t *testing.T) {
 		"constraint": map[string]any{
 			"mutation_operators": []any{
 				[]any{"cutlink_FromNeuronToNeuron", 2.25},
+				[]any{"cutlink_FromElementToElement", 1.75},
 			},
 		},
 	}
@@ -264,7 +265,7 @@ func TestLoadRunRequestFromConfigMapsCutlinkNeuronToNeuronAlias(t *testing.T) {
 	if err != nil {
 		t.Fatalf("load run request: %v", err)
 	}
-	if req.WeightRemoveSynapse != 2.25 {
-		t.Fatalf("unexpected remove synapse alias weight total: got=%f want=2.25", req.WeightRemoveSynapse)
+	if req.WeightRemoveSynapse != 4.0 {
+		t.Fatalf("unexpected remove synapse alias weight total: got=%f want=4.0", req.WeightRemoveSynapse)
 	}
 }

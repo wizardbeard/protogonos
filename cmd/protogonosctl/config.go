@@ -150,7 +150,7 @@ func loadRunRequestFromConfig(path string) (protoapi.RunRequest, error) {
 				req.WeightAggregator += op.Weight
 			case "add_outlink", "add_inlink":
 				req.WeightAddSynapse += op.Weight
-			case "remove_outlink", "remove_inlink", "cutlink_FromNeuronToNeuron":
+			case "remove_outlink", "remove_inlink", "cutlink_FromNeuronToNeuron", "cutlink_FromElementToElement":
 				req.WeightRemoveSynapse += op.Weight
 			case "add_neuron", "outsplice", "insplice":
 				req.WeightAddNeuron += op.Weight
