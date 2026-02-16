@@ -893,6 +893,44 @@ func TestCutlinkFromElementToElementRemovesSynapse(t *testing.T) {
 	}
 }
 
+func TestLinkFromElementToElementAddsSynapse(t *testing.T) {
+	genome := model.Genome{
+		Neurons: []model.Neuron{
+			{ID: "i1", Activation: "identity"},
+			{ID: "h1", Activation: "tanh"},
+		},
+	}
+	mutated, err := (&LinkFromElementToElement{
+		Rand:         rand.New(rand.NewSource(181)),
+		MaxAbsWeight: 1,
+	}).Apply(context.Background(), genome)
+	if err != nil {
+		t.Fatalf("apply failed: %v", err)
+	}
+	if len(mutated.Synapses) != 1 {
+		t.Fatalf("expected one added synapse, got=%d", len(mutated.Synapses))
+	}
+}
+
+func TestLinkFromNeuronToNeuronAddsSynapse(t *testing.T) {
+	genome := model.Genome{
+		Neurons: []model.Neuron{
+			{ID: "i1", Activation: "identity"},
+			{ID: "h1", Activation: "tanh"},
+		},
+	}
+	mutated, err := (&LinkFromNeuronToNeuron{
+		Rand:         rand.New(rand.NewSource(191)),
+		MaxAbsWeight: 1,
+	}).Apply(context.Background(), genome)
+	if err != nil {
+		t.Fatalf("apply failed: %v", err)
+	}
+	if len(mutated.Synapses) != 1 {
+		t.Fatalf("expected one added synapse, got=%d", len(mutated.Synapses))
+	}
+}
+
 func TestAddRandomCPPRequiresSubstrateConfig(t *testing.T) {
 	genome := model.Genome{
 		Neurons: []model.Neuron{
@@ -1193,6 +1231,18 @@ func TestMutationOperatorReferenceNames(t *testing.T) {
 	}
 	if (&CutlinkFromElementToElement{}).Name() != "cutlink_FromElementToElement" {
 		t.Fatalf("unexpected cutlink_FromElementToElement name")
+	}
+	if (&LinkFromElementToElement{}).Name() != "link_FromElementToElement" {
+		t.Fatalf("unexpected link_FromElementToElement name")
+	}
+	if (&LinkFromNeuronToNeuron{}).Name() != "link_FromNeuronToNeuron" {
+		t.Fatalf("unexpected link_FromNeuronToNeuron name")
+	}
+	if (&LinkFromSensorToNeuron{}).Name() != "link_FromSensorToNeuron" {
+		t.Fatalf("unexpected link_FromSensorToNeuron name")
+	}
+	if (&LinkFromNeuronToActuator{}).Name() != "link_FromNeuronToActuator" {
+		t.Fatalf("unexpected link_FromNeuronToActuator name")
 	}
 	if (&AddRandomOutsplice{}).Name() != "outsplice" {
 		t.Fatalf("unexpected outsplice name")

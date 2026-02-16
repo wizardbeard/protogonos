@@ -658,6 +658,82 @@ func (o *CutlinkFromElementToElement) Apply(ctx context.Context, genome model.Ge
 	return (&RemoveRandomSynapse{Rand: o.Rand}).Apply(ctx, genome)
 }
 
+// LinkFromElementToElement mirrors the generic reference helper mutator name
+// used by genome_mutator for directional add-link paths.
+type LinkFromElementToElement struct {
+	Rand         *rand.Rand
+	MaxAbsWeight float64
+}
+
+func (o *LinkFromElementToElement) Name() string {
+	return "link_FromElementToElement"
+}
+
+func (o *LinkFromElementToElement) Applicable(genome model.Genome, _ string) bool {
+	return len(genome.Neurons) > 0
+}
+
+func (o *LinkFromElementToElement) Apply(ctx context.Context, genome model.Genome) (model.Genome, error) {
+	return (&AddRandomSynapse{Rand: o.Rand, MaxAbsWeight: o.MaxAbsWeight}).Apply(ctx, genome)
+}
+
+// LinkFromNeuronToNeuron mirrors the explicit reference helper name used for
+// neuron-to-neuron add-link paths.
+type LinkFromNeuronToNeuron struct {
+	Rand         *rand.Rand
+	MaxAbsWeight float64
+}
+
+func (o *LinkFromNeuronToNeuron) Name() string {
+	return "link_FromNeuronToNeuron"
+}
+
+func (o *LinkFromNeuronToNeuron) Applicable(genome model.Genome, _ string) bool {
+	return len(genome.Neurons) > 0
+}
+
+func (o *LinkFromNeuronToNeuron) Apply(ctx context.Context, genome model.Genome) (model.Genome, error) {
+	return (&AddRandomSynapse{Rand: o.Rand, MaxAbsWeight: o.MaxAbsWeight}).Apply(ctx, genome)
+}
+
+// LinkFromSensorToNeuron mirrors the explicit reference helper name used for
+// sensor-to-neuron add-link paths.
+type LinkFromSensorToNeuron struct {
+	Rand      *rand.Rand
+	ScapeName string
+}
+
+func (o *LinkFromSensorToNeuron) Name() string {
+	return "link_FromSensorToNeuron"
+}
+
+func (o *LinkFromSensorToNeuron) Applicable(genome model.Genome, scapeName string) bool {
+	return (&AddRandomSensorLink{Rand: o.Rand, ScapeName: scapeName}).Applicable(genome, scapeName)
+}
+
+func (o *LinkFromSensorToNeuron) Apply(ctx context.Context, genome model.Genome) (model.Genome, error) {
+	return (&AddRandomSensorLink{Rand: o.Rand, ScapeName: o.ScapeName}).Apply(ctx, genome)
+}
+
+// LinkFromNeuronToActuator mirrors the explicit reference helper name used for
+// neuron-to-actuator add-link paths.
+type LinkFromNeuronToActuator struct {
+	Rand      *rand.Rand
+	ScapeName string
+}
+
+func (o *LinkFromNeuronToActuator) Name() string {
+	return "link_FromNeuronToActuator"
+}
+
+func (o *LinkFromNeuronToActuator) Applicable(genome model.Genome, scapeName string) bool {
+	return (&AddRandomActuatorLink{Rand: o.Rand, ScapeName: scapeName}).Applicable(genome, scapeName)
+}
+
+func (o *LinkFromNeuronToActuator) Apply(ctx context.Context, genome model.Genome) (model.Genome, error) {
+	return (&AddRandomActuatorLink{Rand: o.Rand, ScapeName: o.ScapeName}).Apply(ctx, genome)
+}
+
 // AddRandomNeuron inserts a neuron by splitting a random synapse.
 type AddRandomNeuron struct {
 	Rand        *rand.Rand

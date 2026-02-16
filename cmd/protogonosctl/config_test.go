@@ -219,6 +219,8 @@ func TestLoadRunRequestFromConfigMapsSubstrateMutationAliases(t *testing.T) {
 				[]any{"remove_cpp", 1.25},
 				[]any{"remove_cep", 0.75},
 				[]any{"delete_CircuitNode", 4.0},
+				[]any{"link_FromSensorToNeuron", 0.5},
+				[]any{"link_FromNeuronToActuator", 1.5},
 				[]any{"mutate_tuning_selection", 1.0},
 				[]any{"mutate_tuning_annealing", 1.0},
 				[]any{"mutate_tot_topological_mutations", 1.0},
@@ -238,8 +240,8 @@ func TestLoadRunRequestFromConfigMapsSubstrateMutationAliases(t *testing.T) {
 	if err != nil {
 		t.Fatalf("load run request: %v", err)
 	}
-	if req.WeightSubstrate != 16.0 {
-		t.Fatalf("unexpected substrate alias weight total: got=%f want=16", req.WeightSubstrate)
+	if req.WeightSubstrate != 18.0 {
+		t.Fatalf("unexpected substrate alias weight total: got=%f want=18", req.WeightSubstrate)
 	}
 }
 
@@ -250,6 +252,8 @@ func TestLoadRunRequestFromConfigMapsCutlinkNeuronToNeuronAlias(t *testing.T) {
 			"mutation_operators": []any{
 				[]any{"cutlink_FromNeuronToNeuron", 2.25},
 				[]any{"cutlink_FromElementToElement", 1.75},
+				[]any{"link_FromElementToElement", 0.5},
+				[]any{"link_FromNeuronToNeuron", 0.75},
 			},
 		},
 	}
@@ -267,6 +271,9 @@ func TestLoadRunRequestFromConfigMapsCutlinkNeuronToNeuronAlias(t *testing.T) {
 	}
 	if req.WeightRemoveSynapse != 4.0 {
 		t.Fatalf("unexpected remove synapse alias weight total: got=%f want=4.0", req.WeightRemoveSynapse)
+	}
+	if req.WeightAddSynapse != 1.25 {
+		t.Fatalf("unexpected add synapse alias weight total: got=%f want=1.25", req.WeightAddSynapse)
 	}
 }
 

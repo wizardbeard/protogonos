@@ -151,6 +151,8 @@ func resolveParityProfile(profileID string) (parityProfileResolved, error) {
 				resolved.WeightAggregator += op.Weight
 			case "add_outlink", "add_inlink":
 				resolved.WeightAddSyn += op.Weight
+			case "link_FromElementToElement", "link_FromNeuronToNeuron":
+				resolved.WeightAddSyn += op.Weight
 			case "add_neuron", "outsplice", "insplice":
 				resolved.WeightAddNeuro += op.Weight
 			case "remove_outlink", "remove_inlink", "cutlink_FromNeuronToNeuron", "cutlink_FromElementToElement":
@@ -161,7 +163,7 @@ func resolveParityProfile(profileID string) (parityProfileResolved, error) {
 				resolved.WeightPlasticity += op.Weight
 			case "mutate_pf":
 				resolved.WeightPlasticityRule += op.Weight
-			case "add_sensor", "add_sensorlink", "add_actuator", "add_cpp", "remove_cpp", "add_cep", "remove_cep", "add_circuit_node", "delete_circuit_node", "add_circuit_layer", "remove_sensor", "remove_actuator", "cutlink_FromSensorToNeuron", "cutlink_FromNeuronToActuator", "mutate_tuning_selection", "mutate_tuning_annealing", "mutate_tot_topological_mutations", "mutate_heredity_type":
+			case "add_sensor", "add_sensorlink", "add_actuator", "add_cpp", "remove_cpp", "add_cep", "remove_cep", "add_circuit_node", "delete_circuit_node", "add_circuit_layer", "remove_sensor", "remove_actuator", "cutlink_FromSensorToNeuron", "cutlink_FromNeuronToActuator", "link_FromSensorToNeuron", "link_FromNeuronToActuator", "mutate_tuning_selection", "mutate_tuning_annealing", "mutate_tot_topological_mutations", "mutate_heredity_type":
 				resolved.WeightSubstrate += op.Weight
 			}
 		}
