@@ -1220,8 +1220,8 @@ func TestMutationOperatorReferenceNames(t *testing.T) {
 	if (&AddCircuitLayer{}).Name() != "add_circuit_layer" {
 		t.Fatalf("unexpected add_circuit_layer name")
 	}
-	if (&DeleteCircuitNode{}).Name() != "delete_CircuitNode" {
-		t.Fatalf("unexpected delete_CircuitNode name")
+	if (&DeleteCircuitNode{}).Name() != "delete_circuit_node" {
+		t.Fatalf("unexpected delete_circuit_node name")
 	}
 	if (&MutatePF{}).Name() != "mutate_pf" {
 		t.Fatalf("unexpected mutate_pf name")

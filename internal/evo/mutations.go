@@ -1575,7 +1575,7 @@ type DeleteCircuitNode struct {
 }
 
 func (o *DeleteCircuitNode) Name() string {
-	return "delete_CircuitNode"
+	return "delete_circuit_node"
 }
 
 func (o *DeleteCircuitNode) Applicable(genome model.Genome, _ string) bool {
