@@ -1,0 +1,12 @@
+{
+  "run_id": "xor-101-1771203642",
+  "scape": "xor",
+  "population_size": 12,
+  "generations": 6,
+  "seed": 101,
+  "initial_best": 0.6801663016213432,
+  "final_best": 0.7981155975942578,
+  "improvement": 0.11794929597291459,
+  "min_improvement": 0.0001,
+  "passed": true
+}

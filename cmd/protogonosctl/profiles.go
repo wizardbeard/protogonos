@@ -138,32 +138,30 @@ func resolveParityProfile(profileID string) (parityProfileResolved, error) {
 			MutationOperatorLen: len(profile.MutationOperators),
 		}
 		for _, op := range constraint.MutationOperators {
-			switch normalizeMutationOperatorName(op.Name) {
-			case "mutate_weights":
+			switch mutationWeightBucket(op.Name) {
+			case "perturb":
 				resolved.WeightPerturb += op.Weight
-			case "add_bias":
+			case "bias":
 				resolved.WeightBias += op.Weight
 			case "remove_bias":
 				resolved.WeightRemoveBias += op.Weight
-			case "mutate_af":
+			case "activation":
 				resolved.WeightActivation += op.Weight
-			case "mutate_aggrf":
+			case "aggregator":
 				resolved.WeightAggregator += op.Weight
-			case "add_outlink", "add_inlink":
+			case "add_synapse":
 				resolved.WeightAddSyn += op.Weight
-			case "link_FromElementToElement", "link_FromNeuronToNeuron":
-				resolved.WeightAddSyn += op.Weight
-			case "add_neuron", "outsplice", "insplice":
+			case "add_neuron":
 				resolved.WeightAddNeuro += op.Weight
-			case "remove_outlink", "remove_inlink", "cutlink_FromNeuronToNeuron", "cutlink_FromElementToElement":
+			case "remove_synapse":
 				resolved.WeightRemoveSyn += op.Weight
 			case "remove_neuron":
 				resolved.WeightRemoveNeuro += op.Weight
-			case "mutate_plasticity_parameters":
+			case "plasticity":
 				resolved.WeightPlasticity += op.Weight
-			case "mutate_pf":
+			case "plasticity_rule":
 				resolved.WeightPlasticityRule += op.Weight
-			case "add_sensor", "add_sensorlink", "add_actuator", "add_cpp", "remove_cpp", "add_cep", "remove_cep", "add_circuit_node", "delete_circuit_node", "add_circuit_layer", "remove_sensor", "remove_actuator", "cutlink_FromSensorToNeuron", "cutlink_FromNeuronToActuator", "link_FromSensorToNeuron", "link_FromNeuronToActuator", "mutate_tuning_selection", "mutate_tuning_annealing", "mutate_tot_topological_mutations", "mutate_heredity_type":
+			case "substrate":
 				resolved.WeightSubstrate += op.Weight
 			}
 		}

@@ -1,0 +1,107 @@
+[
+  {
+    "generation": 1,
+    "species": [
+      {
+        "key": "sp-001",
+        "size": 12,
+        "mean_fitness": 0.6007236227614349,
+        "best_fitness": 0.6801663016213432
+      }
+    ],
+    "new_species": [
+      "sp-001"
+    ]
+  },
+  {
+    "generation": 2,
+    "species": [
+      {
+        "key": "sp-001",
+        "size": 12,
+        "mean_fitness": 0.6686147648809054,
+        "best_fitness": 0.7005239553147722
+      }
+    ]
+  },
+  {
+    "generation": 3,
+    "species": [
+      {
+        "key": "sp-001",
+        "size": 10,
+        "mean_fitness": 0.6844841632572141,
+        "best_fitness": 0.7323573431765187
+      },
+      {
+        "key": "sp-002",
+        "size": 2,
+        "mean_fitness": 0.6124567451660604,
+        "best_fitness": 0.6607151533819622
+      }
+    ],
+    "new_species": [
+      "sp-002"
+    ]
+  },
+  {
+    "generation": 4,
+    "species": [
+      {
+        "key": "sp-001",
+        "size": 7,
+        "mean_fitness": 0.7210685283529844,
+        "best_fitness": 0.7323573431765187
+      },
+      {
+        "key": "sp-002",
+        "size": 5,
+        "mean_fitness": 0.5888829995696134,
+        "best_fitness": 0.6912351191828816
+      }
+    ]
+  },
+  {
+    "generation": 5,
+    "species": [
+      {
+        "key": "sp-001",
+        "size": 8,
+        "mean_fitness": 0.7206387696089352,
+        "best_fitness": 0.75076359092803
+      },
+      {
+        "key": "sp-002",
+        "size": 4,
+        "mean_fitness": 0.6296766146570647,
+        "best_fitness": 0.7086748079931038
+      }
+    ]
+  },
+  {
+    "generation": 6,
+    "species": [
+      {
+        "key": "sp-001",
+        "size": 5,
+        "mean_fitness": 0.743125479111008,
+        "best_fitness": 0.8133311590135054
+      },
+      {
+        "key": "sp-002",
+        "size": 5,
+        "mean_fitness": 0.7069519388249469,
+        "best_fitness": 0.738471898172296
+      },
+      {
+        "key": "sp-003",
+        "size": 2,
+        "mean_fitness": 0.7643027084846247,
+        "best_fitness": 0.7903629799811905
+      }
+    ],
+    "new_species": [
+      "sp-003"
+    ]
+  }
+]

@@ -1,0 +1,203 @@
+[
+  {
+    "rank": 1,
+    "fitness": 0.9999848328863786,
+    "genome": {
+      "schema_version": 1,
+      "codec_version": 1,
+      "id": "reg-g0-1-g2-i4-g5-i2",
+      "neurons": [
+        {
+          "id": "i",
+          "activation": "identity",
+          "bias": 0
+        },
+        {
+          "id": "o",
+          "activation": "identity",
+          "bias": 0.005453695479127996
+        }
+      ],
+      "synapses": [
+        {
+          "id": "s1",
+          "from": "i",
+          "to": "o",
+          "weight": 0.9889857336035307,
+          "enabled": true,
+          "recurrent": false
+        }
+      ],
+      "sensor_ids": [
+        "scalar_input"
+      ],
+      "actuator_ids": [
+        "scalar_output"
+      ]
+    }
+  },
+  {
+    "rank": 2,
+    "fitness": 0.9999391368620766,
+    "genome": {
+      "schema_version": 1,
+      "codec_version": 1,
+      "id": "reg-g0-1-g2-i4",
+      "neurons": [
+        {
+          "id": "i",
+          "activation": "identity",
+          "bias": 0
+        },
+        {
+          "id": "o",
+          "activation": "identity",
+          "bias": 0.005453695479127996
+        }
+      ],
+      "synapses": [
+        {
+          "id": "s1",
+          "from": "i",
+          "to": "o",
+          "weight": 1.0079490647509959,
+          "enabled": true,
+          "recurrent": false
+        }
+      ],
+      "sensor_ids": [
+        "scalar_input"
+      ],
+      "actuator_ids": [
+        "scalar_output"
+      ]
+    }
+  },
+  {
+    "rank": 3,
+    "fitness": 0.9982307730723401,
+    "genome": {
+      "schema_version": 1,
+      "codec_version": 1,
+      "id": "reg-g0-1-g2-i7-g3-i10-g4-i10",
+      "neurons": [
+        {
+          "id": "i",
+          "activation": "identity",
+          "bias": 0
+        },
+        {
+          "id": "o",
+          "activation": "identity",
+          "bias": 0.005453695479127996
+        }
+      ],
+      "synapses": [
+        {
+          "id": "s1",
+          "from": "i",
+          "to": "o",
+          "weight": -0.019673631323502527,
+          "enabled": true,
+          "recurrent": false
+        },
+        {
+          "id": "srand-5640615822364667497",
+          "from": "i",
+          "to": "o",
+          "weight": 0.9439075088522478,
+          "enabled": true,
+          "recurrent": false
+        }
+      ],
+      "sensor_ids": [
+        "scalar_input"
+      ],
+      "actuator_ids": [
+        "scalar_output"
+      ]
+    }
+  },
+  {
+    "rank": 4,
+    "fitness": 0.9971729172450254,
+    "genome": {
+      "schema_version": 1,
+      "codec_version": 1,
+      "id": "reg-g0-1-g2-i7-g3-i10-g4-i10-g5-i9",
+      "neurons": [
+        {
+          "id": "i",
+          "activation": "identity",
+          "bias": 0
+        },
+        {
+          "id": "o",
+          "activation": "identity",
+          "bias": 0.005453695479127996
+        }
+      ],
+      "synapses": [
+        {
+          "id": "s1",
+          "from": "i",
+          "to": "o",
+          "weight": -0.1134687471081095,
+          "enabled": true,
+          "recurrent": false
+        },
+        {
+          "id": "srand-5640615822364667497",
+          "from": "i",
+          "to": "o",
+          "weight": 1.2310297551399594,
+          "enabled": true,
+          "recurrent": false
+        }
+      ],
+      "sensor_ids": [
+        "scalar_input"
+      ],
+      "actuator_ids": [
+        "scalar_output"
+      ]
+    }
+  },
+  {
+    "rank": 5,
+    "fitness": 0.9707344251772198,
+    "genome": {
+      "schema_version": 1,
+      "codec_version": 1,
+      "id": "reg-g0-1-g2-i4-g5-i7",
+      "neurons": [
+        {
+          "id": "i",
+          "activation": "identity",
+          "bias": 0
+        },
+        {
+          "id": "o",
+          "activation": "identity",
+          "bias": 0.005453695479127996
+        }
+      ],
+      "synapses": [
+        {
+          "id": "s1",
+          "from": "i",
+          "to": "o",
+          "weight": 1.5047286516371632,
+          "enabled": true,
+          "recurrent": false
+        }
+      ],
+      "sensor_ids": [
+        "scalar_input"
+      ],
+      "actuator_ids": [
+        "scalar_output"
+      ]
+    }
+  }
+]

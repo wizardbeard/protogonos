@@ -539,6 +539,43 @@ func TestSpliceMutationsRespectFeedforwardLayers(t *testing.T) {
 	}
 }
 
+func TestFeedforwardDirectionalCancellationWhenOnlyBackwardOrderingExists(t *testing.T) {
+	genome := model.Genome{
+		Neurons: []model.Neuron{
+			{ID: "i1", Activation: "identity"},
+			{ID: "h1", Activation: "tanh"},
+		},
+		Synapses: []model.Synapse{
+			{ID: "s_backward", From: "h1", To: "i1", Weight: 1, Enabled: true},
+			{ID: "s_forward", From: "i1", To: "h1", Weight: 1, Enabled: true},
+		},
+	}
+	addIn := &AddRandomInlink{
+		Rand:            rand.New(rand.NewSource(229)),
+		MaxAbsWeight:    1.0,
+		InputNeuronIDs:  []string{"i1"},
+		FeedForwardOnly: true,
+	}
+	if addIn.Applicable(genome, "xor") {
+		t.Fatal("expected add_inlink to be inapplicable when inferred feedforward ordering forbids candidates")
+	}
+	if _, err := addIn.Apply(context.Background(), genome); !errors.Is(err, ErrNoSynapses) {
+		t.Fatalf("expected ErrNoSynapses, got %v", err)
+	}
+
+	removeIn := &RemoveRandomInlink{
+		Rand:            rand.New(rand.NewSource(233)),
+		InputNeuronIDs:  []string{"i1"},
+		FeedForwardOnly: true,
+	}
+	if removeIn.Applicable(genome, "xor") {
+		t.Fatal("expected remove_inlink to be inapplicable when no feedforward-directed edges remain")
+	}
+	if _, err := removeIn.Apply(context.Background(), genome); !errors.Is(err, ErrNoSynapses) {
+		t.Fatalf("expected ErrNoSynapses, got %v", err)
+	}
+}
+
 func TestAddRandomOutsplicePrefersOutputEdge(t *testing.T) {
 	genome := model.Genome{
 		Neurons: []model.Neuron{

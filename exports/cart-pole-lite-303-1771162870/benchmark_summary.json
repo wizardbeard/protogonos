@@ -1,0 +1,12 @@
+{
+  "run_id": "cart-pole-lite-303-1771162870",
+  "scape": "cart-pole-lite",
+  "population_size": 12,
+  "generations": 6,
+  "seed": 303,
+  "initial_best": 0.9105842157608967,
+  "final_best": 0.9567136555090262,
+  "improvement": 0.04612943974812955,
+  "min_improvement": 0.0001,
+  "passed": true
+}
