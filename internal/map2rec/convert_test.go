@@ -66,6 +66,14 @@ func TestConvertDispatchesSensorAndActuatorKinds(t *testing.T) {
 		t.Fatalf("unexpected substrate dispatch result: %#v", gotSubstrate)
 	}
 
+	gotPolis, err := Convert("polis", map[string]any{"id": "p1"})
+	if err != nil {
+		t.Fatalf("convert polis: %v", err)
+	}
+	if polis, ok := gotPolis.(PolisRecord); !ok || polis.ID != "p1" {
+		t.Fatalf("unexpected polis dispatch result: %#v", gotPolis)
+	}
+
 	gotSpecie, err := Convert("specie", map[string]any{"id": "sp1"})
 	if err != nil {
 		t.Fatalf("convert specie: %v", err)
@@ -384,6 +392,31 @@ func TestConvertSubstrateMalformedKnownFieldKeepsDefault(t *testing.T) {
 	}
 	if len(out.CPPIDs) != 0 || len(out.CEPIDs) != 0 {
 		t.Fatalf("expected default substrate component IDs, got cpp=%+v cep=%+v", out.CPPIDs, out.CEPIDs)
+	}
+}
+
+func TestConvertPolisMapsFields(t *testing.T) {
+	in := map[string]any{
+		"id":             "polis-1",
+		"scape_ids":      []any{"xor", "flatland"},
+		"population_ids": []any{"pop-1"},
+		"specie_ids":     []any{"sp-1"},
+		"dx_ids":         []any{"dx-1"},
+		"parameters":     []any{map[string]any{"key": "value"}},
+	}
+	out := ConvertPolis(in)
+	if out.ID != "polis-1" {
+		t.Fatalf("unexpected polis conversion identity: %+v", out)
+	}
+	if len(out.ScapeIDs) != 2 || len(out.PopulationIDs) != 1 || len(out.Parameters) != 1 {
+		t.Fatalf("unexpected polis conversion collections: %+v", out)
+	}
+}
+
+func TestConvertPolisMalformedKnownFieldKeepsDefault(t *testing.T) {
+	out := ConvertPolis(map[string]any{"scape_ids": "bad", "parameters": "bad"})
+	if len(out.ScapeIDs) != 0 || len(out.Parameters) != 0 {
+		t.Fatalf("expected default polis collections, got scapes=%+v params=%+v", out.ScapeIDs, out.Parameters)
 	}
 }
 

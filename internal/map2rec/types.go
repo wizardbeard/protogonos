@@ -158,6 +158,15 @@ type SubstrateRecord struct {
 	CEPIDs     []any
 }
 
+type PolisRecord struct {
+	ID            any
+	ScapeIDs      []any
+	PopulationIDs []any
+	SpecieIDs     []any
+	DXIDs         []any
+	Parameters    []any
+}
+
 type SpecieRecord struct {
 	ID                any
 	PopulationID      any
@@ -342,6 +351,16 @@ func defaultSubstrateRecord() SubstrateRecord {
 		Plasticity: "none",
 		CPPIDs:     []any{},
 		CEPIDs:     []any{},
+	}
+}
+
+func defaultPolisRecord() PolisRecord {
+	return PolisRecord{
+		ScapeIDs:      []any{},
+		PopulationIDs: []any{},
+		SpecieIDs:     []any{},
+		DXIDs:         []any{},
+		Parameters:    []any{},
 	}
 }
 

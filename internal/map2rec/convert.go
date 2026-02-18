@@ -20,6 +20,8 @@ func Convert(kind string, in map[string]any) (any, error) {
 		return ConvertCortex(in), nil
 	case "substrate":
 		return ConvertSubstrate(in), nil
+	case "polis":
+		return ConvertPolis(in), nil
 	case "specie":
 		return ConvertSpecie(in), nil
 	case "population":
@@ -498,6 +500,37 @@ func ConvertSubstrate(in map[string]any) SubstrateRecord {
 		case "cep_ids":
 			if xs, ok := asAnySlice(val); ok {
 				out.CEPIDs = xs
+			}
+		}
+	}
+	return out
+}
+
+func ConvertPolis(in map[string]any) PolisRecord {
+	out := defaultPolisRecord()
+	for key, val := range in {
+		switch key {
+		case "id":
+			out.ID = val
+		case "scape_ids":
+			if xs, ok := asAnySlice(val); ok {
+				out.ScapeIDs = xs
+			}
+		case "population_ids":
+			if xs, ok := asAnySlice(val); ok {
+				out.PopulationIDs = xs
+			}
+		case "specie_ids":
+			if xs, ok := asAnySlice(val); ok {
+				out.SpecieIDs = xs
+			}
+		case "dx_ids":
+			if xs, ok := asAnySlice(val); ok {
+				out.DXIDs = xs
+			}
+		case "parameters":
+			if xs, ok := asAnySlice(val); ok {
+				out.Parameters = xs
 			}
 		}
 	}
