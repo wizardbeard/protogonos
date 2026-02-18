@@ -58,6 +58,14 @@ func TestConvertDispatchesSensorAndActuatorKinds(t *testing.T) {
 		t.Fatalf("unexpected cortex dispatch result: %#v", gotCortex)
 	}
 
+	gotSubstrate, err := Convert("substrate", map[string]any{"id": "sub1"})
+	if err != nil {
+		t.Fatalf("convert substrate: %v", err)
+	}
+	if substrate, ok := gotSubstrate.(SubstrateRecord); !ok || substrate.ID != "sub1" {
+		t.Fatalf("unexpected substrate dispatch result: %#v", gotSubstrate)
+	}
+
 	gotSpecie, err := Convert("specie", map[string]any{"id": "sp1"})
 	if err != nil {
 		t.Fatalf("convert specie: %v", err)
@@ -344,6 +352,38 @@ func TestConvertCortexMapsFields(t *testing.T) {
 	}
 	if len(out.NeuronIDs) != 2 || len(out.SensorIDs) != 1 || len(out.ActuatorIDs) != 1 {
 		t.Fatalf("unexpected cortex lists: %+v", out)
+	}
+}
+
+func TestConvertSubstrateMapsFields(t *testing.T) {
+	in := map[string]any{
+		"id":         "sub-1",
+		"agent_id":   "a-1",
+		"densities":  map[string]any{"i": 4, "h": 8, "o": 2},
+		"linkform":   "l2l_feedforward",
+		"plasticity": "hebbian",
+		"cpp_ids":    []any{"cpp-1"},
+		"cep_ids":    []any{"cep-1", "cep-2"},
+	}
+	out := ConvertSubstrate(in)
+	if out.ID != "sub-1" || out.AgentID != "a-1" {
+		t.Fatalf("unexpected substrate conversion identity: %+v", out)
+	}
+	if out.Linkform != "l2l_feedforward" || out.Plasticity != "hebbian" {
+		t.Fatalf("unexpected substrate conversion behavior fields: %+v", out)
+	}
+	if len(out.CPPIDs) != 1 || len(out.CEPIDs) != 2 {
+		t.Fatalf("unexpected substrate conversion component IDs: %+v", out)
+	}
+}
+
+func TestConvertSubstrateMalformedKnownFieldKeepsDefault(t *testing.T) {
+	out := ConvertSubstrate(map[string]any{"cpp_ids": "bad", "cep_ids": map[string]any{"id": "cep-1"}})
+	if out.Plasticity != "none" {
+		t.Fatalf("expected default plasticity none, got %#v", out.Plasticity)
+	}
+	if len(out.CPPIDs) != 0 || len(out.CEPIDs) != 0 {
+		t.Fatalf("expected default substrate component IDs, got cpp=%+v cep=%+v", out.CPPIDs, out.CEPIDs)
 	}
 }
 

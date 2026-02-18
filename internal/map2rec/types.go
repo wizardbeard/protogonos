@@ -148,6 +148,16 @@ type CortexRecord struct {
 	ActuatorIDs []any
 }
 
+type SubstrateRecord struct {
+	ID         any
+	AgentID    any
+	Densities  any
+	Linkform   any
+	Plasticity any
+	CPPIDs     []any
+	CEPIDs     []any
+}
+
 type SpecieRecord struct {
 	ID                any
 	PopulationID      any
@@ -324,6 +334,14 @@ func defaultCortexRecord() CortexRecord {
 		NeuronIDs:   []any{},
 		SensorIDs:   []any{},
 		ActuatorIDs: []any{},
+	}
+}
+
+func defaultSubstrateRecord() SubstrateRecord {
+	return SubstrateRecord{
+		Plasticity: "none",
+		CPPIDs:     []any{},
+		CEPIDs:     []any{},
 	}
 }
 

@@ -18,6 +18,8 @@ func Convert(kind string, in map[string]any) (any, error) {
 		return ConvertAgent(in), nil
 	case "cortex":
 		return ConvertCortex(in), nil
+	case "substrate":
+		return ConvertSubstrate(in), nil
 	case "specie":
 		return ConvertSpecie(in), nil
 	case "population":
@@ -469,6 +471,33 @@ func ConvertCortex(in map[string]any) CortexRecord {
 		case "actuator_ids":
 			if xs, ok := asAnySlice(val); ok {
 				out.ActuatorIDs = xs
+			}
+		}
+	}
+	return out
+}
+
+func ConvertSubstrate(in map[string]any) SubstrateRecord {
+	out := defaultSubstrateRecord()
+	for key, val := range in {
+		switch key {
+		case "id":
+			out.ID = val
+		case "agent_id":
+			out.AgentID = val
+		case "densities":
+			out.Densities = val
+		case "linkform":
+			out.Linkform = val
+		case "plasticity":
+			out.Plasticity = val
+		case "cpp_ids":
+			if xs, ok := asAnySlice(val); ok {
+				out.CPPIDs = xs
+			}
+		case "cep_ids":
+			if xs, ok := asAnySlice(val); ok {
+				out.CEPIDs = xs
 			}
 		}
 	}
