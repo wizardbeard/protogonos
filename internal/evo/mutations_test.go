@@ -870,6 +870,15 @@ func TestAddRandomSensorAddsCompatibleSensor(t *testing.T) {
 	if mutated.SensorIDs[len(mutated.SensorIDs)-1] != protoio.XORInputRightSensorName {
 		t.Fatalf("expected xor right sensor to be added, got=%s", mutated.SensorIDs[len(mutated.SensorIDs)-1])
 	}
+	if len(mutated.SensorNeuronLinks) != 1 {
+		t.Fatalf("expected one sensor-neuron link for new sensor, got=%d", len(mutated.SensorNeuronLinks))
+	}
+	if mutated.SensorNeuronLinks[0].SensorID != protoio.XORInputRightSensorName {
+		t.Fatalf("expected new sensor id on link, got=%+v", mutated.SensorNeuronLinks[0])
+	}
+	if mutated.SensorLinks != 1 {
+		t.Fatalf("expected synchronized sensor link counter, got=%d", mutated.SensorLinks)
+	}
 }
 
 func TestAddRandomActuatorAddsCompatibleActuator(t *testing.T) {
@@ -891,6 +900,15 @@ func TestAddRandomActuatorAddsCompatibleActuator(t *testing.T) {
 	}
 	if mutated.ActuatorIDs[0] != protoio.FXTradeActuatorName {
 		t.Fatalf("expected fx trade actuator to be added, got=%s", mutated.ActuatorIDs[0])
+	}
+	if len(mutated.NeuronActuatorLinks) != 1 {
+		t.Fatalf("expected one neuron-actuator link for new actuator, got=%d", len(mutated.NeuronActuatorLinks))
+	}
+	if mutated.NeuronActuatorLinks[0].ActuatorID != protoio.FXTradeActuatorName {
+		t.Fatalf("expected new actuator id on link, got=%+v", mutated.NeuronActuatorLinks[0])
+	}
+	if mutated.ActuatorLinks != 1 {
+		t.Fatalf("expected synchronized actuator link counter, got=%d", mutated.ActuatorLinks)
 	}
 }
 

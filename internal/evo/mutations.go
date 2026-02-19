@@ -1438,6 +1438,14 @@ func (o *AddRandomSensor) Apply(_ context.Context, genome model.Genome) (model.G
 	choice := candidates[o.Rand.Intn(len(candidates))]
 	mutated := cloneGenome(genome)
 	mutated.SensorIDs = append(mutated.SensorIDs, choice)
+	if len(mutated.Neurons) > 0 {
+		targetNeuron := mutated.Neurons[o.Rand.Intn(len(mutated.Neurons))].ID
+		mutated.SensorNeuronLinks = append(mutated.SensorNeuronLinks, model.SensorNeuronLink{
+			SensorID: choice,
+			NeuronID: targetNeuron,
+		})
+	}
+	syncIOLinkCounts(&mutated)
 	return mutated, nil
 }
 
@@ -1501,6 +1509,14 @@ func (o *AddRandomActuator) Apply(_ context.Context, genome model.Genome) (model
 	choice := candidates[o.Rand.Intn(len(candidates))]
 	mutated := cloneGenome(genome)
 	mutated.ActuatorIDs = append(mutated.ActuatorIDs, choice)
+	if len(mutated.Neurons) > 0 {
+		sourceNeuron := mutated.Neurons[o.Rand.Intn(len(mutated.Neurons))].ID
+		mutated.NeuronActuatorLinks = append(mutated.NeuronActuatorLinks, model.NeuronActuatorLink{
+			NeuronID:   sourceNeuron,
+			ActuatorID: choice,
+		})
+	}
+	syncIOLinkCounts(&mutated)
 	return mutated, nil
 }
 
