@@ -114,6 +114,14 @@ func TestConvertDispatchesSensorAndActuatorKinds(t *testing.T) {
 		t.Fatalf("unexpected circle dispatch result: %#v", gotCircle)
 	}
 
+	gotSquare, err := Convert("square", map[string]any{"id": "sq1"})
+	if err != nil {
+		t.Fatalf("convert square: %v", err)
+	}
+	if square, ok := gotSquare.(SquareRecord); !ok || square.ID != "sq1" {
+		t.Fatalf("unexpected square dispatch result: %#v", gotSquare)
+	}
+
 	gotSpecie, err := Convert("specie", map[string]any{"id": "sp1"})
 	if err != nil {
 		t.Fatalf("convert specie: %v", err)
@@ -624,6 +632,24 @@ func TestConvertCircleMapsFields(t *testing.T) {
 	}
 	if out.R != 1.25 {
 		t.Fatalf("unexpected circle radius mapping: %+v", out)
+	}
+}
+
+func TestConvertSquareMapsFields(t *testing.T) {
+	in := map[string]any{
+		"id":     "square-1",
+		"sector": "sector-1",
+		"color":  "yellow",
+		"loc":    []any{4, 8},
+		"pivot":  []any{0, 0},
+		"r":      2.0,
+	}
+	out := ConvertSquare(in)
+	if out.ID != "square-1" || out.Sector != "sector-1" || out.Color != "yellow" {
+		t.Fatalf("unexpected square identity mapping: %+v", out)
+	}
+	if out.R != 2.0 {
+		t.Fatalf("unexpected square radius mapping: %+v", out)
 	}
 }
 

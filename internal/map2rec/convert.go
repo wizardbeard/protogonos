@@ -32,6 +32,8 @@ func Convert(kind string, in map[string]any) (any, error) {
 		return ConvertObject(in), nil
 	case "circle":
 		return ConvertCircle(in), nil
+	case "square":
+		return ConvertSquare(in), nil
 	case "specie":
 		return ConvertSpecie(in), nil
 	case "population":
@@ -771,6 +773,27 @@ func ConvertObject(in map[string]any) ObjectRecord {
 
 func ConvertCircle(in map[string]any) CircleRecord {
 	out := defaultCircleRecord()
+	for key, val := range in {
+		switch key {
+		case "id":
+			out.ID = val
+		case "sector":
+			out.Sector = val
+		case "color":
+			out.Color = val
+		case "loc":
+			out.Loc = val
+		case "pivot":
+			out.Pivot = val
+		case "r":
+			out.R = val
+		}
+	}
+	return out
+}
+
+func ConvertSquare(in map[string]any) SquareRecord {
+	out := defaultSquareRecord()
 	for key, val := range in {
 		switch key {
 		case "id":
