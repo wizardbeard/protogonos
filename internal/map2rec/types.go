@@ -232,6 +232,17 @@ type AvatarRecord struct {
 	Spear      any
 }
 
+type ObjectRecord struct {
+	ID         any
+	Sector     any
+	Type       any
+	Color      any
+	Loc        any
+	Pivot      any
+	Elements   []any
+	Parameters []any
+}
+
 type SpecieRecord struct {
 	ID                any
 	PopulationID      any
@@ -468,6 +479,13 @@ func defaultAvatarRecord() AvatarRecord {
 		Age:    0,
 		Kills:  0,
 		Vis:    []any{},
+	}
+}
+
+func defaultObjectRecord() ObjectRecord {
+	return ObjectRecord{
+		Elements:   []any{},
+		Parameters: []any{},
 	}
 }
 

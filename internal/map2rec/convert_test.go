@@ -98,6 +98,14 @@ func TestConvertDispatchesSensorAndActuatorKinds(t *testing.T) {
 		t.Fatalf("unexpected avatar dispatch result: %#v", gotAvatar)
 	}
 
+	gotObject, err := Convert("object", map[string]any{"id": "obj1"})
+	if err != nil {
+		t.Fatalf("convert object: %v", err)
+	}
+	if object, ok := gotObject.(ObjectRecord); !ok || object.ID != "obj1" {
+		t.Fatalf("unexpected object dispatch result: %#v", gotObject)
+	}
+
 	gotSpecie, err := Convert("specie", map[string]any{"id": "sp1"})
 	if err != nil {
 		t.Fatalf("convert specie: %v", err)
@@ -563,6 +571,33 @@ func TestConvertAvatarMalformedKnownFieldKeepsDefault(t *testing.T) {
 	}
 	if len(out.Vis) != 0 {
 		t.Fatalf("expected default vis collection, got %+v", out.Vis)
+	}
+}
+
+func TestConvertObjectMapsFields(t *testing.T) {
+	in := map[string]any{
+		"id":         "object-1",
+		"sector":     "sector-1",
+		"type":       "food",
+		"color":      "green",
+		"loc":        []any{3, 4},
+		"pivot":      []any{0, 0},
+		"elements":   []any{"e-1", "e-2"},
+		"parameters": []any{"edible", 1},
+	}
+	out := ConvertObject(in)
+	if out.ID != "object-1" || out.Sector != "sector-1" || out.Type != "food" {
+		t.Fatalf("unexpected object identity mapping: %+v", out)
+	}
+	if len(out.Elements) != 2 || len(out.Parameters) != 2 {
+		t.Fatalf("unexpected object collection mapping: %+v", out)
+	}
+}
+
+func TestConvertObjectMalformedKnownFieldKeepsDefault(t *testing.T) {
+	out := ConvertObject(map[string]any{"elements": "bad", "parameters": "bad"})
+	if len(out.Elements) != 0 || len(out.Parameters) != 0 {
+		t.Fatalf("expected default object collections, got elements=%+v parameters=%+v", out.Elements, out.Parameters)
 	}
 }
 
