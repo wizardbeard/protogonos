@@ -90,6 +90,14 @@ func TestConvertDispatchesSensorAndActuatorKinds(t *testing.T) {
 		t.Fatalf("unexpected sector dispatch result: %#v", gotSector)
 	}
 
+	gotAvatar, err := Convert("avatar", map[string]any{"id": "av1"})
+	if err != nil {
+		t.Fatalf("convert avatar: %v", err)
+	}
+	if avatar, ok := gotAvatar.(AvatarRecord); !ok || avatar.ID != "av1" {
+		t.Fatalf("unexpected avatar dispatch result: %#v", gotAvatar)
+	}
+
 	gotSpecie, err := Convert("specie", map[string]any{"id": "sp1"})
 	if err != nil {
 		t.Fatalf("convert specie: %v", err)
@@ -507,6 +515,54 @@ func TestConvertSectorMalformedKnownFieldKeepsDefault(t *testing.T) {
 	out := ConvertSector(map[string]any{"avatars": "bad", "objects": "bad"})
 	if len(out.Avatars) != 0 || len(out.Objects) != 0 {
 		t.Fatalf("expected default sector collections, got avatars=%+v objects=%+v", out.Avatars, out.Objects)
+	}
+}
+
+func TestConvertAvatarMapsFields(t *testing.T) {
+	in := map[string]any{
+		"id":         "avatar-1",
+		"sector":     "sector-1",
+		"morphology": "flatland",
+		"type":       "agent",
+		"specie":     "sp-1",
+		"energy":     10.5,
+		"health":     8.5,
+		"food":       2.0,
+		"age":        4,
+		"kills":      1,
+		"loc":        []any{1, 2},
+		"direction":  []any{0, 1},
+		"r":          0.5,
+		"mass":       7.2,
+		"objects":    []any{"obj-1"},
+		"vis":        []any{"ray-1"},
+		"state":      "active",
+		"stats":      map[string]any{"fitness": 0.7},
+		"actuators":  []any{"act-1"},
+		"sensors":    []any{"sens-1"},
+		"sound":      "quiet",
+		"gestalt":    map[string]any{"mode": "search"},
+		"spear":      "none",
+	}
+	out := ConvertAvatar(in)
+	if out.ID != "avatar-1" || out.Sector != "sector-1" || out.Morphology != "flatland" {
+		t.Fatalf("unexpected avatar identity mapping: %+v", out)
+	}
+	if out.Energy != 10.5 || out.Health != 8.5 || out.Age != 4 || out.Kills != 1 {
+		t.Fatalf("unexpected avatar numeric mapping: %+v", out)
+	}
+	if len(out.Vis) != 1 || out.State != "active" || out.Sound != "quiet" {
+		t.Fatalf("unexpected avatar misc mapping: %+v", out)
+	}
+}
+
+func TestConvertAvatarMalformedKnownFieldKeepsDefault(t *testing.T) {
+	out := ConvertAvatar(map[string]any{"energy": "bad", "vis": "bad"})
+	if out.Energy != 0 {
+		t.Fatalf("expected default energy=0, got %f", out.Energy)
+	}
+	if len(out.Vis) != 0 {
+		t.Fatalf("expected default vis collection, got %+v", out.Vis)
 	}
 }
 

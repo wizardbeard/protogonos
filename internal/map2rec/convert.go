@@ -26,6 +26,8 @@ func Convert(kind string, in map[string]any) (any, error) {
 		return ConvertScape(in), nil
 	case "sector":
 		return ConvertSector(in), nil
+	case "avatar":
+		return ConvertAvatar(in), nil
 	case "specie":
 		return ConvertSpecie(in), nil
 	case "population":
@@ -662,6 +664,73 @@ func ConvertSector(in map[string]any) SectorRecord {
 			if xs, ok := asAnySlice(val); ok {
 				out.Atoms = xs
 			}
+		}
+	}
+	return out
+}
+
+func ConvertAvatar(in map[string]any) AvatarRecord {
+	out := defaultAvatarRecord()
+	for key, val := range in {
+		switch key {
+		case "id":
+			out.ID = val
+		case "sector":
+			out.Sector = val
+		case "morphology":
+			out.Morphology = val
+		case "type":
+			out.Type = val
+		case "specie":
+			out.Specie = val
+		case "energy":
+			if f, ok := asFloat64(val); ok {
+				out.Energy = f
+			}
+		case "health":
+			if f, ok := asFloat64(val); ok {
+				out.Health = f
+			}
+		case "food":
+			if f, ok := asFloat64(val); ok {
+				out.Food = f
+			}
+		case "age":
+			if f, ok := asFloat64(val); ok {
+				out.Age = f
+			}
+		case "kills":
+			if f, ok := asFloat64(val); ok {
+				out.Kills = f
+			}
+		case "loc":
+			out.Loc = val
+		case "direction":
+			out.Direction = val
+		case "r":
+			out.R = val
+		case "mass":
+			out.Mass = val
+		case "objects":
+			out.Objects = val
+		case "vis":
+			if xs, ok := asAnySlice(val); ok {
+				out.Vis = xs
+			}
+		case "state":
+			out.State = val
+		case "stats":
+			out.Stats = val
+		case "actuators":
+			out.Actuators = val
+		case "sensors":
+			out.Sensors = val
+		case "sound":
+			out.Sound = val
+		case "gestalt":
+			out.Gestalt = val
+		case "spear":
+			out.Spear = val
 		}
 	}
 	return out

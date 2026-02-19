@@ -206,6 +206,32 @@ type SectorRecord struct {
 	Atoms          []any
 }
 
+type AvatarRecord struct {
+	ID         any
+	Sector     any
+	Morphology any
+	Type       any
+	Specie     any
+	Energy     float64
+	Health     float64
+	Food       float64
+	Age        float64
+	Kills      float64
+	Loc        any
+	Direction  any
+	R          any
+	Mass       any
+	Objects    any
+	Vis        []any
+	State      any
+	Stats      any
+	Actuators  any
+	Sensors    any
+	Sound      any
+	Gestalt    any
+	Spear      any
+}
+
 type SpecieRecord struct {
 	ID                any
 	PopulationID      any
@@ -431,6 +457,17 @@ func defaultSectorRecord() SectorRecord {
 		Objects:   []any{},
 		Elements:  []any{},
 		Atoms:     []any{},
+	}
+}
+
+func defaultAvatarRecord() AvatarRecord {
+	return AvatarRecord{
+		Energy: 0,
+		Health: 0,
+		Food:   0,
+		Age:    0,
+		Kills:  0,
+		Vis:    []any{},
 	}
 }
 
