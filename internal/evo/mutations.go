@@ -397,19 +397,34 @@ func (o *AddRandomSynapse) Apply(_ context.Context, genome model.Genome) (model.
 		return model.Genome{}, errors.New("max abs weight must be > 0")
 	}
 
-	from := genome.Neurons[o.Rand.Intn(len(genome.Neurons))].ID
-	to := genome.Neurons[o.Rand.Intn(len(genome.Neurons))].ID
+	type pair struct {
+		from string
+		to   string
+	}
+	candidates := make([]pair, 0, len(genome.Neurons)*len(genome.Neurons))
+	for _, from := range genome.Neurons {
+		for _, to := range genome.Neurons {
+			if hasDirectedSynapse(genome, from.ID, to.ID) {
+				continue
+			}
+			candidates = append(candidates, pair{from: from.ID, to: to.ID})
+		}
+	}
+	if len(candidates) == 0 {
+		return model.Genome{}, ErrSynapseExists
+	}
+	selected := candidates[o.Rand.Intn(len(candidates))]
 	id := uniqueSynapseID(genome, o.Rand)
 	weight := (o.Rand.Float64()*2 - 1) * o.MaxAbsWeight
 
 	mutated := cloneGenome(genome)
 	mutated.Synapses = append(mutated.Synapses, model.Synapse{
 		ID:        id,
-		From:      from,
-		To:        to,
+		From:      selected.from,
+		To:        selected.to,
 		Weight:    weight,
 		Enabled:   true,
-		Recurrent: from == to,
+		Recurrent: selected.from == selected.to,
 	})
 	return mutated, nil
 }
@@ -443,7 +458,7 @@ func (o *AddRandomInlink) Applicable(genome model.Genome, _ string) bool {
 	if o.FeedForwardOnly {
 		fromCandidates, toCandidates = filterDirectedFeedforwardCandidates(fromCandidates, toCandidates, layers)
 	}
-	return len(fromCandidates) > 0 && len(toCandidates) > 0
+	return hasAvailableDirectedPair(genome, fromCandidates, toCandidates)
 }
 
 func (o *AddRandomInlink) Apply(_ context.Context, genome model.Genome) (model.Genome, error) {
@@ -502,7 +517,7 @@ func (o *AddRandomOutlink) Applicable(genome model.Genome, _ string) bool {
 	if o.FeedForwardOnly {
 		fromCandidates, toCandidates = filterDirectedFeedforwardCandidates(fromCandidates, toCandidates, layers)
 	}
-	return len(fromCandidates) > 0 && len(toCandidates) > 0
+	return hasAvailableDirectedPair(genome, fromCandidates, toCandidates)
 }
 
 func (o *AddRandomOutlink) Apply(_ context.Context, genome model.Genome) (model.Genome, error) {
@@ -2130,22 +2145,59 @@ func addDirectedRandomSynapse(genome model.Genome, rng *rand.Rand, maxAbsWeight 
 	if len(fromCandidates) == 0 || len(toCandidates) == 0 {
 		return model.Genome{}, ErrNoSynapses
 	}
-
-	from := fromCandidates[rng.Intn(len(fromCandidates))]
-	to := toCandidates[rng.Intn(len(toCandidates))]
+	type pair struct {
+		from string
+		to   string
+	}
+	candidates := make([]pair, 0, len(fromCandidates)*len(toCandidates))
+	for _, from := range fromCandidates {
+		for _, to := range toCandidates {
+			if hasDirectedSynapse(genome, from, to) {
+				continue
+			}
+			candidates = append(candidates, pair{from: from, to: to})
+		}
+	}
+	if len(candidates) == 0 {
+		return model.Genome{}, ErrSynapseExists
+	}
+	selected := candidates[rng.Intn(len(candidates))]
 	id := uniqueSynapseID(genome, rng)
 	weight := (rng.Float64()*2 - 1) * maxAbsWeight
 
 	mutated := cloneGenome(genome)
 	mutated.Synapses = append(mutated.Synapses, model.Synapse{
 		ID:        id,
-		From:      from,
-		To:        to,
+		From:      selected.from,
+		To:        selected.to,
 		Weight:    weight,
 		Enabled:   true,
-		Recurrent: from == to,
+		Recurrent: selected.from == selected.to,
 	})
 	return mutated, nil
+}
+
+func hasDirectedSynapse(g model.Genome, from, to string) bool {
+	for _, syn := range g.Synapses {
+		if syn.From == from && syn.To == to {
+			return true
+		}
+	}
+	return false
+}
+
+func hasAvailableDirectedPair(g model.Genome, fromCandidates, toCandidates []string) bool {
+	if len(fromCandidates) == 0 || len(toCandidates) == 0 {
+		return false
+	}
+	for _, from := range fromCandidates {
+		for _, to := range toCandidates {
+			if !hasDirectedSynapse(g, from, to) {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 func removeDirectedRandomSynapse(genome model.Genome, rng *rand.Rand, keep func(s model.Synapse) bool) (model.Genome, error) {

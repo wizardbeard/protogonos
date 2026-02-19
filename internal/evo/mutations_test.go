@@ -234,6 +234,24 @@ func TestAddSynapseInvariants(t *testing.T) {
 	}
 }
 
+func TestAddRandomSynapseRejectsDuplicateWhenFullyConnected(t *testing.T) {
+	genome := model.Genome{
+		Neurons: []model.Neuron{
+			{ID: "n1", Activation: "identity"},
+		},
+		Synapses: []model.Synapse{
+			{ID: "s1", From: "n1", To: "n1", Weight: 1, Enabled: true, Recurrent: true},
+		},
+	}
+	op := &AddRandomSynapse{
+		Rand:         rand.New(rand.NewSource(271)),
+		MaxAbsWeight: 1.0,
+	}
+	if _, err := op.Apply(context.Background(), genome); !errors.Is(err, ErrSynapseExists) {
+		t.Fatalf("expected ErrSynapseExists, got %v", err)
+	}
+}
+
 func TestRemoveSynapseInvariants(t *testing.T) {
 	rng := rand.New(rand.NewSource(17))
 	for i := 0; i < 200; i++ {
@@ -465,6 +483,52 @@ func TestAddRandomOutlinkNoDirectionalCandidates(t *testing.T) {
 	}
 }
 
+func TestAddRandomInlinkRejectsDuplicateDirectionalEdge(t *testing.T) {
+	genome := model.Genome{
+		Neurons: []model.Neuron{
+			{ID: "i1", Activation: "identity"},
+			{ID: "h1", Activation: "tanh"},
+		},
+		Synapses: []model.Synapse{
+			{ID: "s_existing", From: "i1", To: "h1", Weight: 1, Enabled: true},
+		},
+	}
+	op := &AddRandomInlink{
+		Rand:           rand.New(rand.NewSource(313)),
+		MaxAbsWeight:   1.0,
+		InputNeuronIDs: []string{"i1"},
+	}
+	if op.Applicable(genome, "xor") {
+		t.Fatal("expected add_inlink to be inapplicable when only duplicate edge candidate exists")
+	}
+	if _, err := op.Apply(context.Background(), genome); !errors.Is(err, ErrSynapseExists) {
+		t.Fatalf("expected ErrSynapseExists, got %v", err)
+	}
+}
+
+func TestAddRandomOutlinkRejectsDuplicateDirectionalEdge(t *testing.T) {
+	genome := model.Genome{
+		Neurons: []model.Neuron{
+			{ID: "h1", Activation: "tanh"},
+			{ID: "o1", Activation: "sigmoid"},
+		},
+		Synapses: []model.Synapse{
+			{ID: "s_existing", From: "h1", To: "o1", Weight: 1, Enabled: true},
+		},
+	}
+	op := &AddRandomOutlink{
+		Rand:            rand.New(rand.NewSource(317)),
+		MaxAbsWeight:    1.0,
+		OutputNeuronIDs: []string{"o1"},
+	}
+	if op.Applicable(genome, "xor") {
+		t.Fatal("expected add_outlink to be inapplicable when only duplicate edge candidate exists")
+	}
+	if _, err := op.Apply(context.Background(), genome); !errors.Is(err, ErrSynapseExists) {
+		t.Fatalf("expected ErrSynapseExists, got %v", err)
+	}
+}
+
 func TestDirectionalMutationsRespectFeedforwardLayers(t *testing.T) {
 	genome := model.Genome{
 		Neurons: []model.Neuron{
@@ -559,8 +623,8 @@ func TestFeedforwardDirectionalCancellationWhenOnlyBackwardOrderingExists(t *tes
 	if addIn.Applicable(genome, "xor") {
 		t.Fatal("expected add_inlink to be inapplicable when inferred feedforward ordering forbids candidates")
 	}
-	if _, err := addIn.Apply(context.Background(), genome); !errors.Is(err, ErrNoSynapses) {
-		t.Fatalf("expected ErrNoSynapses, got %v", err)
+	if _, err := addIn.Apply(context.Background(), genome); !errors.Is(err, ErrSynapseExists) {
+		t.Fatalf("expected ErrSynapseExists, got %v", err)
 	}
 
 	removeIn := &RemoveRandomInlink{
@@ -568,11 +632,15 @@ func TestFeedforwardDirectionalCancellationWhenOnlyBackwardOrderingExists(t *tes
 		InputNeuronIDs:  []string{"i1"},
 		FeedForwardOnly: true,
 	}
-	if removeIn.Applicable(genome, "xor") {
-		t.Fatal("expected remove_inlink to be inapplicable when no feedforward-directed edges remain")
+	if !removeIn.Applicable(genome, "xor") {
+		t.Fatal("expected remove_inlink to remain applicable while feedforward-directed edges exist")
 	}
-	if _, err := removeIn.Apply(context.Background(), genome); !errors.Is(err, ErrNoSynapses) {
-		t.Fatalf("expected ErrNoSynapses, got %v", err)
+	removed, err := removeIn.Apply(context.Background(), genome)
+	if err != nil {
+		t.Fatalf("expected remove_inlink apply to succeed, got %v", err)
+	}
+	if hasSynapse(removed, "s_forward") {
+		t.Fatal("expected feedforward input edge to be removed")
 	}
 }
 
