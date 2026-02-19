@@ -21,10 +21,11 @@ type Genome struct {
 }
 
 type StrategyConfig struct {
-	TuningSelection string  `json:"tuning_selection"`
-	AnnealingFactor float64 `json:"annealing_factor"`
-	TopologicalMode string  `json:"topological_mode"`
-	HeredityType    string  `json:"heredity_type"`
+	TuningSelection  string  `json:"tuning_selection"`
+	AnnealingFactor  float64 `json:"annealing_factor"`
+	TopologicalMode  string  `json:"topological_mode"`
+	TopologicalParam float64 `json:"topological_param,omitempty"`
+	HeredityType     string  `json:"heredity_type"`
 }
 
 type SubstrateConfig struct {

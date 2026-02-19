@@ -1251,6 +1251,12 @@ func (o *MutateTuningAnnealing) Apply(_ context.Context, genome model.Genome) (m
 type MutateTotTopologicalMutations struct {
 	Rand     *rand.Rand
 	Policies []string
+	Choices  []TopologicalPolicyChoice
+}
+
+type TopologicalPolicyChoice struct {
+	Name  string
+	Param float64
 }
 
 func (o *MutateTotTopologicalMutations) Name() string {
@@ -1265,21 +1271,60 @@ func (o *MutateTotTopologicalMutations) Apply(_ context.Context, genome model.Ge
 	if o == nil || o.Rand == nil {
 		return model.Genome{}, errors.New("random source is required")
 	}
-	policies := append([]string(nil), o.Policies...)
-	if len(policies) == 0 {
-		policies = []string{"const", "ncount_linear", "ncount_exponential"}
-	}
 	mutated := cloneGenome(genome)
 	ensureStrategyConfig(&mutated)
+
+	choices := append([]TopologicalPolicyChoice(nil), o.Choices...)
+	if len(choices) == 0 && len(o.Policies) > 0 {
+		for _, name := range o.Policies {
+			if name == "" {
+				continue
+			}
+			choices = append(choices, TopologicalPolicyChoice{
+				Name:  name,
+				Param: defaultTopologicalParam(name),
+			})
+		}
+	}
+	if len(choices) == 0 {
+		choices = []TopologicalPolicyChoice{
+			{Name: "const", Param: 1.0},
+			{Name: "ncount_linear", Param: 1.0},
+			{Name: "ncount_exponential", Param: 0.5},
+		}
+	}
+	filteredChoices := make([]TopologicalPolicyChoice, 0, len(choices))
+	for _, choice := range choices {
+		if choice.Name == "" || choice.Param <= 0 {
+			continue
+		}
+		filteredChoices = append(filteredChoices, choice)
+	}
+	if len(filteredChoices) == 0 {
+		return mutated, nil
+	}
+
 	current := mutated.Strategy.TopologicalMode
 	if current == "" {
 		current = "const"
 	}
-	choices := filterOutString(policies, current)
-	if len(choices) == 0 {
+	currentParam := mutated.Strategy.TopologicalParam
+	if currentParam <= 0 {
+		currentParam = defaultTopologicalParam(current)
+	}
+	available := make([]TopologicalPolicyChoice, 0, len(filteredChoices))
+	for _, choice := range filteredChoices {
+		if choice.Name == current && math.Abs(choice.Param-currentParam) < 1e-9 {
+			continue
+		}
+		available = append(available, choice)
+	}
+	if len(available) == 0 {
 		return mutated, nil
 	}
-	mutated.Strategy.TopologicalMode = choices[o.Rand.Intn(len(choices))]
+	selected := available[o.Rand.Intn(len(available))]
+	mutated.Strategy.TopologicalMode = selected.Name
+	mutated.Strategy.TopologicalParam = selected.Param
 	return mutated, nil
 }
 
@@ -2128,10 +2173,11 @@ func ensureStrategyConfig(g *model.Genome) {
 	}
 	if g.Strategy == nil {
 		g.Strategy = &model.StrategyConfig{
-			TuningSelection: tuning.CandidateSelectBestSoFar,
-			AnnealingFactor: 1.0,
-			TopologicalMode: "const",
-			HeredityType:    "asexual",
+			TuningSelection:  tuning.CandidateSelectBestSoFar,
+			AnnealingFactor:  1.0,
+			TopologicalMode:  "const",
+			TopologicalParam: 1.0,
+			HeredityType:     "asexual",
 		}
 		return
 	}
@@ -2144,8 +2190,24 @@ func ensureStrategyConfig(g *model.Genome) {
 	if g.Strategy.TopologicalMode == "" {
 		g.Strategy.TopologicalMode = "const"
 	}
+	if g.Strategy.TopologicalParam <= 0 {
+		g.Strategy.TopologicalParam = defaultTopologicalParam(g.Strategy.TopologicalMode)
+	}
 	if g.Strategy.HeredityType == "" {
 		g.Strategy.HeredityType = "asexual"
+	}
+}
+
+func defaultTopologicalParam(mode string) float64 {
+	switch mode {
+	case "const":
+		return 1.0
+	case "ncount_linear":
+		return 1.0
+	case "ncount_exponential":
+		return 0.5
+	default:
+		return 0.5
 	}
 }
 

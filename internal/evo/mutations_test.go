@@ -1348,10 +1348,11 @@ func TestRemoveRandomCPPAndCEP(t *testing.T) {
 func TestSearchParameterMutators(t *testing.T) {
 	base := model.Genome{
 		Strategy: &model.StrategyConfig{
-			TuningSelection: "best_so_far",
-			AnnealingFactor: 1.0,
-			TopologicalMode: "const",
-			HeredityType:    "asexual",
+			TuningSelection:  "best_so_far",
+			AnnealingFactor:  1.0,
+			TopologicalMode:  "const",
+			TopologicalParam: 1.0,
+			HeredityType:     "asexual",
 		},
 	}
 
@@ -1375,8 +1376,17 @@ func TestSearchParameterMutators(t *testing.T) {
 	if err != nil {
 		t.Fatalf("mutate topological mutations failed: %v", err)
 	}
-	if topologyMutated.Strategy == nil || topologyMutated.Strategy.TopologicalMode == "" || topologyMutated.Strategy.TopologicalMode == "const" {
-		t.Fatalf("expected topological mode change, got=%+v", topologyMutated.Strategy)
+	if topologyMutated.Strategy == nil {
+		t.Fatalf("expected topological strategy mutation, got=%+v", topologyMutated.Strategy)
+	}
+	if topologyMutated.Strategy.TopologicalMode == "" {
+		t.Fatalf("expected topological mode to be set, got=%+v", topologyMutated.Strategy)
+	}
+	if topologyMutated.Strategy.TopologicalParam <= 0 {
+		t.Fatalf("expected topological param to be set, got=%+v", topologyMutated.Strategy)
+	}
+	if topologyMutated.Strategy.TopologicalMode == "const" && math.Abs(topologyMutated.Strategy.TopologicalParam-1.0) < 1e-9 {
+		t.Fatalf("expected topological mode/param pair to change, got=%+v", topologyMutated.Strategy)
 	}
 
 	heredityMutated, err := (&MutateHeredityType{Rand: rand.New(rand.NewSource(167))}).Apply(context.Background(), base)
@@ -1385,6 +1395,35 @@ func TestSearchParameterMutators(t *testing.T) {
 	}
 	if heredityMutated.Strategy == nil || heredityMutated.Strategy.HeredityType == "" || heredityMutated.Strategy.HeredityType == "asexual" {
 		t.Fatalf("expected heredity type change, got=%+v", heredityMutated.Strategy)
+	}
+}
+
+func TestMutateTotTopologicalMutationsCanChangeParamWithinSameMode(t *testing.T) {
+	base := model.Genome{
+		Strategy: &model.StrategyConfig{
+			TopologicalMode:  "ncount_exponential",
+			TopologicalParam: 0.5,
+		},
+	}
+	op := &MutateTotTopologicalMutations{
+		Rand: rand.New(rand.NewSource(271)),
+		Choices: []TopologicalPolicyChoice{
+			{Name: "ncount_exponential", Param: 0.5},
+			{Name: "ncount_exponential", Param: 0.8},
+		},
+	}
+	mutated, err := op.Apply(context.Background(), base)
+	if err != nil {
+		t.Fatalf("mutate topological mode/param pair failed: %v", err)
+	}
+	if mutated.Strategy == nil {
+		t.Fatalf("expected strategy after mutation, got=%+v", mutated.Strategy)
+	}
+	if mutated.Strategy.TopologicalMode != "ncount_exponential" {
+		t.Fatalf("expected same mode with different param, got=%+v", mutated.Strategy)
+	}
+	if math.Abs(mutated.Strategy.TopologicalParam-0.8) > 1e-9 {
+		t.Fatalf("expected parameter change to 0.8, got=%+v", mutated.Strategy)
 	}
 }
 
