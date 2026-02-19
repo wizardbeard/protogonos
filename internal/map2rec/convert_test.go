@@ -74,6 +74,14 @@ func TestConvertDispatchesSensorAndActuatorKinds(t *testing.T) {
 		t.Fatalf("unexpected polis dispatch result: %#v", gotPolis)
 	}
 
+	gotScape, err := Convert("scape", map[string]any{"id": "sc1"})
+	if err != nil {
+		t.Fatalf("convert scape: %v", err)
+	}
+	if scape, ok := gotScape.(ScapeRecord); !ok || scape.ID != "sc1" {
+		t.Fatalf("unexpected scape dispatch result: %#v", gotScape)
+	}
+
 	gotSpecie, err := Convert("specie", map[string]any{"id": "sp1"})
 	if err != nil {
 		t.Fatalf("convert specie: %v", err)
@@ -417,6 +425,44 @@ func TestConvertPolisMalformedKnownFieldKeepsDefault(t *testing.T) {
 	out := ConvertPolis(map[string]any{"scape_ids": "bad", "parameters": "bad"})
 	if len(out.ScapeIDs) != 0 || len(out.Parameters) != 0 {
 		t.Fatalf("expected default polis collections, got scapes=%+v params=%+v", out.ScapeIDs, out.Parameters)
+	}
+}
+
+func TestConvertScapeMapsFields(t *testing.T) {
+	in := map[string]any{
+		"id":             "scape-1",
+		"type":           "flatland",
+		"physics":        map[string]any{"g": 9.8},
+		"metabolics":     map[string]any{"decay": 0.1},
+		"sector2avatars": map[string]any{"s1": []any{"a1"}},
+		"avatars":        []any{"a1", "a2"},
+		"plants":         []any{"p1"},
+		"walls":          []any{"w1"},
+		"pillars":        []any{"pi1"},
+		"laws":           []any{"l1"},
+		"anomolies":      []any{"n1"},
+		"artifacts":      []any{"ar1"},
+		"objects":        []any{"o1"},
+		"elements":       []any{"e1"},
+		"atoms":          []any{"at1"},
+		"scheduler":      42,
+	}
+	out := ConvertScape(in)
+	if out.ID != "scape-1" || out.Type != "flatland" || out.Scheduler != 42 {
+		t.Fatalf("unexpected scape conversion identity/scheduler: %+v", out)
+	}
+	if len(out.Avatars) != 2 || len(out.Objects) != 1 || len(out.Atoms) != 1 {
+		t.Fatalf("unexpected scape conversion collections: %+v", out)
+	}
+}
+
+func TestConvertScapeMalformedKnownFieldKeepsDefault(t *testing.T) {
+	out := ConvertScape(map[string]any{"avatars": "bad", "scheduler": "bad"})
+	if len(out.Avatars) != 0 {
+		t.Fatalf("expected default avatars collection, got %+v", out.Avatars)
+	}
+	if out.Scheduler != 0 {
+		t.Fatalf("expected default scheduler=0, got %d", out.Scheduler)
 	}
 }
 

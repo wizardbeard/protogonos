@@ -167,6 +167,25 @@ type PolisRecord struct {
 	Parameters    []any
 }
 
+type ScapeRecord struct {
+	ID             any
+	Type           any
+	Physics        any
+	Metabolics     any
+	Sector2Avatars any
+	Avatars        []any
+	Plants         []any
+	Walls          []any
+	Pillars        []any
+	Laws           []any
+	Anomolies      []any
+	Artifacts      []any
+	Objects        []any
+	Elements       []any
+	Atoms          []any
+	Scheduler      int
+}
+
 type SpecieRecord struct {
 	ID                any
 	PopulationID      any
@@ -361,6 +380,22 @@ func defaultPolisRecord() PolisRecord {
 		SpecieIDs:     []any{},
 		DXIDs:         []any{},
 		Parameters:    []any{},
+	}
+}
+
+func defaultScapeRecord() ScapeRecord {
+	return ScapeRecord{
+		Avatars:   []any{},
+		Plants:    []any{},
+		Walls:     []any{},
+		Pillars:   []any{},
+		Laws:      []any{},
+		Anomolies: []any{},
+		Artifacts: []any{},
+		Objects:   []any{},
+		Elements:  []any{},
+		Atoms:     []any{},
+		Scheduler: 0,
 	}
 }
 
