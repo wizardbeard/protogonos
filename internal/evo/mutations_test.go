@@ -1605,6 +1605,76 @@ func TestChangePlasticityRuleMutation(t *testing.T) {
 	}
 }
 
+func TestMutatePFMutatesNeuronPlasticityRule(t *testing.T) {
+	genome := randomGenome(rand.New(rand.NewSource(15)))
+	genome.Plasticity = &model.PlasticityConfig{
+		Rule:            "hebbian",
+		Rate:            0.2,
+		SaturationLimit: 1.0,
+	}
+	op := &MutatePF{
+		Rand:  rand.New(rand.NewSource(16)),
+		Rules: []string{"none", "hebbian", "oja"},
+	}
+	mutated, err := op.Apply(context.Background(), genome)
+	if err != nil {
+		t.Fatalf("apply failed: %v", err)
+	}
+	changed := false
+	for i := range genome.Neurons {
+		if mutated.Neurons[i].PlasticityRule != genome.Neurons[i].PlasticityRule {
+			changed = true
+		}
+	}
+	if !changed {
+		t.Fatalf("expected at least one neuron plasticity rule mutation, before=%+v after=%+v", genome.Neurons, mutated.Neurons)
+	}
+	for i := range mutated.Neurons {
+		if mutated.Neurons[i].PlasticityRule == "" {
+			continue
+		}
+		if mutated.Neurons[i].PlasticityRate <= 0 {
+			t.Fatalf("expected mutated neuron plasticity rate to be set, got=%+v", mutated.Neurons[i])
+		}
+	}
+}
+
+func TestMutatePlasticityParametersMutatesNeuronRate(t *testing.T) {
+	genome := randomGenome(rand.New(rand.NewSource(17)))
+	genome.Neurons[0].PlasticityRate = 0.2
+	op := &MutatePlasticityParameters{
+		Rand:     rand.New(rand.NewSource(18)),
+		MaxDelta: 0.1,
+	}
+	mutated, err := op.Apply(context.Background(), genome)
+	if err != nil {
+		t.Fatalf("apply failed: %v", err)
+	}
+	changed := false
+	for i := range genome.Neurons {
+		if mutated.Neurons[i].PlasticityRate != genome.Neurons[i].PlasticityRate {
+			changed = true
+		}
+		if mutated.Neurons[i].PlasticityRate < 0 {
+			t.Fatalf("expected non-negative neuron plasticity rate, got=%+v", mutated.Neurons[i])
+		}
+	}
+	if !changed {
+		t.Fatalf("expected one neuron plasticity rate change, before=%+v after=%+v", genome.Neurons, mutated.Neurons)
+	}
+}
+
+func TestMutatePFAndPlasticityParametersApplicableWithNeuronsOnly(t *testing.T) {
+	genome := randomGenome(rand.New(rand.NewSource(19)))
+	genome.Plasticity = nil
+	if !(&MutatePF{}).Applicable(genome, "xor") {
+		t.Fatal("expected mutate_pf to be applicable with neuron-level mutation semantics")
+	}
+	if !(&MutatePlasticityParameters{}).Applicable(genome, "xor") {
+		t.Fatal("expected mutate_plasticity_parameters to be applicable with neuron-level mutation semantics")
+	}
+}
+
 func TestContextualOperatorApplicability(t *testing.T) {
 	genome := randomGenome(rand.New(rand.NewSource(7)))
 	if (&PerturbRandomBias{}).Applicable(model.Genome{}, "xor") {

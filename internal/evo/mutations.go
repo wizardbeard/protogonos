@@ -1040,11 +1040,26 @@ func (o *MutatePlasticityParameters) Name() string {
 }
 
 func (o *MutatePlasticityParameters) Applicable(genome model.Genome, _ string) bool {
-	return genome.Plasticity != nil
+	return len(genome.Neurons) > 0
 }
 
-func (o *MutatePlasticityParameters) Apply(ctx context.Context, genome model.Genome) (model.Genome, error) {
-	return (&PerturbPlasticityRate{Rand: o.Rand, MaxDelta: o.MaxDelta}).Apply(ctx, genome)
+func (o *MutatePlasticityParameters) Apply(_ context.Context, genome model.Genome) (model.Genome, error) {
+	if o == nil || o.Rand == nil {
+		return model.Genome{}, errors.New("random source is required")
+	}
+	if len(genome.Neurons) == 0 {
+		return model.Genome{}, ErrNoNeurons
+	}
+	maxDelta := o.MaxDelta
+	if maxDelta <= 0 {
+		maxDelta = 0.15
+	}
+	idx := o.Rand.Intn(len(genome.Neurons))
+	mutated := cloneGenome(genome)
+	baseRate := neuronPlasticityRate(genome, idx)
+	delta := (o.Rand.Float64()*2 - 1) * maxDelta
+	mutated.Neurons[idx].PlasticityRate = math.Max(0, baseRate+delta)
+	return mutated, nil
 }
 
 // ChangePlasticityRule mutates the configured plasticity rule.
@@ -1101,11 +1116,45 @@ func (o *MutatePF) Name() string {
 }
 
 func (o *MutatePF) Applicable(genome model.Genome, _ string) bool {
-	return genome.Plasticity != nil
+	return len(genome.Neurons) > 0
 }
 
-func (o *MutatePF) Apply(ctx context.Context, genome model.Genome) (model.Genome, error) {
-	return (&ChangePlasticityRule{Rand: o.Rand, Rules: o.Rules}).Apply(ctx, genome)
+func (o *MutatePF) Apply(_ context.Context, genome model.Genome) (model.Genome, error) {
+	if o == nil || o.Rand == nil {
+		return model.Genome{}, errors.New("random source is required")
+	}
+	if len(genome.Neurons) == 0 {
+		return model.Genome{}, ErrNoNeurons
+	}
+	rules := append([]string(nil), o.Rules...)
+	if len(rules) == 0 {
+		rules = []string{nn.PlasticityNone, nn.PlasticityHebbian, nn.PlasticityOja}
+	}
+	normalized := make([]string, 0, len(rules))
+	for _, rule := range rules {
+		name := nn.NormalizePlasticityRuleName(rule)
+		if name == "" {
+			continue
+		}
+		normalized = append(normalized, name)
+	}
+	if len(normalized) == 0 {
+		return cloneGenome(genome), nil
+	}
+
+	idx := o.Rand.Intn(len(genome.Neurons))
+	current := neuronPlasticityRule(genome, idx)
+	choices := filterOutString(normalized, current)
+	if len(choices) == 0 {
+		return cloneGenome(genome), nil
+	}
+
+	mutated := cloneGenome(genome)
+	mutated.Neurons[idx].PlasticityRule = choices[o.Rand.Intn(len(choices))]
+	if mutated.Neurons[idx].PlasticityRate <= 0 {
+		mutated.Neurons[idx].PlasticityRate = neuronPlasticityRate(genome, idx)
+	}
+	return mutated, nil
 }
 
 // PerturbSubstrateParameter mutates one substrate parameter when configured.
@@ -2335,6 +2384,29 @@ func filterOutString(values []string, drop string) []string {
 		out = append(out, item)
 	}
 	return out
+}
+
+func neuronPlasticityRule(genome model.Genome, idx int) string {
+	if idx < 0 || idx >= len(genome.Neurons) {
+		return nn.PlasticityNone
+	}
+	if rule := nn.NormalizePlasticityRuleName(genome.Neurons[idx].PlasticityRule); rule != "" {
+		return rule
+	}
+	if genome.Plasticity != nil {
+		return nn.NormalizePlasticityRuleName(genome.Plasticity.Rule)
+	}
+	return nn.PlasticityNone
+}
+
+func neuronPlasticityRate(genome model.Genome, idx int) float64 {
+	if idx >= 0 && idx < len(genome.Neurons) && genome.Neurons[idx].PlasticityRate > 0 {
+		return genome.Neurons[idx].PlasticityRate
+	}
+	if genome.Plasticity != nil && genome.Plasticity.Rate > 0 {
+		return genome.Plasticity.Rate
+	}
+	return 0.1
 }
 
 func maxSensorLinks(genome model.Genome) int {

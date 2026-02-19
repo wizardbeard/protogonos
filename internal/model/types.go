@@ -43,10 +43,12 @@ type PlasticityConfig struct {
 }
 
 type Neuron struct {
-	ID         string  `json:"id"`
-	Activation string  `json:"activation"`
-	Aggregator string  `json:"aggregator,omitempty"`
-	Bias       float64 `json:"bias"`
+	ID             string  `json:"id"`
+	Activation     string  `json:"activation"`
+	Aggregator     string  `json:"aggregator,omitempty"`
+	PlasticityRule string  `json:"plasticity_rule,omitempty"`
+	PlasticityRate float64 `json:"plasticity_rate,omitempty"`
+	Bias           float64 `json:"bias"`
 }
 
 type Synapse struct {
