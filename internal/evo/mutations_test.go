@@ -894,8 +894,9 @@ func TestAddRandomActuatorAddsCompatibleActuator(t *testing.T) {
 	}
 }
 
-func TestAddRandomSensorLinkDuplicatesExistingSensor(t *testing.T) {
+func TestAddRandomSensorLinkIncrementsUntilCapacity(t *testing.T) {
 	genome := model.Genome{
+		Neurons:   []model.Neuron{{ID: "n1", Activation: "identity"}},
 		SensorIDs: []string{protoio.XORInputLeftSensorName},
 	}
 	op := &AddRandomSensorLink{
@@ -911,10 +912,17 @@ func TestAddRandomSensorLinkDuplicatesExistingSensor(t *testing.T) {
 	if len(mutated.SensorIDs) != 1 {
 		t.Fatalf("expected sensor components unchanged, got=%v", mutated.SensorIDs)
 	}
+	if op.Applicable(mutated, "xor") {
+		t.Fatal("expected add_sensorlink to be inapplicable after reaching full connectivity")
+	}
+	if _, err := op.Apply(context.Background(), mutated); !errors.Is(err, ErrSynapseExists) {
+		t.Fatalf("expected ErrSynapseExists when fully connected, got %v", err)
+	}
 }
 
-func TestAddRandomActuatorLinkDuplicatesExistingActuator(t *testing.T) {
+func TestAddRandomActuatorLinkIncrementsUntilCapacity(t *testing.T) {
 	genome := model.Genome{
+		Neurons:     []model.Neuron{{ID: "n1", Activation: "identity"}},
 		ActuatorIDs: []string{protoio.XOROutputActuatorName},
 	}
 	op := &AddRandomActuatorLink{
@@ -929,6 +937,12 @@ func TestAddRandomActuatorLinkDuplicatesExistingActuator(t *testing.T) {
 	}
 	if len(mutated.ActuatorIDs) != 1 {
 		t.Fatalf("expected actuator components unchanged, got=%v", mutated.ActuatorIDs)
+	}
+	if op.Applicable(mutated, "xor") {
+		t.Fatal("expected add_actuatorlink to be inapplicable after reaching full connectivity")
+	}
+	if _, err := op.Apply(context.Background(), mutated); !errors.Is(err, ErrSynapseExists) {
+		t.Fatalf("expected ErrSynapseExists when fully connected, got %v", err)
 	}
 }
 

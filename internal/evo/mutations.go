@@ -1358,7 +1358,10 @@ func (o *AddRandomSensorLink) Name() string {
 }
 
 func (o *AddRandomSensorLink) Applicable(genome model.Genome, _ string) bool {
-	return len(genome.SensorIDs) > 0
+	if len(genome.SensorIDs) == 0 || len(genome.Neurons) == 0 {
+		return false
+	}
+	return genome.SensorLinks < maxSensorLinks(genome)
 }
 
 func (o *AddRandomSensorLink) Apply(ctx context.Context, genome model.Genome) (model.Genome, error) {
@@ -1367,6 +1370,12 @@ func (o *AddRandomSensorLink) Apply(ctx context.Context, genome model.Genome) (m
 	}
 	if len(genome.SensorIDs) == 0 {
 		return model.Genome{}, ErrNoSynapses
+	}
+	if len(genome.Neurons) == 0 {
+		return model.Genome{}, ErrNoNeurons
+	}
+	if genome.SensorLinks >= maxSensorLinks(genome) {
+		return model.Genome{}, ErrSynapseExists
 	}
 	mutated := cloneGenome(genome)
 	mutated.SensorLinks++
@@ -1412,7 +1421,10 @@ func (o *AddRandomActuatorLink) Name() string {
 }
 
 func (o *AddRandomActuatorLink) Applicable(genome model.Genome, _ string) bool {
-	return len(genome.ActuatorIDs) > 0
+	if len(genome.ActuatorIDs) == 0 || len(genome.Neurons) == 0 {
+		return false
+	}
+	return genome.ActuatorLinks < maxActuatorLinks(genome)
 }
 
 func (o *AddRandomActuatorLink) Apply(ctx context.Context, genome model.Genome) (model.Genome, error) {
@@ -1421,6 +1433,12 @@ func (o *AddRandomActuatorLink) Apply(ctx context.Context, genome model.Genome) 
 	}
 	if len(genome.ActuatorIDs) == 0 {
 		return model.Genome{}, ErrNoSynapses
+	}
+	if len(genome.Neurons) == 0 {
+		return model.Genome{}, ErrNoNeurons
+	}
+	if genome.ActuatorLinks >= maxActuatorLinks(genome) {
+		return model.Genome{}, ErrSynapseExists
 	}
 	mutated := cloneGenome(genome)
 	mutated.ActuatorLinks++
@@ -2255,6 +2273,14 @@ func filterOutString(values []string, drop string) []string {
 		out = append(out, item)
 	}
 	return out
+}
+
+func maxSensorLinks(genome model.Genome) int {
+	return len(genome.SensorIDs) * len(genome.Neurons)
+}
+
+func maxActuatorLinks(genome model.Genome) int {
+	return len(genome.ActuatorIDs) * len(genome.Neurons)
 }
 
 func ensureSubstrateConfig(genome *model.Genome) {
