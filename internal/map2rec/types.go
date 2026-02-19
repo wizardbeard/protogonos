@@ -243,6 +243,15 @@ type ObjectRecord struct {
 	Parameters []any
 }
 
+type CircleRecord struct {
+	ID     any
+	Sector any
+	Color  any
+	Loc    any
+	Pivot  any
+	R      any
+}
+
 type SpecieRecord struct {
 	ID                any
 	PopulationID      any
@@ -487,6 +496,10 @@ func defaultObjectRecord() ObjectRecord {
 		Elements:   []any{},
 		Parameters: []any{},
 	}
+}
+
+func defaultCircleRecord() CircleRecord {
+	return CircleRecord{}
 }
 
 func defaultSpecieRecord() SpecieRecord {

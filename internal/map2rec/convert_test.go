@@ -106,6 +106,14 @@ func TestConvertDispatchesSensorAndActuatorKinds(t *testing.T) {
 		t.Fatalf("unexpected object dispatch result: %#v", gotObject)
 	}
 
+	gotCircle, err := Convert("circle", map[string]any{"id": "c1"})
+	if err != nil {
+		t.Fatalf("convert circle: %v", err)
+	}
+	if circle, ok := gotCircle.(CircleRecord); !ok || circle.ID != "c1" {
+		t.Fatalf("unexpected circle dispatch result: %#v", gotCircle)
+	}
+
 	gotSpecie, err := Convert("specie", map[string]any{"id": "sp1"})
 	if err != nil {
 		t.Fatalf("convert specie: %v", err)
@@ -598,6 +606,24 @@ func TestConvertObjectMalformedKnownFieldKeepsDefault(t *testing.T) {
 	out := ConvertObject(map[string]any{"elements": "bad", "parameters": "bad"})
 	if len(out.Elements) != 0 || len(out.Parameters) != 0 {
 		t.Fatalf("expected default object collections, got elements=%+v parameters=%+v", out.Elements, out.Parameters)
+	}
+}
+
+func TestConvertCircleMapsFields(t *testing.T) {
+	in := map[string]any{
+		"id":     "circle-1",
+		"sector": "sector-1",
+		"color":  "blue",
+		"loc":    []any{2, 5},
+		"pivot":  []any{0, 0},
+		"r":      1.25,
+	}
+	out := ConvertCircle(in)
+	if out.ID != "circle-1" || out.Sector != "sector-1" || out.Color != "blue" {
+		t.Fatalf("unexpected circle identity mapping: %+v", out)
+	}
+	if out.R != 1.25 {
+		t.Fatalf("unexpected circle radius mapping: %+v", out)
 	}
 }
 
