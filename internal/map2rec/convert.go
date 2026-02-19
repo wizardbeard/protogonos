@@ -36,6 +36,8 @@ func Convert(kind string, in map[string]any) (any, error) {
 		return ConvertSquare(in), nil
 	case "line":
 		return ConvertLine(in), nil
+	case "e":
+		return ConvertE(in), nil
 	case "specie":
 		return ConvertSpecie(in), nil
 	case "population":
@@ -831,6 +833,27 @@ func ConvertLine(in map[string]any) LineRecord {
 			out.Pivot = val
 		case "coords":
 			out.Coords = val
+		}
+	}
+	return out
+}
+
+func ConvertE(in map[string]any) ERecord {
+	out := defaultERecord()
+	for key, val := range in {
+		switch key {
+		case "id":
+			out.ID = val
+		case "sector":
+			out.Sector = val
+		case "v_id":
+			out.VID = val
+		case "type":
+			out.Type = val
+		case "loc":
+			out.Loc = val
+		case "pivot":
+			out.Pivot = val
 		}
 	}
 	return out

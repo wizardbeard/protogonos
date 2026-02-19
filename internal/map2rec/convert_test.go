@@ -130,6 +130,14 @@ func TestConvertDispatchesSensorAndActuatorKinds(t *testing.T) {
 		t.Fatalf("unexpected line dispatch result: %#v", gotLine)
 	}
 
+	gotE, err := Convert("e", map[string]any{"id": "e1"})
+	if err != nil {
+		t.Fatalf("convert e: %v", err)
+	}
+	if e, ok := gotE.(ERecord); !ok || e.ID != "e1" {
+		t.Fatalf("unexpected e dispatch result: %#v", gotE)
+	}
+
 	gotSpecie, err := Convert("specie", map[string]any{"id": "sp1"})
 	if err != nil {
 		t.Fatalf("convert specie: %v", err)
@@ -676,6 +684,24 @@ func TestConvertLineMapsFields(t *testing.T) {
 	}
 	if out.Coords == nil {
 		t.Fatalf("unexpected missing line coords: %+v", out)
+	}
+}
+
+func TestConvertEMapsFields(t *testing.T) {
+	in := map[string]any{
+		"id":     "e-1",
+		"sector": "sector-1",
+		"v_id":   "v-1",
+		"type":   "joint",
+		"loc":    []any{4, 2},
+		"pivot":  []any{1, 0},
+	}
+	out := ConvertE(in)
+	if out.ID != "e-1" || out.Sector != "sector-1" || out.VID != "v-1" {
+		t.Fatalf("unexpected e identity mapping: %+v", out)
+	}
+	if out.Type != "joint" || out.Pivot == nil {
+		t.Fatalf("unexpected e field mapping: %+v", out)
 	}
 }
 
