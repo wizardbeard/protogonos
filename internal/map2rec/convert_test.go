@@ -122,6 +122,14 @@ func TestConvertDispatchesSensorAndActuatorKinds(t *testing.T) {
 		t.Fatalf("unexpected square dispatch result: %#v", gotSquare)
 	}
 
+	gotLine, err := Convert("line", map[string]any{"id": "ln1"})
+	if err != nil {
+		t.Fatalf("convert line: %v", err)
+	}
+	if line, ok := gotLine.(LineRecord); !ok || line.ID != "ln1" {
+		t.Fatalf("unexpected line dispatch result: %#v", gotLine)
+	}
+
 	gotSpecie, err := Convert("specie", map[string]any{"id": "sp1"})
 	if err != nil {
 		t.Fatalf("convert specie: %v", err)
@@ -650,6 +658,24 @@ func TestConvertSquareMapsFields(t *testing.T) {
 	}
 	if out.R != 2.0 {
 		t.Fatalf("unexpected square radius mapping: %+v", out)
+	}
+}
+
+func TestConvertLineMapsFields(t *testing.T) {
+	in := map[string]any{
+		"id":     "line-1",
+		"sector": "sector-1",
+		"color":  "white",
+		"loc":    []any{0, 0},
+		"pivot":  []any{1, 1},
+		"coords": []any{[]any{0, 0}, []any{3, 3}},
+	}
+	out := ConvertLine(in)
+	if out.ID != "line-1" || out.Sector != "sector-1" || out.Color != "white" {
+		t.Fatalf("unexpected line identity mapping: %+v", out)
+	}
+	if out.Coords == nil {
+		t.Fatalf("unexpected missing line coords: %+v", out)
 	}
 }
 

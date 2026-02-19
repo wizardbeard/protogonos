@@ -261,6 +261,15 @@ type SquareRecord struct {
 	R      any
 }
 
+type LineRecord struct {
+	ID     any
+	Sector any
+	Color  any
+	Loc    any
+	Pivot  any
+	Coords any
+}
+
 type SpecieRecord struct {
 	ID                any
 	PopulationID      any
@@ -513,6 +522,10 @@ func defaultCircleRecord() CircleRecord {
 
 func defaultSquareRecord() SquareRecord {
 	return SquareRecord{}
+}
+
+func defaultLineRecord() LineRecord {
+	return LineRecord{}
 }
 
 func defaultSpecieRecord() SpecieRecord {
