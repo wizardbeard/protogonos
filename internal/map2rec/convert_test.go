@@ -138,6 +138,14 @@ func TestConvertDispatchesSensorAndActuatorKinds(t *testing.T) {
 		t.Fatalf("unexpected e dispatch result: %#v", gotE)
 	}
 
+	gotA, err := Convert("a", map[string]any{"id": "a1"})
+	if err != nil {
+		t.Fatalf("convert a: %v", err)
+	}
+	if a, ok := gotA.(ARecord); !ok || a.ID != "a1" {
+		t.Fatalf("unexpected a dispatch result: %#v", gotA)
+	}
+
 	gotSpecie, err := Convert("specie", map[string]any{"id": "sp1"})
 	if err != nil {
 		t.Fatalf("convert specie: %v", err)
@@ -702,6 +710,26 @@ func TestConvertEMapsFields(t *testing.T) {
 	}
 	if out.Type != "joint" || out.Pivot == nil {
 		t.Fatalf("unexpected e field mapping: %+v", out)
+	}
+}
+
+func TestConvertAMapsFields(t *testing.T) {
+	in := map[string]any{
+		"id":         "a-1",
+		"sector":     "sector-1",
+		"v_id":       "v-1",
+		"type":       "atom",
+		"loc":        []any{6, 6},
+		"pivot":      []any{0, 0},
+		"mass":       3.14,
+		"properties": map[string]any{"charge": -1},
+	}
+	out := ConvertA(in)
+	if out.ID != "a-1" || out.Sector != "sector-1" || out.VID != "v-1" {
+		t.Fatalf("unexpected a identity mapping: %+v", out)
+	}
+	if out.Type != "atom" || out.Properties == nil {
+		t.Fatalf("unexpected a field mapping: %+v", out)
 	}
 }
 

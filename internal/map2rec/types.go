@@ -279,6 +279,17 @@ type ERecord struct {
 	Pivot  any
 }
 
+type ARecord struct {
+	ID         any
+	Sector     any
+	VID        any
+	Type       any
+	Loc        any
+	Pivot      any
+	Mass       any
+	Properties any
+}
+
 type SpecieRecord struct {
 	ID                any
 	PopulationID      any
@@ -539,6 +550,10 @@ func defaultLineRecord() LineRecord {
 
 func defaultERecord() ERecord {
 	return ERecord{}
+}
+
+func defaultARecord() ARecord {
+	return ARecord{}
 }
 
 func defaultSpecieRecord() SpecieRecord {
