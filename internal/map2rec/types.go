@@ -186,6 +186,26 @@ type ScapeRecord struct {
 	Scheduler      int
 }
 
+type SectorRecord struct {
+	ID             any
+	Type           any
+	ScapePID       any
+	SectorSize     any
+	Physics        any
+	Metabolics     any
+	Sector2Avatars any
+	Avatars        []any
+	Plants         []any
+	Walls          []any
+	Pillars        []any
+	Laws           []any
+	Anomolies      []any
+	Artifacts      []any
+	Objects        []any
+	Elements       []any
+	Atoms          []any
+}
+
 type SpecieRecord struct {
 	ID                any
 	PopulationID      any
@@ -396,6 +416,21 @@ func defaultScapeRecord() ScapeRecord {
 		Elements:  []any{},
 		Atoms:     []any{},
 		Scheduler: 0,
+	}
+}
+
+func defaultSectorRecord() SectorRecord {
+	return SectorRecord{
+		Avatars:   []any{},
+		Plants:    []any{},
+		Walls:     []any{},
+		Pillars:   []any{},
+		Laws:      []any{},
+		Anomolies: []any{},
+		Artifacts: []any{},
+		Objects:   []any{},
+		Elements:  []any{},
+		Atoms:     []any{},
 	}
 }
 

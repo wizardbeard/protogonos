@@ -24,6 +24,8 @@ func Convert(kind string, in map[string]any) (any, error) {
 		return ConvertPolis(in), nil
 	case "scape":
 		return ConvertScape(in), nil
+	case "sector":
+		return ConvertSector(in), nil
 	case "specie":
 		return ConvertSpecie(in), nil
 	case "population":
@@ -596,6 +598,69 @@ func ConvertScape(in map[string]any) ScapeRecord {
 		case "scheduler":
 			if n, ok := asInt(val); ok {
 				out.Scheduler = n
+			}
+		}
+	}
+	return out
+}
+
+func ConvertSector(in map[string]any) SectorRecord {
+	out := defaultSectorRecord()
+	for key, val := range in {
+		switch key {
+		case "id":
+			out.ID = val
+		case "type":
+			out.Type = val
+		case "scape_pid":
+			out.ScapePID = val
+		case "sector_size":
+			out.SectorSize = val
+		case "physics":
+			out.Physics = val
+		case "metabolics":
+			out.Metabolics = val
+		case "sector2avatars":
+			out.Sector2Avatars = val
+		case "avatars":
+			if xs, ok := asAnySlice(val); ok {
+				out.Avatars = xs
+			}
+		case "plants":
+			if xs, ok := asAnySlice(val); ok {
+				out.Plants = xs
+			}
+		case "walls":
+			if xs, ok := asAnySlice(val); ok {
+				out.Walls = xs
+			}
+		case "pillars":
+			if xs, ok := asAnySlice(val); ok {
+				out.Pillars = xs
+			}
+		case "laws":
+			if xs, ok := asAnySlice(val); ok {
+				out.Laws = xs
+			}
+		case "anomolies":
+			if xs, ok := asAnySlice(val); ok {
+				out.Anomolies = xs
+			}
+		case "artifacts":
+			if xs, ok := asAnySlice(val); ok {
+				out.Artifacts = xs
+			}
+		case "objects":
+			if xs, ok := asAnySlice(val); ok {
+				out.Objects = xs
+			}
+		case "elements":
+			if xs, ok := asAnySlice(val); ok {
+				out.Elements = xs
+			}
+		case "atoms":
+			if xs, ok := asAnySlice(val); ok {
+				out.Atoms = xs
 			}
 		}
 	}

@@ -82,6 +82,14 @@ func TestConvertDispatchesSensorAndActuatorKinds(t *testing.T) {
 		t.Fatalf("unexpected scape dispatch result: %#v", gotScape)
 	}
 
+	gotSector, err := Convert("sector", map[string]any{"id": "sec1"})
+	if err != nil {
+		t.Fatalf("convert sector: %v", err)
+	}
+	if sector, ok := gotSector.(SectorRecord); !ok || sector.ID != "sec1" {
+		t.Fatalf("unexpected sector dispatch result: %#v", gotSector)
+	}
+
 	gotSpecie, err := Convert("specie", map[string]any{"id": "sp1"})
 	if err != nil {
 		t.Fatalf("convert specie: %v", err)
@@ -463,6 +471,42 @@ func TestConvertScapeMalformedKnownFieldKeepsDefault(t *testing.T) {
 	}
 	if out.Scheduler != 0 {
 		t.Fatalf("expected default scheduler=0, got %d", out.Scheduler)
+	}
+}
+
+func TestConvertSectorMapsFields(t *testing.T) {
+	in := map[string]any{
+		"id":             "sector-1",
+		"type":           "arena",
+		"scape_pid":      "scape-1",
+		"sector_size":    []any{100, 100},
+		"physics":        map[string]any{"drag": 0.2},
+		"metabolics":     map[string]any{"burn": 0.05},
+		"sector2avatars": map[string]any{"zone-a": []any{"a1"}},
+		"avatars":        []any{"a1"},
+		"plants":         []any{"p1"},
+		"walls":          []any{"w1"},
+		"pillars":        []any{"pi1"},
+		"laws":           []any{"l1"},
+		"anomolies":      []any{"n1"},
+		"artifacts":      []any{"ar1"},
+		"objects":        []any{"o1"},
+		"elements":       []any{"e1"},
+		"atoms":          []any{"at1"},
+	}
+	out := ConvertSector(in)
+	if out.ID != "sector-1" || out.Type != "arena" || out.ScapePID != "scape-1" {
+		t.Fatalf("unexpected sector identity mapping: %+v", out)
+	}
+	if len(out.Avatars) != 1 || len(out.Objects) != 1 || len(out.Atoms) != 1 {
+		t.Fatalf("unexpected sector collection mapping: %+v", out)
+	}
+}
+
+func TestConvertSectorMalformedKnownFieldKeepsDefault(t *testing.T) {
+	out := ConvertSector(map[string]any{"avatars": "bad", "objects": "bad"})
+	if len(out.Avatars) != 0 || len(out.Objects) != 0 {
+		t.Fatalf("expected default sector collections, got avatars=%+v objects=%+v", out.Avatars, out.Objects)
 	}
 }
 
