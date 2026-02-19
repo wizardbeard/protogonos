@@ -8,16 +8,28 @@ type VersionedRecord struct {
 
 type Genome struct {
 	VersionedRecord
-	ID            string            `json:"id"`
-	Neurons       []Neuron          `json:"neurons"`
-	Synapses      []Synapse         `json:"synapses"`
-	SensorIDs     []string          `json:"sensor_ids"`
-	ActuatorIDs   []string          `json:"actuator_ids"`
-	SensorLinks   int               `json:"sensor_links,omitempty"`
-	ActuatorLinks int               `json:"actuator_links,omitempty"`
-	Substrate     *SubstrateConfig  `json:"substrate,omitempty"`
-	Plasticity    *PlasticityConfig `json:"plasticity,omitempty"`
-	Strategy      *StrategyConfig   `json:"strategy,omitempty"`
+	ID                  string               `json:"id"`
+	Neurons             []Neuron             `json:"neurons"`
+	Synapses            []Synapse            `json:"synapses"`
+	SensorIDs           []string             `json:"sensor_ids"`
+	ActuatorIDs         []string             `json:"actuator_ids"`
+	SensorNeuronLinks   []SensorNeuronLink   `json:"sensor_neuron_links,omitempty"`
+	NeuronActuatorLinks []NeuronActuatorLink `json:"neuron_actuator_links,omitempty"`
+	SensorLinks         int                  `json:"sensor_links,omitempty"`
+	ActuatorLinks       int                  `json:"actuator_links,omitempty"`
+	Substrate           *SubstrateConfig     `json:"substrate,omitempty"`
+	Plasticity          *PlasticityConfig    `json:"plasticity,omitempty"`
+	Strategy            *StrategyConfig      `json:"strategy,omitempty"`
+}
+
+type SensorNeuronLink struct {
+	SensorID string `json:"sensor_id"`
+	NeuronID string `json:"neuron_id"`
+}
+
+type NeuronActuatorLink struct {
+	NeuronID   string `json:"neuron_id"`
+	ActuatorID string `json:"actuator_id"`
 }
 
 type StrategyConfig struct {

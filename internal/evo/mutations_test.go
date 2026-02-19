@@ -909,6 +909,12 @@ func TestAddRandomSensorLinkIncrementsUntilCapacity(t *testing.T) {
 	if mutated.SensorLinks != 1 {
 		t.Fatalf("expected one added sensor link count, got=%d", mutated.SensorLinks)
 	}
+	if len(mutated.SensorNeuronLinks) != 1 {
+		t.Fatalf("expected one explicit sensor-neuron link, got=%d", len(mutated.SensorNeuronLinks))
+	}
+	if mutated.SensorNeuronLinks[0].SensorID != protoio.XORInputLeftSensorName || mutated.SensorNeuronLinks[0].NeuronID != "n1" {
+		t.Fatalf("unexpected sensor-neuron link: %+v", mutated.SensorNeuronLinks[0])
+	}
 	if len(mutated.SensorIDs) != 1 {
 		t.Fatalf("expected sensor components unchanged, got=%v", mutated.SensorIDs)
 	}
@@ -934,6 +940,12 @@ func TestAddRandomActuatorLinkIncrementsUntilCapacity(t *testing.T) {
 	}
 	if mutated.ActuatorLinks != 1 {
 		t.Fatalf("expected one added actuator link count, got=%d", mutated.ActuatorLinks)
+	}
+	if len(mutated.NeuronActuatorLinks) != 1 {
+		t.Fatalf("expected one explicit neuron-actuator link, got=%d", len(mutated.NeuronActuatorLinks))
+	}
+	if mutated.NeuronActuatorLinks[0].NeuronID != "n1" || mutated.NeuronActuatorLinks[0].ActuatorID != protoio.XOROutputActuatorName {
+		t.Fatalf("unexpected neuron-actuator link: %+v", mutated.NeuronActuatorLinks[0])
 	}
 	if len(mutated.ActuatorIDs) != 1 {
 		t.Fatalf("expected actuator components unchanged, got=%v", mutated.ActuatorIDs)
@@ -962,8 +974,14 @@ func TestRemoveRandomSensorRemovesOneSensor(t *testing.T) {
 
 func TestRemoveRandomSensorRemovesAllLinksForSelectedSensor(t *testing.T) {
 	genome := model.Genome{
-		SensorIDs:   []string{protoio.XORInputLeftSensorName, protoio.XORInputLeftSensorName, protoio.XORInputRightSensorName},
-		SensorLinks: 2,
+		Neurons:   []model.Neuron{{ID: "n1", Activation: "identity"}, {ID: "n2", Activation: "identity"}},
+		SensorIDs: []string{protoio.XORInputLeftSensorName, protoio.XORInputRightSensorName},
+		SensorNeuronLinks: []model.SensorNeuronLink{
+			{SensorID: protoio.XORInputLeftSensorName, NeuronID: "n1"},
+			{SensorID: protoio.XORInputLeftSensorName, NeuronID: "n2"},
+			{SensorID: protoio.XORInputRightSensorName, NeuronID: "n1"},
+		},
+		SensorLinks: 3,
 	}
 	op := &RemoveRandomSensor{Rand: rand.New(rand.NewSource(97))}
 	mutated, err := op.Apply(context.Background(), genome)
@@ -973,11 +991,17 @@ func TestRemoveRandomSensorRemovesAllLinksForSelectedSensor(t *testing.T) {
 	if len(mutated.SensorIDs) != 1 {
 		t.Fatalf("expected selected sensor to be removed with all links, got=%v", mutated.SensorIDs)
 	}
-	if mutated.SensorIDs[0] != protoio.XORInputRightSensorName {
-		t.Fatalf("unexpected remaining sensor ids: %v", mutated.SensorIDs)
+	removedSensorID := protoio.XORInputLeftSensorName
+	if mutated.SensorIDs[0] == protoio.XORInputLeftSensorName {
+		removedSensorID = protoio.XORInputRightSensorName
 	}
-	if mutated.SensorLinks != 0 {
-		t.Fatalf("expected sensor links reset after component removal, got=%d", mutated.SensorLinks)
+	for _, link := range mutated.SensorNeuronLinks {
+		if link.SensorID == removedSensorID {
+			t.Fatalf("found dangling sensor link for removed sensor %q: %+v", removedSensorID, link)
+		}
+	}
+	if mutated.SensorLinks != len(mutated.SensorNeuronLinks) {
+		t.Fatalf("expected sensor links count to match explicit links, count=%d explicit=%d", mutated.SensorLinks, len(mutated.SensorNeuronLinks))
 	}
 }
 
@@ -997,8 +1021,14 @@ func TestRemoveRandomActuatorRemovesOneActuator(t *testing.T) {
 
 func TestRemoveRandomActuatorRemovesAllLinksForSelectedActuator(t *testing.T) {
 	genome := model.Genome{
-		ActuatorIDs:   []string{protoio.XOROutputActuatorName, protoio.XOROutputActuatorName, protoio.FXTradeActuatorName},
-		ActuatorLinks: 2,
+		Neurons:     []model.Neuron{{ID: "n1", Activation: "identity"}, {ID: "n2", Activation: "identity"}},
+		ActuatorIDs: []string{protoio.XOROutputActuatorName, protoio.FXTradeActuatorName},
+		NeuronActuatorLinks: []model.NeuronActuatorLink{
+			{NeuronID: "n1", ActuatorID: protoio.XOROutputActuatorName},
+			{NeuronID: "n2", ActuatorID: protoio.XOROutputActuatorName},
+			{NeuronID: "n1", ActuatorID: protoio.FXTradeActuatorName},
+		},
+		ActuatorLinks: 3,
 	}
 	op := &RemoveRandomActuator{Rand: rand.New(rand.NewSource(101))}
 	mutated, err := op.Apply(context.Background(), genome)
@@ -1008,18 +1038,32 @@ func TestRemoveRandomActuatorRemovesAllLinksForSelectedActuator(t *testing.T) {
 	if len(mutated.ActuatorIDs) != 1 {
 		t.Fatalf("expected selected actuator to be removed with all links, got=%v", mutated.ActuatorIDs)
 	}
-	if mutated.ActuatorIDs[0] != protoio.FXTradeActuatorName {
-		t.Fatalf("unexpected remaining actuator ids: %v", mutated.ActuatorIDs)
+	removedActuatorID := protoio.XOROutputActuatorName
+	if mutated.ActuatorIDs[0] == protoio.XOROutputActuatorName {
+		removedActuatorID = protoio.FXTradeActuatorName
 	}
-	if mutated.ActuatorLinks != 0 {
-		t.Fatalf("expected actuator links reset after component removal, got=%d", mutated.ActuatorLinks)
+	for _, link := range mutated.NeuronActuatorLinks {
+		if link.ActuatorID == removedActuatorID {
+			t.Fatalf("found dangling actuator link for removed actuator %q: %+v", removedActuatorID, link)
+		}
+	}
+	if mutated.ActuatorLinks != len(mutated.NeuronActuatorLinks) {
+		t.Fatalf("expected actuator links count to match explicit links, count=%d explicit=%d", mutated.ActuatorLinks, len(mutated.NeuronActuatorLinks))
 	}
 }
 
 func TestCutlinkAliasesRemoveSensorAndActuatorLinks(t *testing.T) {
 	genome := model.Genome{
-		SensorIDs:     []string{protoio.XORInputLeftSensorName, protoio.XORInputRightSensorName},
-		ActuatorIDs:   []string{protoio.XOROutputActuatorName, protoio.FXTradeActuatorName},
+		SensorIDs:   []string{protoio.XORInputLeftSensorName, protoio.XORInputRightSensorName},
+		ActuatorIDs: []string{protoio.XOROutputActuatorName, protoio.FXTradeActuatorName},
+		SensorNeuronLinks: []model.SensorNeuronLink{
+			{SensorID: protoio.XORInputLeftSensorName, NeuronID: "n1"},
+			{SensorID: protoio.XORInputRightSensorName, NeuronID: "n2"},
+		},
+		NeuronActuatorLinks: []model.NeuronActuatorLink{
+			{NeuronID: "n1", ActuatorID: protoio.XOROutputActuatorName},
+			{NeuronID: "n2", ActuatorID: protoio.FXTradeActuatorName},
+		},
 		SensorLinks:   2,
 		ActuatorLinks: 2,
 	}
@@ -1031,6 +1075,9 @@ func TestCutlinkAliasesRemoveSensorAndActuatorLinks(t *testing.T) {
 	if mutatedSensor.SensorLinks != genome.SensorLinks-1 {
 		t.Fatalf("expected one sensor link removed, before=%d after=%d", genome.SensorLinks, mutatedSensor.SensorLinks)
 	}
+	if len(mutatedSensor.SensorNeuronLinks) != len(genome.SensorNeuronLinks)-1 {
+		t.Fatalf("expected one explicit sensor-neuron link removed, before=%d after=%d", len(genome.SensorNeuronLinks), len(mutatedSensor.SensorNeuronLinks))
+	}
 	if len(mutatedSensor.SensorIDs) != len(genome.SensorIDs) {
 		t.Fatalf("expected sensor components unchanged by cutlink, before=%d after=%d", len(genome.SensorIDs), len(mutatedSensor.SensorIDs))
 	}
@@ -1041,6 +1088,9 @@ func TestCutlinkAliasesRemoveSensorAndActuatorLinks(t *testing.T) {
 	}
 	if mutatedActuator.ActuatorLinks != genome.ActuatorLinks-1 {
 		t.Fatalf("expected one actuator link removed, before=%d after=%d", genome.ActuatorLinks, mutatedActuator.ActuatorLinks)
+	}
+	if len(mutatedActuator.NeuronActuatorLinks) != len(genome.NeuronActuatorLinks)-1 {
+		t.Fatalf("expected one explicit neuron-actuator link removed, before=%d after=%d", len(genome.NeuronActuatorLinks), len(mutatedActuator.NeuronActuatorLinks))
 	}
 	if len(mutatedActuator.ActuatorIDs) != len(genome.ActuatorIDs) {
 		t.Fatalf("expected actuator components unchanged by cutlink, before=%d after=%d", len(genome.ActuatorIDs), len(mutatedActuator.ActuatorIDs))

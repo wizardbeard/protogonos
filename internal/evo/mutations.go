@@ -1452,10 +1452,7 @@ func (o *AddRandomSensorLink) Name() string {
 }
 
 func (o *AddRandomSensorLink) Applicable(genome model.Genome, _ string) bool {
-	if len(genome.SensorIDs) == 0 || len(genome.Neurons) == 0 {
-		return false
-	}
-	return genome.SensorLinks < maxSensorLinks(genome)
+	return len(availableSensorNeuronPairs(genome)) > 0
 }
 
 func (o *AddRandomSensorLink) Apply(ctx context.Context, genome model.Genome) (model.Genome, error) {
@@ -1468,11 +1465,14 @@ func (o *AddRandomSensorLink) Apply(ctx context.Context, genome model.Genome) (m
 	if len(genome.Neurons) == 0 {
 		return model.Genome{}, ErrNoNeurons
 	}
-	if genome.SensorLinks >= maxSensorLinks(genome) {
+	candidates := availableSensorNeuronPairs(genome)
+	if len(candidates) == 0 {
 		return model.Genome{}, ErrSynapseExists
 	}
 	mutated := cloneGenome(genome)
-	mutated.SensorLinks++
+	selected := candidates[o.Rand.Intn(len(candidates))]
+	mutated.SensorNeuronLinks = append(mutated.SensorNeuronLinks, selected)
+	syncIOLinkCounts(&mutated)
 	return mutated, nil
 }
 
@@ -1515,10 +1515,7 @@ func (o *AddRandomActuatorLink) Name() string {
 }
 
 func (o *AddRandomActuatorLink) Applicable(genome model.Genome, _ string) bool {
-	if len(genome.ActuatorIDs) == 0 || len(genome.Neurons) == 0 {
-		return false
-	}
-	return genome.ActuatorLinks < maxActuatorLinks(genome)
+	return len(availableNeuronActuatorPairs(genome)) > 0
 }
 
 func (o *AddRandomActuatorLink) Apply(ctx context.Context, genome model.Genome) (model.Genome, error) {
@@ -1531,11 +1528,14 @@ func (o *AddRandomActuatorLink) Apply(ctx context.Context, genome model.Genome) 
 	if len(genome.Neurons) == 0 {
 		return model.Genome{}, ErrNoNeurons
 	}
-	if genome.ActuatorLinks >= maxActuatorLinks(genome) {
+	candidates := availableNeuronActuatorPairs(genome)
+	if len(candidates) == 0 {
 		return model.Genome{}, ErrSynapseExists
 	}
 	mutated := cloneGenome(genome)
-	mutated.ActuatorLinks++
+	selected := candidates[o.Rand.Intn(len(candidates))]
+	mutated.NeuronActuatorLinks = append(mutated.NeuronActuatorLinks, selected)
+	syncIOLinkCounts(&mutated)
 	return mutated, nil
 }
 
@@ -1569,7 +1569,15 @@ func (o *RemoveRandomSensor) Apply(_ context.Context, genome model.Genome) (mode
 		filtered = append(filtered, id)
 	}
 	mutated.SensorIDs = filtered
-	mutated.SensorLinks = 0
+	filteredLinks := mutated.SensorNeuronLinks[:0]
+	for _, link := range mutated.SensorNeuronLinks {
+		if link.SensorID == selected {
+			continue
+		}
+		filteredLinks = append(filteredLinks, link)
+	}
+	mutated.SensorNeuronLinks = filteredLinks
+	syncIOLinkCounts(&mutated)
 	return mutated, nil
 }
 
@@ -1585,14 +1593,26 @@ func (o *CutlinkFromSensorToNeuron) Name() string {
 }
 
 func (o *CutlinkFromSensorToNeuron) Applicable(genome model.Genome, _ string) bool {
+	if len(genome.SensorNeuronLinks) > 0 {
+		return true
+	}
 	return genome.SensorLinks > 0
 }
 
 func (o *CutlinkFromSensorToNeuron) Apply(ctx context.Context, genome model.Genome) (model.Genome, error) {
-	if genome.SensorLinks <= 0 {
+	if len(genome.SensorNeuronLinks) == 0 && genome.SensorLinks <= 0 {
 		return model.Genome{}, ErrNoSynapses
 	}
+	if o == nil || o.Rand == nil {
+		return model.Genome{}, errors.New("random source is required")
+	}
 	mutated := cloneGenome(genome)
+	if len(mutated.SensorNeuronLinks) > 0 {
+		idx := o.Rand.Intn(len(mutated.SensorNeuronLinks))
+		mutated.SensorNeuronLinks = append(mutated.SensorNeuronLinks[:idx], mutated.SensorNeuronLinks[idx+1:]...)
+		syncIOLinkCounts(&mutated)
+		return mutated, nil
+	}
 	mutated.SensorLinks--
 	return mutated, nil
 }
@@ -1627,7 +1647,15 @@ func (o *RemoveRandomActuator) Apply(_ context.Context, genome model.Genome) (mo
 		filtered = append(filtered, id)
 	}
 	mutated.ActuatorIDs = filtered
-	mutated.ActuatorLinks = 0
+	filteredLinks := mutated.NeuronActuatorLinks[:0]
+	for _, link := range mutated.NeuronActuatorLinks {
+		if link.ActuatorID == selected {
+			continue
+		}
+		filteredLinks = append(filteredLinks, link)
+	}
+	mutated.NeuronActuatorLinks = filteredLinks
+	syncIOLinkCounts(&mutated)
 	return mutated, nil
 }
 
@@ -1643,14 +1671,26 @@ func (o *CutlinkFromNeuronToActuator) Name() string {
 }
 
 func (o *CutlinkFromNeuronToActuator) Applicable(genome model.Genome, _ string) bool {
+	if len(genome.NeuronActuatorLinks) > 0 {
+		return true
+	}
 	return genome.ActuatorLinks > 0
 }
 
 func (o *CutlinkFromNeuronToActuator) Apply(ctx context.Context, genome model.Genome) (model.Genome, error) {
-	if genome.ActuatorLinks <= 0 {
+	if len(genome.NeuronActuatorLinks) == 0 && genome.ActuatorLinks <= 0 {
 		return model.Genome{}, ErrNoSynapses
 	}
+	if o == nil || o.Rand == nil {
+		return model.Genome{}, errors.New("random source is required")
+	}
 	mutated := cloneGenome(genome)
+	if len(mutated.NeuronActuatorLinks) > 0 {
+		idx := o.Rand.Intn(len(mutated.NeuronActuatorLinks))
+		mutated.NeuronActuatorLinks = append(mutated.NeuronActuatorLinks[:idx], mutated.NeuronActuatorLinks[idx+1:]...)
+		syncIOLinkCounts(&mutated)
+		return mutated, nil
+	}
 	mutated.ActuatorLinks--
 	return mutated, nil
 }
@@ -2409,12 +2449,80 @@ func neuronPlasticityRate(genome model.Genome, idx int) float64 {
 	return 0.1
 }
 
-func maxSensorLinks(genome model.Genome) int {
-	return len(genome.SensorIDs) * len(genome.Neurons)
+func availableSensorNeuronPairs(genome model.Genome) []model.SensorNeuronLink {
+	if len(genome.SensorIDs) == 0 || len(genome.Neurons) == 0 {
+		return nil
+	}
+	sensors := uniqueStrings(genome.SensorIDs)
+	pairs := make([]model.SensorNeuronLink, 0, len(sensors)*len(genome.Neurons))
+	for _, sensorID := range sensors {
+		for _, neuron := range genome.Neurons {
+			if hasSensorNeuronLink(genome, sensorID, neuron.ID) {
+				continue
+			}
+			pairs = append(pairs, model.SensorNeuronLink{
+				SensorID: sensorID,
+				NeuronID: neuron.ID,
+			})
+		}
+	}
+	return pairs
 }
 
-func maxActuatorLinks(genome model.Genome) int {
-	return len(genome.ActuatorIDs) * len(genome.Neurons)
+func availableNeuronActuatorPairs(genome model.Genome) []model.NeuronActuatorLink {
+	if len(genome.ActuatorIDs) == 0 || len(genome.Neurons) == 0 {
+		return nil
+	}
+	actuators := uniqueStrings(genome.ActuatorIDs)
+	pairs := make([]model.NeuronActuatorLink, 0, len(actuators)*len(genome.Neurons))
+	for _, neuron := range genome.Neurons {
+		for _, actuatorID := range actuators {
+			if hasNeuronActuatorLink(genome, neuron.ID, actuatorID) {
+				continue
+			}
+			pairs = append(pairs, model.NeuronActuatorLink{
+				NeuronID:   neuron.ID,
+				ActuatorID: actuatorID,
+			})
+		}
+	}
+	return pairs
+}
+
+func hasSensorNeuronLink(genome model.Genome, sensorID, neuronID string) bool {
+	for _, link := range genome.SensorNeuronLinks {
+		if link.SensorID == sensorID && link.NeuronID == neuronID {
+			return true
+		}
+	}
+	return false
+}
+
+func hasNeuronActuatorLink(genome model.Genome, neuronID, actuatorID string) bool {
+	for _, link := range genome.NeuronActuatorLinks {
+		if link.NeuronID == neuronID && link.ActuatorID == actuatorID {
+			return true
+		}
+	}
+	return false
+}
+
+func uniqueStrings(values []string) []string {
+	seen := make(map[string]struct{}, len(values))
+	out := make([]string, 0, len(values))
+	for _, value := range values {
+		if _, ok := seen[value]; ok {
+			continue
+		}
+		seen[value] = struct{}{}
+		out = append(out, value)
+	}
+	return out
+}
+
+func syncIOLinkCounts(genome *model.Genome) {
+	genome.SensorLinks = len(genome.SensorNeuronLinks)
+	genome.ActuatorLinks = len(genome.NeuronActuatorLinks)
 }
 
 func ensureSubstrateConfig(genome *model.Genome) {
