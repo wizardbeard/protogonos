@@ -845,6 +845,38 @@ func TestAddRandomInspliceNoDirectionalCandidates(t *testing.T) {
 	}
 }
 
+func TestAddRandomSpliceCancelsWithoutSynapses(t *testing.T) {
+	empty := model.Genome{
+		Neurons: []model.Neuron{
+			{ID: "i1", Activation: "identity"},
+			{ID: "o1", Activation: "sigmoid"},
+		},
+	}
+	outOp := &AddRandomOutsplice{
+		Rand:            rand.New(rand.NewSource(1141)),
+		OutputNeuronIDs: []string{"o1"},
+		Activations:     []string{"relu"},
+	}
+	if outOp.Applicable(empty, "xor") {
+		t.Fatal("expected outsplice to be inapplicable without synapses")
+	}
+	if _, err := outOp.Apply(context.Background(), empty); !errors.Is(err, ErrNoMutationChoice) {
+		t.Fatalf("expected ErrNoMutationChoice for outsplice without synapses, got %v", err)
+	}
+
+	inOp := &AddRandomInsplice{
+		Rand:           rand.New(rand.NewSource(1143)),
+		InputNeuronIDs: []string{"i1"},
+		Activations:    []string{"relu"},
+	}
+	if inOp.Applicable(empty, "xor") {
+		t.Fatal("expected insplice to be inapplicable without synapses")
+	}
+	if _, err := inOp.Apply(context.Background(), empty); !errors.Is(err, ErrNoMutationChoice) {
+		t.Fatalf("expected ErrNoMutationChoice for insplice without synapses, got %v", err)
+	}
+}
+
 func TestRemoveRandomInlinkPrefersInputSource(t *testing.T) {
 	genome := model.Genome{
 		Neurons: []model.Neuron{
@@ -1095,6 +1127,19 @@ func TestAddRandomSensorLinkIncrementsUntilCapacity(t *testing.T) {
 	}
 }
 
+func TestAddRandomSensorLinkCancelsWithoutSensors(t *testing.T) {
+	op := &AddRandomSensorLink{Rand: rand.New(rand.NewSource(85))}
+	genome := model.Genome{
+		Neurons: []model.Neuron{{ID: "n1", Activation: "identity"}},
+	}
+	if op.Applicable(genome, "xor") {
+		t.Fatal("expected add_sensorlink to be inapplicable without sensors")
+	}
+	if _, err := op.Apply(context.Background(), genome); !errors.Is(err, ErrNoMutationChoice) {
+		t.Fatalf("expected ErrNoMutationChoice without sensors, got %v", err)
+	}
+}
+
 func TestAddRandomActuatorLinkIncrementsUntilCapacity(t *testing.T) {
 	genome := model.Genome{
 		Neurons:     []model.Neuron{{ID: "n1", Activation: "identity"}},
@@ -1124,6 +1169,19 @@ func TestAddRandomActuatorLinkIncrementsUntilCapacity(t *testing.T) {
 	}
 	if _, err := op.Apply(context.Background(), mutated); !errors.Is(err, ErrNoMutationChoice) {
 		t.Fatalf("expected ErrNoMutationChoice when fully connected, got %v", err)
+	}
+}
+
+func TestAddRandomActuatorLinkCancelsWithoutActuators(t *testing.T) {
+	op := &AddRandomActuatorLink{Rand: rand.New(rand.NewSource(91))}
+	genome := model.Genome{
+		Neurons: []model.Neuron{{ID: "n1", Activation: "identity"}},
+	}
+	if op.Applicable(genome, "xor") {
+		t.Fatal("expected add_actuatorlink to be inapplicable without actuators")
+	}
+	if _, err := op.Apply(context.Background(), genome); !errors.Is(err, ErrNoMutationChoice) {
+		t.Fatalf("expected ErrNoMutationChoice without actuators, got %v", err)
 	}
 }
 

@@ -49,7 +49,7 @@ func (o PerturbWeightAt) Name() string {
 
 func (o PerturbWeightAt) Apply(_ context.Context, genome model.Genome) (model.Genome, error) {
 	if len(genome.Synapses) == 0 {
-		return model.Genome{}, ErrNoSynapses
+		return model.Genome{}, ErrNoMutationChoice
 	}
 	if o.Index < 0 || o.Index >= len(genome.Synapses) {
 		return model.Genome{}, fmt.Errorf("synapse index out of range: %d", o.Index)
@@ -76,7 +76,7 @@ func (o *PerturbRandomWeight) Applicable(genome model.Genome, _ string) bool {
 
 func (o *PerturbRandomWeight) Apply(_ context.Context, genome model.Genome) (model.Genome, error) {
 	if len(genome.Synapses) == 0 {
-		return model.Genome{}, ErrNoSynapses
+		return model.Genome{}, ErrNoMutationChoice
 	}
 	if o == nil || o.Rand == nil {
 		return model.Genome{}, errors.New("random source is required")
@@ -998,7 +998,7 @@ func addRandomNeuronWithSynapseCandidates(
 		return model.Genome{}, errors.New("random source is required")
 	}
 	if len(genome.Synapses) == 0 {
-		return model.Genome{}, ErrNoSynapses
+		return model.Genome{}, ErrNoMutationChoice
 	}
 
 	if len(activations) == 0 {
@@ -1676,7 +1676,7 @@ func (o *AddRandomSensorLink) Apply(ctx context.Context, genome model.Genome) (m
 		return model.Genome{}, errors.New("random source is required")
 	}
 	if len(genome.SensorIDs) == 0 {
-		return model.Genome{}, ErrNoSynapses
+		return model.Genome{}, ErrNoMutationChoice
 	}
 	if len(genome.Neurons) == 0 {
 		return model.Genome{}, ErrNoNeurons
@@ -1748,7 +1748,7 @@ func (o *AddRandomActuatorLink) Apply(ctx context.Context, genome model.Genome) 
 		return model.Genome{}, errors.New("random source is required")
 	}
 	if len(genome.ActuatorIDs) == 0 {
-		return model.Genome{}, ErrNoSynapses
+		return model.Genome{}, ErrNoMutationChoice
 	}
 	if len(genome.Neurons) == 0 {
 		return model.Genome{}, ErrNoNeurons
