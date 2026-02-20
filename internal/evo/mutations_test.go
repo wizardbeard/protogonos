@@ -1539,6 +1539,34 @@ func TestSearchParameterMutators(t *testing.T) {
 	}
 }
 
+func TestMutateTuningSelectionSupportsReferenceModeSurface(t *testing.T) {
+	base := model.Genome{
+		Strategy: &model.StrategyConfig{
+			TuningSelection: tuning.CandidateSelectBestSoFar,
+		},
+	}
+
+	for _, mode := range []string{
+		tuning.CandidateSelectActive,
+		tuning.CandidateSelectActiveRnd,
+		tuning.CandidateSelectRecent,
+		tuning.CandidateSelectRecentRnd,
+		tuning.CandidateSelectLastGen,
+		tuning.CandidateSelectLastGenRd,
+	} {
+		mutated, err := (&MutateTuningSelection{
+			Rand:  rand.New(rand.NewSource(187)),
+			Modes: []string{tuning.CandidateSelectBestSoFar, mode},
+		}).Apply(context.Background(), base)
+		if err != nil {
+			t.Fatalf("mutate tuning selection failed for mode %q: %v", mode, err)
+		}
+		if mutated.Strategy == nil || mutated.Strategy.TuningSelection != mode {
+			t.Fatalf("expected mode %q, got=%+v", mode, mutated.Strategy)
+		}
+	}
+}
+
 func TestMutateTotTopologicalMutationsCanChangeParamWithinSameMode(t *testing.T) {
 	base := model.Genome{
 		Strategy: &model.StrategyConfig{

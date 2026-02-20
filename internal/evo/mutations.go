@@ -1294,19 +1294,35 @@ func (o *MutateTuningSelection) Apply(_ context.Context, genome model.Genome) (m
 			tuning.CandidateSelectOriginal,
 			tuning.CandidateSelectDynamicA,
 			tuning.CandidateSelectDynamic,
+			tuning.CandidateSelectActive,
+			tuning.CandidateSelectActiveRnd,
+			tuning.CandidateSelectRecent,
+			tuning.CandidateSelectRecentRnd,
 			tuning.CandidateSelectAll,
 			tuning.CandidateSelectAllRandom,
 			tuning.CandidateSelectCurrent,
 			tuning.CandidateSelectCurrentRd,
+			tuning.CandidateSelectLastGen,
+			tuning.CandidateSelectLastGenRd,
 		}
 	}
-	for i := range modes {
-		modes[i] = tuning.NormalizeCandidateSelectionName(modes[i])
+	normalized := make([]string, 0, len(modes))
+	seen := make(map[string]struct{}, len(modes))
+	for _, mode := range modes {
+		name := tuning.NormalizeCandidateSelectionName(mode)
+		if name == "" {
+			continue
+		}
+		if _, ok := seen[name]; ok {
+			continue
+		}
+		seen[name] = struct{}{}
+		normalized = append(normalized, name)
 	}
 	mutated := cloneGenome(genome)
 	ensureStrategyConfig(&mutated)
 	current := tuning.NormalizeCandidateSelectionName(mutated.Strategy.TuningSelection)
-	choices := filterOutString(modes, current)
+	choices := filterOutString(normalized, current)
 	if len(choices) == 0 {
 		return mutated, nil
 	}
