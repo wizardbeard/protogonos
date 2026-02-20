@@ -1721,8 +1721,21 @@ func (o *AddRandomActuator) Apply(_ context.Context, genome model.Genome) (model
 	mutated := cloneGenome(genome)
 	mutated.ActuatorIDs = append(mutated.ActuatorIDs, choice)
 	sourceNeuron := mutated.Neurons[o.Rand.Intn(len(mutated.Neurons))].ID
+	helperNeuronID := uniqueNeuronID(mutated, o.Rand)
+	mutated.Neurons = append(mutated.Neurons, model.Neuron{
+		ID:         helperNeuronID,
+		Activation: "tanh",
+	})
+	mutated.Synapses = append(mutated.Synapses, model.Synapse{
+		ID:        uniqueSynapseID(mutated, o.Rand),
+		From:      sourceNeuron,
+		To:        helperNeuronID,
+		Weight:    (o.Rand.Float64() * 2) - 1,
+		Enabled:   true,
+		Recurrent: sourceNeuron == helperNeuronID,
+	})
 	mutated.NeuronActuatorLinks = append(mutated.NeuronActuatorLinks, model.NeuronActuatorLink{
-		NeuronID:   sourceNeuron,
+		NeuronID:   helperNeuronID,
 		ActuatorID: choice,
 	})
 	syncIOLinkCounts(&mutated)
@@ -1990,6 +2003,22 @@ func (o *AddRandomCEP) Apply(_ context.Context, genome model.Genome) (model.Geno
 	}
 	if mutated.Substrate.Parameters == nil {
 		mutated.Substrate.Parameters = map[string]float64{}
+	}
+	if len(mutated.Neurons) > 0 {
+		sourceNeuron := mutated.Neurons[o.Rand.Intn(len(mutated.Neurons))].ID
+		helperNeuronID := uniqueNeuronID(mutated, o.Rand)
+		mutated.Neurons = append(mutated.Neurons, model.Neuron{
+			ID:         helperNeuronID,
+			Activation: "tanh",
+		})
+		mutated.Synapses = append(mutated.Synapses, model.Synapse{
+			ID:        uniqueSynapseID(mutated, o.Rand),
+			From:      sourceNeuron,
+			To:        helperNeuronID,
+			Weight:    (o.Rand.Float64() * 2) - 1,
+			Enabled:   true,
+			Recurrent: sourceNeuron == helperNeuronID,
+		})
 	}
 	return mutated, nil
 }

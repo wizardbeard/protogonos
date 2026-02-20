@@ -1034,6 +1034,26 @@ func TestAddRandomActuatorAddsCompatibleActuator(t *testing.T) {
 	if mutated.NeuronActuatorLinks[0].ActuatorID != protoio.FXTradeActuatorName {
 		t.Fatalf("expected new actuator id on link, got=%+v", mutated.NeuronActuatorLinks[0])
 	}
+	if len(mutated.Neurons) != len(genome.Neurons)+1 {
+		t.Fatalf("expected helper-neuron scaffold on add_actuator, before=%d after=%d", len(genome.Neurons), len(mutated.Neurons))
+	}
+	if len(mutated.Synapses) != len(genome.Synapses)+1 {
+		t.Fatalf("expected one helper synapse on add_actuator, before=%d after=%d", len(genome.Synapses), len(mutated.Synapses))
+	}
+	helperID := mutated.NeuronActuatorLinks[0].NeuronID
+	if !hasNeuron(mutated, helperID) {
+		t.Fatalf("expected actuator link source neuron to exist in mutated genome: %s", helperID)
+	}
+	foundIncoming := false
+	for _, syn := range mutated.Synapses {
+		if syn.To == helperID {
+			foundIncoming = true
+			break
+		}
+	}
+	if !foundIncoming {
+		t.Fatalf("expected helper neuron %s to receive at least one incoming synapse", helperID)
+	}
 	if mutated.ActuatorLinks != 1 {
 		t.Fatalf("expected synchronized actuator link counter, got=%d", mutated.ActuatorLinks)
 	}
@@ -1486,6 +1506,12 @@ func TestAddRandomCEPRequiresSubstrateConfig(t *testing.T) {
 		}
 		if mutated.Substrate == nil || mutated.Substrate.CEPName == "" {
 			t.Fatal("expected cep mutation on substrate-configured genome")
+		}
+		if len(mutated.Neurons) != len(withSubstrate.Neurons)+1 {
+			t.Fatalf("expected helper-neuron scaffold on add_cep, before=%d after=%d", len(withSubstrate.Neurons), len(mutated.Neurons))
+		}
+		if len(mutated.Synapses) != len(withSubstrate.Synapses)+1 {
+			t.Fatalf("expected one helper synapse on add_cep, before=%d after=%d", len(withSubstrate.Synapses), len(mutated.Synapses))
 		}
 	}
 }
