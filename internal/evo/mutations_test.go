@@ -1510,6 +1510,9 @@ func TestAddRandomCPPRequiresSubstrateConfig(t *testing.T) {
 	}
 	withSubstrate := model.Genome{
 		Neurons: genome.Neurons,
+		SensorIDs: []string{
+			protoio.XORInputLeftSensorName,
+		},
 		Substrate: &model.SubstrateConfig{
 			CPPName:    substrate.DefaultCPPName,
 			CEPName:    substrate.DefaultCEPName,
@@ -1528,6 +1531,12 @@ func TestAddRandomCPPRequiresSubstrateConfig(t *testing.T) {
 		}
 		if mutated.Substrate == nil || mutated.Substrate.CPPName == "" {
 			t.Fatal("expected cpp mutation on substrate-configured genome")
+		}
+		if len(mutated.SensorNeuronLinks) != len(withSubstrate.SensorNeuronLinks)+1 {
+			t.Fatalf("expected add_cpp to append one sensor-neuron link scaffold, before=%d after=%d", len(withSubstrate.SensorNeuronLinks), len(mutated.SensorNeuronLinks))
+		}
+		if mutated.SensorLinks != len(mutated.SensorNeuronLinks) {
+			t.Fatalf("expected synchronized sensor link counter, count=%d explicit=%d", mutated.SensorLinks, len(mutated.SensorNeuronLinks))
 		}
 	}
 }

@@ -1992,6 +1992,16 @@ func (o *AddRandomCPP) Apply(_ context.Context, genome model.Genome) (model.Geno
 	if mutated.Substrate.Parameters == nil {
 		mutated.Substrate.Parameters = map[string]float64{}
 	}
+	// In the simplified model, approximate CPP structural growth by adding one
+	// extra sensor->neuron endpoint link when such a connection is available.
+	if len(mutated.Neurons) > 0 && len(mutated.SensorIDs) > 0 {
+		toCandidates := filterNeuronIDs(mutated, nil)
+		sensorPairs := availableSensorToNeuronPairs(mutated, toCandidates)
+		if len(sensorPairs) > 0 {
+			mutated.SensorNeuronLinks = append(mutated.SensorNeuronLinks, sensorPairs[o.Rand.Intn(len(sensorPairs))])
+			syncIOLinkCounts(&mutated)
+		}
+	}
 	return mutated, nil
 }
 
