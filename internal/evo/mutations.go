@@ -1811,7 +1811,7 @@ func (o *AddRandomCPP) Apply(_ context.Context, genome model.Genome) (model.Geno
 		return model.Genome{}, errors.New("random source is required")
 	}
 	if genome.Substrate == nil {
-		return cloneGenome(genome), nil
+		return model.Genome{}, ErrNoMutationChoice
 	}
 	choices := availableCPPChoices(genome)
 	if len(choices) == 0 {
@@ -1848,7 +1848,7 @@ func (o *AddRandomCEP) Apply(_ context.Context, genome model.Genome) (model.Geno
 		return model.Genome{}, errors.New("random source is required")
 	}
 	if genome.Substrate == nil {
-		return cloneGenome(genome), nil
+		return model.Genome{}, ErrNoMutationChoice
 	}
 	choices := availableCEPChoices(genome)
 	if len(choices) == 0 {
@@ -1879,8 +1879,8 @@ func (o *RemoveRandomCPP) Applicable(genome model.Genome, _ string) bool {
 }
 
 func (o *RemoveRandomCPP) Apply(_ context.Context, genome model.Genome) (model.Genome, error) {
-	if genome.Substrate == nil {
-		return cloneGenome(genome), nil
+	if genome.Substrate == nil || genome.Substrate.CPPName == "" {
+		return model.Genome{}, ErrNoMutationChoice
 	}
 	mutated := cloneGenome(genome)
 	mutated.Substrate.CPPName = ""
@@ -1899,8 +1899,8 @@ func (o *RemoveRandomCEP) Applicable(genome model.Genome, _ string) bool {
 }
 
 func (o *RemoveRandomCEP) Apply(_ context.Context, genome model.Genome) (model.Genome, error) {
-	if genome.Substrate == nil {
-		return cloneGenome(genome), nil
+	if genome.Substrate == nil || genome.Substrate.CEPName == "" {
+		return model.Genome{}, ErrNoMutationChoice
 	}
 	mutated := cloneGenome(genome)
 	mutated.Substrate.CEPName = ""
@@ -1924,13 +1924,10 @@ func (o *AddCircuitNode) Apply(_ context.Context, genome model.Genome) (model.Ge
 	if o == nil || o.Rand == nil {
 		return model.Genome{}, errors.New("random source is required")
 	}
-	if genome.Substrate == nil {
-		return cloneGenome(genome), nil
+	if genome.Substrate == nil || len(genome.Substrate.Dimensions) == 0 {
+		return model.Genome{}, ErrNoMutationChoice
 	}
 	mutated := cloneGenome(genome)
-	if len(mutated.Substrate.Dimensions) == 0 {
-		return mutated, nil
-	}
 	idx := o.Rand.Intn(len(mutated.Substrate.Dimensions))
 	if mutated.Substrate.Dimensions[idx] < 1 {
 		mutated.Substrate.Dimensions[idx] = 1
@@ -1966,7 +1963,7 @@ func (o *DeleteCircuitNode) Apply(_ context.Context, genome model.Genome) (model
 		return model.Genome{}, errors.New("random source is required")
 	}
 	if genome.Substrate == nil || len(genome.Substrate.Dimensions) == 0 {
-		return cloneGenome(genome), nil
+		return model.Genome{}, ErrNoMutationChoice
 	}
 	candidates := make([]int, 0, len(genome.Substrate.Dimensions))
 	for i, width := range genome.Substrate.Dimensions {
@@ -1975,7 +1972,7 @@ func (o *DeleteCircuitNode) Apply(_ context.Context, genome model.Genome) (model
 		}
 	}
 	if len(candidates) == 0 {
-		return cloneGenome(genome), nil
+		return model.Genome{}, ErrNoMutationChoice
 	}
 	mutated := cloneGenome(genome)
 	idx := candidates[o.Rand.Intn(len(candidates))]
@@ -2001,12 +1998,12 @@ func (o *AddCircuitLayer) Apply(_ context.Context, genome model.Genome) (model.G
 		return model.Genome{}, errors.New("random source is required")
 	}
 	if genome.Substrate == nil {
-		return cloneGenome(genome), nil
+		return model.Genome{}, ErrNoMutationChoice
 	}
 	mutated := cloneGenome(genome)
 	dims := append([]int(nil), mutated.Substrate.Dimensions...)
 	if len(dims) == 0 {
-		return mutated, nil
+		return model.Genome{}, ErrNoMutationChoice
 	}
 	if len(dims) == 1 {
 		mutated.Substrate.Dimensions = []int{dims[0], 1}

@@ -1338,12 +1338,8 @@ func TestAddRandomCPPRequiresSubstrateConfig(t *testing.T) {
 		},
 	}
 	op := &AddRandomCPP{Rand: rand.New(rand.NewSource(83))}
-	mutated, err := op.Apply(context.Background(), genome)
-	if err != nil {
-		t.Fatalf("apply failed: %v", err)
-	}
-	if mutated.Substrate != nil {
-		t.Fatal("expected neural-encoded genome to remain without substrate config")
+	if _, err := op.Apply(context.Background(), genome); !errors.Is(err, ErrNoMutationChoice) {
+		t.Fatalf("expected ErrNoMutationChoice without substrate config, got %v", err)
 	}
 	withSubstrate := model.Genome{
 		Neurons: genome.Neurons,
@@ -1354,7 +1350,7 @@ func TestAddRandomCPPRequiresSubstrateConfig(t *testing.T) {
 			Parameters: map[string]float64{},
 		},
 	}
-	mutated, err = op.Apply(context.Background(), withSubstrate)
+	mutated, err := op.Apply(context.Background(), withSubstrate)
 	if len(availableCPPChoices(withSubstrate)) == 0 {
 		if !errors.Is(err, ErrNoMutationChoice) {
 			t.Fatalf("expected exhausted cpp choices error, got %v", err)
@@ -1377,12 +1373,8 @@ func TestAddRandomCEPRequiresSubstrateConfig(t *testing.T) {
 		},
 	}
 	op := &AddRandomCEP{Rand: rand.New(rand.NewSource(89))}
-	mutated, err := op.Apply(context.Background(), genome)
-	if err != nil {
-		t.Fatalf("apply failed: %v", err)
-	}
-	if mutated.Substrate != nil {
-		t.Fatal("expected neural-encoded genome to remain without substrate config")
+	if _, err := op.Apply(context.Background(), genome); !errors.Is(err, ErrNoMutationChoice) {
+		t.Fatalf("expected ErrNoMutationChoice without substrate config, got %v", err)
 	}
 	withSubstrate := model.Genome{
 		Neurons: genome.Neurons,
@@ -1393,7 +1385,7 @@ func TestAddRandomCEPRequiresSubstrateConfig(t *testing.T) {
 			Parameters: map[string]float64{},
 		},
 	}
-	mutated, err = op.Apply(context.Background(), withSubstrate)
+	mutated, err := op.Apply(context.Background(), withSubstrate)
 	if len(availableCEPChoices(withSubstrate)) == 0 {
 		if !errors.Is(err, ErrNoMutationChoice) {
 			t.Fatalf("expected exhausted cep choices error, got %v", err)
@@ -1515,6 +1507,15 @@ func TestCircuitMutationsRequireConfiguredDimensions(t *testing.T) {
 	if (&AddCircuitLayer{}).Applicable(withoutSubstrate, "xor") {
 		t.Fatal("expected add circuit layer to be inapplicable without substrate config")
 	}
+	if _, err := (&AddCircuitNode{Rand: rand.New(rand.NewSource(321))}).Apply(context.Background(), withoutSubstrate); !errors.Is(err, ErrNoMutationChoice) {
+		t.Fatalf("expected ErrNoMutationChoice for add circuit node without substrate, got %v", err)
+	}
+	if _, err := (&AddCircuitLayer{Rand: rand.New(rand.NewSource(323))}).Apply(context.Background(), withoutSubstrate); !errors.Is(err, ErrNoMutationChoice) {
+		t.Fatalf("expected ErrNoMutationChoice for add circuit layer without substrate, got %v", err)
+	}
+	if _, err := (&DeleteCircuitNode{Rand: rand.New(rand.NewSource(325))}).Apply(context.Background(), withoutSubstrate); !errors.Is(err, ErrNoMutationChoice) {
+		t.Fatalf("expected ErrNoMutationChoice for delete circuit node without substrate, got %v", err)
+	}
 
 	withEmptyDims := model.Genome{
 		Substrate: &model.SubstrateConfig{
@@ -1529,6 +1530,15 @@ func TestCircuitMutationsRequireConfiguredDimensions(t *testing.T) {
 	}
 	if (&AddCircuitLayer{}).Applicable(withEmptyDims, "xor") {
 		t.Fatal("expected add circuit layer to be inapplicable with empty dimensions")
+	}
+	if _, err := (&AddCircuitNode{Rand: rand.New(rand.NewSource(327))}).Apply(context.Background(), withEmptyDims); !errors.Is(err, ErrNoMutationChoice) {
+		t.Fatalf("expected ErrNoMutationChoice for add circuit node with empty dimensions, got %v", err)
+	}
+	if _, err := (&AddCircuitLayer{Rand: rand.New(rand.NewSource(329))}).Apply(context.Background(), withEmptyDims); !errors.Is(err, ErrNoMutationChoice) {
+		t.Fatalf("expected ErrNoMutationChoice for add circuit layer with empty dimensions, got %v", err)
+	}
+	if _, err := (&DeleteCircuitNode{Rand: rand.New(rand.NewSource(331))}).Apply(context.Background(), withEmptyDims); !errors.Is(err, ErrNoMutationChoice) {
+		t.Fatalf("expected ErrNoMutationChoice for delete circuit node with empty dimensions, got %v", err)
 	}
 }
 
@@ -1581,6 +1591,12 @@ func TestRemoveRandomCPPAndCEP(t *testing.T) {
 	}
 	if cepMutated.Substrate.CEPName != "" {
 		t.Fatalf("expected cleared cep name, got=%q", cepMutated.Substrate.CEPName)
+	}
+	if _, err := (&RemoveRandomCPP{}).Apply(context.Background(), model.Genome{}); !errors.Is(err, ErrNoMutationChoice) {
+		t.Fatalf("expected ErrNoMutationChoice for remove cpp without substrate, got %v", err)
+	}
+	if _, err := (&RemoveRandomCEP{}).Apply(context.Background(), model.Genome{}); !errors.Is(err, ErrNoMutationChoice) {
+		t.Fatalf("expected ErrNoMutationChoice for remove cep without substrate, got %v", err)
 	}
 }
 
