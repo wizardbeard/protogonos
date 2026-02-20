@@ -1290,11 +1290,17 @@ func TestAddRandomCPPRequiresSubstrateConfig(t *testing.T) {
 		},
 	}
 	mutated, err = op.Apply(context.Background(), withSubstrate)
-	if err != nil {
-		t.Fatalf("apply with substrate failed: %v", err)
-	}
-	if mutated.Substrate == nil || mutated.Substrate.CPPName == "" {
-		t.Fatal("expected cpp mutation on substrate-configured genome")
+	if len(availableCPPChoices(withSubstrate)) == 0 {
+		if !errors.Is(err, ErrNoMutationChoice) {
+			t.Fatalf("expected exhausted cpp choices error, got %v", err)
+		}
+	} else {
+		if err != nil {
+			t.Fatalf("apply with substrate failed: %v", err)
+		}
+		if mutated.Substrate == nil || mutated.Substrate.CPPName == "" {
+			t.Fatal("expected cpp mutation on substrate-configured genome")
+		}
 	}
 }
 
@@ -1323,11 +1329,17 @@ func TestAddRandomCEPRequiresSubstrateConfig(t *testing.T) {
 		},
 	}
 	mutated, err = op.Apply(context.Background(), withSubstrate)
-	if err != nil {
-		t.Fatalf("apply with substrate failed: %v", err)
-	}
-	if mutated.Substrate == nil || mutated.Substrate.CEPName == "" {
-		t.Fatal("expected cep mutation on substrate-configured genome")
+	if len(availableCEPChoices(withSubstrate)) == 0 {
+		if !errors.Is(err, ErrNoMutationChoice) {
+			t.Fatalf("expected exhausted cep choices error, got %v", err)
+		}
+	} else {
+		if err != nil {
+			t.Fatalf("apply with substrate failed: %v", err)
+		}
+		if mutated.Substrate == nil || mutated.Substrate.CEPName == "" {
+			t.Fatal("expected cep mutation on substrate-configured genome")
+		}
 	}
 }
 
@@ -1346,14 +1358,35 @@ func TestAddRandomCPPAndCEPApplicable(t *testing.T) {
 			Parameters: map[string]float64{},
 		},
 	}
-	if !(&AddRandomCPP{}).Applicable(genome, "xor") {
-		t.Fatal("expected add cpp operator to be applicable with substrate config")
+	if (&AddRandomCPP{}).Applicable(genome, "xor") != (len(availableCPPChoices(genome)) > 0) {
+		t.Fatal("expected add cpp applicability to track alternative choice availability")
 	}
-	if !(&AddRandomCEP{}).Applicable(genome, "xor") {
-		t.Fatal("expected add cep operator to be applicable with substrate config")
+	if (&AddRandomCEP{}).Applicable(genome, "xor") != (len(availableCEPChoices(genome)) > 0) {
+		t.Fatal("expected add cep applicability to track alternative choice availability")
 	}
 	if substrate.DefaultCPPName == "" || substrate.DefaultCEPName == "" {
 		t.Fatal("expected default substrate names")
+	}
+}
+
+func TestAddRandomCPPAndCEPReturnErrorWhenNoAlternativeChoice(t *testing.T) {
+	genome := model.Genome{
+		Substrate: &model.SubstrateConfig{
+			CPPName:    substrate.DefaultCPPName,
+			CEPName:    substrate.DefaultCEPName,
+			Dimensions: []int{2, 2},
+			Parameters: map[string]float64{},
+		},
+	}
+	if len(availableCPPChoices(genome)) == 0 {
+		if _, err := (&AddRandomCPP{Rand: rand.New(rand.NewSource(241))}).Apply(context.Background(), genome); !errors.Is(err, ErrNoMutationChoice) {
+			t.Fatalf("expected ErrNoMutationChoice for cpp mutation exhaustion, got %v", err)
+		}
+	}
+	if len(availableCEPChoices(genome)) == 0 {
+		if _, err := (&AddRandomCEP{Rand: rand.New(rand.NewSource(251))}).Apply(context.Background(), genome); !errors.Is(err, ErrNoMutationChoice) {
+			t.Fatalf("expected ErrNoMutationChoice for cep mutation exhaustion, got %v", err)
+		}
 	}
 }
 

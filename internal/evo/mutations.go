@@ -29,11 +29,12 @@ type ContextualOperator interface {
 }
 
 var (
-	ErrSynapseExists   = errors.New("synapse already exists")
-	ErrSynapseNotFound = errors.New("synapse not found")
-	ErrNeuronExists    = errors.New("neuron already exists")
-	ErrNeuronNotFound  = errors.New("neuron not found")
-	ErrInvalidEndpoint = errors.New("invalid synapse endpoint")
+	ErrSynapseExists    = errors.New("synapse already exists")
+	ErrSynapseNotFound  = errors.New("synapse not found")
+	ErrNeuronExists     = errors.New("neuron already exists")
+	ErrNeuronNotFound   = errors.New("neuron not found")
+	ErrInvalidEndpoint  = errors.New("invalid synapse endpoint")
+	ErrNoMutationChoice = errors.New("no mutation choice available")
 )
 
 // PerturbWeightAt mutates one synapse weight by a fixed delta.
@@ -1800,7 +1801,7 @@ func (o *AddRandomCPP) Name() string {
 }
 
 func (o *AddRandomCPP) Applicable(genome model.Genome, _ string) bool {
-	return genome.Substrate != nil && len(substrate.ListCPPs()) > 0
+	return len(availableCPPChoices(genome)) > 0
 }
 
 func (o *AddRandomCPP) Apply(_ context.Context, genome model.Genome) (model.Genome, error) {
@@ -1810,18 +1811,9 @@ func (o *AddRandomCPP) Apply(_ context.Context, genome model.Genome) (model.Geno
 	if genome.Substrate == nil {
 		return cloneGenome(genome), nil
 	}
-	candidates := substrate.ListCPPs()
-	if len(candidates) == 0 {
-		return cloneGenome(genome), nil
-	}
-
-	current := ""
-	if genome.Substrate != nil {
-		current = genome.Substrate.CPPName
-	}
-	choices := filterOutString(candidates, current)
+	choices := availableCPPChoices(genome)
 	if len(choices) == 0 {
-		choices = candidates
+		return model.Genome{}, ErrNoMutationChoice
 	}
 	selected := choices[o.Rand.Intn(len(choices))]
 
@@ -1846,7 +1838,7 @@ func (o *AddRandomCEP) Name() string {
 }
 
 func (o *AddRandomCEP) Applicable(genome model.Genome, _ string) bool {
-	return genome.Substrate != nil && len(substrate.ListCEPs()) > 0
+	return len(availableCEPChoices(genome)) > 0
 }
 
 func (o *AddRandomCEP) Apply(_ context.Context, genome model.Genome) (model.Genome, error) {
@@ -1856,18 +1848,9 @@ func (o *AddRandomCEP) Apply(_ context.Context, genome model.Genome) (model.Geno
 	if genome.Substrate == nil {
 		return cloneGenome(genome), nil
 	}
-	candidates := substrate.ListCEPs()
-	if len(candidates) == 0 {
-		return cloneGenome(genome), nil
-	}
-
-	current := ""
-	if genome.Substrate != nil {
-		current = genome.Substrate.CEPName
-	}
-	choices := filterOutString(candidates, current)
+	choices := availableCEPChoices(genome)
 	if len(choices) == 0 {
-		choices = candidates
+		return model.Genome{}, ErrNoMutationChoice
 	}
 	selected := choices[o.Rand.Intn(len(choices))]
 
@@ -2659,6 +2642,20 @@ func uniqueStrings(values []string) []string {
 func syncIOLinkCounts(genome *model.Genome) {
 	genome.SensorLinks = len(genome.SensorNeuronLinks)
 	genome.ActuatorLinks = len(genome.NeuronActuatorLinks)
+}
+
+func availableCPPChoices(genome model.Genome) []string {
+	if genome.Substrate == nil {
+		return nil
+	}
+	return filterOutString(substrate.ListCPPs(), genome.Substrate.CPPName)
+}
+
+func availableCEPChoices(genome model.Genome) []string {
+	if genome.Substrate == nil {
+		return nil
+	}
+	return filterOutString(substrate.ListCEPs(), genome.Substrate.CEPName)
 }
 
 func ensureSubstrateConfig(genome *model.Genome) {
