@@ -1082,7 +1082,7 @@ func (o *PerturbPlasticityRate) Apply(_ context.Context, genome model.Genome) (m
 		return model.Genome{}, errors.New("max delta must be > 0")
 	}
 	if genome.Plasticity == nil {
-		return cloneGenome(genome), nil
+		return model.Genome{}, ErrNoMutationChoice
 	}
 	mutated := cloneGenome(genome)
 	delta := (o.Rand.Float64()*2 - 1) * o.MaxDelta
@@ -1145,7 +1145,7 @@ func (o *ChangePlasticityRule) Apply(_ context.Context, genome model.Genome) (mo
 		return model.Genome{}, errors.New("random source is required")
 	}
 	if genome.Plasticity == nil {
-		return cloneGenome(genome), nil
+		return model.Genome{}, ErrNoMutationChoice
 	}
 	rules := o.Rules
 	if len(rules) == 0 {
@@ -1244,7 +1244,7 @@ func (o *PerturbSubstrateParameter) Apply(_ context.Context, genome model.Genome
 		return model.Genome{}, errors.New("max delta must be > 0")
 	}
 	if genome.Substrate == nil || len(genome.Substrate.Parameters) == 0 {
-		return cloneGenome(genome), nil
+		return model.Genome{}, ErrNoMutationChoice
 	}
 
 	keys := append([]string(nil), o.Keys...)
@@ -1260,7 +1260,7 @@ func (o *PerturbSubstrateParameter) Apply(_ context.Context, genome model.Genome
 		}
 	}
 	if len(filtered) == 0 {
-		return cloneGenome(genome), nil
+		return model.Genome{}, ErrNoMutationChoice
 	}
 
 	selected := filtered[o.Rand.Intn(len(filtered))]

@@ -1907,6 +1907,29 @@ func TestPerturbSubstrateParameterMutation(t *testing.T) {
 	}
 }
 
+func TestPerturbSubstrateParameterCancelsWhenUnavailable(t *testing.T) {
+	op := &PerturbSubstrateParameter{
+		Rand:     rand.New(rand.NewSource(333)),
+		MaxDelta: 0.5,
+	}
+	if _, err := op.Apply(context.Background(), model.Genome{}); !errors.Is(err, ErrNoMutationChoice) {
+		t.Fatalf("expected ErrNoMutationChoice without substrate, got %v", err)
+	}
+
+	genome := model.Genome{
+		Substrate: &model.SubstrateConfig{
+			CPPName:    "set_weight",
+			CEPName:    "delta_weight",
+			Dimensions: []int{2, 2},
+			Parameters: map[string]float64{"scale": 1.0},
+		},
+	}
+	op.Keys = []string{"offset"}
+	if _, err := op.Apply(context.Background(), genome); !errors.Is(err, ErrNoMutationChoice) {
+		t.Fatalf("expected ErrNoMutationChoice for missing substrate keys, got %v", err)
+	}
+}
+
 func TestChangePlasticityRuleMutation(t *testing.T) {
 	genome := randomGenome(rand.New(rand.NewSource(5)))
 	genome.Plasticity = &model.PlasticityConfig{
@@ -1927,6 +1950,23 @@ func TestChangePlasticityRuleMutation(t *testing.T) {
 	}
 	if mutated.Plasticity.Rule == genome.Plasticity.Rule {
 		t.Fatal("expected plasticity rule to change")
+	}
+}
+
+func TestPlasticityRuleMutatorsCancelWithoutPlasticityConfig(t *testing.T) {
+	genome := randomGenome(rand.New(rand.NewSource(335)))
+
+	if _, err := (&ChangePlasticityRule{
+		Rand: rand.New(rand.NewSource(337)),
+	}).Apply(context.Background(), genome); !errors.Is(err, ErrNoMutationChoice) {
+		t.Fatalf("expected ErrNoMutationChoice for change_plasticity_rule without plasticity config, got %v", err)
+	}
+
+	if _, err := (&PerturbPlasticityRate{
+		Rand:     rand.New(rand.NewSource(339)),
+		MaxDelta: 0.1,
+	}).Apply(context.Background(), genome); !errors.Is(err, ErrNoMutationChoice) {
+		t.Fatalf("expected ErrNoMutationChoice for perturb_plasticity_rate without plasticity config, got %v", err)
 	}
 }
 
