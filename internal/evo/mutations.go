@@ -706,7 +706,7 @@ func (o *RemoveRandomInlink) Apply(_ context.Context, genome model.Genome) (mode
 		return model.Genome{}, errors.New("random source is required")
 	}
 	if len(genome.Synapses) == 0 {
-		return model.Genome{}, ErrNoSynapses
+		return model.Genome{}, ErrNoMutationChoice
 	}
 	inputSet := toIDSet(o.InputNeuronIDs)
 	layers := inferFeedforwardLayers(genome, o.InputNeuronIDs, nil)
@@ -749,7 +749,7 @@ func (o *RemoveRandomOutlink) Apply(_ context.Context, genome model.Genome) (mod
 		return model.Genome{}, errors.New("random source is required")
 	}
 	if len(genome.Synapses) == 0 {
-		return model.Genome{}, ErrNoSynapses
+		return model.Genome{}, ErrNoMutationChoice
 	}
 	outputSet := toIDSet(o.OutputNeuronIDs)
 	layers := inferFeedforwardLayers(genome, nil, o.OutputNeuronIDs)
@@ -2581,7 +2581,7 @@ func removeDirectedRandomSynapse(genome model.Genome, rng *rand.Rand, keep func(
 		}
 	}
 	if len(candidates) == 0 {
-		return model.Genome{}, ErrNoSynapses
+		return model.Genome{}, ErrNoMutationChoice
 	}
 	idx := candidates[rng.Intn(len(candidates))]
 	mutated := cloneGenome(genome)

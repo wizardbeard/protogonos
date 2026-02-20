@@ -890,8 +890,8 @@ func TestRemoveRandomInlinkNoDirectionalCandidates(t *testing.T) {
 	if op.Applicable(genome, "xor") {
 		t.Fatal("expected remove_inlink to be inapplicable without matching edges")
 	}
-	if _, err := op.Apply(context.Background(), genome); !errors.Is(err, ErrNoSynapses) {
-		t.Fatalf("expected ErrNoSynapses, got %v", err)
+	if _, err := op.Apply(context.Background(), genome); !errors.Is(err, ErrNoMutationChoice) {
+		t.Fatalf("expected ErrNoMutationChoice, got %v", err)
 	}
 }
 
@@ -940,8 +940,8 @@ func TestRemoveRandomOutlinkNoDirectionalCandidates(t *testing.T) {
 	if op.Applicable(genome, "xor") {
 		t.Fatal("expected remove_outlink to be inapplicable without matching edges")
 	}
-	if _, err := op.Apply(context.Background(), genome); !errors.Is(err, ErrNoSynapses) {
-		t.Fatalf("expected ErrNoSynapses, got %v", err)
+	if _, err := op.Apply(context.Background(), genome); !errors.Is(err, ErrNoMutationChoice) {
+		t.Fatalf("expected ErrNoMutationChoice, got %v", err)
 	}
 }
 
