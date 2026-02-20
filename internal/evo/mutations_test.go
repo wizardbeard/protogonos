@@ -2079,6 +2079,24 @@ func TestMutatePFAndPlasticityParametersApplicableWithNeuronsOnly(t *testing.T) 
 	}
 }
 
+func TestFunctionMutatorApplicableReflectsAlternativeChoiceAvailability(t *testing.T) {
+	genome := model.Genome{
+		Neurons: []model.Neuron{
+			{ID: "n1", Activation: "identity", Aggregator: "dot_product", PlasticityRule: "hebbian"},
+			{ID: "n2", Activation: "identity", Aggregator: "dot_product", PlasticityRule: "hebbian"},
+		},
+	}
+	if (&MutateAF{Activations: []string{"identity"}}).Applicable(genome, "xor") {
+		t.Fatal("expected mutate_af to be inapplicable with no alternative activation choices")
+	}
+	if (&MutateAggrF{Aggregators: []string{"dot_product"}}).Applicable(genome, "xor") {
+		t.Fatal("expected mutate_aggrf to be inapplicable with no alternative aggregator choices")
+	}
+	if (&MutatePF{Rules: []string{"hebbian"}}).Applicable(genome, "xor") {
+		t.Fatal("expected mutate_pf to be inapplicable with no alternative plasticity-rule choices")
+	}
+}
+
 func TestContextualOperatorApplicability(t *testing.T) {
 	genome := randomGenome(rand.New(rand.NewSource(7)))
 	if (&PerturbRandomBias{}).Applicable(model.Genome{}, "xor") {

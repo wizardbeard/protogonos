@@ -368,7 +368,25 @@ func (o *MutateAF) Name() string {
 }
 
 func (o *MutateAF) Applicable(genome model.Genome, _ string) bool {
-	return len(genome.Neurons) > 0
+	if len(genome.Neurons) == 0 {
+		return false
+	}
+	activations := append([]string(nil), o.Activations...)
+	if len(activations) == 0 {
+		activations = []string{"identity", "relu", "tanh", "sigmoid"}
+	}
+	options := normalizeNonEmptyStrings(activations)
+	if len(options) == 0 {
+		return false
+	}
+	for _, neuron := range genome.Neurons {
+		for _, option := range options {
+			if option != neuron.Activation {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 func (o *MutateAF) Apply(ctx context.Context, genome model.Genome) (model.Genome, error) {
@@ -429,7 +447,25 @@ func (o *MutateAggrF) Name() string {
 }
 
 func (o *MutateAggrF) Applicable(genome model.Genome, _ string) bool {
-	return len(genome.Neurons) > 0
+	if len(genome.Neurons) == 0 {
+		return false
+	}
+	aggregators := append([]string(nil), o.Aggregators...)
+	if len(aggregators) == 0 {
+		aggregators = []string{"dot_product", "mult_product", "diff_product"}
+	}
+	options := normalizeNonEmptyStrings(aggregators)
+	if len(options) == 0 {
+		return false
+	}
+	for _, neuron := range genome.Neurons {
+		for _, option := range options {
+			if option != neuron.Aggregator {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 func (o *MutateAggrF) Apply(ctx context.Context, genome model.Genome) (model.Genome, error) {
@@ -1180,7 +1216,26 @@ func (o *MutatePF) Name() string {
 }
 
 func (o *MutatePF) Applicable(genome model.Genome, _ string) bool {
-	return len(genome.Neurons) > 0
+	if len(genome.Neurons) == 0 {
+		return false
+	}
+	rules := append([]string(nil), o.Rules...)
+	if len(rules) == 0 {
+		rules = []string{nn.PlasticityNone, nn.PlasticityHebbian, nn.PlasticityOja}
+	}
+	normalized := normalizePlasticityRuleOptions(rules)
+	if len(normalized) == 0 {
+		return false
+	}
+	for i := range genome.Neurons {
+		current := neuronPlasticityRule(genome, i)
+		for _, option := range normalized {
+			if option != current {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 func (o *MutatePF) Apply(_ context.Context, genome model.Genome) (model.Genome, error) {
@@ -2596,6 +2651,39 @@ func neuronPlasticityRate(genome model.Genome, idx int) float64 {
 		return genome.Plasticity.Rate
 	}
 	return 0.1
+}
+
+func normalizeNonEmptyStrings(values []string) []string {
+	seen := make(map[string]struct{}, len(values))
+	out := make([]string, 0, len(values))
+	for _, value := range values {
+		if value == "" {
+			continue
+		}
+		if _, ok := seen[value]; ok {
+			continue
+		}
+		seen[value] = struct{}{}
+		out = append(out, value)
+	}
+	return out
+}
+
+func normalizePlasticityRuleOptions(rules []string) []string {
+	seen := make(map[string]struct{}, len(rules))
+	out := make([]string, 0, len(rules))
+	for _, rule := range rules {
+		name := nn.NormalizePlasticityRuleName(rule)
+		if name == "" {
+			continue
+		}
+		if _, ok := seen[name]; ok {
+			continue
+		}
+		seen[name] = struct{}{}
+		out = append(out, name)
+	}
+	return out
 }
 
 func selectedNeuronIDsForMutateWeights(genome model.Genome, rng *rand.Rand) []string {
