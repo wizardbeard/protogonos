@@ -1017,6 +1017,30 @@ func TestAddRandomSensorAndActuatorRequireNeuronsForConnection(t *testing.T) {
 	}
 }
 
+func TestAddRandomSensorAndActuatorCancelWhenNoCompatibleCandidates(t *testing.T) {
+	sensorGenome := model.Genome{
+		Neurons:   []model.Neuron{{ID: "n1", Activation: "identity"}},
+		SensorIDs: []string{protoio.XORInputLeftSensorName, protoio.XORInputRightSensorName},
+	}
+	if _, err := (&AddRandomSensor{
+		Rand:      rand.New(rand.NewSource(271)),
+		ScapeName: "xor",
+	}).Apply(context.Background(), sensorGenome); !errors.Is(err, ErrNoMutationChoice) {
+		t.Fatalf("expected ErrNoMutationChoice for exhausted sensor candidates, got %v", err)
+	}
+
+	actuatorGenome := model.Genome{
+		Neurons:     []model.Neuron{{ID: "n1", Activation: "identity"}},
+		ActuatorIDs: []string{protoio.XOROutputActuatorName},
+	}
+	if _, err := (&AddRandomActuator{
+		Rand:      rand.New(rand.NewSource(273)),
+		ScapeName: "xor",
+	}).Apply(context.Background(), actuatorGenome); !errors.Is(err, ErrNoMutationChoice) {
+		t.Fatalf("expected ErrNoMutationChoice for exhausted actuator candidates, got %v", err)
+	}
+}
+
 func TestAddRandomSensorLinkIncrementsUntilCapacity(t *testing.T) {
 	genome := model.Genome{
 		Neurons:   []model.Neuron{{ID: "n1", Activation: "identity"}},
@@ -1092,6 +1116,15 @@ func TestRemoveRandomSensorRemovesOneSensor(t *testing.T) {
 	}
 	if len(mutated.SensorIDs) != 1 {
 		t.Fatalf("expected one remaining sensor, got=%d", len(mutated.SensorIDs))
+	}
+}
+
+func TestRemoveRandomSensorAndActuatorCancelWhenEmpty(t *testing.T) {
+	if _, err := (&RemoveRandomSensor{Rand: rand.New(rand.NewSource(281))}).Apply(context.Background(), model.Genome{}); !errors.Is(err, ErrNoMutationChoice) {
+		t.Fatalf("expected ErrNoMutationChoice for empty sensor removal, got %v", err)
+	}
+	if _, err := (&RemoveRandomActuator{Rand: rand.New(rand.NewSource(283))}).Apply(context.Background(), model.Genome{}); !errors.Is(err, ErrNoMutationChoice) {
+		t.Fatalf("expected ErrNoMutationChoice for empty actuator removal, got %v", err)
 	}
 }
 

@@ -1516,7 +1516,7 @@ func (o *AddRandomSensor) Apply(_ context.Context, genome model.Genome) (model.G
 	}
 	candidates := sensorCandidates(genome, o.ScapeName)
 	if len(candidates) == 0 {
-		return cloneGenome(genome), nil
+		return model.Genome{}, ErrNoMutationChoice
 	}
 	choice := candidates[o.Rand.Intn(len(candidates))]
 	mutated := cloneGenome(genome)
@@ -1588,7 +1588,7 @@ func (o *AddRandomActuator) Apply(_ context.Context, genome model.Genome) (model
 	}
 	candidates := actuatorCandidates(genome, o.ScapeName)
 	if len(candidates) == 0 {
-		return cloneGenome(genome), nil
+		return model.Genome{}, ErrNoMutationChoice
 	}
 	choice := candidates[o.Rand.Intn(len(candidates))]
 	mutated := cloneGenome(genome)
@@ -1655,7 +1655,7 @@ func (o *RemoveRandomSensor) Apply(_ context.Context, genome model.Genome) (mode
 		return model.Genome{}, errors.New("random source is required")
 	}
 	if len(genome.SensorIDs) == 0 {
-		return cloneGenome(genome), nil
+		return model.Genome{}, ErrNoMutationChoice
 	}
 	selected := genome.SensorIDs[o.Rand.Intn(len(genome.SensorIDs))]
 	mutated := cloneGenome(genome)
@@ -1733,7 +1733,7 @@ func (o *RemoveRandomActuator) Apply(_ context.Context, genome model.Genome) (mo
 		return model.Genome{}, errors.New("random source is required")
 	}
 	if len(genome.ActuatorIDs) == 0 {
-		return cloneGenome(genome), nil
+		return model.Genome{}, ErrNoMutationChoice
 	}
 	selected := genome.ActuatorIDs[o.Rand.Intn(len(genome.ActuatorIDs))]
 	mutated := cloneGenome(genome)
