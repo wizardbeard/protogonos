@@ -371,6 +371,8 @@ func (e *Exoself) randomSubset(pool []model.Genome) []model.Genome {
 
 func (e *Exoself) perturbCandidate(ctx context.Context, base model.Genome, perturbationRange, annealingFactor float64) (model.Genome, error) {
 	candidate := cloneGenome(base)
+	targets := e.selectedNeuronPerturbTargets(candidate, perturbationRange, annealingFactor)
+	currentGeneration := currentGenomeGeneration(candidate)
 	for s := 0; s < e.Steps; s++ {
 		if err := ctx.Err(); err != nil {
 			return model.Genome{}, err
@@ -378,10 +380,172 @@ func (e *Exoself) perturbCandidate(ctx context.Context, base model.Genome, pertu
 		if len(candidate.Synapses) == 0 {
 			break
 		}
-		idx := e.randIntn(len(candidate.Synapses))
-		spread := e.StepSize * perturbationRange * math.Pow(annealingFactor, float64(s))
+		if len(targets) == 0 {
+			idx := e.randIntn(len(candidate.Synapses))
+			spread := e.StepSize * perturbationRange
+			delta := (e.randFloat64()*2 - 1) * spread
+			candidate.Synapses[idx].Weight += delta
+			continue
+		}
+		target := targets[e.randIntn(len(targets))]
+		incoming := incomingSynapseIndexes(candidate, target.neuronID)
+		if len(incoming) == 0 {
+			continue
+		}
+		idx := incoming[e.randIntn(len(incoming))]
+		spread := e.StepSize * target.spread
 		delta := (e.randFloat64()*2 - 1) * spread
 		candidate.Synapses[idx].Weight += delta
+		touchNeuronGeneration(candidate.Neurons, target.neuronID, currentGeneration)
 	}
 	return candidate, nil
+}
+
+type neuronPerturbTarget struct {
+	neuronID string
+	spread   float64
+}
+
+func (e *Exoself) selectedNeuronPerturbTargets(
+	genome model.Genome,
+	perturbationRange float64,
+	annealingFactor float64,
+) []neuronPerturbTarget {
+	if len(genome.Neurons) == 0 {
+		return nil
+	}
+	if perturbationRange <= 0 {
+		perturbationRange = 1.0
+	}
+	if annealingFactor <= 0 {
+		annealingFactor = 1.0
+	}
+
+	mode := NormalizeCandidateSelectionName(e.CandidateSelection)
+	baseMode := nonRandomModeFor(mode)
+	currentGeneration := currentGenomeGeneration(genome)
+	selected := neuronPoolForMode(genome.Neurons, baseMode, currentGeneration, e.randFloat64)
+	if len(selected) == 0 {
+		selected = []model.Neuron{genome.Neurons[0]}
+	}
+	targets := make([]neuronPerturbTarget, 0, len(selected))
+	for _, neuron := range selected {
+		age := currentGeneration - effectiveNeuronGeneration(neuron, currentGeneration)
+		if age < 0 {
+			age = 0
+		}
+		spread := perturbationRange * math.Pi * math.Pow(annealingFactor, float64(age))
+		if spread <= 0 {
+			spread = perturbationRange * math.Pi
+		}
+		targets = append(targets, neuronPerturbTarget{
+			neuronID: neuron.ID,
+			spread:   spread,
+		})
+	}
+	if isRandomSelection(mode) {
+		return e.randomNeuronTargetSubset(targets)
+	}
+	return targets
+}
+
+func neuronPoolForMode(
+	neurons []model.Neuron,
+	mode string,
+	currentGeneration int,
+	randFloat64 func() float64,
+) []model.Neuron {
+	if len(neurons) == 0 {
+		return nil
+	}
+	switch mode {
+	case CandidateSelectDynamicA:
+		u := randFloat64()
+		return filterNeuronsByAge(neurons, currentGeneration, dynamicAgeLimit(u))
+	case CandidateSelectActive, CandidateSelectRecent:
+		return filterNeuronsByAge(neurons, currentGeneration, 3)
+	case CandidateSelectCurrent, CandidateSelectLastGen:
+		return filterNeuronsByAge(neurons, currentGeneration, 0)
+	case CandidateSelectAll, CandidateSelectBestSoFar, CandidateSelectOriginal:
+		return append([]model.Neuron(nil), neurons...)
+	default:
+		return append([]model.Neuron(nil), neurons...)
+	}
+}
+
+func filterNeuronsByAge(neurons []model.Neuron, currentGeneration int, maxAge float64) []model.Neuron {
+	filtered := make([]model.Neuron, 0, len(neurons))
+	for _, neuron := range neurons {
+		age := currentGeneration - effectiveNeuronGeneration(neuron, currentGeneration)
+		if age < 0 {
+			age = 0
+		}
+		if float64(age) <= maxAge {
+			filtered = append(filtered, neuron)
+		}
+	}
+	return filtered
+}
+
+func currentGenomeGeneration(genome model.Genome) int {
+	if gen, ok := inferGenomeGeneration(genome.ID); ok {
+		return gen
+	}
+	maxGen := 0
+	for _, neuron := range genome.Neurons {
+		if neuron.Generation > maxGen {
+			maxGen = neuron.Generation
+		}
+	}
+	return maxGen
+}
+
+func effectiveNeuronGeneration(neuron model.Neuron, fallback int) int {
+	if neuron.Generation > 0 {
+		return neuron.Generation
+	}
+	if gen, ok := inferGenomeGeneration(neuron.ID); ok {
+		return gen
+	}
+	return fallback
+}
+
+func (e *Exoself) randomNeuronTargetSubset(targets []neuronPerturbTarget) []neuronPerturbTarget {
+	if len(targets) <= 1 {
+		return append([]neuronPerturbTarget(nil), targets...)
+	}
+	mutationP := 1 / math.Sqrt(float64(len(targets)))
+	chosen := make([]neuronPerturbTarget, 0, len(targets))
+	for i := range targets {
+		if e.randFloat64() < mutationP {
+			chosen = append(chosen, targets[i])
+		}
+	}
+	if len(chosen) > 0 {
+		return chosen
+	}
+	return []neuronPerturbTarget{targets[e.randIntn(len(targets))]}
+}
+
+func incomingSynapseIndexes(genome model.Genome, neuronID string) []int {
+	indexes := make([]int, 0, len(genome.Synapses))
+	for i, syn := range genome.Synapses {
+		if syn.To == neuronID {
+			indexes = append(indexes, i)
+		}
+	}
+	return indexes
+}
+
+func touchNeuronGeneration(neurons []model.Neuron, neuronID string, generation int) {
+	if generation < 0 {
+		generation = 0
+	}
+	for i := range neurons {
+		if neurons[i].ID != neuronID {
+			continue
+		}
+		neurons[i].Generation = generation
+		return
+	}
 }

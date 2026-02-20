@@ -449,3 +449,66 @@ func TestExoselfAllRandomCanSelectOlderCandidates(t *testing.T) {
 		t.Fatalf("expected all_random to include older candidate %q over repeated draws", original.ID)
 	}
 }
+
+func TestSelectedNeuronPerturbTargetsActiveUsesAgeAnnealing(t *testing.T) {
+	tuner := &Exoself{
+		Rand:               rand.New(rand.NewSource(43)),
+		CandidateSelection: CandidateSelectActive,
+	}
+	genome := model.Genome{
+		ID: "xor-g5-i0",
+		Neurons: []model.Neuron{
+			{ID: "n-new", Generation: 5, Activation: "identity"},
+			{ID: "n-mid", Generation: 3, Activation: "identity"},
+			{ID: "n-old", Generation: 1, Activation: "identity"},
+		},
+	}
+
+	targets := tuner.selectedNeuronPerturbTargets(genome, 1.0, 0.5)
+	if len(targets) != 2 {
+		t.Fatalf("expected active mode to include age<=3 neurons only, got=%d", len(targets))
+	}
+	if targets[0].neuronID != "n-new" {
+		t.Fatalf("expected first target n-new, got=%s", targets[0].neuronID)
+	}
+	if math.Abs(targets[0].spread-math.Pi) > 1e-9 {
+		t.Fatalf("expected age-0 spread=pi, got=%f", targets[0].spread)
+	}
+	if targets[1].neuronID != "n-mid" {
+		t.Fatalf("expected second target n-mid, got=%s", targets[1].neuronID)
+	}
+	if math.Abs(targets[1].spread-(math.Pi*0.25)) > 1e-9 {
+		t.Fatalf("expected age-2 spread=pi*0.25, got=%f", targets[1].spread)
+	}
+}
+
+func TestExoselfPerturbCandidateCurrentModeTargetsCurrentGeneration(t *testing.T) {
+	tuner := &Exoself{
+		Rand:               rand.New(rand.NewSource(47)),
+		Steps:              8,
+		StepSize:           0.2,
+		CandidateSelection: CandidateSelectCurrent,
+	}
+	base := model.Genome{
+		ID: "xor-g5-i0",
+		Neurons: []model.Neuron{
+			{ID: "n-old", Generation: 2, Activation: "identity"},
+			{ID: "n-new", Generation: 5, Activation: "identity"},
+		},
+		Synapses: []model.Synapse{
+			{ID: "s-old", From: "n-old", To: "n-old", Weight: 0.0, Enabled: true},
+			{ID: "s-new", From: "n-new", To: "n-new", Weight: 0.0, Enabled: true},
+		},
+	}
+
+	mutated, err := tuner.perturbCandidate(context.Background(), base, 1.0, 0.5)
+	if err != nil {
+		t.Fatalf("perturbCandidate: %v", err)
+	}
+	if mutated.Synapses[0].Weight != base.Synapses[0].Weight {
+		t.Fatal("expected older-neuron synapse to remain unchanged in current mode")
+	}
+	if mutated.Synapses[1].Weight == base.Synapses[1].Weight {
+		t.Fatal("expected current-neuron synapse to mutate in current mode")
+	}
+}
