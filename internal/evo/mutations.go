@@ -801,6 +801,9 @@ func (o *CutlinkFromNeuronToNeuron) Applicable(genome model.Genome, _ string) bo
 }
 
 func (o *CutlinkFromNeuronToNeuron) Apply(ctx context.Context, genome model.Genome) (model.Genome, error) {
+	if len(genome.Synapses) == 0 {
+		return model.Genome{}, ErrNoMutationChoice
+	}
 	return (&RemoveRandomSynapse{Rand: o.Rand}).Apply(ctx, genome)
 }
 
@@ -819,6 +822,9 @@ func (o *CutlinkFromElementToElement) Applicable(genome model.Genome, _ string) 
 }
 
 func (o *CutlinkFromElementToElement) Apply(ctx context.Context, genome model.Genome) (model.Genome, error) {
+	if o == nil || o.Rand == nil {
+		return model.Genome{}, errors.New("random source is required")
+	}
 	type opCandidate struct {
 		apply func(context.Context, model.Genome) (model.Genome, error)
 	}
@@ -838,9 +844,6 @@ func (o *CutlinkFromElementToElement) Apply(ctx context.Context, genome model.Ge
 	if len(candidates) == 0 {
 		return model.Genome{}, ErrNoMutationChoice
 	}
-	if o == nil || o.Rand == nil {
-		return model.Genome{}, errors.New("random source is required")
-	}
 	selected := candidates[o.Rand.Intn(len(candidates))]
 	return selected.apply(ctx, genome)
 }
@@ -857,20 +860,29 @@ func (o *LinkFromElementToElement) Name() string {
 }
 
 func (o *LinkFromElementToElement) Applicable(genome model.Genome, _ string) bool {
-	addSynapse := (&AddRandomSynapse{Rand: o.Rand, MaxAbsWeight: o.MaxAbsWeight}).Applicable(genome, "")
+	allNeurons := filterNeuronIDs(genome, nil)
+	addSynapse := hasAvailableDirectedPair(genome, allNeurons, allNeurons)
 	addSensor := (&AddRandomSensorLink{Rand: o.Rand, ScapeName: ""}).Applicable(genome, "")
 	addActuator := (&AddRandomActuatorLink{Rand: o.Rand, ScapeName: ""}).Applicable(genome, "")
 	return addSynapse || addSensor || addActuator
 }
 
 func (o *LinkFromElementToElement) Apply(ctx context.Context, genome model.Genome) (model.Genome, error) {
+	if o == nil || o.Rand == nil {
+		return model.Genome{}, errors.New("random source is required")
+	}
 	type opCandidate struct {
 		apply func(context.Context, model.Genome) (model.Genome, error)
 	}
 	candidates := make([]opCandidate, 0, 3)
-	addSynapse := &AddRandomSynapse{Rand: o.Rand, MaxAbsWeight: o.MaxAbsWeight}
-	if addSynapse.Applicable(genome, "") {
-		candidates = append(candidates, opCandidate{apply: addSynapse.Apply})
+	allNeurons := filterNeuronIDs(genome, nil)
+	if hasAvailableDirectedPair(genome, allNeurons, allNeurons) {
+		candidates = append(candidates, opCandidate{apply: func(_ context.Context, g model.Genome) (model.Genome, error) {
+			if o.MaxAbsWeight <= 0 {
+				return model.Genome{}, errors.New("max abs weight must be > 0")
+			}
+			return addDirectedRandomSynapse(g, o.Rand, o.MaxAbsWeight, allNeurons, allNeurons)
+		}})
 	}
 	addSensor := &AddRandomSensorLink{Rand: o.Rand, ScapeName: ""}
 	if addSensor.Applicable(genome, "") {
@@ -882,9 +894,6 @@ func (o *LinkFromElementToElement) Apply(ctx context.Context, genome model.Genom
 	}
 	if len(candidates) == 0 {
 		return model.Genome{}, ErrNoMutationChoice
-	}
-	if o == nil || o.Rand == nil {
-		return model.Genome{}, errors.New("random source is required")
 	}
 	selected := candidates[o.Rand.Intn(len(candidates))]
 	return selected.apply(ctx, genome)
@@ -902,11 +911,19 @@ func (o *LinkFromNeuronToNeuron) Name() string {
 }
 
 func (o *LinkFromNeuronToNeuron) Applicable(genome model.Genome, _ string) bool {
-	return len(genome.Neurons) > 0
+	allNeurons := filterNeuronIDs(genome, nil)
+	return hasAvailableDirectedPair(genome, allNeurons, allNeurons)
 }
 
 func (o *LinkFromNeuronToNeuron) Apply(ctx context.Context, genome model.Genome) (model.Genome, error) {
-	return (&AddRandomSynapse{Rand: o.Rand, MaxAbsWeight: o.MaxAbsWeight}).Apply(ctx, genome)
+	if o == nil || o.Rand == nil {
+		return model.Genome{}, errors.New("random source is required")
+	}
+	if o.MaxAbsWeight <= 0 {
+		return model.Genome{}, errors.New("max abs weight must be > 0")
+	}
+	allNeurons := filterNeuronIDs(genome, nil)
+	return addDirectedRandomSynapse(genome, o.Rand, o.MaxAbsWeight, allNeurons, allNeurons)
 }
 
 // LinkFromSensorToNeuron mirrors the explicit reference helper name used for

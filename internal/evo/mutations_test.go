@@ -1440,6 +1440,15 @@ func TestCutlinkFromNeuronToNeuronRemovesSynapse(t *testing.T) {
 	}
 }
 
+func TestCutlinkFromNeuronToNeuronCancelsWhenNoSynapses(t *testing.T) {
+	if (&CutlinkFromNeuronToNeuron{}).Applicable(model.Genome{}, "xor") {
+		t.Fatal("expected cutlink_FromNeuronToNeuron to be inapplicable without synapses")
+	}
+	if _, err := (&CutlinkFromNeuronToNeuron{Rand: rand.New(rand.NewSource(151))}).Apply(context.Background(), model.Genome{}); !errors.Is(err, ErrNoMutationChoice) {
+		t.Fatalf("expected ErrNoMutationChoice without synapses, got %v", err)
+	}
+}
+
 func TestCutlinkFromElementToElementRemovesSynapse(t *testing.T) {
 	genome := model.Genome{
 		Neurons: []model.Neuron{
@@ -1500,6 +1509,24 @@ func TestLinkFromElementToElementAddsSynapse(t *testing.T) {
 	}
 	if len(mutated.Synapses) != 1 {
 		t.Fatalf("expected one added synapse, got=%d", len(mutated.Synapses))
+	}
+}
+
+func TestLinkFromNeuronToNeuronCancelsWhenFullyConnected(t *testing.T) {
+	genome := model.Genome{
+		Neurons: []model.Neuron{
+			{ID: "n1", Activation: "identity"},
+		},
+		Synapses: []model.Synapse{
+			{ID: "s1", From: "n1", To: "n1", Weight: 1, Enabled: true, Recurrent: true},
+		},
+	}
+	op := &LinkFromNeuronToNeuron{Rand: rand.New(rand.NewSource(1831)), MaxAbsWeight: 1.0}
+	if op.Applicable(genome, "xor") {
+		t.Fatal("expected link_FromNeuronToNeuron to be inapplicable when all neuron pairs are exhausted")
+	}
+	if _, err := op.Apply(context.Background(), genome); !errors.Is(err, ErrNoMutationChoice) {
+		t.Fatalf("expected ErrNoMutationChoice for exhausted neuron pairs, got %v", err)
 	}
 }
 
