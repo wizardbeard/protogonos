@@ -547,3 +547,45 @@ func TestSelectedNeuronPerturbTargetsIncludesActuatorDrivenTargets(t *testing.T)
 		t.Fatalf("expected age-0 spread=pi from current actuator, got=%f", targets[0].spread)
 	}
 }
+
+func TestSelectedNeuronPerturbTargetsActiveHasNoFallbackWhenPoolEmpty(t *testing.T) {
+	tuner := &Exoself{
+		Rand:               rand.New(rand.NewSource(59)),
+		CandidateSelection: CandidateSelectActive,
+	}
+	genome := model.Genome{
+		ID: "xor-g5-i0",
+		Neurons: []model.Neuron{
+			{ID: "n-g0-a", Generation: 0, Activation: "identity"},
+			{ID: "n-g0-b", Generation: 0, Activation: "identity"},
+		},
+	}
+	targets := tuner.selectedNeuronPerturbTargets(genome, 1.0, 0.5)
+	if len(targets) != 0 {
+		t.Fatalf("expected active mode empty target pool when no young elements, got=%d", len(targets))
+	}
+}
+
+func TestSelectedNeuronPerturbTargetsActiveRandomFallsBackToFirstElement(t *testing.T) {
+	tuner := &Exoself{
+		Rand:               rand.New(rand.NewSource(61)),
+		CandidateSelection: CandidateSelectActiveRnd,
+	}
+	genome := model.Genome{
+		ID: "xor-g5-i0",
+		Neurons: []model.Neuron{
+			{ID: "n-g0-a", Generation: 0, Activation: "identity"},
+			{ID: "n-g0-b", Generation: 0, Activation: "identity"},
+		},
+	}
+	targets := tuner.selectedNeuronPerturbTargets(genome, 1.0, 0.5)
+	if len(targets) != 1 {
+		t.Fatalf("expected active_random fallback to one target, got=%d", len(targets))
+	}
+	if targets[0].neuronID != "n-g0-a" {
+		t.Fatalf("expected fallback to first element target n-g0-a, got=%s", targets[0].neuronID)
+	}
+	if math.Abs(targets[0].spread-math.Pi) > 1e-9 {
+		t.Fatalf("expected fallback spread=pi, got=%f", targets[0].spread)
+	}
+}

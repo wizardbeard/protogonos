@@ -470,19 +470,68 @@ func (e *Exoself) selectedNeuronPerturbTargets(
 	candidates := tuningElementsForGenome(genome, currentGeneration)
 	selected := filterTuningElementsByMode(candidates, nonRandomModeFor(mode), currentGeneration, e.randFloat64)
 	targets := neuronTargetsFromElements(genome, selected, currentGeneration, perturbationRange, annealingFactor)
+	if len(targets) == 0 && shouldFallbackToFirstTuningTarget(mode) {
+		targets = fallbackNeuronTargetsFromCandidates(genome, candidates, currentGeneration, perturbationRange*math.Pi)
+	}
 	if len(targets) == 0 {
-		targets = []neuronPerturbTarget{{
-			neuronID:   genome.Neurons[0].ID,
-			spread:     perturbationRange * math.Pi,
-			sourceKind: tuningElementNeuron,
-			sourceID:   genome.Neurons[0].ID,
-			generation: currentGeneration,
-		}}
+		return nil
 	}
 	if isRandomSelection(mode) {
 		return e.randomNeuronTargetSubset(targets)
 	}
 	return targets
+}
+
+func shouldFallbackToFirstTuningTarget(mode string) bool {
+	switch mode {
+	case CandidateSelectDynamicA,
+		CandidateSelectDynamic,
+		CandidateSelectActiveRnd,
+		CandidateSelectRecentRnd,
+		CandidateSelectCurrent,
+		CandidateSelectCurrentRd,
+		CandidateSelectLastGen,
+		CandidateSelectLastGenRd,
+		CandidateSelectBestSoFar,
+		CandidateSelectOriginal:
+		return true
+	default:
+		return false
+	}
+}
+
+func fallbackNeuronTargetsFromCandidates(
+	genome model.Genome,
+	candidates []tuningElementCandidate,
+	currentGeneration int,
+	spread float64,
+) []neuronPerturbTarget {
+	for _, candidate := range candidates {
+		neuronIDs := resolveNeuronTargetsForElement(genome, candidate)
+		for _, neuronID := range neuronIDs {
+			if neuronID == "" || !hasNeuron(genome, neuronID) {
+				continue
+			}
+			return []neuronPerturbTarget{{
+				neuronID:   neuronID,
+				spread:     spread,
+				sourceKind: candidate.kind,
+				sourceID:   candidate.id,
+				generation: candidate.generation,
+			}}
+		}
+	}
+	if len(genome.Neurons) == 0 {
+		return nil
+	}
+	fallback := genome.Neurons[0]
+	return []neuronPerturbTarget{{
+		neuronID:   fallback.ID,
+		spread:     spread,
+		sourceKind: tuningElementNeuron,
+		sourceID:   fallback.ID,
+		generation: effectiveNeuronGeneration(fallback, currentGeneration),
+	}}
 }
 
 func tuningElementsForGenome(genome model.Genome, currentGeneration int) []tuningElementCandidate {
