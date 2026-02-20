@@ -485,6 +485,72 @@ func TestMutateWeightsRandomSelectionMutatesSubset(t *testing.T) {
 	}
 }
 
+func TestMutateWeightsCurrentSelectionTargetsCurrentGenerationNeurons(t *testing.T) {
+	genome := model.Genome{
+		ID: "xor-g5-i0",
+		Neurons: []model.Neuron{
+			{ID: "n-old", Generation: 1, Activation: "identity"},
+			{ID: "n-new", Generation: 5, Activation: "identity"},
+		},
+		Synapses: []model.Synapse{
+			{ID: "s-old", From: "n-old", To: "n-old", Weight: 0.0, Enabled: true},
+			{ID: "s-new", From: "n-new", To: "n-new", Weight: 0.0, Enabled: true},
+		},
+		Strategy: &model.StrategyConfig{
+			TuningSelection: tuning.CandidateSelectCurrent,
+			AnnealingFactor: 0.5,
+		},
+	}
+	op := &MutateWeights{
+		Rand:     rand.New(rand.NewSource(73)),
+		MaxDelta: 0.5,
+	}
+	mutated, err := op.Apply(context.Background(), genome)
+	if err != nil {
+		t.Fatalf("apply failed: %v", err)
+	}
+	if mutated.Synapses[0].Weight != genome.Synapses[0].Weight {
+		t.Fatal("expected non-current neuron synapse to remain unchanged")
+	}
+	if mutated.Synapses[1].Weight == genome.Synapses[1].Weight {
+		t.Fatal("expected current-generation neuron synapse to mutate")
+	}
+	if mutated.Neurons[1].Generation != 5 {
+		t.Fatalf("expected touched neuron generation to remain current, got=%d", mutated.Neurons[1].Generation)
+	}
+}
+
+func TestSelectedNeuronSpreadsForMutateWeightsActiveUsesAgeAnnealing(t *testing.T) {
+	genome := model.Genome{
+		ID: "xor-g5-i0",
+		Neurons: []model.Neuron{
+			{ID: "n-new", Generation: 5, Activation: "identity"},
+			{ID: "n-mid", Generation: 3, Activation: "identity"},
+			{ID: "n-old", Generation: 1, Activation: "identity"},
+		},
+		Strategy: &model.StrategyConfig{
+			TuningSelection: tuning.CandidateSelectActive,
+			AnnealingFactor: 0.5,
+		},
+	}
+	got := selectedNeuronSpreadsForMutateWeights(genome, rand.New(rand.NewSource(79)), 1.0, 0.5)
+	if len(got) != 2 {
+		t.Fatalf("expected active mode to include age<=3 neurons only, got=%d", len(got))
+	}
+	if got[0].id != "n-new" {
+		t.Fatalf("expected first selected neuron n-new, got=%s", got[0].id)
+	}
+	if math.Abs(got[0].spread-1.0) > 1e-9 {
+		t.Fatalf("expected age-0 spread=1.0, got=%f", got[0].spread)
+	}
+	if got[1].id != "n-mid" {
+		t.Fatalf("expected second selected neuron n-mid, got=%s", got[1].id)
+	}
+	if math.Abs(got[1].spread-0.25) > 1e-9 {
+		t.Fatalf("expected age-2 spread=0.25, got=%f", got[1].spread)
+	}
+}
+
 func TestAddRandomInlinkPrefersInputSource(t *testing.T) {
 	genome := model.Genome{
 		Neurons: []model.Neuron{

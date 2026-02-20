@@ -56,6 +56,7 @@ type PlasticityConfig struct {
 
 type Neuron struct {
 	ID             string  `json:"id"`
+	Generation     int     `json:"generation,omitempty"`
 	Activation     string  `json:"activation"`
 	Aggregator     string  `json:"aggregator,omitempty"`
 	PlasticityRule string  `json:"plasticity_rule,omitempty"`

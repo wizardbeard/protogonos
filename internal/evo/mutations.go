@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"math"
 	"math/rand"
+	"strconv"
+	"strings"
 
 	"protogonos/internal/genotype"
 	protoio "protogonos/internal/io"
@@ -166,25 +168,27 @@ func (o *MutateWeights) Apply(ctx context.Context, genome model.Genome) (model.G
 
 	mutated := cloneGenome(genome)
 	ensureStrategyConfig(&mutated)
-	selectedNeuronIDs := selectedNeuronIDsForMutateWeights(mutated, o.Rand)
-	if len(selectedNeuronIDs) == 0 {
-		selectedNeuronIDs = filterNeuronIDs(mutated, nil)
-	}
-
-	annealing := mutated.Strategy.AnnealingFactor
-	if annealing <= 0 {
-		annealing = 1.0
+	selectedNeuronSpreads := selectedNeuronSpreadsForMutateWeights(
+		mutated,
+		o.Rand,
+		o.MaxDelta,
+		mutated.Strategy.AnnealingFactor,
+	)
+	if len(selectedNeuronSpreads) == 0 {
+		return model.Genome{}, ErrNoMutationChoice
 	}
 
 	changed := 0
 	candidateFallback := make([]int, 0, len(mutated.Synapses))
-	for i, neuronID := range selectedNeuronIDs {
+	currentGeneration := currentGenomeGeneration(mutated)
+	for _, target := range selectedNeuronSpreads {
+		neuronID := target.id
 		incoming := incomingSynapseIndexes(mutated, neuronID)
 		if len(incoming) == 0 {
 			continue
 		}
 		candidateFallback = append(candidateFallback, incoming...)
-		spread := o.MaxDelta * math.Pow(annealing, float64(i))
+		spread := target.spread
 		if spread <= 0 {
 			continue
 		}
@@ -205,6 +209,7 @@ func (o *MutateWeights) Apply(ctx context.Context, genome model.Genome) (model.G
 			mutated.Synapses[idx].Weight += delta
 			changed++
 		}
+		touchNeuronGeneration(mutated.Neurons, neuronID, currentGeneration)
 	}
 
 	if changed == 0 {
@@ -250,6 +255,7 @@ func (o *PerturbRandomBias) Apply(_ context.Context, genome model.Genome) (model
 
 	mutated := cloneGenome(genome)
 	mutated.Neurons[idx].Bias += delta
+	mutated.Neurons[idx].Generation = currentGenomeGeneration(mutated)
 	return mutated, nil
 }
 
@@ -294,6 +300,7 @@ func (o *RemoveRandomBias) Apply(_ context.Context, genome model.Genome) (model.
 	idx := o.Rand.Intn(len(genome.Neurons))
 	mutated := cloneGenome(genome)
 	mutated.Neurons[idx].Bias = 0
+	mutated.Neurons[idx].Generation = currentGenomeGeneration(mutated)
 	return mutated, nil
 }
 
@@ -354,6 +361,7 @@ func (o *ChangeRandomActivation) Apply(_ context.Context, genome model.Genome) (
 
 	mutated := cloneGenome(genome)
 	mutated.Neurons[idx].Activation = choices[o.Rand.Intn(len(choices))]
+	mutated.Neurons[idx].Generation = currentGenomeGeneration(mutated)
 	return mutated, nil
 }
 
@@ -433,6 +441,7 @@ func (o *ChangeRandomAggregator) Apply(_ context.Context, genome model.Genome) (
 
 	mutated := cloneGenome(genome)
 	mutated.Neurons[idx].Aggregator = choices[o.Rand.Intn(len(choices))]
+	mutated.Neurons[idx].Generation = currentGenomeGeneration(mutated)
 	return mutated, nil
 }
 
@@ -1250,6 +1259,7 @@ func (o *MutatePlasticityParameters) Apply(_ context.Context, genome model.Genom
 	baseRate := neuronPlasticityRate(genome, idx)
 	delta := (o.Rand.Float64()*2 - 1) * maxDelta
 	mutated.Neurons[idx].PlasticityRate = math.Max(0, baseRate+delta)
+	mutated.Neurons[idx].Generation = currentGenomeGeneration(mutated)
 	return mutated, nil
 }
 
@@ -1364,6 +1374,7 @@ func (o *MutatePF) Apply(_ context.Context, genome model.Genome) (model.Genome, 
 	if mutated.Neurons[idx].PlasticityRate <= 0 {
 		mutated.Neurons[idx].PlasticityRate = neuronPlasticityRate(genome, idx)
 	}
+	mutated.Neurons[idx].Generation = currentGenomeGeneration(mutated)
 	return mutated, nil
 }
 
@@ -1810,11 +1821,13 @@ func (o *AddRandomActuator) Apply(_ context.Context, genome model.Genome) (model
 	}
 	choice := candidates[o.Rand.Intn(len(candidates))]
 	mutated := cloneGenome(genome)
+	currentGeneration := currentGenomeGeneration(mutated)
 	mutated.ActuatorIDs = append(mutated.ActuatorIDs, choice)
 	sourceNeuron := mutated.Neurons[o.Rand.Intn(len(mutated.Neurons))].ID
 	helperNeuronID := uniqueNeuronID(mutated, o.Rand)
 	mutated.Neurons = append(mutated.Neurons, model.Neuron{
 		ID:         helperNeuronID,
+		Generation: currentGeneration,
 		Activation: "tanh",
 	})
 	mutated.Synapses = append(mutated.Synapses, model.Synapse{
@@ -2098,6 +2111,7 @@ func (o *AddRandomCEP) Apply(_ context.Context, genome model.Genome) (model.Geno
 	selected := choices[o.Rand.Intn(len(choices))]
 
 	mutated := cloneGenome(genome)
+	currentGeneration := currentGenomeGeneration(mutated)
 	mutated.Substrate.CEPName = selected
 	if mutated.Substrate.CPPName == "" {
 		mutated.Substrate.CPPName = substrate.DefaultCPPName
@@ -2110,6 +2124,7 @@ func (o *AddRandomCEP) Apply(_ context.Context, genome model.Genome) (model.Geno
 		helperNeuronID := uniqueNeuronID(mutated, o.Rand)
 		mutated.Neurons = append(mutated.Neurons, model.Neuron{
 			ID:         helperNeuronID,
+			Generation: currentGeneration,
 			Activation: "tanh",
 		})
 		mutated.Synapses = append(mutated.Synapses, model.Synapse{
@@ -2298,6 +2313,7 @@ func (o ChangeActivationAt) Apply(_ context.Context, genome model.Genome) (model
 
 	mutated := cloneGenome(genome)
 	mutated.Neurons[o.Index].Activation = o.Activation
+	mutated.Neurons[o.Index].Generation = currentGenomeGeneration(mutated)
 	return mutated, nil
 }
 
@@ -2396,11 +2412,13 @@ func (o AddNeuronAtSynapse) Apply(_ context.Context, genome model.Genome) (model
 	}
 
 	mutated := cloneGenome(genome)
+	currentGeneration := currentGenomeGeneration(mutated)
 	target := mutated.Synapses[o.SynapseIndex]
 	mutated.Synapses = append(mutated.Synapses[:o.SynapseIndex], mutated.Synapses[o.SynapseIndex+1:]...)
 
 	mutated.Neurons = append(mutated.Neurons, model.Neuron{
 		ID:         o.NeuronID,
+		Generation: currentGeneration,
 		Activation: o.Activation,
 		Bias:       o.Bias,
 	})
@@ -2863,35 +2881,202 @@ func normalizePlasticityRuleOptions(rules []string) []string {
 	return out
 }
 
-func selectedNeuronIDsForMutateWeights(genome model.Genome, rng *rand.Rand) []string {
-	ids := filterNeuronIDs(genome, nil)
-	if len(ids) == 0 {
+type neuronSpreadTarget struct {
+	id     string
+	spread float64
+}
+
+func selectedNeuronSpreadsForMutateWeights(
+	genome model.Genome,
+	rng *rand.Rand,
+	baseSpread float64,
+	annealing float64,
+) []neuronSpreadTarget {
+	if len(genome.Neurons) == 0 || rng == nil {
 		return nil
 	}
+	if baseSpread <= 0 {
+		return nil
+	}
+	if annealing <= 0 {
+		annealing = 1.0
+	}
+
 	mode := tuning.NormalizeCandidateSelectionName(genome.Strategy.TuningSelection)
+	currentGeneration := currentGenomeGeneration(genome)
+	selected := neuronPoolForTuningMode(genome.Neurons, mode, currentGeneration, rng)
+	if len(selected) == 0 {
+		selected = append(selected, genome.Neurons[0])
+	}
+
+	targets := make([]neuronSpreadTarget, 0, len(selected))
+	for _, neuron := range selected {
+		age := currentGeneration - effectiveNeuronGeneration(neuron, currentGeneration)
+		if age < 0 {
+			age = 0
+		}
+		spread := baseSpread * math.Pow(annealing, float64(age))
+		if spread <= 0 {
+			spread = baseSpread
+		}
+		targets = append(targets, neuronSpreadTarget{
+			id:     neuron.ID,
+			spread: spread,
+		})
+	}
+	if isRandomTuningSelectionMode(mode) {
+		return randomNeuronSpreadSubset(targets, rng)
+	}
+	return targets
+}
+
+func isRandomTuningSelectionMode(mode string) bool {
 	switch mode {
-	case tuning.CandidateSelectDynamic, tuning.CandidateSelectAllRandom, tuning.CandidateSelectActiveRnd, tuning.CandidateSelectRecentRnd, tuning.CandidateSelectCurrentRd, tuning.CandidateSelectLastGenRd:
-		return randomNeuronSubset(ids, rng)
+	case tuning.CandidateSelectDynamic,
+		tuning.CandidateSelectAllRandom,
+		tuning.CandidateSelectActiveRnd,
+		tuning.CandidateSelectRecentRnd,
+		tuning.CandidateSelectCurrentRd,
+		tuning.CandidateSelectLastGenRd:
+		return true
 	default:
-		return ids
+		return false
 	}
 }
 
-func randomNeuronSubset(ids []string, rng *rand.Rand) []string {
-	if len(ids) == 0 {
+func nonRandomTuningSelectionMode(mode string) string {
+	switch mode {
+	case tuning.CandidateSelectDynamic:
+		return tuning.CandidateSelectDynamicA
+	case tuning.CandidateSelectAllRandom:
+		return tuning.CandidateSelectAll
+	case tuning.CandidateSelectActiveRnd:
+		return tuning.CandidateSelectActive
+	case tuning.CandidateSelectRecentRnd:
+		return tuning.CandidateSelectRecent
+	case tuning.CandidateSelectCurrentRd:
+		return tuning.CandidateSelectCurrent
+	case tuning.CandidateSelectLastGenRd:
+		return tuning.CandidateSelectLastGen
+	default:
+		return mode
+	}
+}
+
+func neuronPoolForTuningMode(
+	neurons []model.Neuron,
+	mode string,
+	currentGeneration int,
+	rng *rand.Rand,
+) []model.Neuron {
+	if len(neurons) == 0 {
 		return nil
 	}
-	subset := make([]string, 0, len(ids))
-	mp := 1 / math.Sqrt(float64(len(ids)))
-	for _, id := range ids {
-		if rng.Float64() < mp {
-			subset = append(subset, id)
+	baseMode := nonRandomTuningSelectionMode(mode)
+	switch baseMode {
+	case tuning.CandidateSelectDynamicA:
+		u := rng.Float64()
+		if u <= 0 {
+			u = math.SmallestNonzeroFloat64
+		}
+		return filterNeuronsByAge(neurons, currentGeneration, math.Sqrt(1/u))
+	case tuning.CandidateSelectActive, tuning.CandidateSelectRecent:
+		return filterNeuronsByAge(neurons, currentGeneration, 3)
+	case tuning.CandidateSelectCurrent, tuning.CandidateSelectLastGen:
+		return filterNeuronsByAge(neurons, currentGeneration, 0)
+	case tuning.CandidateSelectAll, tuning.CandidateSelectBestSoFar, tuning.CandidateSelectOriginal:
+		return append([]model.Neuron(nil), neurons...)
+	default:
+		return append([]model.Neuron(nil), neurons...)
+	}
+}
+
+func filterNeuronsByAge(neurons []model.Neuron, currentGeneration int, maxAge float64) []model.Neuron {
+	filtered := make([]model.Neuron, 0, len(neurons))
+	for _, neuron := range neurons {
+		age := currentGeneration - effectiveNeuronGeneration(neuron, currentGeneration)
+		if age < 0 {
+			age = 0
+		}
+		if float64(age) <= maxAge {
+			filtered = append(filtered, neuron)
 		}
 	}
-	if len(subset) == 0 {
-		subset = append(subset, ids[rng.Intn(len(ids))])
+	return filtered
+}
+
+func currentGenomeGeneration(genome model.Genome) int {
+	if gen, ok := inferGenerationFromTaggedID(genome.ID); ok {
+		return gen
 	}
-	return subset
+	maxGen := 0
+	for _, neuron := range genome.Neurons {
+		if neuron.Generation > maxGen {
+			maxGen = neuron.Generation
+		}
+	}
+	return maxGen
+}
+
+func effectiveNeuronGeneration(neuron model.Neuron, fallback int) int {
+	switch {
+	case neuron.Generation > 0:
+		return neuron.Generation
+	case neuron.ID != "":
+		if gen, ok := inferGenerationFromTaggedID(neuron.ID); ok {
+			return gen
+		}
+	}
+	return fallback
+}
+
+func inferGenerationFromTaggedID(id string) (int, bool) {
+	if id == "" {
+		return 0, false
+	}
+	parts := strings.Split(id, "-")
+	for _, part := range parts {
+		if len(part) > 1 && part[0] == 'g' {
+			gen, err := strconv.Atoi(part[1:])
+			if err == nil {
+				return gen, true
+			}
+		}
+	}
+	return 0, false
+}
+
+func randomNeuronSpreadSubset(targets []neuronSpreadTarget, rng *rand.Rand) []neuronSpreadTarget {
+	if len(targets) == 0 {
+		return nil
+	}
+	if len(targets) == 1 {
+		return append([]neuronSpreadTarget(nil), targets...)
+	}
+	subset := make([]neuronSpreadTarget, 0, len(targets))
+	mp := 1 / math.Sqrt(float64(len(targets)))
+	for _, target := range targets {
+		if rng.Float64() < mp {
+			subset = append(subset, target)
+		}
+	}
+	if len(subset) > 0 {
+		return subset
+	}
+	return []neuronSpreadTarget{targets[rng.Intn(len(targets))]}
+}
+
+func touchNeuronGeneration(neurons []model.Neuron, neuronID string, generation int) {
+	if generation < 0 {
+		generation = 0
+	}
+	for i := range neurons {
+		if neurons[i].ID != neuronID {
+			continue
+		}
+		neurons[i].Generation = generation
+		return
+	}
 }
 
 func incomingSynapseIndexes(genome model.Genome, neuronID string) []int {
