@@ -1012,7 +1012,7 @@ func addRandomNeuronWithSynapseCandidates(
 		}
 	}
 	if len(candidates) == 0 {
-		return model.Genome{}, ErrNoSynapses
+		return model.Genome{}, ErrNoMutationChoice
 	}
 
 	activation := activations[rng.Intn(len(activations))]

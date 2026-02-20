@@ -787,8 +787,8 @@ func TestAddRandomOutspliceNoDirectionalCandidates(t *testing.T) {
 	if op.Applicable(genome, "xor") {
 		t.Fatal("expected outsplice to be inapplicable without output-directed edges")
 	}
-	if _, err := op.Apply(context.Background(), genome); !errors.Is(err, ErrNoSynapses) {
-		t.Fatalf("expected ErrNoSynapses, got %v", err)
+	if _, err := op.Apply(context.Background(), genome); !errors.Is(err, ErrNoMutationChoice) {
+		t.Fatalf("expected ErrNoMutationChoice, got %v", err)
 	}
 }
 
@@ -840,8 +840,8 @@ func TestAddRandomInspliceNoDirectionalCandidates(t *testing.T) {
 	if op.Applicable(genome, "xor") {
 		t.Fatal("expected insplice to be inapplicable without input-directed edges")
 	}
-	if _, err := op.Apply(context.Background(), genome); !errors.Is(err, ErrNoSynapses) {
-		t.Fatalf("expected ErrNoSynapses, got %v", err)
+	if _, err := op.Apply(context.Background(), genome); !errors.Is(err, ErrNoMutationChoice) {
+		t.Fatalf("expected ErrNoMutationChoice, got %v", err)
 	}
 }
 
