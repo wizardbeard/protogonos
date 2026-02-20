@@ -542,7 +542,7 @@ func (o *AddRandomInlink) Name() string {
 }
 
 func (o *AddRandomInlink) Applicable(genome model.Genome, _ string) bool {
-	if len(genome.Neurons) <= 1 {
+	if len(genome.Neurons) == 0 {
 		return false
 	}
 	inputSet := toIDSet(o.InputNeuronIDs)
@@ -558,7 +558,8 @@ func (o *AddRandomInlink) Applicable(genome model.Genome, _ string) bool {
 	if o.FeedForwardOnly {
 		fromCandidates, toCandidates = filterDirectedFeedforwardCandidates(fromCandidates, toCandidates, layers)
 	}
-	return hasAvailableDirectedPair(genome, fromCandidates, toCandidates)
+	return len(availableInlinkNeuronPairs(genome, fromCandidates, toCandidates)) > 0 ||
+		len(availableSensorToNeuronPairs(genome, toCandidates)) > 0
 }
 
 func (o *AddRandomInlink) Apply(_ context.Context, genome model.Genome) (model.Genome, error) {
@@ -585,7 +586,31 @@ func (o *AddRandomInlink) Apply(_ context.Context, genome model.Genome) (model.G
 	if o.FeedForwardOnly {
 		fromCandidates, toCandidates = filterDirectedFeedforwardCandidates(fromCandidates, toCandidates, layers)
 	}
-	return addDirectedRandomSynapse(genome, o.Rand, o.MaxAbsWeight, fromCandidates, toCandidates)
+	neuronPairs := availableInlinkNeuronPairs(genome, fromCandidates, toCandidates)
+	sensorPairs := availableSensorToNeuronPairs(genome, toCandidates)
+	totalCandidates := len(neuronPairs) + len(sensorPairs)
+	if totalCandidates == 0 {
+		return model.Genome{}, ErrNoMutationChoice
+	}
+	selected := o.Rand.Intn(totalCandidates)
+	if selected < len(neuronPairs) {
+		pair := neuronPairs[selected]
+		weight := (o.Rand.Float64()*2 - 1) * o.MaxAbsWeight
+		mutated := cloneGenome(genome)
+		mutated.Synapses = append(mutated.Synapses, model.Synapse{
+			ID:        uniqueSynapseID(genome, o.Rand),
+			From:      pair.from,
+			To:        pair.to,
+			Weight:    weight,
+			Enabled:   true,
+			Recurrent: pair.from == pair.to,
+		})
+		return mutated, nil
+	}
+	mutated := cloneGenome(genome)
+	mutated.SensorNeuronLinks = append(mutated.SensorNeuronLinks, sensorPairs[selected-len(neuronPairs)])
+	syncIOLinkCounts(&mutated)
+	return mutated, nil
 }
 
 // AddRandomOutlink adds a synapse biased toward non-output->output direction.
@@ -2577,6 +2602,53 @@ func addDirectedRandomSynapse(genome model.Genome, rng *rand.Rand, maxAbsWeight 
 		Recurrent: selected.from == selected.to,
 	})
 	return mutated, nil
+}
+
+type directedNeuronPair struct {
+	from string
+	to   string
+}
+
+func availableInlinkNeuronPairs(genome model.Genome, fromCandidates, toCandidates []string) []directedNeuronPair {
+	if len(fromCandidates) == 0 || len(toCandidates) == 0 {
+		return nil
+	}
+	pairs := make([]directedNeuronPair, 0, len(fromCandidates)*len(toCandidates))
+	for _, from := range fromCandidates {
+		for _, to := range toCandidates {
+			if hasDirectedSynapse(genome, from, to) {
+				continue
+			}
+			pairs = append(pairs, directedNeuronPair{from: from, to: to})
+		}
+	}
+	return pairs
+}
+
+func availableSensorToNeuronPairs(genome model.Genome, toCandidates []string) []model.SensorNeuronLink {
+	if len(genome.SensorIDs) == 0 || len(toCandidates) == 0 {
+		return nil
+	}
+	targetSet := make(map[string]struct{}, len(toCandidates))
+	for _, id := range toCandidates {
+		targetSet[id] = struct{}{}
+	}
+	pairs := make([]model.SensorNeuronLink, 0, len(genome.SensorIDs)*len(toCandidates))
+	for _, sensorID := range uniqueStrings(genome.SensorIDs) {
+		for _, neuronID := range toCandidates {
+			if _, ok := targetSet[neuronID]; !ok {
+				continue
+			}
+			if hasSensorNeuronLink(genome, sensorID, neuronID) {
+				continue
+			}
+			pairs = append(pairs, model.SensorNeuronLink{
+				SensorID: sensorID,
+				NeuronID: neuronID,
+			})
+		}
+	}
+	return pairs
 }
 
 func hasDirectedSynapse(g model.Genome, from, to string) bool {

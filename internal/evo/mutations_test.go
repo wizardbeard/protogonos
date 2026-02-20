@@ -533,6 +533,63 @@ func TestAddRandomInlinkNoDirectionalCandidates(t *testing.T) {
 	}
 }
 
+func TestAddRandomInlinkUsesSensorSourceWhenNeuronSourcesUnavailable(t *testing.T) {
+	genome := model.Genome{
+		Neurons: []model.Neuron{
+			{ID: "h1", Activation: "tanh"},
+		},
+		SensorIDs: []string{protoio.XORInputLeftSensorName},
+	}
+	op := &AddRandomInlink{
+		Rand:           rand.New(rand.NewSource(117)),
+		MaxAbsWeight:   1.0,
+		InputNeuronIDs: []string{"i1"},
+	}
+	if !op.Applicable(genome, "xor") {
+		t.Fatal("expected add_inlink to be applicable via sensor->neuron candidate")
+	}
+	mutated, err := op.Apply(context.Background(), genome)
+	if err != nil {
+		t.Fatalf("apply failed: %v", err)
+	}
+	if len(mutated.Synapses) != len(genome.Synapses) {
+		t.Fatalf("expected no neuron-neuron synapse added, before=%d after=%d", len(genome.Synapses), len(mutated.Synapses))
+	}
+	if len(mutated.SensorNeuronLinks) != 1 {
+		t.Fatalf("expected one sensor-neuron inlink, got=%d", len(mutated.SensorNeuronLinks))
+	}
+	if mutated.SensorNeuronLinks[0].SensorID != protoio.XORInputLeftSensorName || mutated.SensorNeuronLinks[0].NeuronID != "h1" {
+		t.Fatalf("unexpected sensor-neuron inlink: %+v", mutated.SensorNeuronLinks[0])
+	}
+	if mutated.SensorLinks != 1 {
+		t.Fatalf("expected synchronized sensor link counter, got=%d", mutated.SensorLinks)
+	}
+}
+
+func TestAddRandomInlinkCancelsWhenOnlyExhaustedSensorSourcesRemain(t *testing.T) {
+	genome := model.Genome{
+		Neurons: []model.Neuron{
+			{ID: "h1", Activation: "tanh"},
+		},
+		SensorIDs: []string{protoio.XORInputLeftSensorName},
+		SensorNeuronLinks: []model.SensorNeuronLink{
+			{SensorID: protoio.XORInputLeftSensorName, NeuronID: "h1"},
+		},
+		SensorLinks: 1,
+	}
+	op := &AddRandomInlink{
+		Rand:           rand.New(rand.NewSource(119)),
+		MaxAbsWeight:   1.0,
+		InputNeuronIDs: []string{"i1"},
+	}
+	if op.Applicable(genome, "xor") {
+		t.Fatal("expected add_inlink to be inapplicable when only exhausted sensor sources remain")
+	}
+	if _, err := op.Apply(context.Background(), genome); !errors.Is(err, ErrNoMutationChoice) {
+		t.Fatalf("expected ErrNoMutationChoice, got %v", err)
+	}
+}
+
 func TestAddRandomOutlinkTargetsOutput(t *testing.T) {
 	genome := model.Genome{
 		Neurons: []model.Neuron{
