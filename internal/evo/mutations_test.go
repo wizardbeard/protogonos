@@ -1632,6 +1632,48 @@ func TestMutateTuningSelectionSupportsReferenceModeSurface(t *testing.T) {
 	}
 }
 
+func TestSearchParameterMutatorsCancelWhenNoAlternativeChoice(t *testing.T) {
+	base := model.Genome{
+		Strategy: &model.StrategyConfig{
+			TuningSelection:  tuning.CandidateSelectBestSoFar,
+			AnnealingFactor:  1.0,
+			TopologicalMode:  "const",
+			TopologicalParam: 1.0,
+			HeredityType:     "asexual",
+		},
+	}
+
+	if _, err := (&MutateTuningSelection{
+		Rand:  rand.New(rand.NewSource(271)),
+		Modes: []string{tuning.CandidateSelectBestSoFar},
+	}).Apply(context.Background(), base); !errors.Is(err, ErrNoMutationChoice) {
+		t.Fatalf("expected ErrNoMutationChoice for mutate_tuning_selection exhaustion, got %v", err)
+	}
+
+	if _, err := (&MutateTuningAnnealing{
+		Rand:   rand.New(rand.NewSource(277)),
+		Values: []float64{1.0},
+	}).Apply(context.Background(), base); !errors.Is(err, ErrNoMutationChoice) {
+		t.Fatalf("expected ErrNoMutationChoice for mutate_tuning_annealing exhaustion, got %v", err)
+	}
+
+	if _, err := (&MutateTotTopologicalMutations{
+		Rand: rand.New(rand.NewSource(281)),
+		Choices: []TopologicalPolicyChoice{
+			{Name: "const", Param: 1.0},
+		},
+	}).Apply(context.Background(), base); !errors.Is(err, ErrNoMutationChoice) {
+		t.Fatalf("expected ErrNoMutationChoice for mutate_tot_topological_mutations exhaustion, got %v", err)
+	}
+
+	if _, err := (&MutateHeredityType{
+		Rand:  rand.New(rand.NewSource(283)),
+		Types: []string{"asexual"},
+	}).Apply(context.Background(), base); !errors.Is(err, ErrNoMutationChoice) {
+		t.Fatalf("expected ErrNoMutationChoice for mutate_heredity_type exhaustion, got %v", err)
+	}
+}
+
 func TestMutateTotTopologicalMutationsCanChangeParamWithinSameMode(t *testing.T) {
 	base := model.Genome{
 		Strategy: &model.StrategyConfig{

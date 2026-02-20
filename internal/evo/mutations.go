@@ -1325,7 +1325,7 @@ func (o *MutateTuningSelection) Apply(_ context.Context, genome model.Genome) (m
 	current := tuning.NormalizeCandidateSelectionName(mutated.Strategy.TuningSelection)
 	choices := filterOutString(normalized, current)
 	if len(choices) == 0 {
-		return mutated, nil
+		return model.Genome{}, ErrNoMutationChoice
 	}
 	mutated.Strategy.TuningSelection = choices[o.Rand.Intn(len(choices))]
 	return mutated, nil
@@ -1370,7 +1370,7 @@ func (o *MutateTuningAnnealing) Apply(_ context.Context, genome model.Genome) (m
 		choices = append(choices, value)
 	}
 	if len(choices) == 0 {
-		return mutated, nil
+		return model.Genome{}, ErrNoMutationChoice
 	}
 	mutated.Strategy.AnnealingFactor = choices[o.Rand.Intn(len(choices))]
 	return mutated, nil
@@ -1449,7 +1449,7 @@ func (o *MutateTotTopologicalMutations) Apply(_ context.Context, genome model.Ge
 		available = append(available, choice)
 	}
 	if len(available) == 0 {
-		return mutated, nil
+		return model.Genome{}, ErrNoMutationChoice
 	}
 	selected := available[o.Rand.Intn(len(available))]
 	mutated.Strategy.TopologicalMode = selected.Name
@@ -1487,7 +1487,7 @@ func (o *MutateHeredityType) Apply(_ context.Context, genome model.Genome) (mode
 	}
 	choices := filterOutString(types, current)
 	if len(choices) == 0 {
-		return mutated, nil
+		return model.Genome{}, ErrNoMutationChoice
 	}
 	mutated.Strategy.HeredityType = choices[o.Rand.Intn(len(choices))]
 	return mutated, nil
