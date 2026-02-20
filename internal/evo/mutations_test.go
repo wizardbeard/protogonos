@@ -15,6 +15,7 @@ import (
 	"protogonos/internal/model"
 	"protogonos/internal/storage"
 	"protogonos/internal/substrate"
+	"protogonos/internal/tuning"
 )
 
 func TestPerturbWeightAtMatchesFixture(t *testing.T) {
@@ -387,6 +388,78 @@ func TestPerturbWeightsProportionalNoSynapses(t *testing.T) {
 	_, err := op.Apply(context.Background(), model.Genome{})
 	if !errors.Is(err, ErrNoSynapses) {
 		t.Fatalf("expected ErrNoSynapses, got=%v", err)
+	}
+}
+
+func TestMutateWeightsUsesAllSelectionAcrossNeurons(t *testing.T) {
+	genome := model.Genome{
+		Neurons: []model.Neuron{
+			{ID: "n1", Activation: "identity"},
+			{ID: "n2", Activation: "identity"},
+		},
+		Synapses: []model.Synapse{
+			{ID: "s1", From: "n1", To: "n1", Weight: 0.0, Enabled: true},
+			{ID: "s2", From: "n2", To: "n2", Weight: 0.0, Enabled: true},
+		},
+		Strategy: &model.StrategyConfig{
+			TuningSelection: tuning.CandidateSelectAll,
+			AnnealingFactor: 1.0,
+		},
+	}
+	op := &MutateWeights{
+		Rand:     rand.New(rand.NewSource(43)),
+		MaxDelta: 0.5,
+	}
+	mutated, err := op.Apply(context.Background(), genome)
+	if err != nil {
+		t.Fatalf("apply failed: %v", err)
+	}
+	if mutated.Synapses[0].Weight == genome.Synapses[0].Weight {
+		t.Fatal("expected synapse targeting n1 to mutate")
+	}
+	if mutated.Synapses[1].Weight == genome.Synapses[1].Weight {
+		t.Fatal("expected synapse targeting n2 to mutate")
+	}
+}
+
+func TestMutateWeightsRandomSelectionMutatesSubset(t *testing.T) {
+	genome := model.Genome{
+		Neurons: []model.Neuron{
+			{ID: "n1", Activation: "identity"},
+			{ID: "n2", Activation: "identity"},
+			{ID: "n3", Activation: "identity"},
+			{ID: "n4", Activation: "identity"},
+		},
+		Synapses: []model.Synapse{
+			{ID: "s1", From: "n1", To: "n1", Weight: 0.0, Enabled: true},
+			{ID: "s2", From: "n2", To: "n2", Weight: 0.0, Enabled: true},
+			{ID: "s3", From: "n3", To: "n3", Weight: 0.0, Enabled: true},
+			{ID: "s4", From: "n4", To: "n4", Weight: 0.0, Enabled: true},
+		},
+		Strategy: &model.StrategyConfig{
+			TuningSelection: tuning.CandidateSelectAllRandom,
+			AnnealingFactor: 1.0,
+		},
+	}
+	op := &MutateWeights{
+		Rand:     rand.New(rand.NewSource(7)),
+		MaxDelta: 0.5,
+	}
+	mutated, err := op.Apply(context.Background(), genome)
+	if err != nil {
+		t.Fatalf("apply failed: %v", err)
+	}
+	changed := 0
+	for i := range genome.Synapses {
+		if mutated.Synapses[i].Weight != genome.Synapses[i].Weight {
+			changed++
+		}
+	}
+	if changed == 0 {
+		t.Fatal("expected at least one mutated synapse")
+	}
+	if changed >= len(genome.Synapses) {
+		t.Fatalf("expected random selection to mutate a strict subset, changed=%d total=%d", changed, len(genome.Synapses))
 	}
 }
 

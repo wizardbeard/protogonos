@@ -153,7 +153,70 @@ func (o *MutateWeights) Applicable(genome model.Genome, _ string) bool {
 }
 
 func (o *MutateWeights) Apply(ctx context.Context, genome model.Genome) (model.Genome, error) {
-	return (&PerturbWeightsProportional{Rand: o.Rand, MaxDelta: o.MaxDelta}).Apply(ctx, genome)
+	if len(genome.Synapses) == 0 {
+		return model.Genome{}, ErrNoSynapses
+	}
+	if o == nil || o.Rand == nil {
+		return model.Genome{}, errors.New("random source is required")
+	}
+	if o.MaxDelta <= 0 {
+		return model.Genome{}, errors.New("max delta must be > 0")
+	}
+
+	mutated := cloneGenome(genome)
+	ensureStrategyConfig(&mutated)
+	selectedNeuronIDs := selectedNeuronIDsForMutateWeights(mutated, o.Rand)
+	if len(selectedNeuronIDs) == 0 {
+		selectedNeuronIDs = filterNeuronIDs(mutated, nil)
+	}
+
+	annealing := mutated.Strategy.AnnealingFactor
+	if annealing <= 0 {
+		annealing = 1.0
+	}
+
+	changed := 0
+	candidateFallback := make([]int, 0, len(mutated.Synapses))
+	for i, neuronID := range selectedNeuronIDs {
+		incoming := incomingSynapseIndexes(mutated, neuronID)
+		if len(incoming) == 0 {
+			continue
+		}
+		candidateFallback = append(candidateFallback, incoming...)
+		spread := o.MaxDelta * math.Pow(annealing, float64(i))
+		if spread <= 0 {
+			continue
+		}
+		mp := 1 / math.Sqrt(float64(len(incoming)))
+		mutatedLocal := 0
+		for _, idx := range incoming {
+			if o.Rand.Float64() >= mp {
+				continue
+			}
+			delta := (o.Rand.Float64()*2 - 1) * spread
+			mutated.Synapses[idx].Weight += delta
+			mutatedLocal++
+			changed++
+		}
+		if mutatedLocal == 0 {
+			idx := incoming[o.Rand.Intn(len(incoming))]
+			delta := (o.Rand.Float64()*2 - 1) * spread
+			mutated.Synapses[idx].Weight += delta
+			changed++
+		}
+	}
+
+	if changed == 0 {
+		idx := 0
+		if len(candidateFallback) > 0 {
+			idx = candidateFallback[o.Rand.Intn(len(candidateFallback))]
+		} else {
+			idx = o.Rand.Intn(len(mutated.Synapses))
+		}
+		delta := (o.Rand.Float64()*2 - 1) * o.MaxDelta
+		mutated.Synapses[idx].Weight += delta
+	}
+	return mutated, nil
 }
 
 // PerturbRandomBias mutates a random neuron bias using uniform delta in [-MaxDelta, MaxDelta].
@@ -2463,6 +2526,47 @@ func neuronPlasticityRate(genome model.Genome, idx int) float64 {
 		return genome.Plasticity.Rate
 	}
 	return 0.1
+}
+
+func selectedNeuronIDsForMutateWeights(genome model.Genome, rng *rand.Rand) []string {
+	ids := filterNeuronIDs(genome, nil)
+	if len(ids) == 0 {
+		return nil
+	}
+	mode := tuning.NormalizeCandidateSelectionName(genome.Strategy.TuningSelection)
+	switch mode {
+	case tuning.CandidateSelectDynamic, tuning.CandidateSelectAllRandom, tuning.CandidateSelectActiveRnd, tuning.CandidateSelectRecentRnd, tuning.CandidateSelectCurrentRd, tuning.CandidateSelectLastGenRd:
+		return randomNeuronSubset(ids, rng)
+	default:
+		return ids
+	}
+}
+
+func randomNeuronSubset(ids []string, rng *rand.Rand) []string {
+	if len(ids) == 0 {
+		return nil
+	}
+	subset := make([]string, 0, len(ids))
+	mp := 1 / math.Sqrt(float64(len(ids)))
+	for _, id := range ids {
+		if rng.Float64() < mp {
+			subset = append(subset, id)
+		}
+	}
+	if len(subset) == 0 {
+		subset = append(subset, ids[rng.Intn(len(ids))])
+	}
+	return subset
+}
+
+func incomingSynapseIndexes(genome model.Genome, neuronID string) []int {
+	indexes := make([]int, 0, len(genome.Synapses))
+	for i, syn := range genome.Synapses {
+		if syn.To == neuronID {
+			indexes = append(indexes, i)
+		}
+	}
+	return indexes
 }
 
 func availableSensorNeuronPairs(genome model.Genome) []model.SensorNeuronLink {
