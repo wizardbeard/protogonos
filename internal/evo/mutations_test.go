@@ -985,6 +985,38 @@ func TestAddRandomActuatorAddsCompatibleActuator(t *testing.T) {
 	}
 }
 
+func TestAddRandomSensorAndActuatorRequireNeuronsForConnection(t *testing.T) {
+	sensorGenome := model.Genome{
+		Neurons:   nil,
+		SensorIDs: []string{protoio.XORInputLeftSensorName},
+	}
+	sensorOp := &AddRandomSensor{
+		Rand:      rand.New(rand.NewSource(261)),
+		ScapeName: "xor",
+	}
+	if sensorOp.Applicable(sensorGenome, "xor") {
+		t.Fatal("expected add_sensor to be inapplicable without neurons")
+	}
+	if _, err := sensorOp.Apply(context.Background(), sensorGenome); !errors.Is(err, ErrNoNeurons) {
+		t.Fatalf("expected ErrNoNeurons for add_sensor without neurons, got %v", err)
+	}
+
+	actuatorGenome := model.Genome{
+		Neurons:     nil,
+		ActuatorIDs: []string{},
+	}
+	actuatorOp := &AddRandomActuator{
+		Rand:      rand.New(rand.NewSource(269)),
+		ScapeName: "xor",
+	}
+	if actuatorOp.Applicable(actuatorGenome, "xor") {
+		t.Fatal("expected add_actuator to be inapplicable without neurons")
+	}
+	if _, err := actuatorOp.Apply(context.Background(), actuatorGenome); !errors.Is(err, ErrNoNeurons) {
+		t.Fatalf("expected ErrNoNeurons for add_actuator without neurons, got %v", err)
+	}
+}
+
 func TestAddRandomSensorLinkIncrementsUntilCapacity(t *testing.T) {
 	genome := model.Genome{
 		Neurons:   []model.Neuron{{ID: "n1", Activation: "identity"}},

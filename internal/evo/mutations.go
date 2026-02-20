@@ -1504,12 +1504,15 @@ func (o *AddRandomSensor) Name() string {
 }
 
 func (o *AddRandomSensor) Applicable(genome model.Genome, _ string) bool {
-	return len(sensorCandidates(genome, o.ScapeName)) > 0
+	return len(genome.Neurons) > 0 && len(sensorCandidates(genome, o.ScapeName)) > 0
 }
 
 func (o *AddRandomSensor) Apply(_ context.Context, genome model.Genome) (model.Genome, error) {
 	if o == nil || o.Rand == nil {
 		return model.Genome{}, errors.New("random source is required")
+	}
+	if len(genome.Neurons) == 0 {
+		return model.Genome{}, ErrNoNeurons
 	}
 	candidates := sensorCandidates(genome, o.ScapeName)
 	if len(candidates) == 0 {
@@ -1518,13 +1521,11 @@ func (o *AddRandomSensor) Apply(_ context.Context, genome model.Genome) (model.G
 	choice := candidates[o.Rand.Intn(len(candidates))]
 	mutated := cloneGenome(genome)
 	mutated.SensorIDs = append(mutated.SensorIDs, choice)
-	if len(mutated.Neurons) > 0 {
-		targetNeuron := mutated.Neurons[o.Rand.Intn(len(mutated.Neurons))].ID
-		mutated.SensorNeuronLinks = append(mutated.SensorNeuronLinks, model.SensorNeuronLink{
-			SensorID: choice,
-			NeuronID: targetNeuron,
-		})
-	}
+	targetNeuron := mutated.Neurons[o.Rand.Intn(len(mutated.Neurons))].ID
+	mutated.SensorNeuronLinks = append(mutated.SensorNeuronLinks, model.SensorNeuronLink{
+		SensorID: choice,
+		NeuronID: targetNeuron,
+	})
 	syncIOLinkCounts(&mutated)
 	return mutated, nil
 }
@@ -1575,12 +1576,15 @@ func (o *AddRandomActuator) Name() string {
 }
 
 func (o *AddRandomActuator) Applicable(genome model.Genome, _ string) bool {
-	return len(actuatorCandidates(genome, o.ScapeName)) > 0
+	return len(genome.Neurons) > 0 && len(actuatorCandidates(genome, o.ScapeName)) > 0
 }
 
 func (o *AddRandomActuator) Apply(_ context.Context, genome model.Genome) (model.Genome, error) {
 	if o == nil || o.Rand == nil {
 		return model.Genome{}, errors.New("random source is required")
+	}
+	if len(genome.Neurons) == 0 {
+		return model.Genome{}, ErrNoNeurons
 	}
 	candidates := actuatorCandidates(genome, o.ScapeName)
 	if len(candidates) == 0 {
@@ -1589,13 +1593,11 @@ func (o *AddRandomActuator) Apply(_ context.Context, genome model.Genome) (model
 	choice := candidates[o.Rand.Intn(len(candidates))]
 	mutated := cloneGenome(genome)
 	mutated.ActuatorIDs = append(mutated.ActuatorIDs, choice)
-	if len(mutated.Neurons) > 0 {
-		sourceNeuron := mutated.Neurons[o.Rand.Intn(len(mutated.Neurons))].ID
-		mutated.NeuronActuatorLinks = append(mutated.NeuronActuatorLinks, model.NeuronActuatorLink{
-			NeuronID:   sourceNeuron,
-			ActuatorID: choice,
-		})
-	}
+	sourceNeuron := mutated.Neurons[o.Rand.Intn(len(mutated.Neurons))].ID
+	mutated.NeuronActuatorLinks = append(mutated.NeuronActuatorLinks, model.NeuronActuatorLink{
+		NeuronID:   sourceNeuron,
+		ActuatorID: choice,
+	})
 	syncIOLinkCounts(&mutated)
 	return mutated, nil
 }
