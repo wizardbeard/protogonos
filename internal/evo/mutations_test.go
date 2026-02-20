@@ -325,6 +325,28 @@ func TestRemoveNeuronInvariants(t *testing.T) {
 	}
 }
 
+func TestRemoveRandomNeuronCancelsWhenAllProtected(t *testing.T) {
+	genome := model.Genome{
+		Neurons: []model.Neuron{
+			{ID: "n1", Activation: "identity"},
+			{ID: "n2", Activation: "identity"},
+		},
+	}
+	op := &RemoveRandomNeuron{
+		Rand: rand.New(rand.NewSource(341)),
+		Protected: map[string]struct{}{
+			"n1": {},
+			"n2": {},
+		},
+	}
+	if op.Applicable(genome, "xor") {
+		t.Fatal("expected remove_random_neuron to be inapplicable when all neurons are protected")
+	}
+	if _, err := op.Apply(context.Background(), genome); !errors.Is(err, ErrNoMutationChoice) {
+		t.Fatalf("expected ErrNoMutationChoice when all neurons are protected, got %v", err)
+	}
+}
+
 func TestPerturbPlasticityRateMutation(t *testing.T) {
 	genome := randomGenome(rand.New(rand.NewSource(1)))
 	genome.Plasticity = &model.PlasticityConfig{

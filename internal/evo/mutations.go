@@ -1027,7 +1027,7 @@ func (o *RemoveRandomNeuron) Apply(ctx context.Context, genome model.Genome) (mo
 		candidates = append(candidates, n.ID)
 	}
 	if len(candidates) == 0 {
-		return model.Genome{}, errors.New("no removable neurons")
+		return model.Genome{}, ErrNoMutationChoice
 	}
 
 	target := candidates[o.Rand.Intn(len(candidates))]
