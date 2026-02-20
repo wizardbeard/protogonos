@@ -2100,6 +2100,48 @@ func TestChangeRandomAggregatorMutation(t *testing.T) {
 	}
 }
 
+func TestActivationAndPlasticityRuleMutatorsCancelWhenNoAlternative(t *testing.T) {
+	genome := randomGenome(rand.New(rand.NewSource(287)))
+	for i := range genome.Neurons {
+		genome.Neurons[i].Activation = "identity"
+		genome.Neurons[i].Aggregator = "dot_product"
+		genome.Neurons[i].PlasticityRule = "hebbian"
+	}
+	genome.Plasticity = &model.PlasticityConfig{
+		Rule:            "hebbian",
+		Rate:            0.2,
+		SaturationLimit: 1.0,
+	}
+
+	if _, err := (&ChangeRandomActivation{
+		Rand:        rand.New(rand.NewSource(289)),
+		Activations: []string{"identity"},
+	}).Apply(context.Background(), genome); !errors.Is(err, ErrNoMutationChoice) {
+		t.Fatalf("expected ErrNoMutationChoice for mutate_af exhaustion, got %v", err)
+	}
+
+	if _, err := (&ChangeRandomAggregator{
+		Rand:        rand.New(rand.NewSource(293)),
+		Aggregators: []string{"dot_product"},
+	}).Apply(context.Background(), genome); !errors.Is(err, ErrNoMutationChoice) {
+		t.Fatalf("expected ErrNoMutationChoice for mutate_aggrf exhaustion, got %v", err)
+	}
+
+	if _, err := (&ChangePlasticityRule{
+		Rand:  rand.New(rand.NewSource(307)),
+		Rules: []string{"hebbian"},
+	}).Apply(context.Background(), genome); !errors.Is(err, ErrNoMutationChoice) {
+		t.Fatalf("expected ErrNoMutationChoice for change_plasticity_rule exhaustion, got %v", err)
+	}
+
+	if _, err := (&MutatePF{
+		Rand:  rand.New(rand.NewSource(311)),
+		Rules: []string{"hebbian"},
+	}).Apply(context.Background(), genome); !errors.Is(err, ErrNoMutationChoice) {
+		t.Fatalf("expected ErrNoMutationChoice for mutate_pf exhaustion, got %v", err)
+	}
+}
+
 func TestRemoveRandomBiasMutation(t *testing.T) {
 	genome := randomGenome(rand.New(rand.NewSource(16)))
 	for i := range genome.Neurons {

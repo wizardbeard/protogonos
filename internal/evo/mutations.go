@@ -349,7 +349,7 @@ func (o *ChangeRandomActivation) Apply(_ context.Context, genome model.Genome) (
 		}
 	}
 	if len(choices) == 0 {
-		return cloneGenome(genome), nil
+		return model.Genome{}, ErrNoMutationChoice
 	}
 
 	mutated := cloneGenome(genome)
@@ -410,7 +410,7 @@ func (o *ChangeRandomAggregator) Apply(_ context.Context, genome model.Genome) (
 		}
 	}
 	if len(choices) == 0 {
-		return cloneGenome(genome), nil
+		return model.Genome{}, ErrNoMutationChoice
 	}
 
 	mutated := cloneGenome(genome)
@@ -1161,7 +1161,7 @@ func (o *ChangePlasticityRule) Apply(_ context.Context, genome model.Genome) (mo
 		choices = append(choices, rule)
 	}
 	if len(choices) == 0 {
-		return cloneGenome(genome), nil
+		return model.Genome{}, ErrNoMutationChoice
 	}
 
 	mutated := cloneGenome(genome)
@@ -1203,14 +1203,14 @@ func (o *MutatePF) Apply(_ context.Context, genome model.Genome) (model.Genome, 
 		normalized = append(normalized, name)
 	}
 	if len(normalized) == 0 {
-		return cloneGenome(genome), nil
+		return model.Genome{}, ErrNoMutationChoice
 	}
 
 	idx := o.Rand.Intn(len(genome.Neurons))
 	current := neuronPlasticityRule(genome, idx)
 	choices := filterOutString(normalized, current)
 	if len(choices) == 0 {
-		return cloneGenome(genome), nil
+		return model.Genome{}, ErrNoMutationChoice
 	}
 
 	mutated := cloneGenome(genome)
