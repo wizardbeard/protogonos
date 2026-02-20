@@ -815,11 +815,34 @@ func (o *CutlinkFromElementToElement) Name() string {
 }
 
 func (o *CutlinkFromElementToElement) Applicable(genome model.Genome, _ string) bool {
-	return len(genome.Synapses) > 0
+	return len(genome.Synapses) > 0 || len(genome.SensorNeuronLinks) > 0 || len(genome.NeuronActuatorLinks) > 0
 }
 
 func (o *CutlinkFromElementToElement) Apply(ctx context.Context, genome model.Genome) (model.Genome, error) {
-	return (&RemoveRandomSynapse{Rand: o.Rand}).Apply(ctx, genome)
+	type opCandidate struct {
+		apply func(context.Context, model.Genome) (model.Genome, error)
+	}
+	candidates := make([]opCandidate, 0, 3)
+	removeSynapse := &RemoveRandomSynapse{Rand: o.Rand}
+	if removeSynapse.Applicable(genome, "") {
+		candidates = append(candidates, opCandidate{apply: removeSynapse.Apply})
+	}
+	cutSensor := &CutlinkFromSensorToNeuron{Rand: o.Rand}
+	if cutSensor.Applicable(genome, "") {
+		candidates = append(candidates, opCandidate{apply: cutSensor.Apply})
+	}
+	cutActuator := &CutlinkFromNeuronToActuator{Rand: o.Rand}
+	if cutActuator.Applicable(genome, "") {
+		candidates = append(candidates, opCandidate{apply: cutActuator.Apply})
+	}
+	if len(candidates) == 0 {
+		return model.Genome{}, ErrNoMutationChoice
+	}
+	if o == nil || o.Rand == nil {
+		return model.Genome{}, errors.New("random source is required")
+	}
+	selected := candidates[o.Rand.Intn(len(candidates))]
+	return selected.apply(ctx, genome)
 }
 
 // LinkFromElementToElement mirrors the generic reference helper mutator name
@@ -834,11 +857,37 @@ func (o *LinkFromElementToElement) Name() string {
 }
 
 func (o *LinkFromElementToElement) Applicable(genome model.Genome, _ string) bool {
-	return len(genome.Neurons) > 0
+	addSynapse := (&AddRandomSynapse{Rand: o.Rand, MaxAbsWeight: o.MaxAbsWeight}).Applicable(genome, "")
+	addSensor := (&AddRandomSensorLink{Rand: o.Rand, ScapeName: ""}).Applicable(genome, "")
+	addActuator := (&AddRandomActuatorLink{Rand: o.Rand, ScapeName: ""}).Applicable(genome, "")
+	return addSynapse || addSensor || addActuator
 }
 
 func (o *LinkFromElementToElement) Apply(ctx context.Context, genome model.Genome) (model.Genome, error) {
-	return (&AddRandomSynapse{Rand: o.Rand, MaxAbsWeight: o.MaxAbsWeight}).Apply(ctx, genome)
+	type opCandidate struct {
+		apply func(context.Context, model.Genome) (model.Genome, error)
+	}
+	candidates := make([]opCandidate, 0, 3)
+	addSynapse := &AddRandomSynapse{Rand: o.Rand, MaxAbsWeight: o.MaxAbsWeight}
+	if addSynapse.Applicable(genome, "") {
+		candidates = append(candidates, opCandidate{apply: addSynapse.Apply})
+	}
+	addSensor := &AddRandomSensorLink{Rand: o.Rand, ScapeName: ""}
+	if addSensor.Applicable(genome, "") {
+		candidates = append(candidates, opCandidate{apply: addSensor.Apply})
+	}
+	addActuator := &AddRandomActuatorLink{Rand: o.Rand, ScapeName: ""}
+	if addActuator.Applicable(genome, "") {
+		candidates = append(candidates, opCandidate{apply: addActuator.Apply})
+	}
+	if len(candidates) == 0 {
+		return model.Genome{}, ErrNoMutationChoice
+	}
+	if o == nil || o.Rand == nil {
+		return model.Genome{}, errors.New("random source is required")
+	}
+	selected := candidates[o.Rand.Intn(len(candidates))]
+	return selected.apply(ctx, genome)
 }
 
 // LinkFromNeuronToNeuron mirrors the explicit reference helper name used for

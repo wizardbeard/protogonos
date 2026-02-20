@@ -1459,6 +1459,31 @@ func TestCutlinkFromElementToElementRemovesSynapse(t *testing.T) {
 	}
 }
 
+func TestCutlinkFromElementToElementRemovesEndpointLinksWhenNoSynapses(t *testing.T) {
+	genome := model.Genome{
+		Neurons:   []model.Neuron{{ID: "n1", Activation: "identity"}},
+		SensorIDs: []string{protoio.XORInputLeftSensorName},
+		SensorNeuronLinks: []model.SensorNeuronLink{
+			{SensorID: protoio.XORInputLeftSensorName, NeuronID: "n1"},
+		},
+		SensorLinks: 1,
+	}
+	op := &CutlinkFromElementToElement{Rand: rand.New(rand.NewSource(1801))}
+	if !op.Applicable(genome, "xor") {
+		t.Fatal("expected cutlink_FromElementToElement to be applicable with endpoint links")
+	}
+	mutated, err := op.Apply(context.Background(), genome)
+	if err != nil {
+		t.Fatalf("apply failed: %v", err)
+	}
+	if len(mutated.SensorNeuronLinks) != 0 {
+		t.Fatalf("expected endpoint link removal, got=%d", len(mutated.SensorNeuronLinks))
+	}
+	if mutated.SensorLinks != 0 {
+		t.Fatalf("expected synchronized sensor link counter after removal, got=%d", mutated.SensorLinks)
+	}
+}
+
 func TestLinkFromElementToElementAddsSynapse(t *testing.T) {
 	genome := model.Genome{
 		Neurons: []model.Neuron{
@@ -1475,6 +1500,38 @@ func TestLinkFromElementToElementAddsSynapse(t *testing.T) {
 	}
 	if len(mutated.Synapses) != 1 {
 		t.Fatalf("expected one added synapse, got=%d", len(mutated.Synapses))
+	}
+}
+
+func TestLinkFromElementToElementAddsEndpointLinkWhenSynapsesExhausted(t *testing.T) {
+	genome := model.Genome{
+		Neurons: []model.Neuron{
+			{ID: "n1", Activation: "identity"},
+		},
+		Synapses: []model.Synapse{
+			{ID: "s1", From: "n1", To: "n1", Weight: 1, Enabled: true, Recurrent: true},
+		},
+		SensorIDs: []string{protoio.XORInputLeftSensorName},
+	}
+	op := &LinkFromElementToElement{
+		Rand:         rand.New(rand.NewSource(1811)),
+		MaxAbsWeight: 1.0,
+	}
+	if !op.Applicable(genome, "xor") {
+		t.Fatal("expected link_FromElementToElement to be applicable via endpoint-link candidate")
+	}
+	mutated, err := op.Apply(context.Background(), genome)
+	if err != nil {
+		t.Fatalf("apply failed: %v", err)
+	}
+	if len(mutated.Synapses) != len(genome.Synapses) {
+		t.Fatalf("expected no new synapse when exhausted, before=%d after=%d", len(genome.Synapses), len(mutated.Synapses))
+	}
+	if len(mutated.SensorNeuronLinks) != 1 {
+		t.Fatalf("expected one sensor endpoint link to be added, got=%d", len(mutated.SensorNeuronLinks))
+	}
+	if mutated.SensorLinks != 1 {
+		t.Fatalf("expected synchronized sensor link counter, got=%d", mutated.SensorLinks)
 	}
 }
 
