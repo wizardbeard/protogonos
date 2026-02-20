@@ -1683,7 +1683,7 @@ func (o *AddRandomSensorLink) Apply(ctx context.Context, genome model.Genome) (m
 	}
 	candidates := availableSensorNeuronPairs(genome)
 	if len(candidates) == 0 {
-		return model.Genome{}, ErrSynapseExists
+		return model.Genome{}, ErrNoMutationChoice
 	}
 	mutated := cloneGenome(genome)
 	selected := candidates[o.Rand.Intn(len(candidates))]
@@ -1755,7 +1755,7 @@ func (o *AddRandomActuatorLink) Apply(ctx context.Context, genome model.Genome) 
 	}
 	candidates := availableNeuronActuatorPairs(genome)
 	if len(candidates) == 0 {
-		return model.Genome{}, ErrSynapseExists
+		return model.Genome{}, ErrNoMutationChoice
 	}
 	mutated := cloneGenome(genome)
 	selected := candidates[o.Rand.Intn(len(candidates))]
@@ -2516,7 +2516,7 @@ func filterNeuronIDs(g model.Genome, keep func(id string) bool) []string {
 
 func addDirectedRandomSynapse(genome model.Genome, rng *rand.Rand, maxAbsWeight float64, fromCandidates, toCandidates []string) (model.Genome, error) {
 	if len(fromCandidates) == 0 || len(toCandidates) == 0 {
-		return model.Genome{}, ErrNoSynapses
+		return model.Genome{}, ErrNoMutationChoice
 	}
 	type pair struct {
 		from string
@@ -2532,7 +2532,7 @@ func addDirectedRandomSynapse(genome model.Genome, rng *rand.Rand, maxAbsWeight 
 		}
 	}
 	if len(candidates) == 0 {
-		return model.Genome{}, ErrSynapseExists
+		return model.Genome{}, ErrNoMutationChoice
 	}
 	selected := candidates[rng.Intn(len(candidates))]
 	id := uniqueSynapseID(genome, rng)

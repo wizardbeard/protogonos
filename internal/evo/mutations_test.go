@@ -528,8 +528,8 @@ func TestAddRandomInlinkNoDirectionalCandidates(t *testing.T) {
 	if op.Applicable(genome, "xor") {
 		t.Fatal("expected add_inlink to be inapplicable without directional candidates")
 	}
-	if _, err := op.Apply(context.Background(), genome); !errors.Is(err, ErrNoSynapses) {
-		t.Fatalf("expected ErrNoSynapses, got %v", err)
+	if _, err := op.Apply(context.Background(), genome); !errors.Is(err, ErrNoMutationChoice) {
+		t.Fatalf("expected ErrNoMutationChoice, got %v", err)
 	}
 }
 
@@ -573,8 +573,8 @@ func TestAddRandomOutlinkNoDirectionalCandidates(t *testing.T) {
 	if op.Applicable(genome, "xor") {
 		t.Fatal("expected add_outlink to be inapplicable without directional candidates")
 	}
-	if _, err := op.Apply(context.Background(), genome); !errors.Is(err, ErrNoSynapses) {
-		t.Fatalf("expected ErrNoSynapses, got %v", err)
+	if _, err := op.Apply(context.Background(), genome); !errors.Is(err, ErrNoMutationChoice) {
+		t.Fatalf("expected ErrNoMutationChoice, got %v", err)
 	}
 }
 
@@ -596,8 +596,8 @@ func TestAddRandomInlinkRejectsDuplicateDirectionalEdge(t *testing.T) {
 	if op.Applicable(genome, "xor") {
 		t.Fatal("expected add_inlink to be inapplicable when only duplicate edge candidate exists")
 	}
-	if _, err := op.Apply(context.Background(), genome); !errors.Is(err, ErrSynapseExists) {
-		t.Fatalf("expected ErrSynapseExists, got %v", err)
+	if _, err := op.Apply(context.Background(), genome); !errors.Is(err, ErrNoMutationChoice) {
+		t.Fatalf("expected ErrNoMutationChoice, got %v", err)
 	}
 }
 
@@ -619,8 +619,8 @@ func TestAddRandomOutlinkRejectsDuplicateDirectionalEdge(t *testing.T) {
 	if op.Applicable(genome, "xor") {
 		t.Fatal("expected add_outlink to be inapplicable when only duplicate edge candidate exists")
 	}
-	if _, err := op.Apply(context.Background(), genome); !errors.Is(err, ErrSynapseExists) {
-		t.Fatalf("expected ErrSynapseExists, got %v", err)
+	if _, err := op.Apply(context.Background(), genome); !errors.Is(err, ErrNoMutationChoice) {
+		t.Fatalf("expected ErrNoMutationChoice, got %v", err)
 	}
 }
 
@@ -718,8 +718,8 @@ func TestFeedforwardDirectionalCancellationWhenOnlyBackwardOrderingExists(t *tes
 	if addIn.Applicable(genome, "xor") {
 		t.Fatal("expected add_inlink to be inapplicable when inferred feedforward ordering forbids candidates")
 	}
-	if _, err := addIn.Apply(context.Background(), genome); !errors.Is(err, ErrSynapseExists) {
-		t.Fatalf("expected ErrSynapseExists, got %v", err)
+	if _, err := addIn.Apply(context.Background(), genome); !errors.Is(err, ErrNoMutationChoice) {
+		t.Fatalf("expected ErrNoMutationChoice, got %v", err)
 	}
 
 	removeIn := &RemoveRandomInlink{
@@ -1090,8 +1090,8 @@ func TestAddRandomSensorLinkIncrementsUntilCapacity(t *testing.T) {
 	if op.Applicable(mutated, "xor") {
 		t.Fatal("expected add_sensorlink to be inapplicable after reaching full connectivity")
 	}
-	if _, err := op.Apply(context.Background(), mutated); !errors.Is(err, ErrSynapseExists) {
-		t.Fatalf("expected ErrSynapseExists when fully connected, got %v", err)
+	if _, err := op.Apply(context.Background(), mutated); !errors.Is(err, ErrNoMutationChoice) {
+		t.Fatalf("expected ErrNoMutationChoice when fully connected, got %v", err)
 	}
 }
 
@@ -1122,8 +1122,8 @@ func TestAddRandomActuatorLinkIncrementsUntilCapacity(t *testing.T) {
 	if op.Applicable(mutated, "xor") {
 		t.Fatal("expected add_actuatorlink to be inapplicable after reaching full connectivity")
 	}
-	if _, err := op.Apply(context.Background(), mutated); !errors.Is(err, ErrSynapseExists) {
-		t.Fatalf("expected ErrSynapseExists when fully connected, got %v", err)
+	if _, err := op.Apply(context.Background(), mutated); !errors.Is(err, ErrNoMutationChoice) {
+		t.Fatalf("expected ErrNoMutationChoice when fully connected, got %v", err)
 	}
 }
 
