@@ -1281,7 +1281,24 @@ func (o *MutateTuningSelection) Name() string {
 }
 
 func (o *MutateTuningSelection) Applicable(_ model.Genome, _ string) bool {
-	return true
+	modes := append([]string(nil), o.Modes...)
+	if len(modes) == 0 {
+		return true
+	}
+	normalized := make([]string, 0, len(modes))
+	seen := make(map[string]struct{}, len(modes))
+	for _, mode := range modes {
+		name := tuning.NormalizeCandidateSelectionName(mode)
+		if name == "" {
+			continue
+		}
+		if _, ok := seen[name]; ok {
+			continue
+		}
+		seen[name] = struct{}{}
+		normalized = append(normalized, name)
+	}
+	return len(normalized) > 1
 }
 
 func (o *MutateTuningSelection) Apply(_ context.Context, genome model.Genome) (model.Genome, error) {
@@ -1342,7 +1359,24 @@ func (o *MutateTuningAnnealing) Name() string {
 }
 
 func (o *MutateTuningAnnealing) Applicable(_ model.Genome, _ string) bool {
-	return true
+	values := append([]float64(nil), o.Values...)
+	if len(values) == 0 {
+		return true
+	}
+	seen := make(map[int64]struct{}, len(values))
+	unique := 0
+	for _, value := range values {
+		if value <= 0 {
+			continue
+		}
+		key := int64(value * 1e9)
+		if _, ok := seen[key]; ok {
+			continue
+		}
+		seen[key] = struct{}{}
+		unique++
+	}
+	return unique > 1
 }
 
 func (o *MutateTuningAnnealing) Apply(_ context.Context, genome model.Genome) (model.Genome, error) {
@@ -1393,7 +1427,34 @@ func (o *MutateTotTopologicalMutations) Name() string {
 }
 
 func (o *MutateTotTopologicalMutations) Applicable(_ model.Genome, _ string) bool {
-	return true
+	if len(o.Choices) > 0 {
+		unique := make(map[string]struct{}, len(o.Choices))
+		for _, choice := range o.Choices {
+			name := choice.Name
+			if name == "" {
+				continue
+			}
+			param := choice.Param
+			if param <= 0 {
+				param = defaultTopologicalParam(name)
+			}
+			key := fmt.Sprintf("%s:%0.9f", name, param)
+			unique[key] = struct{}{}
+		}
+		return len(unique) > 1
+	}
+	policies := append([]string(nil), o.Policies...)
+	if len(policies) == 0 {
+		return true
+	}
+	normalized := make(map[string]struct{}, len(policies))
+	for _, policy := range policies {
+		if policy == "" {
+			continue
+		}
+		normalized[policy] = struct{}{}
+	}
+	return len(normalized) > 1
 }
 
 func (o *MutateTotTopologicalMutations) Apply(_ context.Context, genome model.Genome) (model.Genome, error) {
@@ -1468,7 +1529,18 @@ func (o *MutateHeredityType) Name() string {
 }
 
 func (o *MutateHeredityType) Applicable(_ model.Genome, _ string) bool {
-	return true
+	types := append([]string(nil), o.Types...)
+	if len(types) == 0 {
+		return true
+	}
+	normalized := make(map[string]struct{}, len(types))
+	for _, item := range types {
+		if item == "" {
+			continue
+		}
+		normalized[item] = struct{}{}
+	}
+	return len(normalized) > 1
 }
 
 func (o *MutateHeredityType) Apply(_ context.Context, genome model.Genome) (model.Genome, error) {

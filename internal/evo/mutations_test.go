@@ -1745,6 +1745,23 @@ func TestSearchParameterMutatorsCancelWhenNoAlternativeChoice(t *testing.T) {
 	}
 }
 
+func TestSearchParameterMutatorsApplicableReflectsAlternativeChoice(t *testing.T) {
+	if (&MutateTuningSelection{Modes: []string{tuning.CandidateSelectBestSoFar}}).Applicable(model.Genome{}, "xor") {
+		t.Fatal("expected mutate_tuning_selection to be inapplicable with a single mode")
+	}
+	if (&MutateTuningAnnealing{Values: []float64{1.0}}).Applicable(model.Genome{}, "xor") {
+		t.Fatal("expected mutate_tuning_annealing to be inapplicable with a single value")
+	}
+	if (&MutateTotTopologicalMutations{
+		Choices: []TopologicalPolicyChoice{{Name: "const", Param: 1.0}},
+	}).Applicable(model.Genome{}, "xor") {
+		t.Fatal("expected mutate_tot_topological_mutations to be inapplicable with a single choice")
+	}
+	if (&MutateHeredityType{Types: []string{"asexual"}}).Applicable(model.Genome{}, "xor") {
+		t.Fatal("expected mutate_heredity_type to be inapplicable with a single type")
+	}
+}
+
 func TestMutateTotTopologicalMutationsCanChangeParamWithinSameMode(t *testing.T) {
 	base := model.Genome{
 		Strategy: &model.StrategyConfig{
