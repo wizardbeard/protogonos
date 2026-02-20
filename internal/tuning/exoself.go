@@ -226,6 +226,8 @@ func (e *Exoself) candidateBasesForMode(mode string, best, original, recent mode
 		return []model.Genome{cloneGenome(best)}, nil
 	case CandidateSelectOriginal:
 		return []model.Genome{cloneGenome(original)}, nil
+	case CandidateSelectAll:
+		return cloneCandidatePool(candidates), nil
 	case CandidateSelectLastGen:
 		return filterCandidatesByAge(candidates, 0), nil
 	case CandidateSelectDynamicA:
@@ -233,7 +235,7 @@ func (e *Exoself) candidateBasesForMode(mode string, best, original, recent mode
 		return filterCandidatesByAge(candidates, limit), nil
 	case CandidateSelectActive, CandidateSelectRecent:
 		return filterCandidatesByAge(candidates, 3), nil
-	case CandidateSelectCurrent, CandidateSelectAll:
+	case CandidateSelectCurrent:
 		return filterCandidatesByAge(candidates, 0), nil
 	default:
 		return nil, errors.New("unsupported candidate selection")
@@ -289,6 +291,14 @@ func uniqueCandidatePool(best, original, recent model.Genome) []model.Genome {
 		}
 		seen[key] = struct{}{}
 		out = append(out, cloneGenome(g))
+	}
+	return out
+}
+
+func cloneCandidatePool(pool []model.Genome) []model.Genome {
+	out := make([]model.Genome, 0, len(pool))
+	for i := range pool {
+		out = append(out, cloneGenome(pool[i]))
 	}
 	return out
 }

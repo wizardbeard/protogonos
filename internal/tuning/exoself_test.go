@@ -398,3 +398,54 @@ func TestExoselfLastGenAliasUsesCurrentGenerationPool(t *testing.T) {
 		t.Fatalf("expected lastgen to resolve to current-generation pool; got=%v", pool)
 	}
 }
+
+func TestExoselfAllSelectionUsesEntireCandidatePool(t *testing.T) {
+	tuner := &Exoself{
+		Rand:               rand.New(rand.NewSource(31)),
+		CandidateSelection: CandidateSelectAll,
+	}
+	best := model.Genome{ID: "xor-g5-best"}
+	original := model.Genome{ID: "xor-g1-original"}
+	recent := model.Genome{ID: "xor-g4-recent"}
+
+	pool, err := tuner.candidateBases(best, original, recent)
+	if err != nil {
+		t.Fatalf("candidateBases(all): %v", err)
+	}
+	if len(pool) != 3 {
+		t.Fatalf("expected all mode to keep full pool, got=%d", len(pool))
+	}
+	seen := map[string]bool{}
+	for _, g := range pool {
+		seen[g.ID] = true
+	}
+	for _, id := range []string{best.ID, original.ID, recent.ID} {
+		if !seen[id] {
+			t.Fatalf("expected all mode pool to contain %q", id)
+		}
+	}
+}
+
+func TestExoselfAllRandomCanSelectOlderCandidates(t *testing.T) {
+	tuner := &Exoself{
+		Rand:               rand.New(rand.NewSource(37)),
+		CandidateSelection: CandidateSelectAllRandom,
+	}
+	best := model.Genome{ID: "xor-g5-best"}
+	original := model.Genome{ID: "xor-g1-original"}
+	recent := model.Genome{ID: "xor-g4-recent"}
+
+	seen := map[string]bool{}
+	for i := 0; i < 128; i++ {
+		pool, err := tuner.candidateBases(best, original, recent)
+		if err != nil {
+			t.Fatalf("candidateBases(all_random): %v", err)
+		}
+		for _, g := range pool {
+			seen[g.ID] = true
+		}
+	}
+	if !seen[original.ID] {
+		t.Fatalf("expected all_random to include older candidate %q over repeated draws", original.ID)
+	}
+}
