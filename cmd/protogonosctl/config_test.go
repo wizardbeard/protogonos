@@ -282,6 +282,7 @@ func TestNormalizeMutationOperatorNameLegacyCircuitAliases(t *testing.T) {
 		"add_CircuitNode":    "add_circuit_node",
 		"delete_CircuitNode": "delete_circuit_node",
 		"add_CircuitLayer":   "add_circuit_layer",
+		"remove_outLink":     "remove_outlink",
 		"mutate_weights":     "mutate_weights",
 	}
 	for in, want := range cases {

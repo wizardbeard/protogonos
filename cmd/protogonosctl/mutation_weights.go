@@ -8,6 +8,8 @@ func normalizeMutationOperatorName(name string) string {
 		return "delete_circuit_node"
 	case "add_CircuitLayer":
 		return "add_circuit_layer"
+	case "remove_outLink":
+		return "remove_outlink"
 	default:
 		return name
 	}

@@ -13,6 +13,7 @@ func TestMutationWeightBucketCoversGenomeMutatorSurface(t *testing.T) {
 		"add_outlink":                      "add_synapse",
 		"remove_inlink":                    "remove_synapse",
 		"remove_outlink":                   "remove_synapse",
+		"remove_outLink":                   "remove_synapse",
 		"cutlink_FromElementToElement":     "remove_synapse",
 		"cutlink_FromNeuronToNeuron":       "remove_synapse",
 		"link_FromElementToElement":        "add_synapse",
