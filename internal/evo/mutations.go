@@ -1826,7 +1826,7 @@ func (o *CutlinkFromSensorToNeuron) Applicable(genome model.Genome, _ string) bo
 
 func (o *CutlinkFromSensorToNeuron) Apply(ctx context.Context, genome model.Genome) (model.Genome, error) {
 	if len(genome.SensorNeuronLinks) == 0 && genome.SensorLinks <= 0 {
-		return model.Genome{}, ErrNoSynapses
+		return model.Genome{}, ErrNoMutationChoice
 	}
 	if o == nil || o.Rand == nil {
 		return model.Genome{}, errors.New("random source is required")
@@ -1904,7 +1904,7 @@ func (o *CutlinkFromNeuronToActuator) Applicable(genome model.Genome, _ string) 
 
 func (o *CutlinkFromNeuronToActuator) Apply(ctx context.Context, genome model.Genome) (model.Genome, error) {
 	if len(genome.NeuronActuatorLinks) == 0 && genome.ActuatorLinks <= 0 {
-		return model.Genome{}, ErrNoSynapses
+		return model.Genome{}, ErrNoMutationChoice
 	}
 	if o == nil || o.Rand == nil {
 		return model.Genome{}, errors.New("random source is required")

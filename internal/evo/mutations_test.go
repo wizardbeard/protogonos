@@ -1275,6 +1275,16 @@ func TestCutlinkAliasesRemoveSensorAndActuatorLinks(t *testing.T) {
 	}
 }
 
+func TestCutlinkAliasesCancelWhenNoEndpointLinks(t *testing.T) {
+	empty := model.Genome{}
+	if _, err := (&CutlinkFromSensorToNeuron{Rand: rand.New(rand.NewSource(1401))}).Apply(context.Background(), empty); !errors.Is(err, ErrNoMutationChoice) {
+		t.Fatalf("expected ErrNoMutationChoice for empty sensor cutlink, got %v", err)
+	}
+	if _, err := (&CutlinkFromNeuronToActuator{Rand: rand.New(rand.NewSource(1403))}).Apply(context.Background(), empty); !errors.Is(err, ErrNoMutationChoice) {
+		t.Fatalf("expected ErrNoMutationChoice for empty actuator cutlink, got %v", err)
+	}
+}
+
 func TestCutlinkFromNeuronToNeuronRemovesSynapse(t *testing.T) {
 	genome := model.Genome{
 		Neurons: []model.Neuron{
