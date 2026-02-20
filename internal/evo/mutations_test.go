@@ -551,6 +551,41 @@ func TestSelectedNeuronSpreadsForMutateWeightsActiveUsesAgeAnnealing(t *testing.
 	}
 }
 
+func TestSelectedNeuronSpreadsForMutateWeightsIncludesActuatorDrivenTargets(t *testing.T) {
+	genome := model.Genome{
+		ID: "xor-g5-i0",
+		Neurons: []model.Neuron{
+			{ID: "n-g0-old", Generation: 0, Activation: "identity"},
+			{ID: "n-g0-act", Generation: 0, Activation: "identity"},
+		},
+		ActuatorIDs: []string{"a-current"},
+		ActuatorGenerations: map[string]int{
+			"a-current": 5,
+		},
+		NeuronActuatorLinks: []model.NeuronActuatorLink{
+			{NeuronID: "n-g0-act", ActuatorID: "a-current"},
+		},
+		Strategy: &model.StrategyConfig{
+			TuningSelection: tuning.CandidateSelectCurrent,
+			AnnealingFactor: 0.5,
+		},
+	}
+
+	got := selectedNeuronSpreadsForMutateWeights(genome, rand.New(rand.NewSource(83)), 1.0, 0.5)
+	if len(got) != 1 {
+		t.Fatalf("expected one actuator-driven target, got=%d", len(got))
+	}
+	if got[0].id != "n-g0-act" {
+		t.Fatalf("expected actuator-linked neuron target, got=%s", got[0].id)
+	}
+	if got[0].sourceKind != tuningElementActuator || got[0].sourceID != "a-current" {
+		t.Fatalf("expected actuator source metadata, got kind=%s id=%s", got[0].sourceKind, got[0].sourceID)
+	}
+	if math.Abs(got[0].spread-1.0) > 1e-9 {
+		t.Fatalf("expected age-0 spread from current actuator, got=%f", got[0].spread)
+	}
+}
+
 func TestAddRandomInlinkPrefersInputSource(t *testing.T) {
 	genome := model.Genome{
 		Neurons: []model.Neuron{

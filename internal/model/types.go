@@ -13,6 +13,7 @@ type Genome struct {
 	Synapses            []Synapse            `json:"synapses"`
 	SensorIDs           []string             `json:"sensor_ids"`
 	ActuatorIDs         []string             `json:"actuator_ids"`
+	ActuatorGenerations map[string]int       `json:"actuator_generations,omitempty"`
 	SensorNeuronLinks   []SensorNeuronLink   `json:"sensor_neuron_links,omitempty"`
 	NeuronActuatorLinks []NeuronActuatorLink `json:"neuron_actuator_links,omitempty"`
 	SensorLinks         int                  `json:"sensor_links,omitempty"`

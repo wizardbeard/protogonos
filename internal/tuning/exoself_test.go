@@ -512,3 +512,38 @@ func TestExoselfPerturbCandidateCurrentModeTargetsCurrentGeneration(t *testing.T
 		t.Fatal("expected current-neuron synapse to mutate in current mode")
 	}
 }
+
+func TestSelectedNeuronPerturbTargetsIncludesActuatorDrivenTargets(t *testing.T) {
+	tuner := &Exoself{
+		Rand:               rand.New(rand.NewSource(53)),
+		CandidateSelection: CandidateSelectCurrent,
+	}
+	genome := model.Genome{
+		ID: "xor-g5-i0",
+		Neurons: []model.Neuron{
+			{ID: "n-g0-old", Generation: 0, Activation: "identity"},
+			{ID: "n-g0-act", Generation: 0, Activation: "identity"},
+		},
+		ActuatorIDs: []string{"a-current"},
+		ActuatorGenerations: map[string]int{
+			"a-current": 5,
+		},
+		NeuronActuatorLinks: []model.NeuronActuatorLink{
+			{NeuronID: "n-g0-act", ActuatorID: "a-current"},
+		},
+	}
+
+	targets := tuner.selectedNeuronPerturbTargets(genome, 1.0, 0.5)
+	if len(targets) != 1 {
+		t.Fatalf("expected one actuator-driven target, got=%d", len(targets))
+	}
+	if targets[0].neuronID != "n-g0-act" {
+		t.Fatalf("expected actuator-linked neuron target, got=%s", targets[0].neuronID)
+	}
+	if targets[0].sourceKind != tuningElementActuator || targets[0].sourceID != "a-current" {
+		t.Fatalf("expected actuator source metadata, got kind=%s id=%s", targets[0].sourceKind, targets[0].sourceID)
+	}
+	if math.Abs(targets[0].spread-math.Pi) > 1e-9 {
+		t.Fatalf("expected age-0 spread=pi from current actuator, got=%f", targets[0].spread)
+	}
+}

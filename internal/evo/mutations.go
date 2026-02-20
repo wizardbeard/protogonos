@@ -210,6 +210,9 @@ func (o *MutateWeights) Apply(ctx context.Context, genome model.Genome) (model.G
 			changed++
 		}
 		touchNeuronGeneration(mutated.Neurons, neuronID, currentGeneration)
+		if target.sourceKind == tuningElementActuator {
+			touchActuatorGeneration(&mutated, target.sourceID, currentGeneration)
+		}
 	}
 
 	if changed == 0 {
@@ -1823,6 +1826,7 @@ func (o *AddRandomActuator) Apply(_ context.Context, genome model.Genome) (model
 	mutated := cloneGenome(genome)
 	currentGeneration := currentGenomeGeneration(mutated)
 	mutated.ActuatorIDs = append(mutated.ActuatorIDs, choice)
+	touchActuatorGeneration(&mutated, choice, currentGeneration)
 	sourceNeuron := mutated.Neurons[o.Rand.Intn(len(mutated.Neurons))].ID
 	helperNeuronID := uniqueNeuronID(mutated, o.Rand)
 	mutated.Neurons = append(mutated.Neurons, model.Neuron{
@@ -1989,6 +1993,7 @@ func (o *RemoveRandomActuator) Apply(_ context.Context, genome model.Genome) (mo
 		filtered = append(filtered, id)
 	}
 	mutated.ActuatorIDs = filtered
+	deleteActuatorGeneration(&mutated, selected)
 	filteredLinks := mutated.NeuronActuatorLinks[:0]
 	for _, link := range mutated.NeuronActuatorLinks {
 		if link.ActuatorID == selected {
@@ -2882,9 +2887,22 @@ func normalizePlasticityRuleOptions(rules []string) []string {
 }
 
 type neuronSpreadTarget struct {
-	id     string
-	spread float64
+	id         string
+	spread     float64
+	sourceKind string
+	sourceID   string
 }
+
+type tuningElementCandidate struct {
+	kind       string
+	id         string
+	generation int
+}
+
+const (
+	tuningElementNeuron   = "neuron"
+	tuningElementActuator = "actuator"
+)
 
 func selectedNeuronSpreadsForMutateWeights(
 	genome model.Genome,
@@ -2904,25 +2922,16 @@ func selectedNeuronSpreadsForMutateWeights(
 
 	mode := tuning.NormalizeCandidateSelectionName(genome.Strategy.TuningSelection)
 	currentGeneration := currentGenomeGeneration(genome)
-	selected := neuronPoolForTuningMode(genome.Neurons, mode, currentGeneration, rng)
-	if len(selected) == 0 {
-		selected = append(selected, genome.Neurons[0])
-	}
-
-	targets := make([]neuronSpreadTarget, 0, len(selected))
-	for _, neuron := range selected {
-		age := currentGeneration - effectiveNeuronGeneration(neuron, currentGeneration)
-		if age < 0 {
-			age = 0
-		}
-		spread := baseSpread * math.Pow(annealing, float64(age))
-		if spread <= 0 {
-			spread = baseSpread
-		}
-		targets = append(targets, neuronSpreadTarget{
-			id:     neuron.ID,
-			spread: spread,
-		})
+	candidates := tuningElementsForMutateWeights(genome, currentGeneration)
+	selected := filterTuningElementsByMode(candidates, mode, currentGeneration, rng)
+	targets := neuronSpreadTargetsFromElements(genome, selected, currentGeneration, baseSpread, annealing)
+	if len(targets) == 0 {
+		targets = []neuronSpreadTarget{{
+			id:         genome.Neurons[0].ID,
+			spread:     baseSpread,
+			sourceKind: tuningElementNeuron,
+			sourceID:   genome.Neurons[0].ID,
+		}}
 	}
 	if isRandomTuningSelectionMode(mode) {
 		return randomNeuronSpreadSubset(targets, rng)
@@ -2963,13 +2972,13 @@ func nonRandomTuningSelectionMode(mode string) string {
 	}
 }
 
-func neuronPoolForTuningMode(
-	neurons []model.Neuron,
+func filterTuningElementsByMode(
+	candidates []tuningElementCandidate,
 	mode string,
 	currentGeneration int,
 	rng *rand.Rand,
-) []model.Neuron {
-	if len(neurons) == 0 {
+) []tuningElementCandidate {
+	if len(candidates) == 0 {
 		return nil
 	}
 	baseMode := nonRandomTuningSelectionMode(mode)
@@ -2979,30 +2988,135 @@ func neuronPoolForTuningMode(
 		if u <= 0 {
 			u = math.SmallestNonzeroFloat64
 		}
-		return filterNeuronsByAge(neurons, currentGeneration, math.Sqrt(1/u))
+		return filterTuningElementsByAge(candidates, currentGeneration, math.Sqrt(1/u))
 	case tuning.CandidateSelectActive, tuning.CandidateSelectRecent:
-		return filterNeuronsByAge(neurons, currentGeneration, 3)
+		return filterTuningElementsByAge(candidates, currentGeneration, 3)
 	case tuning.CandidateSelectCurrent, tuning.CandidateSelectLastGen:
-		return filterNeuronsByAge(neurons, currentGeneration, 0)
+		return filterTuningElementsByAge(candidates, currentGeneration, 0)
 	case tuning.CandidateSelectAll, tuning.CandidateSelectBestSoFar, tuning.CandidateSelectOriginal:
-		return append([]model.Neuron(nil), neurons...)
+		return append([]tuningElementCandidate(nil), candidates...)
 	default:
-		return append([]model.Neuron(nil), neurons...)
+		return append([]tuningElementCandidate(nil), candidates...)
 	}
 }
 
-func filterNeuronsByAge(neurons []model.Neuron, currentGeneration int, maxAge float64) []model.Neuron {
-	filtered := make([]model.Neuron, 0, len(neurons))
-	for _, neuron := range neurons {
-		age := currentGeneration - effectiveNeuronGeneration(neuron, currentGeneration)
+func filterTuningElementsByAge(candidates []tuningElementCandidate, currentGeneration int, maxAge float64) []tuningElementCandidate {
+	filtered := make([]tuningElementCandidate, 0, len(candidates))
+	for _, candidate := range candidates {
+		age := currentGeneration - candidate.generation
 		if age < 0 {
 			age = 0
 		}
 		if float64(age) <= maxAge {
-			filtered = append(filtered, neuron)
+			filtered = append(filtered, candidate)
 		}
 	}
 	return filtered
+}
+
+func tuningElementsForMutateWeights(genome model.Genome, currentGeneration int) []tuningElementCandidate {
+	out := make([]tuningElementCandidate, 0, len(genome.Neurons)+len(genome.ActuatorIDs))
+	for _, neuron := range genome.Neurons {
+		out = append(out, tuningElementCandidate{
+			kind:       tuningElementNeuron,
+			id:         neuron.ID,
+			generation: effectiveNeuronGeneration(neuron, currentGeneration),
+		})
+	}
+	for _, actuatorID := range uniqueStrings(genome.ActuatorIDs) {
+		if actuatorID == "" {
+			continue
+		}
+		out = append(out, tuningElementCandidate{
+			kind:       tuningElementActuator,
+			id:         actuatorID,
+			generation: effectiveActuatorGeneration(genome, actuatorID, currentGeneration),
+		})
+	}
+	return out
+}
+
+func neuronSpreadTargetsFromElements(
+	genome model.Genome,
+	selected []tuningElementCandidate,
+	currentGeneration int,
+	baseSpread float64,
+	annealing float64,
+) []neuronSpreadTarget {
+	type spreadState struct {
+		spread     float64
+		sourceKind string
+		sourceID   string
+	}
+	ordered := make([]string, 0, len(selected))
+	byNeuronID := make(map[string]spreadState, len(selected))
+	for _, candidate := range selected {
+		age := currentGeneration - candidate.generation
+		if age < 0 {
+			age = 0
+		}
+		spread := baseSpread * math.Pow(annealing, float64(age))
+		if spread <= 0 {
+			spread = baseSpread
+		}
+		neuronIDs := resolveNeuronTargetsForTuningElement(genome, candidate)
+		for _, neuronID := range neuronIDs {
+			if neuronID == "" || !hasNeuron(genome, neuronID) {
+				continue
+			}
+			prev, exists := byNeuronID[neuronID]
+			if !exists {
+				ordered = append(ordered, neuronID)
+				byNeuronID[neuronID] = spreadState{
+					spread:     spread,
+					sourceKind: candidate.kind,
+					sourceID:   candidate.id,
+				}
+				continue
+			}
+			if spread > prev.spread {
+				byNeuronID[neuronID] = spreadState{
+					spread:     spread,
+					sourceKind: candidate.kind,
+					sourceID:   candidate.id,
+				}
+			}
+		}
+	}
+	targets := make([]neuronSpreadTarget, 0, len(ordered))
+	for _, neuronID := range ordered {
+		state := byNeuronID[neuronID]
+		targets = append(targets, neuronSpreadTarget{
+			id:         neuronID,
+			spread:     state.spread,
+			sourceKind: state.sourceKind,
+			sourceID:   state.sourceID,
+		})
+	}
+	return targets
+}
+
+func resolveNeuronTargetsForTuningElement(genome model.Genome, candidate tuningElementCandidate) []string {
+	switch candidate.kind {
+	case tuningElementNeuron:
+		return []string{candidate.id}
+	case tuningElementActuator:
+		out := make([]string, 0, len(genome.NeuronActuatorLinks))
+		seen := make(map[string]struct{}, len(genome.NeuronActuatorLinks))
+		for _, link := range genome.NeuronActuatorLinks {
+			if link.ActuatorID != candidate.id {
+				continue
+			}
+			if _, ok := seen[link.NeuronID]; ok {
+				continue
+			}
+			seen[link.NeuronID] = struct{}{}
+			out = append(out, link.NeuronID)
+		}
+		return out
+	default:
+		return nil
+	}
 }
 
 func currentGenomeGeneration(genome model.Genome) int {
@@ -3013,6 +3127,16 @@ func currentGenomeGeneration(genome model.Genome) int {
 	for _, neuron := range genome.Neurons {
 		if neuron.Generation > maxGen {
 			maxGen = neuron.Generation
+		}
+	}
+	for _, actuatorGen := range genome.ActuatorGenerations {
+		if actuatorGen > maxGen {
+			maxGen = actuatorGen
+		}
+	}
+	for _, actuatorID := range genome.ActuatorIDs {
+		if gen, ok := inferGenerationFromTaggedID(actuatorID); ok && gen > maxGen {
+			maxGen = gen
 		}
 	}
 	return maxGen
@@ -3026,6 +3150,18 @@ func effectiveNeuronGeneration(neuron model.Neuron, fallback int) int {
 		if gen, ok := inferGenerationFromTaggedID(neuron.ID); ok {
 			return gen
 		}
+	}
+	return fallback
+}
+
+func effectiveActuatorGeneration(genome model.Genome, actuatorID string, fallback int) int {
+	if genome.ActuatorGenerations != nil {
+		if generation, ok := genome.ActuatorGenerations[actuatorID]; ok && generation > 0 {
+			return generation
+		}
+	}
+	if generation, ok := inferGenerationFromTaggedID(actuatorID); ok {
+		return generation
 	}
 	return fallback
 }
@@ -3076,6 +3212,29 @@ func touchNeuronGeneration(neurons []model.Neuron, neuronID string, generation i
 		}
 		neurons[i].Generation = generation
 		return
+	}
+}
+
+func touchActuatorGeneration(genome *model.Genome, actuatorID string, generation int) {
+	if genome == nil || actuatorID == "" {
+		return
+	}
+	if generation < 0 {
+		generation = 0
+	}
+	if genome.ActuatorGenerations == nil {
+		genome.ActuatorGenerations = map[string]int{}
+	}
+	genome.ActuatorGenerations[actuatorID] = generation
+}
+
+func deleteActuatorGeneration(genome *model.Genome, actuatorID string) {
+	if genome == nil || genome.ActuatorGenerations == nil || actuatorID == "" {
+		return
+	}
+	delete(genome.ActuatorGenerations, actuatorID)
+	if len(genome.ActuatorGenerations) == 0 {
+		genome.ActuatorGenerations = nil
 	}
 }
 
