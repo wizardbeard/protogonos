@@ -382,6 +382,67 @@ func TestApplyPlasticitySelfModulationV6UsesDynamicABCDFromSynapseParameters(t *
 	}
 }
 
+func TestApplyPlasticitySelfModulationUsesBiasParametersForDynamicTerms(t *testing.T) {
+	g := model.Genome{
+		Neurons: []model.Neuron{
+			{ID: "h", PlasticityBiasParams: []float64{0.5}},
+		},
+		Synapses: []model.Synapse{
+			{ID: "s1", From: "in", To: "h", Weight: 1.0, Enabled: true},
+		},
+	}
+	values := map[string]float64{
+		"in": 2.0,
+		"h":  0.25,
+	}
+	cfg := model.PlasticityConfig{
+		Rule:   PlasticitySelfModulationV1,
+		Rate:   1.0,
+		CoeffA: 1.0,
+	}
+	if err := ApplyPlasticity(&g, values, cfg); err != nil {
+		t.Fatalf("apply self_modulationV1 with bias params: %v", err)
+	}
+
+	h := math.Tanh(0.5)
+	want := 1.0 + h*(values["in"]*values["h"])
+	if math.Abs(g.Synapses[0].Weight-want) > 1e-12 {
+		t.Fatalf("unexpected self_modulationV1 bias-parameter weight: got=%f want=%f", g.Synapses[0].Weight, want)
+	}
+}
+
+func TestApplyPlasticitySelfModulationV6UsesBiasParametersForABCD(t *testing.T) {
+	g := model.Genome{
+		Neurons: []model.Neuron{
+			{ID: "h", PlasticityBiasParams: []float64{0.4, 0.3, -0.2, 0.1, 0.05}},
+		},
+		Synapses: []model.Synapse{
+			{ID: "s1", From: "in", To: "h", Weight: 0.0, Enabled: true},
+		},
+	}
+	values := map[string]float64{
+		"in": 1.5,
+		"h":  0.2,
+	}
+	cfg := model.PlasticityConfig{
+		Rule: PlasticitySelfModulationV6,
+		Rate: 1.0,
+	}
+	if err := ApplyPlasticity(&g, values, cfg); err != nil {
+		t.Fatalf("apply self_modulationV6 with bias params: %v", err)
+	}
+
+	h := math.Tanh(0.4)
+	a := math.Tanh(0.3)
+	b := math.Tanh(-0.2)
+	c := math.Tanh(0.1)
+	d := math.Tanh(0.05)
+	want := h * (a*values["in"]*values["h"] + b*values["in"] + c*values["h"] + d)
+	if math.Abs(g.Synapses[0].Weight-want) > 1e-12 {
+		t.Fatalf("unexpected self_modulationV6 bias-parameter weight: got=%f want=%f", g.Synapses[0].Weight, want)
+	}
+}
+
 func TestNormalizePlasticityRuleName(t *testing.T) {
 	cases := map[string]string{
 		"":                   "none",

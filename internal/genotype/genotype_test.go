@@ -11,7 +11,7 @@ import (
 func TestCloneGenomeDeepCopy(t *testing.T) {
 	in := model.Genome{
 		ID:          "g1",
-		Neurons:     []model.Neuron{{ID: "n1", Activation: "identity"}},
+		Neurons:     []model.Neuron{{ID: "n1", Activation: "identity", PlasticityBiasParams: []float64{0.2, -0.3}}},
 		Synapses:    []model.Synapse{{ID: "s1", From: "n1", To: "n1", Weight: 1, Enabled: true, PlasticityParams: []float64{0.3, -0.1}}},
 		SensorIDs:   []string{"s"},
 		ActuatorIDs: []string{"a"},
@@ -27,12 +27,16 @@ func TestCloneGenomeDeepCopy(t *testing.T) {
 
 	out := CloneGenome(in)
 	out.Neurons[0].Activation = "relu"
+	out.Neurons[0].PlasticityBiasParams[0] = 7
 	out.Synapses[0].PlasticityParams[0] = 9
 	out.ActuatorTunables["a"] = 0.75
 	out.Substrate.Parameters["scale"] = 2
 
 	if in.Neurons[0].Activation != "identity" {
 		t.Fatal("expected original neuron slice to remain unchanged")
+	}
+	if in.Neurons[0].PlasticityBiasParams[0] != 0.2 {
+		t.Fatal("expected original neuron plasticity bias parameters to remain unchanged")
 	}
 	if in.Substrate.Parameters["scale"] != 1 {
 		t.Fatal("expected original substrate map to remain unchanged")

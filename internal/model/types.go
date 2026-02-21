@@ -61,17 +61,18 @@ type PlasticityConfig struct {
 }
 
 type Neuron struct {
-	ID             string  `json:"id"`
-	Generation     int     `json:"generation,omitempty"`
-	Activation     string  `json:"activation"`
-	Aggregator     string  `json:"aggregator,omitempty"`
-	PlasticityRule string  `json:"plasticity_rule,omitempty"`
-	PlasticityRate float64 `json:"plasticity_rate,omitempty"`
-	PlasticityA    float64 `json:"plasticity_a,omitempty"`
-	PlasticityB    float64 `json:"plasticity_b,omitempty"`
-	PlasticityC    float64 `json:"plasticity_c,omitempty"`
-	PlasticityD    float64 `json:"plasticity_d,omitempty"`
-	Bias           float64 `json:"bias"`
+	ID                   string    `json:"id"`
+	Generation           int       `json:"generation,omitempty"`
+	Activation           string    `json:"activation"`
+	Aggregator           string    `json:"aggregator,omitempty"`
+	PlasticityRule       string    `json:"plasticity_rule,omitempty"`
+	PlasticityRate       float64   `json:"plasticity_rate,omitempty"`
+	PlasticityA          float64   `json:"plasticity_a,omitempty"`
+	PlasticityB          float64   `json:"plasticity_b,omitempty"`
+	PlasticityC          float64   `json:"plasticity_c,omitempty"`
+	PlasticityD          float64   `json:"plasticity_d,omitempty"`
+	PlasticityBiasParams []float64 `json:"plasticity_bias_params,omitempty"`
+	Bias                 float64   `json:"bias"`
 }
 
 type Synapse struct {

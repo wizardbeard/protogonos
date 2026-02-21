@@ -5,6 +5,12 @@ import "protogonos/internal/model"
 func CloneGenome(g model.Genome) model.Genome {
 	out := g
 	out.Neurons = append([]model.Neuron(nil), g.Neurons...)
+	for i := range out.Neurons {
+		if len(out.Neurons[i].PlasticityBiasParams) == 0 {
+			continue
+		}
+		out.Neurons[i].PlasticityBiasParams = append([]float64(nil), out.Neurons[i].PlasticityBiasParams...)
+	}
 	out.Synapses = append([]model.Synapse(nil), g.Synapses...)
 	for i := range out.Synapses {
 		if len(out.Synapses[i].PlasticityParams) == 0 {
