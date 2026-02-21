@@ -13,6 +13,7 @@ import (
 
 	protoio "protogonos/internal/io"
 	"protogonos/internal/model"
+	"protogonos/internal/nn"
 	"protogonos/internal/storage"
 	"protogonos/internal/substrate"
 	"protogonos/internal/tuning"
@@ -2508,6 +2509,55 @@ func TestMutatePlasticityParametersMutatesNeuronRate(t *testing.T) {
 	}
 	if !changed {
 		t.Fatalf("expected one neuron plasticity rate change, before=%+v after=%+v", genome.Neurons, mutated.Neurons)
+	}
+}
+
+func TestMutatePlasticityParametersMutatesSelfModulationCoefficients(t *testing.T) {
+	genome := model.Genome{
+		Neurons: []model.Neuron{
+			{
+				ID:             "n0",
+				Activation:     "identity",
+				Aggregator:     "dot_product",
+				PlasticityRule: nn.PlasticitySelfModulationV3,
+				PlasticityRate: 0.2,
+				PlasticityA:    0.1,
+				PlasticityB:    0.2,
+				PlasticityC:    -0.1,
+				PlasticityD:    0.0,
+			},
+		},
+		Synapses: []model.Synapse{
+			{ID: "s0", From: "n0", To: "n0", Weight: 0.5, Enabled: true, Recurrent: true},
+		},
+	}
+
+	op := &MutatePlasticityParameters{
+		Rand:     rand.New(rand.NewSource(2501)),
+		MaxDelta: 0.1,
+	}
+	mutated, err := op.Apply(context.Background(), genome)
+	if err != nil {
+		t.Fatalf("apply failed: %v", err)
+	}
+	if mutated.Neurons[0].PlasticityRate != genome.Neurons[0].PlasticityRate {
+		t.Fatalf("expected self-modulation mutation to leave rate untouched, before=%f after=%f", genome.Neurons[0].PlasticityRate, mutated.Neurons[0].PlasticityRate)
+	}
+	changed := 0
+	if mutated.Neurons[0].PlasticityA != genome.Neurons[0].PlasticityA {
+		changed++
+	}
+	if mutated.Neurons[0].PlasticityB != genome.Neurons[0].PlasticityB {
+		changed++
+	}
+	if mutated.Neurons[0].PlasticityC != genome.Neurons[0].PlasticityC {
+		changed++
+	}
+	if mutated.Neurons[0].PlasticityD != genome.Neurons[0].PlasticityD {
+		changed++
+	}
+	if changed != 1 {
+		t.Fatalf("expected exactly one self-modulation coefficient change, before=%+v after=%+v", genome.Neurons[0], mutated.Neurons[0])
 	}
 }
 

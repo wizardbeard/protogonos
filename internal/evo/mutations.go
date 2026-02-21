@@ -1266,9 +1266,22 @@ func (o *MutatePlasticityParameters) Apply(_ context.Context, genome model.Genom
 	}
 	idx := o.Rand.Intn(len(genome.Neurons))
 	mutated := cloneGenome(genome)
-	baseRate := neuronPlasticityRate(genome, idx)
 	delta := (o.Rand.Float64()*2 - 1) * maxDelta
-	mutated.Neurons[idx].PlasticityRate = math.Max(0, baseRate+delta)
+	if plasticityRuleUsesGeneralizedCoefficients(neuronPlasticityRule(genome, idx)) {
+		switch o.Rand.Intn(4) {
+		case 0:
+			mutated.Neurons[idx].PlasticityA = neuronPlasticityA(genome, idx) + delta
+		case 1:
+			mutated.Neurons[idx].PlasticityB = neuronPlasticityB(genome, idx) + delta
+		case 2:
+			mutated.Neurons[idx].PlasticityC = neuronPlasticityC(genome, idx) + delta
+		default:
+			mutated.Neurons[idx].PlasticityD = neuronPlasticityD(genome, idx) + delta
+		}
+	} else {
+		baseRate := neuronPlasticityRate(genome, idx)
+		mutated.Neurons[idx].PlasticityRate = math.Max(0, baseRate+delta)
+	}
 	mutated.Neurons[idx].Generation = currentGenomeGeneration(mutated)
 	return mutated, nil
 }
@@ -2868,6 +2881,61 @@ func neuronPlasticityRate(genome model.Genome, idx int) float64 {
 		return genome.Plasticity.Rate
 	}
 	return 0.1
+}
+
+func neuronPlasticityA(genome model.Genome, idx int) float64 {
+	if idx >= 0 && idx < len(genome.Neurons) && genome.Neurons[idx].PlasticityA != 0 {
+		return genome.Neurons[idx].PlasticityA
+	}
+	if genome.Plasticity != nil && genome.Plasticity.CoeffA != 0 {
+		return genome.Plasticity.CoeffA
+	}
+	return 0
+}
+
+func neuronPlasticityB(genome model.Genome, idx int) float64 {
+	if idx >= 0 && idx < len(genome.Neurons) && genome.Neurons[idx].PlasticityB != 0 {
+		return genome.Neurons[idx].PlasticityB
+	}
+	if genome.Plasticity != nil && genome.Plasticity.CoeffB != 0 {
+		return genome.Plasticity.CoeffB
+	}
+	return 0
+}
+
+func neuronPlasticityC(genome model.Genome, idx int) float64 {
+	if idx >= 0 && idx < len(genome.Neurons) && genome.Neurons[idx].PlasticityC != 0 {
+		return genome.Neurons[idx].PlasticityC
+	}
+	if genome.Plasticity != nil && genome.Plasticity.CoeffC != 0 {
+		return genome.Plasticity.CoeffC
+	}
+	return 0
+}
+
+func neuronPlasticityD(genome model.Genome, idx int) float64 {
+	if idx >= 0 && idx < len(genome.Neurons) && genome.Neurons[idx].PlasticityD != 0 {
+		return genome.Neurons[idx].PlasticityD
+	}
+	if genome.Plasticity != nil && genome.Plasticity.CoeffD != 0 {
+		return genome.Plasticity.CoeffD
+	}
+	return 0
+}
+
+func plasticityRuleUsesGeneralizedCoefficients(rule string) bool {
+	switch nn.NormalizePlasticityRuleName(rule) {
+	case nn.PlasticitySelfModulationV1,
+		nn.PlasticitySelfModulationV2,
+		nn.PlasticitySelfModulationV3,
+		nn.PlasticitySelfModulationV4,
+		nn.PlasticitySelfModulationV5,
+		nn.PlasticitySelfModulationV6,
+		nn.PlasticityNeuromodulation:
+		return true
+	default:
+		return false
+	}
 }
 
 func normalizeNonEmptyStrings(values []string) []string {
