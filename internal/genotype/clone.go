@@ -8,6 +8,12 @@ func CloneGenome(g model.Genome) model.Genome {
 	out.Synapses = append([]model.Synapse(nil), g.Synapses...)
 	out.SensorIDs = append([]string(nil), g.SensorIDs...)
 	out.ActuatorIDs = append([]string(nil), g.ActuatorIDs...)
+	if g.ActuatorTunables != nil {
+		out.ActuatorTunables = make(map[string]float64, len(g.ActuatorTunables))
+		for k, v := range g.ActuatorTunables {
+			out.ActuatorTunables[k] = v
+		}
+	}
 	if g.ActuatorGenerations != nil {
 		out.ActuatorGenerations = make(map[string]int, len(g.ActuatorGenerations))
 		for k, v := range g.ActuatorGenerations {

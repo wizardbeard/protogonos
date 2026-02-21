@@ -140,7 +140,13 @@ func (c *Cortex) execute(ctx context.Context, inputs []float64) ([]float64, erro
 			if !ok {
 				return nil, fmt.Errorf("actuator not registered: %s", actuatorID)
 			}
-			if err := actuator.Write(ctx, chunks[i]); err != nil {
+			chunk := chunks[i]
+			if c.genome.ActuatorTunables != nil {
+				if offset, ok := c.genome.ActuatorTunables[actuatorID]; ok && offset != 0 {
+					chunk = applyActuatorOffset(chunk, offset)
+				}
+			}
+			if err := actuator.Write(ctx, chunk); err != nil {
 				return nil, err
 			}
 		}
@@ -172,4 +178,15 @@ func splitOutputsForActuators(outputs []float64, actuatorCount int) ([][]float64
 		chunks = append(chunks, append([]float64(nil), outputs[start:end]...))
 	}
 	return chunks, nil
+}
+
+func applyActuatorOffset(values []float64, offset float64) []float64 {
+	if offset == 0 {
+		return values
+	}
+	out := append([]float64(nil), values...)
+	for i := range out {
+		out[i] += offset
+	}
+	return out
 }

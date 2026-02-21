@@ -513,7 +513,7 @@ func TestExoselfPerturbCandidateCurrentModeTargetsCurrentGeneration(t *testing.T
 	}
 }
 
-func TestSelectedNeuronPerturbTargetsIncludesActuatorDrivenTargets(t *testing.T) {
+func TestSelectedNeuronPerturbTargetsIncludesDirectActuatorTargets(t *testing.T) {
 	tuner := &Exoself{
 		Rand:               rand.New(rand.NewSource(53)),
 		CandidateSelection: CandidateSelectCurrent,
@@ -528,23 +528,47 @@ func TestSelectedNeuronPerturbTargetsIncludesActuatorDrivenTargets(t *testing.T)
 		ActuatorGenerations: map[string]int{
 			"a-current": 5,
 		},
-		NeuronActuatorLinks: []model.NeuronActuatorLink{
-			{NeuronID: "n-g0-act", ActuatorID: "a-current"},
-		},
 	}
 
 	targets := tuner.selectedNeuronPerturbTargets(genome, 1.0, 0.5)
 	if len(targets) != 1 {
-		t.Fatalf("expected one actuator-driven target, got=%d", len(targets))
+		t.Fatalf("expected one actuator target, got=%d", len(targets))
 	}
-	if targets[0].neuronID != "n-g0-act" {
-		t.Fatalf("expected actuator-linked neuron target, got=%s", targets[0].neuronID)
+	if targets[0].neuronID != "" {
+		t.Fatalf("expected direct actuator target without neuron projection, got=%s", targets[0].neuronID)
 	}
 	if targets[0].sourceKind != tuningElementActuator || targets[0].sourceID != "a-current" {
 		t.Fatalf("expected actuator source metadata, got kind=%s id=%s", targets[0].sourceKind, targets[0].sourceID)
 	}
 	if math.Abs(targets[0].spread-math.Pi) > 1e-9 {
 		t.Fatalf("expected age-0 spread=pi from current actuator, got=%f", targets[0].spread)
+	}
+}
+
+func TestExoselfPerturbCandidateMutatesActuatorTunablesForActuatorTargets(t *testing.T) {
+	tuner := &Exoself{
+		Rand:               rand.New(rand.NewSource(67)),
+		Steps:              4,
+		StepSize:           0.2,
+		CandidateSelection: CandidateSelectCurrent,
+	}
+	base := model.Genome{
+		ID:          "xor-g5-i0",
+		ActuatorIDs: []string{"a-current"},
+		ActuatorGenerations: map[string]int{
+			"a-current": 5,
+		},
+	}
+
+	mutated, err := tuner.perturbCandidate(context.Background(), base, 1.0, 0.5)
+	if err != nil {
+		t.Fatalf("perturbCandidate: %v", err)
+	}
+	if mutated.ActuatorTunables == nil {
+		t.Fatal("expected actuator tunables to be created")
+	}
+	if mutated.ActuatorTunables["a-current"] == 0 {
+		t.Fatal("expected actuator-local tunable to be perturbed")
 	}
 }
 

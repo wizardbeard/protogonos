@@ -241,6 +241,44 @@ func TestCortexTickMultipleActuatorsReceiveEvenChunks(t *testing.T) {
 	}
 }
 
+func TestCortexTickAppliesActuatorTunablesBeforeWrite(t *testing.T) {
+	genome := model.Genome{
+		SensorIDs:   []string{"s1"},
+		ActuatorIDs: []string{"a1"},
+		ActuatorTunables: map[string]float64{
+			"a1": 0.25,
+		},
+		Neurons: []model.Neuron{
+			{ID: "i1", Activation: "identity"},
+			{ID: "o1", Activation: "identity"},
+		},
+		Synapses: []model.Synapse{
+			{From: "i1", To: "o1", Weight: 1.0, Enabled: true},
+		},
+	}
+	sensors := map[string]protoio.Sensor{
+		"s1": testSensor{values: []float64{0.5}},
+	}
+	act := &testActuator{}
+	actuators := map[string]protoio.Actuator{"a1": act}
+
+	c, err := NewCortex("agent-act-tunable", genome, sensors, actuators, []string{"i1"}, []string{"o1"}, nil)
+	if err != nil {
+		t.Fatalf("new cortex: %v", err)
+	}
+
+	out, err := c.Tick(context.Background())
+	if err != nil {
+		t.Fatalf("tick: %v", err)
+	}
+	if len(out) != 1 || out[0] != 0.5 {
+		t.Fatalf("unexpected raw output vector: %v", out)
+	}
+	if len(act.last) != 1 || act.last[0] != 0.75 {
+		t.Fatalf("expected actuator-local offset to be applied, got=%v", act.last)
+	}
+}
+
 func TestCortexTickRejectsUnevenActuatorOutputShape(t *testing.T) {
 	genome := model.Genome{
 		SensorIDs:   []string{"s1", "s2", "s3"},

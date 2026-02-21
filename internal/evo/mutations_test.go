@@ -551,7 +551,7 @@ func TestSelectedNeuronSpreadsForMutateWeightsActiveUsesAgeAnnealing(t *testing.
 	}
 }
 
-func TestSelectedNeuronSpreadsForMutateWeightsIncludesActuatorDrivenTargets(t *testing.T) {
+func TestSelectedNeuronSpreadsForMutateWeightsIncludesDirectActuatorTargets(t *testing.T) {
 	genome := model.Genome{
 		ID: "xor-g5-i0",
 		Neurons: []model.Neuron{
@@ -562,9 +562,6 @@ func TestSelectedNeuronSpreadsForMutateWeightsIncludesActuatorDrivenTargets(t *t
 		ActuatorGenerations: map[string]int{
 			"a-current": 5,
 		},
-		NeuronActuatorLinks: []model.NeuronActuatorLink{
-			{NeuronID: "n-g0-act", ActuatorID: "a-current"},
-		},
 		Strategy: &model.StrategyConfig{
 			TuningSelection: tuning.CandidateSelectCurrent,
 			AnnealingFactor: 0.5,
@@ -573,16 +570,45 @@ func TestSelectedNeuronSpreadsForMutateWeightsIncludesActuatorDrivenTargets(t *t
 
 	got := selectedNeuronSpreadsForMutateWeights(genome, rand.New(rand.NewSource(83)), 1.0, 0.5)
 	if len(got) != 1 {
-		t.Fatalf("expected one actuator-driven target, got=%d", len(got))
+		t.Fatalf("expected one actuator target, got=%d", len(got))
 	}
-	if got[0].id != "n-g0-act" {
-		t.Fatalf("expected actuator-linked neuron target, got=%s", got[0].id)
+	if got[0].id != "a-current" {
+		t.Fatalf("expected direct actuator target id, got=%s", got[0].id)
 	}
 	if got[0].sourceKind != tuningElementActuator || got[0].sourceID != "a-current" {
 		t.Fatalf("expected actuator source metadata, got kind=%s id=%s", got[0].sourceKind, got[0].sourceID)
 	}
 	if math.Abs(got[0].spread-1.0) > 1e-9 {
 		t.Fatalf("expected age-0 spread from current actuator, got=%f", got[0].spread)
+	}
+}
+
+func TestMutateWeightsPerturbsActuatorTunablesForActuatorTargets(t *testing.T) {
+	genome := model.Genome{
+		ID:          "xor-g5-i0",
+		ActuatorIDs: []string{"a-current"},
+		ActuatorGenerations: map[string]int{
+			"a-current": 5,
+		},
+		Strategy: &model.StrategyConfig{
+			TuningSelection: tuning.CandidateSelectCurrent,
+			AnnealingFactor: 0.5,
+		},
+	}
+	op := &MutateWeights{
+		Rand:     rand.New(rand.NewSource(97)),
+		MaxDelta: 0.5,
+	}
+
+	mutated, err := op.Apply(context.Background(), genome)
+	if err != nil {
+		t.Fatalf("apply failed: %v", err)
+	}
+	if mutated.ActuatorTunables == nil {
+		t.Fatal("expected actuator tunables to be initialized")
+	}
+	if mutated.ActuatorTunables["a-current"] == 0 {
+		t.Fatal("expected actuator-local tunable to be perturbed")
 	}
 }
 
