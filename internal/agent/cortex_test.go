@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"math"
+	"math/rand"
 	"testing"
 
 	protoio "protogonos/internal/io"
@@ -525,5 +526,90 @@ func TestCortexTerminateBlocksFurtherExecution(t *testing.T) {
 	}
 	if err := c.Reactivate(); !errors.Is(err, ErrCortexTerminated) {
 		t.Fatalf("expected ErrCortexTerminated on Reactivate, got %v", err)
+	}
+}
+
+func TestCortexBackupRestoreWeights(t *testing.T) {
+	genome := model.Genome{
+		Neurons: []model.Neuron{
+			{ID: "i", Activation: "identity"},
+			{ID: "o", Activation: "identity"},
+		},
+		Synapses: []model.Synapse{
+			{ID: "s", From: "i", To: "o", Weight: 0.2, Enabled: true},
+		},
+	}
+	c, err := NewCortex("agent-backup", genome, nil, nil, []string{"i"}, []string{"o"}, nil)
+	if err != nil {
+		t.Fatalf("new cortex: %v", err)
+	}
+	c.BackupWeights()
+	if err := c.PerturbWeights(rand.New(rand.NewSource(151)), 2.0); err != nil {
+		t.Fatalf("perturb weights: %v", err)
+	}
+	if c.genome.Synapses[0].Weight == 0.2 {
+		t.Fatal("expected perturbed synapse weight to differ from backup")
+	}
+	if err := c.RestoreWeights(); err != nil {
+		t.Fatalf("restore weights: %v", err)
+	}
+	if c.genome.Synapses[0].Weight != 0.2 {
+		t.Fatalf("expected restored synapse weight 0.2, got=%f", c.genome.Synapses[0].Weight)
+	}
+}
+
+func TestCortexRestoreWeightsWithoutBackupErrors(t *testing.T) {
+	genome := model.Genome{
+		Neurons: []model.Neuron{
+			{ID: "i", Activation: "identity"},
+			{ID: "o", Activation: "identity"},
+		},
+		Synapses: []model.Synapse{
+			{ID: "s", From: "i", To: "o", Weight: 0.2, Enabled: true},
+		},
+	}
+	c, err := NewCortex("agent-no-backup", genome, nil, nil, []string{"i"}, []string{"o"}, nil)
+	if err != nil {
+		t.Fatalf("new cortex: %v", err)
+	}
+	if err := c.RestoreWeights(); !errors.Is(err, ErrNoWeightBackup) {
+		t.Fatalf("expected ErrNoWeightBackup, got %v", err)
+	}
+}
+
+func TestCortexPerturbWeightsSaturatesToReferenceLimit(t *testing.T) {
+	genome := model.Genome{
+		Neurons: []model.Neuron{
+			{ID: "i", Activation: "identity"},
+			{ID: "o", Activation: "identity"},
+		},
+		Synapses: []model.Synapse{
+			{ID: "s", From: "i", To: "o", Weight: math.Pi*10 - 0.01, Enabled: true},
+		},
+	}
+	c, err := NewCortex("agent-sat", genome, nil, nil, []string{"i"}, []string{"o"}, nil)
+	if err != nil {
+		t.Fatalf("new cortex: %v", err)
+	}
+	if err := c.PerturbWeights(rand.New(rand.NewSource(157)), 1000); err != nil {
+		t.Fatalf("perturb weights: %v", err)
+	}
+	if c.genome.Synapses[0].Weight > math.Pi*10 || c.genome.Synapses[0].Weight < -math.Pi*10 {
+		t.Fatalf("expected saturated synapse within +/-pi*10, got=%f", c.genome.Synapses[0].Weight)
+	}
+}
+
+func TestCortexPerturbWeightsNoSynapses(t *testing.T) {
+	genome := model.Genome{
+		Neurons: []model.Neuron{
+			{ID: "i", Activation: "identity"},
+		},
+	}
+	c, err := NewCortex("agent-nosyn", genome, nil, nil, []string{"i"}, []string{"i"}, nil)
+	if err != nil {
+		t.Fatalf("new cortex: %v", err)
+	}
+	if err := c.PerturbWeights(rand.New(rand.NewSource(163)), 1.0); !errors.Is(err, ErrNoSynapses) {
+		t.Fatalf("expected ErrNoSynapses, got %v", err)
 	}
 }

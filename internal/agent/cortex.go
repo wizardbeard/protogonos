@@ -4,9 +4,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math"
+	"math/rand"
 	"sync"
 	"time"
 
+	"protogonos/internal/genotype"
 	protoio "protogonos/internal/io"
 	"protogonos/internal/model"
 	"protogonos/internal/nn"
@@ -24,6 +27,8 @@ const (
 var (
 	ErrCortexInactive   = errors.New("cortex is inactive")
 	ErrCortexTerminated = errors.New("cortex is terminated")
+	ErrNoWeightBackup   = errors.New("no cortex weight backup available")
+	ErrNoSynapses       = errors.New("no synapses available for perturbation")
 )
 
 type EvaluationReport struct {
@@ -58,6 +63,7 @@ type Cortex struct {
 	nnState         *nn.ForwardState
 	mu              sync.Mutex
 	status          CortexStatus
+	weightBackup    *model.Genome
 }
 
 func NewCortex(
@@ -133,6 +139,71 @@ func (c *Cortex) Terminate() {
 	c.mu.Lock()
 	c.status = CortexStatusTerminated
 	c.mu.Unlock()
+}
+
+func (c *Cortex) BackupWeights() {
+	c.mu.Lock()
+	backup := genotype.CloneGenome(c.genome)
+	c.weightBackup = &backup
+	c.mu.Unlock()
+}
+
+func (c *Cortex) RestoreWeights() error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.weightBackup == nil {
+		return ErrNoWeightBackup
+	}
+	c.genome = genotype.CloneGenome(*c.weightBackup)
+	c.nnState = nn.NewForwardState()
+	return nil
+}
+
+func (c *Cortex) ClearWeightBackup() {
+	c.mu.Lock()
+	c.weightBackup = nil
+	c.mu.Unlock()
+}
+
+func (c *Cortex) PerturbWeights(rng *rand.Rand, spread float64) error {
+	if rng == nil {
+		return fmt.Errorf("random source is required")
+	}
+	if spread <= 0 {
+		return fmt.Errorf("spread must be > 0")
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if len(c.genome.Synapses) == 0 {
+		return ErrNoSynapses
+	}
+	enabled := make([]int, 0, len(c.genome.Synapses))
+	for i := range c.genome.Synapses {
+		if c.genome.Synapses[i].Enabled {
+			enabled = append(enabled, i)
+		}
+	}
+	if len(enabled) == 0 {
+		return ErrNoSynapses
+	}
+	mp := 1 / math.Sqrt(float64(len(enabled)))
+	changed := 0
+	for _, idx := range enabled {
+		if rng.Float64() >= mp {
+			continue
+		}
+		delta := (rng.Float64()*2 - 1) * spread
+		next := c.genome.Synapses[idx].Weight + delta
+		c.genome.Synapses[idx].Weight = saturateWeight(next)
+		changed++
+	}
+	if changed == 0 {
+		idx := enabled[rng.Intn(len(enabled))]
+		delta := (rng.Float64()*2 - 1) * spread
+		next := c.genome.Synapses[idx].Weight + delta
+		c.genome.Synapses[idx].Weight = saturateWeight(next)
+	}
+	return nil
 }
 
 func (c *Cortex) Tick(ctx context.Context) ([]float64, error) {
@@ -299,6 +370,17 @@ func applyActuatorOffset(values []float64, offset float64) []float64 {
 		out[i] += offset
 	}
 	return out
+}
+
+func saturateWeight(weight float64) float64 {
+	const limit = math.Pi * 10
+	if weight > limit {
+		return limit
+	}
+	if weight < -limit {
+		return -limit
+	}
+	return weight
 }
 
 func addFitnessVectors(acc, values []float64) []float64 {
