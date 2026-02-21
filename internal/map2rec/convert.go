@@ -14,6 +14,8 @@ func Convert(kind string, in map[string]any) (any, error) {
 		return ConvertCircuit(in), nil
 	case "layer_spec":
 		return ConvertLayerSpec(in), nil
+	case "neurode":
+		return ConvertNeurode(in), nil
 	case "sensor":
 		return ConvertSensor(in), nil
 	case "actuator":
@@ -352,6 +354,31 @@ func ConvertLayerSpec(in map[string]any) LayerSpecRecord {
 			if n, ok := asInt(val); ok {
 				out.Step = n
 			}
+		}
+	}
+	return out
+}
+
+func ConvertNeurode(in map[string]any) NeurodeRecord {
+	out := defaultNeurodeRecord()
+	for key, val := range in {
+		switch key {
+		case "id":
+			out.ID = val
+		case "weights":
+			out.Weights = val
+		case "i":
+			out.Input = val
+		case "af":
+			out.AF = val
+		case "bias":
+			out.Bias = val
+		case "parameters":
+			if xs, ok := asAnySlice(val); ok {
+				out.Parameters = xs
+			}
+		case "dot_product":
+			out.DotProduct = val
 		}
 	}
 	return out

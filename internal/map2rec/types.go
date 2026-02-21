@@ -107,6 +107,16 @@ type LayerSpecRecord struct {
 	Step           int
 }
 
+type NeurodeRecord struct {
+	ID         any
+	Weights    any
+	Input      any
+	AF         any
+	Bias       any
+	Parameters []any
+	DotProduct any
+}
+
 type SensorRecord struct {
 	ID           any
 	Name         string
@@ -511,6 +521,12 @@ func defaultCircuitRecord() CircuitRecord {
 
 func defaultLayerSpecRecord() LayerSpecRecord {
 	return LayerSpecRecord{}
+}
+
+func defaultNeurodeRecord() NeurodeRecord {
+	return NeurodeRecord{
+		Parameters: []any{},
+	}
 }
 
 func defaultSensorRecord() SensorRecord {

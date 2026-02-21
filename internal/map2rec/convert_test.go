@@ -225,6 +225,14 @@ func TestConvertDispatchesSensorAndActuatorKinds(t *testing.T) {
 	if layerSpec, ok := gotLayerSpec.(LayerSpecRecord); !ok || layerSpec.IVL != 4 {
 		t.Fatalf("unexpected layer_spec dispatch result: %#v", gotLayerSpec)
 	}
+
+	gotNeurode, err := Convert("neurode", map[string]any{"af": "tanh"})
+	if err != nil {
+		t.Fatalf("convert neurode: %v", err)
+	}
+	if neurode, ok := gotNeurode.(NeurodeRecord); !ok || neurode.AF != "tanh" {
+		t.Fatalf("unexpected neurode dispatch result: %#v", gotNeurode)
+	}
 }
 
 func TestConvertConstraintOverridesKnownFieldsAndIgnoresUnknown(t *testing.T) {
@@ -414,6 +422,32 @@ func TestConvertLayerSpecMalformedKnownFieldKeepsDefault(t *testing.T) {
 	out := ConvertLayerSpec(map[string]any{"ivl": "bad", "step": "bad"})
 	if out.IVL != 0 || out.Step != 0 {
 		t.Fatalf("expected default layer_spec ints on malformed values, got %+v", out)
+	}
+}
+
+func TestConvertNeurodeMapsFields(t *testing.T) {
+	in := map[string]any{
+		"id":          []any{1.0, 2.0},
+		"weights":     []any{0.1, 0.2},
+		"i":           []any{1.0, 0.5},
+		"af":          "gabor_2d",
+		"bias":        0.25,
+		"parameters":  []any{0.9, "shape"},
+		"dot_product": []any{0.01, 0.02},
+	}
+	out := ConvertNeurode(in)
+	if out.AF != "gabor_2d" || out.Bias != 0.25 {
+		t.Fatalf("unexpected neurode conversion: %+v", out)
+	}
+	if len(out.Parameters) != 2 || out.DotProduct == nil {
+		t.Fatalf("unexpected neurode list fields: %+v", out)
+	}
+}
+
+func TestConvertNeurodeMalformedKnownFieldKeepsDefault(t *testing.T) {
+	out := ConvertNeurode(map[string]any{"parameters": "bad"})
+	if len(out.Parameters) != 0 {
+		t.Fatalf("expected default neurode parameters on malformed input, got %+v", out.Parameters)
 	}
 }
 
