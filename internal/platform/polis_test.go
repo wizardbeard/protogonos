@@ -31,6 +31,7 @@ type managedTestScape struct {
 	stopCalls  int
 	startErr   error
 	stopErr    error
+	stopReason StopReason
 }
 
 func (s *managedTestScape) Start(context.Context) error {
@@ -43,12 +44,18 @@ func (s *managedTestScape) Stop(context.Context) error {
 	return s.stopErr
 }
 
+func (s *managedTestScape) StopWithReason(ctx context.Context, reason StopReason) error {
+	s.stopReason = reason
+	return s.Stop(ctx)
+}
+
 type testSupportModule struct {
 	name       string
 	startCalls int
 	stopCalls  int
 	startErr   error
 	stopErr    error
+	stopReason StopReason
 }
 
 func (m *testSupportModule) Name() string { return m.name }
@@ -61,6 +68,11 @@ func (m *testSupportModule) Start(context.Context) error {
 func (m *testSupportModule) Stop(context.Context) error {
 	m.stopCalls++
 	return m.stopErr
+}
+
+func (m *testSupportModule) StopWithReason(ctx context.Context, reason StopReason) error {
+	m.stopReason = reason
+	return m.Stop(ctx)
 }
 
 func TestPolisInitAndRegisterScape(t *testing.T) {
@@ -114,6 +126,9 @@ func TestPolisLifecycleStopAndReinit(t *testing.T) {
 	p.Stop()
 	if p.Started() {
 		t.Fatal("expected polis stopped after stop call")
+	}
+	if p.LastStopReason() != StopReasonNormal {
+		t.Fatalf("expected stop reason %q, got=%q", StopReasonNormal, p.LastStopReason())
 	}
 	if len(p.RegisteredScapes()) != 0 {
 		t.Fatalf("expected scapes cleared after stop, got %d", len(p.RegisteredScapes()))
@@ -175,6 +190,12 @@ func TestPolisInitStartsConfiguredModulesAndPublicScapes(t *testing.T) {
 	}
 	if public.stopCalls != 1 {
 		t.Fatalf("expected public scape stop call, got=%d", public.stopCalls)
+	}
+	if module.stopReason != StopReasonNormal {
+		t.Fatalf("expected support module stop reason %q, got=%q", StopReasonNormal, module.stopReason)
+	}
+	if public.stopReason != StopReasonNormal {
+		t.Fatalf("expected public scape stop reason %q, got=%q", StopReasonNormal, public.stopReason)
 	}
 	if len(p.ActiveSupportModules()) != 0 {
 		t.Fatalf("expected cleared active support modules after stop, got=%+v", p.ActiveSupportModules())
@@ -241,6 +262,15 @@ func TestPolisResetClearsStoreAndRestartsLifecycle(t *testing.T) {
 	if public.startCalls != 2 || public.stopCalls != 1 {
 		t.Fatalf("expected public scape restart around reset, start=%d stop=%d", public.startCalls, public.stopCalls)
 	}
+	if p.LastStopReason() != StopReasonShutdown {
+		t.Fatalf("expected reset stop reason %q, got=%q", StopReasonShutdown, p.LastStopReason())
+	}
+	if module.stopReason != StopReasonShutdown {
+		t.Fatalf("expected support module reset stop reason %q, got=%q", StopReasonShutdown, module.stopReason)
+	}
+	if public.stopReason != StopReasonShutdown {
+		t.Fatalf("expected public scape reset stop reason %q, got=%q", StopReasonShutdown, public.stopReason)
+	}
 	if len(p.ActivePublicScapes()) != 1 || len(p.ActiveSupportModules()) != 1 {
 		t.Fatalf("expected public scape and support module active after reset: scapes=%+v mods=%+v", p.ActivePublicScapes(), p.ActiveSupportModules())
 	}
@@ -250,5 +280,18 @@ func TestPolisResetClearsStoreAndRestartsLifecycle(t *testing.T) {
 	}
 	if ok {
 		t.Fatal("expected reset to clear persisted population data")
+	}
+}
+
+func TestPolisStopWithReasonRejectsInvalidReason(t *testing.T) {
+	p := NewPolis(Config{Store: storage.NewMemoryStore()})
+	if err := p.Init(context.Background()); err != nil {
+		t.Fatalf("init failed: %v", err)
+	}
+	if err := p.StopWithReason(StopReason("bad")); err == nil {
+		t.Fatal("expected invalid stop reason to fail")
+	}
+	if !p.Started() {
+		t.Fatal("expected polis to remain started after invalid stop reason")
 	}
 }

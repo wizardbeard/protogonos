@@ -42,6 +42,13 @@ type PublicScapeSummary struct {
 	Physics    any    `json:"physics,omitempty"`
 }
 
+type StopReason string
+
+const (
+	StopReasonNormal   StopReason = "normal"
+	StopReasonShutdown StopReason = "shutdown"
+)
+
 type EvolutionConfig struct {
 	RunID                string
 	OpMode               string
@@ -88,6 +95,7 @@ type Polis struct {
 	supportModules map[string]SupportModule
 	publicScapes   map[string]PublicScapeSummary
 	started        bool
+	lastStopReason StopReason
 	runs           map[string]chan evo.MonitorCommand
 
 	config Config
@@ -101,6 +109,7 @@ func NewPolis(cfg Config) *Polis {
 		publicScapes:   make(map[string]PublicScapeSummary),
 		runs:           make(map[string]chan evo.MonitorCommand),
 		config:         cfg,
+		lastStopReason: StopReasonNormal,
 	}
 }
 
@@ -213,7 +222,7 @@ func (p *Polis) Create(ctx context.Context) error {
 }
 
 func (p *Polis) Reset(ctx context.Context) error {
-	p.Stop()
+	_ = p.StopWithReason(StopReasonShutdown)
 	if resetter, ok := p.store.(storage.Resetter); ok {
 		if err := resetter.Reset(ctx); err != nil {
 			return err
@@ -250,6 +259,21 @@ func (p *Polis) GetScape(name string) (scape.Scape, bool) {
 }
 
 func (p *Polis) Stop() {
+	_ = p.StopWithReason(StopReasonNormal)
+}
+
+func (p *Polis) Shutdown() {
+	_ = p.StopWithReason(StopReasonShutdown)
+}
+
+func (p *Polis) StopWithReason(reason StopReason) error {
+	if reason == "" {
+		reason = StopReasonNormal
+	}
+	if !isValidStopReason(reason) {
+		return fmt.Errorf("unsupported stop reason: %s", reason)
+	}
+
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	for _, control := range p.runs {
@@ -260,18 +284,28 @@ func (p *Polis) Stop() {
 	}
 	for _, sc := range p.scapes {
 		if managed, ok := sc.(managedScape); ok {
-			_ = managed.Stop(context.Background())
+			if withReason, ok := sc.(reasonAwareManagedScape); ok {
+				_ = withReason.StopWithReason(context.Background(), reason)
+			} else {
+				_ = managed.Stop(context.Background())
+			}
 		}
 	}
 	for _, module := range p.supportModules {
-		_ = module.Stop(context.Background())
+		if withReason, ok := module.(reasonAwareSupportModule); ok {
+			_ = withReason.StopWithReason(context.Background(), reason)
+		} else {
+			_ = module.Stop(context.Background())
+		}
 	}
 
 	p.started = false
+	p.lastStopReason = reason
 	p.scapes = make(map[string]scape.Scape)
 	p.supportModules = make(map[string]SupportModule)
 	p.publicScapes = make(map[string]PublicScapeSummary)
 	p.runs = make(map[string]chan evo.MonitorCommand)
+	return nil
 }
 
 func (p *Polis) RunEvolution(ctx context.Context, cfg EvolutionConfig) (EvolutionResult, error) {
@@ -748,9 +782,34 @@ func (p *Polis) Started() bool {
 	return p.started
 }
 
+func (p *Polis) LastStopReason() StopReason {
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+	return p.lastStopReason
+}
+
 type managedScape interface {
 	Start(ctx context.Context) error
 	Stop(ctx context.Context) error
+}
+
+type reasonAwareManagedScape interface {
+	managedScape
+	StopWithReason(ctx context.Context, reason StopReason) error
+}
+
+type reasonAwareSupportModule interface {
+	SupportModule
+	StopWithReason(ctx context.Context, reason StopReason) error
+}
+
+func isValidStopReason(reason StopReason) bool {
+	switch reason {
+	case StopReasonNormal, StopReasonShutdown:
+		return true
+	default:
+		return false
+	}
 }
 
 func stopSupportModules(ctx context.Context, modules []SupportModule) {

@@ -262,6 +262,10 @@ func New(opts Options) (*Client, error) {
 }
 
 func (c *Client) Close() error {
+	if c.polis != nil {
+		c.polis.Shutdown()
+		c.polis = nil
+	}
 	return storage.CloseIfSupported(c.store)
 }
 
