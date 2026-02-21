@@ -2507,14 +2507,6 @@ func TestMutatePFMutatesNeuronPlasticityRule(t *testing.T) {
 	if !changed {
 		t.Fatalf("expected at least one neuron plasticity rule mutation, before=%+v after=%+v", genome.Neurons, mutated.Neurons)
 	}
-	for i := range mutated.Neurons {
-		if mutated.Neurons[i].PlasticityRule == "" {
-			continue
-		}
-		if mutated.Neurons[i].PlasticityRate <= 0 {
-			t.Fatalf("expected mutated neuron plasticity rate to be set, got=%+v", mutated.Neurons[i])
-		}
-	}
 }
 
 func TestMutatePFResetsWeightParameterWidthsForRuleFamily(t *testing.T) {
@@ -2603,6 +2595,44 @@ func TestMutatePFClearsWeightParametersForNonWeightRules(t *testing.T) {
 	}
 }
 
+func TestMutatePFResetsNeuralParametersForSelfModulationV1(t *testing.T) {
+	genome := model.Genome{
+		Neurons: []model.Neuron{
+			{
+				ID:             "n0",
+				Activation:     "identity",
+				Aggregator:     "dot_product",
+				PlasticityRule: nn.PlasticityHebbian,
+				PlasticityRate: 0.2,
+				PlasticityA:    0.9,
+				PlasticityB:    0.8,
+				PlasticityC:    0.7,
+				PlasticityD:    0.6,
+			},
+		},
+		Synapses: []model.Synapse{
+			{ID: "s0", From: "n0", To: "n0", Weight: 0.5, Enabled: true, Recurrent: true},
+		},
+	}
+	op := &MutatePF{
+		Rand:  rand.New(rand.NewSource(2537)),
+		Rules: []string{nn.PlasticityHebbian, nn.PlasticitySelfModulationV1},
+	}
+	mutated, err := op.Apply(context.Background(), genome)
+	if err != nil {
+		t.Fatalf("apply failed: %v", err)
+	}
+	if mutated.Neurons[0].PlasticityRule != nn.PlasticitySelfModulationV1 {
+		t.Fatalf("expected mutate_pf to switch to self_modulationV1, got %q", mutated.Neurons[0].PlasticityRule)
+	}
+	if mutated.Neurons[0].PlasticityA != 0.1 ||
+		mutated.Neurons[0].PlasticityB != 0 ||
+		mutated.Neurons[0].PlasticityC != 0 ||
+		mutated.Neurons[0].PlasticityD != 0 {
+		t.Fatalf("expected self_modulationV1 neural parameter reset to [A=0.1,B=0,C=0,D=0], got=%+v", mutated.Neurons[0])
+	}
+}
+
 func TestMutatePlasticityParametersMutatesNeuronRate(t *testing.T) {
 	genome := randomGenome(rand.New(rand.NewSource(17)))
 	genome.Plasticity = &model.PlasticityConfig{
@@ -2624,12 +2654,26 @@ func TestMutatePlasticityParametersMutatesNeuronRate(t *testing.T) {
 		if mutated.Neurons[i].PlasticityRate != genome.Neurons[i].PlasticityRate {
 			changed = true
 		}
-		if mutated.Neurons[i].PlasticityRate < 0 {
-			t.Fatalf("expected non-negative neuron plasticity rate, got=%+v", mutated.Neurons[i])
-		}
 	}
 	if !changed {
 		t.Fatalf("expected one neuron plasticity rate change, before=%+v after=%+v", genome.Neurons, mutated.Neurons)
+	}
+}
+
+func TestNeuronPlasticityRateSignedAllowsNegativeFallbacks(t *testing.T) {
+	genome := model.Genome{
+		Neurons: []model.Neuron{
+			{ID: "n0", PlasticityRate: -0.3},
+		},
+	}
+	if got := neuronPlasticityRateSigned(genome, 0); got != -0.3 {
+		t.Fatalf("expected signed neuron plasticity rate fallback, got=%f", got)
+	}
+
+	genome.Neurons[0].PlasticityRate = 0
+	genome.Plasticity = &model.PlasticityConfig{Rule: nn.PlasticityHebbian, Rate: -0.2}
+	if got := neuronPlasticityRateSigned(genome, 0); got != -0.2 {
+		t.Fatalf("expected signed genome plasticity rate fallback, got=%f", got)
 	}
 }
 

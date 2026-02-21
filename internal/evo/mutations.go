@@ -1304,6 +1304,11 @@ func (o *MutatePlasticityParameters) Apply(_ context.Context, genome model.Genom
 		mutated.Neurons[idx].Generation = currentGenomeGeneration(mutated)
 		return mutated, nil
 	}
+	if plasticityRuleUsesSingleNeuralParameter(rule) {
+		mutateSingleNeuralPlasticityParameter(&mutated, genome, idx, maxDelta*10, o.Rand)
+		mutated.Neurons[idx].Generation = currentGenomeGeneration(mutated)
+		return mutated, nil
+	}
 	delta := (o.Rand.Float64()*2 - 1) * maxDelta
 	if plasticityRuleUsesGeneralizedCoefficients(rule) {
 		mutateNeuronPlasticityCoefficients(&mutated, genome, idx, delta, o.Rand)
@@ -1423,10 +1428,8 @@ func (o *MutatePF) Apply(_ context.Context, genome model.Genome) (model.Genome, 
 
 	mutated := cloneGenome(genome)
 	mutated.Neurons[idx].PlasticityRule = choices[o.Rand.Intn(len(choices))]
+	resetNeuronPlasticityParametersForRule(&mutated, idx, mutated.Neurons[idx].PlasticityRule, o.Rand)
 	resetPlasticityWeightParameterVectors(&mutated, idx, mutated.Neurons[idx].PlasticityRule, o.Rand)
-	if mutated.Neurons[idx].PlasticityRate <= 0 {
-		mutated.Neurons[idx].PlasticityRate = neuronPlasticityRate(genome, idx)
-	}
 	mutated.Neurons[idx].Generation = currentGenomeGeneration(mutated)
 	return mutated, nil
 }
@@ -2913,6 +2916,16 @@ func neuronPlasticityRate(genome model.Genome, idx int) float64 {
 	return 0.1
 }
 
+func neuronPlasticityRateSigned(genome model.Genome, idx int) float64 {
+	if idx >= 0 && idx < len(genome.Neurons) && genome.Neurons[idx].PlasticityRate != 0 {
+		return genome.Neurons[idx].PlasticityRate
+	}
+	if genome.Plasticity != nil && genome.Plasticity.Rate != 0 {
+		return genome.Plasticity.Rate
+	}
+	return 0
+}
+
 func neuronPlasticityA(genome model.Genome, idx int) float64 {
 	if idx >= 0 && idx < len(genome.Neurons) && genome.Neurons[idx].PlasticityA != 0 {
 		return genome.Neurons[idx].PlasticityA
@@ -2981,6 +2994,15 @@ func plasticityRuleUsesSynapseParameterMutation(rule string) bool {
 	}
 }
 
+func plasticityRuleUsesSingleNeuralParameter(rule string) bool {
+	switch nn.NormalizePlasticityRuleName(rule) {
+	case nn.PlasticityHebbian, nn.PlasticityOja:
+		return true
+	default:
+		return false
+	}
+}
+
 func selfModulationParameterWidth(rule string) int {
 	switch nn.NormalizePlasticityRuleName(rule) {
 	case nn.PlasticitySelfModulationV1, nn.PlasticitySelfModulationV2, nn.PlasticitySelfModulationV3:
@@ -3000,6 +3022,68 @@ func plasticityWeightParameterWidth(rule string) int {
 		return 1
 	default:
 		return selfModulationParameterWidth(rule)
+	}
+}
+
+func resetNeuronPlasticityParametersForRule(genome *model.Genome, neuronIdx int, rule string, rng *rand.Rand) {
+	if genome == nil || neuronIdx < 0 || neuronIdx >= len(genome.Neurons) {
+		return
+	}
+	neuron := &genome.Neurons[neuronIdx]
+	switch nn.NormalizePlasticityRuleName(rule) {
+	case nn.PlasticityNone:
+		neuron.PlasticityRate = 0
+		neuron.PlasticityA = 0
+		neuron.PlasticityB = 0
+		neuron.PlasticityC = 0
+		neuron.PlasticityD = 0
+	case nn.PlasticityHebbian, nn.PlasticityOja:
+		neuron.PlasticityRate = randomCentered(rng)
+		neuron.PlasticityA = 0
+		neuron.PlasticityB = 0
+		neuron.PlasticityC = 0
+		neuron.PlasticityD = 0
+	case nn.PlasticityHebbianW, nn.PlasticityOjaW:
+		neuron.PlasticityA = 0
+		neuron.PlasticityB = 0
+		neuron.PlasticityC = 0
+		neuron.PlasticityD = 0
+	case nn.PlasticityNeuromodulation:
+		neuron.PlasticityRate = randomCentered(rng)
+		neuron.PlasticityA = randomCentered(rng)
+		neuron.PlasticityB = randomCentered(rng)
+		neuron.PlasticityC = randomCentered(rng)
+		neuron.PlasticityD = randomCentered(rng)
+	case nn.PlasticitySelfModulationV1:
+		neuron.PlasticityA = 0.1
+		neuron.PlasticityB = 0
+		neuron.PlasticityC = 0
+		neuron.PlasticityD = 0
+	case nn.PlasticitySelfModulationV2:
+		neuron.PlasticityA = randomCentered(rng)
+		neuron.PlasticityB = 0
+		neuron.PlasticityC = 0
+		neuron.PlasticityD = 0
+	case nn.PlasticitySelfModulationV3:
+		neuron.PlasticityA = randomCentered(rng)
+		neuron.PlasticityB = randomCentered(rng)
+		neuron.PlasticityC = randomCentered(rng)
+		neuron.PlasticityD = randomCentered(rng)
+	case nn.PlasticitySelfModulationV4:
+		neuron.PlasticityA = 0
+		neuron.PlasticityB = 0
+		neuron.PlasticityC = 0
+		neuron.PlasticityD = 0
+	case nn.PlasticitySelfModulationV5:
+		neuron.PlasticityA = 0
+		neuron.PlasticityB = randomCentered(rng)
+		neuron.PlasticityC = randomCentered(rng)
+		neuron.PlasticityD = randomCentered(rng)
+	case nn.PlasticitySelfModulationV6:
+		neuron.PlasticityA = 0
+		neuron.PlasticityB = 0
+		neuron.PlasticityC = 0
+		neuron.PlasticityD = 0
 	}
 }
 
@@ -3038,6 +3122,13 @@ func randomPlasticityParams(width int, rng *rand.Rand) []float64 {
 		params[i] = rng.Float64() - 0.5
 	}
 	return params
+}
+
+func randomCentered(rng *rand.Rand) float64 {
+	if rng == nil {
+		return 0
+	}
+	return rng.Float64() - 0.5
 }
 
 func selfModulationRuleUsesCoefficientMutation(rule string) bool {
@@ -3253,6 +3344,24 @@ func mutateNeuromodulationParameters(
 		changed = true
 	}
 	return changed
+}
+
+func mutateSingleNeuralPlasticityParameter(
+	mutated *model.Genome,
+	base model.Genome,
+	neuronIdx int,
+	spread float64,
+	rng *rand.Rand,
+) bool {
+	if mutated == nil || rng == nil || neuronIdx < 0 || neuronIdx >= len(mutated.Neurons) {
+		return false
+	}
+	if spread <= 0 {
+		spread = 0.15
+	}
+	baseRate := neuronPlasticityRateSigned(base, neuronIdx)
+	mutated.Neurons[neuronIdx].PlasticityRate = saturateSigned(baseRate+(rng.Float64()*2-1)*spread, spread)
+	return true
 }
 
 func saturateSigned(value, limit float64) float64 {
