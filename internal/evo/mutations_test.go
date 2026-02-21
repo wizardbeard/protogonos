@@ -2519,6 +2519,11 @@ func TestMutatePFMutatesNeuronPlasticityRule(t *testing.T) {
 
 func TestMutatePlasticityParametersMutatesNeuronRate(t *testing.T) {
 	genome := randomGenome(rand.New(rand.NewSource(17)))
+	genome.Plasticity = &model.PlasticityConfig{
+		Rule:            nn.PlasticityHebbian,
+		Rate:            0.2,
+		SaturationLimit: 1.0,
+	}
 	genome.Neurons[0].PlasticityRate = 0.2
 	op := &MutatePlasticityParameters{
 		Rand:     rand.New(rand.NewSource(18)),
@@ -2539,6 +2544,26 @@ func TestMutatePlasticityParametersMutatesNeuronRate(t *testing.T) {
 	}
 	if !changed {
 		t.Fatalf("expected one neuron plasticity rate change, before=%+v after=%+v", genome.Neurons, mutated.Neurons)
+	}
+}
+
+func TestMutatePlasticityParametersCancelsForNoneRule(t *testing.T) {
+	genome := model.Genome{
+		Neurons: []model.Neuron{
+			{
+				ID:             "n0",
+				Activation:     "identity",
+				Aggregator:     "dot_product",
+				PlasticityRule: nn.PlasticityNone,
+			},
+		},
+	}
+	op := &MutatePlasticityParameters{
+		Rand:     rand.New(rand.NewSource(2521)),
+		MaxDelta: 0.1,
+	}
+	if _, err := op.Apply(context.Background(), genome); !errors.Is(err, ErrNoMutationChoice) {
+		t.Fatalf("expected ErrNoMutationChoice for none plasticity rule, got %v", err)
 	}
 }
 
@@ -2782,6 +2807,7 @@ func TestMutatePlasticityParametersCoMutatesV3VectorsAndCoefficients(t *testing.
 func TestMutatePFAndPlasticityParametersApplicableWithNeuronsOnly(t *testing.T) {
 	genome := randomGenome(rand.New(rand.NewSource(19)))
 	genome.Plasticity = nil
+	genome.Neurons[0].PlasticityRule = nn.PlasticityHebbian
 	if !(&MutatePF{}).Applicable(genome, "xor") {
 		t.Fatal("expected mutate_pf to be applicable with neuron-level mutation semantics")
 	}

@@ -1250,7 +1250,15 @@ func (o *MutatePlasticityParameters) Name() string {
 }
 
 func (o *MutatePlasticityParameters) Applicable(genome model.Genome, _ string) bool {
-	return len(genome.Neurons) > 0
+	if len(genome.Neurons) == 0 {
+		return false
+	}
+	for i := range genome.Neurons {
+		if plasticityRuleHasMutableParameters(neuronPlasticityRule(genome, i)) {
+			return true
+		}
+	}
+	return false
 }
 
 func (o *MutatePlasticityParameters) Apply(_ context.Context, genome model.Genome) (model.Genome, error) {
@@ -1267,6 +1275,9 @@ func (o *MutatePlasticityParameters) Apply(_ context.Context, genome model.Genom
 	idx := o.Rand.Intn(len(genome.Neurons))
 	mutated := cloneGenome(genome)
 	rule := nn.NormalizePlasticityRuleName(neuronPlasticityRule(genome, idx))
+	if !plasticityRuleHasMutableParameters(rule) {
+		return model.Genome{}, ErrNoMutationChoice
+	}
 	if plasticityRuleUsesSynapseParameterMutation(rule) {
 		mutateSelfModulationParameterVectors(&mutated, genome, idx, 1, maxDelta, o.Rand)
 		mutated.Neurons[idx].Generation = currentGenomeGeneration(mutated)
@@ -2877,8 +2888,8 @@ func neuronPlasticityRule(genome model.Genome, idx int) string {
 	if idx < 0 || idx >= len(genome.Neurons) {
 		return nn.PlasticityNone
 	}
-	if rule := nn.NormalizePlasticityRuleName(genome.Neurons[idx].PlasticityRule); rule != "" {
-		return rule
+	if raw := strings.TrimSpace(genome.Neurons[idx].PlasticityRule); raw != "" {
+		return nn.NormalizePlasticityRuleName(raw)
 	}
 	if genome.Plasticity != nil {
 		return nn.NormalizePlasticityRuleName(genome.Plasticity.Rule)
@@ -2949,6 +2960,10 @@ func plasticityRuleUsesGeneralizedCoefficients(rule string) bool {
 	default:
 		return false
 	}
+}
+
+func plasticityRuleHasMutableParameters(rule string) bool {
+	return nn.NormalizePlasticityRuleName(rule) != nn.PlasticityNone
 }
 
 func plasticityRuleUsesSynapseParameterMutation(rule string) bool {
