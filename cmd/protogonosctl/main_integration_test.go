@@ -13,6 +13,7 @@ import (
 	"testing"
 
 	"protogonos/internal/stats"
+	"protogonos/internal/storage"
 )
 
 func TestRunCommandSQLiteCreatesArtifacts(t *testing.T) {
@@ -82,6 +83,72 @@ func TestRunCommandSQLiteCreatesArtifacts(t *testing.T) {
 	if !seenStructural {
 		t.Fatalf("expected at least one structural mutation in lineage: %+v", lineage)
 	}
+}
+
+func TestResetCommandSQLiteClearsStore(t *testing.T) {
+	origWD, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("getwd: %v", err)
+	}
+	workdir := t.TempDir()
+	if err := os.Chdir(workdir); err != nil {
+		t.Fatalf("chdir tempdir: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = os.Chdir(origWD)
+	})
+
+	dbPath := filepath.Join(workdir, "protogonos.db")
+	runID := "reset-run"
+	if err := run(context.Background(), []string{
+		"run",
+		"--store", "sqlite",
+		"--db-path", dbPath,
+		"--run-id", runID,
+		"--scape", "xor",
+		"--pop", "4",
+		"--gens", "1",
+		"--seed", "17",
+		"--workers", "2",
+	}); err != nil {
+		t.Fatalf("run command: %v", err)
+	}
+
+	storeBefore, err := storage.NewStore("sqlite", dbPath)
+	if err != nil {
+		t.Fatalf("new store before reset: %v", err)
+	}
+	if err := storeBefore.Init(context.Background()); err != nil {
+		t.Fatalf("init store before reset: %v", err)
+	}
+	if _, ok, err := storeBefore.GetPopulation(context.Background(), runID); err != nil {
+		t.Fatalf("get population before reset: %v", err)
+	} else if !ok {
+		t.Fatalf("expected population snapshot %q before reset", runID)
+	}
+	_ = storage.CloseIfSupported(storeBefore)
+
+	if err := run(context.Background(), []string{
+		"reset",
+		"--store", "sqlite",
+		"--db-path", dbPath,
+	}); err != nil {
+		t.Fatalf("reset command: %v", err)
+	}
+
+	storeAfter, err := storage.NewStore("sqlite", dbPath)
+	if err != nil {
+		t.Fatalf("new store after reset: %v", err)
+	}
+	if err := storeAfter.Init(context.Background()); err != nil {
+		t.Fatalf("init store after reset: %v", err)
+	}
+	if _, ok, err := storeAfter.GetPopulation(context.Background(), runID); err != nil {
+		t.Fatalf("get population after reset: %v", err)
+	} else if ok {
+		t.Fatalf("expected population snapshot %q to be cleared by reset", runID)
+	}
+	_ = storage.CloseIfSupported(storeAfter)
 }
 
 func TestRunCommandSQLiteConfigLoadsMap2RecAndAllowsFlagOverrides(t *testing.T) {

@@ -42,6 +42,8 @@ func run(ctx context.Context, args []string) error {
 	switch args[0] {
 	case "init":
 		return runInit(ctx, args[1:])
+	case "reset":
+		return runReset(ctx, args[1:])
 	case "start":
 		return runStart(ctx, args[1:])
 	case "run":
@@ -99,6 +101,31 @@ func runInit(ctx context.Context, args []string) error {
 	}
 
 	fmt.Printf("initialized store=%s\n", *storeKind)
+	return nil
+}
+
+func runReset(ctx context.Context, args []string) error {
+	fs := flag.NewFlagSet("reset", flag.ContinueOnError)
+	storeKind := fs.String("store", storage.DefaultStoreKind(), "store backend: memory|sqlite")
+	dbPath := fs.String("db-path", "protogonos.db", "sqlite database path")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+
+	store, err := storage.NewStore(*storeKind, *dbPath)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		_ = storage.CloseIfSupported(store)
+	}()
+
+	polis := platform.NewPolis(platform.Config{Store: store})
+	if err := polis.Reset(ctx); err != nil {
+		return err
+	}
+
+	fmt.Printf("reset store=%s\n", *storeKind)
 	return nil
 }
 
@@ -1469,7 +1496,7 @@ func defaultMutationPolicy(
 }
 
 func usageError(msg string) error {
-	return fmt.Errorf("%s\nusage: protogonosctl <init|start|run|benchmark|profile|runs|lineage|fitness|diagnostics|species|species-diff|monitor|population|top|scape-summary|export> [flags]", msg)
+	return fmt.Errorf("%s\nusage: protogonosctl <init|reset|start|run|benchmark|profile|runs|lineage|fitness|diagnostics|species|species-diff|monitor|population|top|scape-summary|export> [flags]", msg)
 }
 
 func selectionFromName(name string) (evo.Selector, error) {
