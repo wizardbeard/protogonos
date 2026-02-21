@@ -195,3 +195,42 @@ func TestSupervisorOneForAllStopsSiblingTasksOnPermanentFailure(t *testing.T) {
 	}
 	t.Fatalf("expected no running tasks after one_for_all failure, got=%v", supervisor.Tasks())
 }
+
+func TestSupervisorChildrenExposeSpecAndStatus(t *testing.T) {
+	supervisor := NewSupervisor(SupervisorPolicy{
+		InitialBackoff: time.Millisecond,
+		MaxBackoff:     time.Millisecond,
+		BackoffFactor:  1,
+		MaxRestarts:    2,
+	})
+	spec := SupervisorChildSpec{
+		Name:    "child-status",
+		Group:   "support",
+		Restart: SupervisorRestartPermanent,
+	}
+	if err := supervisor.StartSpec(spec, func(context.Context) error {
+		return errors.New("boom")
+	}); err != nil {
+		t.Fatalf("start child-status task: %v", err)
+	}
+	deadline := time.Now().Add(250 * time.Millisecond)
+	for time.Now().Before(deadline) {
+		children := supervisor.Children()
+		if len(children) == 1 && children[0].RestartCount > 0 && children[0].LastError != "" {
+			child := children[0]
+			if child.Name != spec.Name {
+				t.Fatalf("unexpected child name: %s", child.Name)
+			}
+			if child.Group != spec.Group {
+				t.Fatalf("unexpected child group: %s", child.Group)
+			}
+			if child.RestartPolicy != spec.Restart {
+				t.Fatalf("unexpected child restart policy: %s", child.RestartPolicy)
+			}
+			supervisor.StopAll()
+			return
+		}
+		time.Sleep(2 * time.Millisecond)
+	}
+	t.Fatalf("expected child status with restart metadata, got=%+v", supervisor.Children())
+}

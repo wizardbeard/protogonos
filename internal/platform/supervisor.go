@@ -24,6 +24,27 @@ const (
 	SupervisorStrategyOneForAll SupervisorStrategy = "one_for_all"
 )
 
+type SupervisorRestartPolicy string
+
+const (
+	SupervisorRestartPermanent SupervisorRestartPolicy = "permanent"
+)
+
+type SupervisorChildSpec struct {
+	Name    string
+	Group   string
+	Restart SupervisorRestartPolicy
+}
+
+type SupervisorChildStatus struct {
+	Name            string                  `json:"name"`
+	Group           string                  `json:"group,omitempty"`
+	RestartPolicy   SupervisorRestartPolicy `json:"restart_policy"`
+	RestartCount    int                     `json:"restart_count"`
+	LastError       string                  `json:"last_error,omitempty"`
+	PermanentFailed bool                    `json:"permanent_failed"`
+}
+
 type SupervisorHooks struct {
 	OnTaskRestart          func(name string, err error, restartCount int)
 	OnTaskPermanentFailure func(name string, err error, restartCount int)
@@ -75,6 +96,11 @@ type Supervisor struct {
 type supervisorTask struct {
 	cancel context.CancelFunc
 	done   chan struct{}
+	spec   SupervisorChildSpec
+
+	restartCount    int
+	lastErr         error
+	permanentFailed bool
 }
 
 func NewSupervisor(policy SupervisorPolicy) *Supervisor {
@@ -90,27 +116,39 @@ func NewSupervisorWithHooks(policy SupervisorPolicy, hooks SupervisorHooks) *Sup
 }
 
 func (s *Supervisor) Start(name string, run func(ctx context.Context) error) error {
-	if name == "" {
+	spec := SupervisorChildSpec{
+		Name:    name,
+		Restart: SupervisorRestartPermanent,
+	}
+	return s.StartSpec(spec, run)
+}
+
+func (s *Supervisor) StartSpec(spec SupervisorChildSpec, run func(ctx context.Context) error) error {
+	if spec.Name == "" {
 		return errors.New("task name is required")
 	}
 	if run == nil {
 		return errors.New("task runner is required")
 	}
+	if spec.Restart == "" {
+		spec.Restart = SupervisorRestartPermanent
+	}
 
 	s.mu.Lock()
-	if _, exists := s.tasks[name]; exists {
+	if _, exists := s.tasks[spec.Name]; exists {
 		s.mu.Unlock()
-		return fmt.Errorf("task already running: %s", name)
+		return fmt.Errorf("task already running: %s", spec.Name)
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	task := &supervisorTask{
 		cancel: cancel,
 		done:   make(chan struct{}),
+		spec:   spec,
 	}
-	s.tasks[name] = task
+	s.tasks[spec.Name] = task
 	s.mu.Unlock()
 
-	go s.runTask(name, task, ctx, run)
+	go s.runTask(spec.Name, task, ctx, run)
 	return nil
 }
 
@@ -135,7 +173,14 @@ func (s *Supervisor) runTask(name string, task *supervisorTask, ctx context.Cont
 		if err == nil {
 			return
 		}
+		s.mu.Lock()
+		task.lastErr = err
+		s.mu.Unlock()
 		if s.policy.MaxRestarts > 0 && restarts >= s.policy.MaxRestarts {
+			s.mu.Lock()
+			task.permanentFailed = true
+			task.restartCount = restarts
+			s.mu.Unlock()
 			if s.hooks.OnTaskPermanentFailure != nil {
 				go s.hooks.OnTaskPermanentFailure(name, err, restarts)
 			}
@@ -145,6 +190,9 @@ func (s *Supervisor) runTask(name string, task *supervisorTask, ctx context.Cont
 			return
 		}
 		restarts++
+		s.mu.Lock()
+		task.restartCount = restarts
+		s.mu.Unlock()
 		if s.hooks.OnTaskRestart != nil {
 			s.hooks.OnTaskRestart(name, err, restarts)
 		}
@@ -219,4 +267,29 @@ func (s *Supervisor) Tasks() []string {
 	}
 	sort.Strings(names)
 	return names
+}
+
+func (s *Supervisor) Children() []SupervisorChildStatus {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	names := make([]string, 0, len(s.tasks))
+	for name := range s.tasks {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+
+	out := make([]SupervisorChildStatus, 0, len(names))
+	for _, name := range names {
+		task := s.tasks[name]
+		out = append(out, SupervisorChildStatus{
+			Name:            task.spec.Name,
+			Group:           task.spec.Group,
+			RestartPolicy:   task.spec.Restart,
+			RestartCount:    task.restartCount,
+			LastError:       errString(task.lastErr),
+			PermanentFailed: task.permanentFailed,
+		})
+	}
+	return out
 }

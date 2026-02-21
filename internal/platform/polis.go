@@ -1150,6 +1150,16 @@ func (p *Polis) ActiveSupervisedTasks() []string {
 	return supervisor.Tasks()
 }
 
+func (p *Polis) ActiveSupervisedChildren() []SupervisorChildStatus {
+	p.mu.RLock()
+	supervisor := p.supervisor
+	p.mu.RUnlock()
+	if supervisor == nil {
+		return nil
+	}
+	return supervisor.Children()
+}
+
 func (p *Polis) SupervisionFailures() []SupervisionFailure {
 	p.mu.RLock()
 	defer p.mu.RUnlock()
@@ -1369,7 +1379,12 @@ func (p *Polis) startSupportModule(ctx context.Context, name string, module Supp
 	if p.supervisor == nil {
 		p.supervisor = p.newSupervisor()
 	}
-	if err := p.supervisor.Start(supervisedSupportTaskName(name), supervised.Supervise); err != nil {
+	spec := SupervisorChildSpec{
+		Name:    supervisedSupportTaskName(name),
+		Group:   "support",
+		Restart: SupervisorRestartPermanent,
+	}
+	if err := p.supervisor.StartSpec(spec, supervised.Supervise); err != nil {
 		_ = module.Stop(ctx)
 		return err
 	}
@@ -1406,7 +1421,12 @@ func (p *Polis) startPublicScape(ctx context.Context, name string, sc scape.Scap
 	if p.supervisor == nil {
 		p.supervisor = p.newSupervisor()
 	}
-	if err := p.supervisor.Start(supervisedScapeTaskName(name), supervised.Supervise); err != nil {
+	spec := SupervisorChildSpec{
+		Name:    supervisedScapeTaskName(name),
+		Group:   "scape",
+		Restart: SupervisorRestartPermanent,
+	}
+	if err := p.supervisor.StartSpec(spec, supervised.Supervise); err != nil {
 		if managedStarted {
 			_ = managed.Stop(ctx)
 		}

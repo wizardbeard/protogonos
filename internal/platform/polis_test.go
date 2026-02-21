@@ -699,6 +699,13 @@ func TestPolisSupervisesConfiguredSupportModuleRuntime(t *testing.T) {
 	if len(p.ActiveSupervisedTasks()) == 0 {
 		t.Fatal("expected active supervised task for support module")
 	}
+	children := p.ActiveSupervisedChildren()
+	if len(children) == 0 {
+		t.Fatal("expected active supervised child metadata")
+	}
+	if children[0].Group != "support" || children[0].RestartPolicy != SupervisorRestartPermanent {
+		t.Fatalf("unexpected supervised child metadata: %+v", children[0])
+	}
 	p.Stop()
 	if len(p.ActiveSupervisedTasks()) != 0 {
 		t.Fatalf("expected no supervised tasks after stop, got=%v", p.ActiveSupervisedTasks())
@@ -727,6 +734,13 @@ func TestPolisSupervisesPublicScapeRuntime(t *testing.T) {
 	waitForAtLeastRuns(t, &public.superviseRuns, 2, 250*time.Millisecond)
 	if len(p.ActiveSupervisedTasks()) == 0 {
 		t.Fatal("expected active supervised task for public scape")
+	}
+	children := p.ActiveSupervisedChildren()
+	if len(children) == 0 {
+		t.Fatal("expected active supervised child metadata")
+	}
+	if children[0].Group != "scape" || children[0].RestartPolicy != SupervisorRestartPermanent {
+		t.Fatalf("unexpected supervised child metadata: %+v", children[0])
 	}
 	if err := p.RemovePublicScape(context.Background(), "supervised-scape", StopReasonNormal); err != nil {
 		t.Fatalf("remove public scape: %v", err)
