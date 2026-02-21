@@ -85,6 +85,23 @@ type InitCast struct{}
 
 func (InitCast) isPolisCastMessage() {}
 
+type polisCallEnvelope struct {
+	ctx   context.Context
+	msg   CallMessage
+	reply chan polisCallResponse
+}
+
+type polisCallResponse struct {
+	value any
+	err   error
+}
+
+type polisCastEnvelope struct {
+	ctx   context.Context
+	msg   CastMessage
+	reply chan error
+}
+
 type EvolutionConfig struct {
 	RunID                string
 	OpMode               string
@@ -135,6 +152,12 @@ type Polis struct {
 	started              bool
 	lastStopReason       StopReason
 	runs                 map[string]chan evo.MonitorCommand
+
+	mailboxActive bool
+	mailboxCallCh chan polisCallEnvelope
+	mailboxCastCh chan polisCastEnvelope
+	mailboxCancel context.CancelFunc
+	mailboxDone   chan struct{}
 
 	supervisor *Supervisor
 	config     Config
@@ -288,6 +311,7 @@ func (p *Polis) Init(ctx context.Context) error {
 	}
 
 	p.started = true
+	p.ensureMailboxLocked()
 	return nil
 }
 
@@ -498,20 +522,33 @@ func (p *Polis) Call(ctx context.Context, msg CallMessage) (any, error) {
 	if msg == nil {
 		return nil, fmt.Errorf("call message is required")
 	}
-	switch req := msg.(type) {
-	case GetScapeCall:
-		p.mu.RLock()
-		started := p.started
-		p.mu.RUnlock()
-		if !started {
-			return GetScapeCallResult{}, fmt.Errorf("polis is not initialized")
-		}
-		sc, ok := p.GetScapeByType(req.Type)
-		return GetScapeCallResult{Scape: sc, Found: ok}, nil
-	case StopCall:
-		return nil, p.StopWithReason(req.Reason)
-	default:
-		return nil, fmt.Errorf("unsupported call message: %T", msg)
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	p.mu.RLock()
+	active := p.mailboxActive
+	callCh := p.mailboxCallCh
+	p.mu.RUnlock()
+	if !active || callCh == nil {
+		value, err, _ := p.handleCallMessage(ctx, msg, false)
+		return value, err
+	}
+	reply := make(chan polisCallResponse, 1)
+	envelope := polisCallEnvelope{
+		ctx:   ctx,
+		msg:   msg,
+		reply: reply,
+	}
+	select {
+	case callCh <- envelope:
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	}
+	select {
+	case out := <-reply:
+		return out.value, out.err
+	case <-ctx.Done():
+		return nil, ctx.Err()
 	}
 }
 
@@ -519,13 +556,33 @@ func (p *Polis) Cast(ctx context.Context, msg CastMessage) error {
 	if msg == nil {
 		return fmt.Errorf("cast message is required")
 	}
-	switch req := msg.(type) {
-	case StopCast:
-		return p.StopWithReason(req.Reason)
-	case InitCast:
-		return p.Init(ctx)
-	default:
-		return fmt.Errorf("unsupported cast message: %T", msg)
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	p.mu.RLock()
+	active := p.mailboxActive
+	castCh := p.mailboxCastCh
+	p.mu.RUnlock()
+	if !active || castCh == nil {
+		err, _ := p.handleCastMessage(ctx, msg, false)
+		return err
+	}
+	reply := make(chan error, 1)
+	envelope := polisCastEnvelope{
+		ctx:   ctx,
+		msg:   msg,
+		reply: reply,
+	}
+	select {
+	case castCh <- envelope:
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+	select {
+	case err := <-reply:
+		return err
+	case <-ctx.Done():
+		return ctx.Err()
 	}
 }
 
@@ -538,6 +595,10 @@ func (p *Polis) Shutdown() {
 }
 
 func (p *Polis) StopWithReason(reason StopReason) error {
+	return p.stopWithReason(reason, false)
+}
+
+func (p *Polis) stopWithReason(reason StopReason, fromMailbox bool) error {
 	if reason == "" {
 		reason = StopReasonNormal
 	}
@@ -545,8 +606,11 @@ func (p *Polis) StopWithReason(reason StopReason) error {
 		return fmt.Errorf("unsupported stop reason: %s", reason)
 	}
 
+	var mailboxDone chan struct{}
 	p.mu.Lock()
-	defer p.mu.Unlock()
+	if !fromMailbox {
+		mailboxDone = p.stopMailboxLocked()
+	}
 	if p.supervisor != nil {
 		p.supervisor.StopAll()
 	}
@@ -565,6 +629,10 @@ func (p *Polis) StopWithReason(reason StopReason) error {
 
 	p.lastStopReason = reason
 	p.resetRuntimeStateLocked()
+	p.mu.Unlock()
+	if mailboxDone != nil {
+		<-mailboxDone
+	}
 	return nil
 }
 
@@ -1048,6 +1116,12 @@ func (p *Polis) LastStopReason() StopReason {
 	return p.lastStopReason
 }
 
+func (p *Polis) MailboxActive() bool {
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+	return p.mailboxActive
+}
+
 func (p *Polis) ActiveSupervisedTasks() []string {
 	p.mu.RLock()
 	supervisor := p.supervisor
@@ -1103,6 +1177,106 @@ func (p *Polis) resetRuntimeStateLocked() {
 		p.supervisor.StopAll()
 	}
 	p.supervisor = NewSupervisor(p.config.SupervisorPolicy)
+}
+
+func (p *Polis) ensureMailboxLocked() {
+	if p.mailboxActive {
+		return
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	callCh := make(chan polisCallEnvelope, 32)
+	castCh := make(chan polisCastEnvelope, 32)
+	done := make(chan struct{})
+	p.mailboxActive = true
+	p.mailboxCallCh = callCh
+	p.mailboxCastCh = castCh
+	p.mailboxCancel = cancel
+	p.mailboxDone = done
+	go p.mailboxLoop(ctx, callCh, castCh, done)
+}
+
+func (p *Polis) stopMailboxLocked() chan struct{} {
+	if !p.mailboxActive || p.mailboxCancel == nil {
+		return nil
+	}
+	done := p.mailboxDone
+	cancel := p.mailboxCancel
+	p.mailboxActive = false
+	p.mailboxCallCh = nil
+	p.mailboxCastCh = nil
+	p.mailboxCancel = nil
+	p.mailboxDone = nil
+	cancel()
+	return done
+}
+
+func (p *Polis) mailboxLoop(
+	ctx context.Context,
+	callCh <-chan polisCallEnvelope,
+	castCh <-chan polisCastEnvelope,
+	done chan struct{},
+) {
+	defer func() {
+		p.mu.Lock()
+		if p.mailboxDone == done {
+			p.mailboxActive = false
+			p.mailboxCallCh = nil
+			p.mailboxCastCh = nil
+			p.mailboxCancel = nil
+			p.mailboxDone = nil
+		}
+		p.mu.Unlock()
+		close(done)
+	}()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case call := <-callCh:
+			value, err, terminate := p.handleCallMessage(call.ctx, call.msg, true)
+			call.reply <- polisCallResponse{value: value, err: err}
+			if terminate {
+				return
+			}
+		case cast := <-castCh:
+			err, terminate := p.handleCastMessage(cast.ctx, cast.msg, true)
+			cast.reply <- err
+			if terminate {
+				return
+			}
+		}
+	}
+}
+
+func (p *Polis) handleCallMessage(ctx context.Context, msg CallMessage, fromMailbox bool) (any, error, bool) {
+	switch req := msg.(type) {
+	case GetScapeCall:
+		p.mu.RLock()
+		started := p.started
+		p.mu.RUnlock()
+		if !started {
+			return GetScapeCallResult{}, fmt.Errorf("polis is not initialized"), false
+		}
+		sc, ok := p.GetScapeByType(req.Type)
+		return GetScapeCallResult{Scape: sc, Found: ok}, nil, false
+	case StopCall:
+		err := p.stopWithReason(req.Reason, fromMailbox)
+		return nil, err, fromMailbox
+	default:
+		return nil, fmt.Errorf("unsupported call message: %T", msg), false
+	}
+}
+
+func (p *Polis) handleCastMessage(ctx context.Context, msg CastMessage, fromMailbox bool) (error, bool) {
+	switch req := msg.(type) {
+	case StopCast:
+		return p.stopWithReason(req.Reason, fromMailbox), fromMailbox
+	case InitCast:
+		return p.Init(ctx), false
+	default:
+		return fmt.Errorf("unsupported cast message: %T", msg), false
+	}
 }
 
 func publicScapeSummaryFromSpec(name string, spec PublicScapeSpec) PublicScapeSummary {

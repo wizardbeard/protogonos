@@ -619,12 +619,16 @@ func TestPolisCallAndCastStopReason(t *testing.T) {
 	if err := p.Cast(ctx, InitCast{}); err != nil {
 		t.Fatalf("cast init: %v", err)
 	}
+	if !p.MailboxActive() {
+		t.Fatal("expected mailbox active after init cast")
+	}
 	if _, err := p.Call(ctx, StopCall{Reason: StopReasonShutdown}); err != nil {
 		t.Fatalf("call stop: %v", err)
 	}
 	if p.Started() {
 		t.Fatal("expected polis stopped by stop call")
 	}
+	waitForMailboxState(t, p, false, 100*time.Millisecond)
 	if p.LastStopReason() != StopReasonShutdown {
 		t.Fatalf("expected call stop reason %q, got=%q", StopReasonShutdown, p.LastStopReason())
 	}
@@ -635,12 +639,16 @@ func TestPolisCallAndCastStopReason(t *testing.T) {
 	if err := p.Cast(ctx, InitCast{}); err != nil {
 		t.Fatalf("cast re-init: %v", err)
 	}
+	if !p.MailboxActive() {
+		t.Fatal("expected mailbox active after cast re-init")
+	}
 	if err := p.Cast(ctx, StopCast{}); err != nil {
 		t.Fatalf("cast stop default: %v", err)
 	}
 	if p.LastStopReason() != StopReasonNormal {
 		t.Fatalf("expected cast default stop reason %q, got=%q", StopReasonNormal, p.LastStopReason())
 	}
+	waitForMailboxState(t, p, false, 100*time.Millisecond)
 }
 
 func TestPolisCallCastRejectUnsupportedMessage(t *testing.T) {
@@ -738,6 +746,18 @@ func waitForAtLeastRuns(t *testing.T, counter *atomic.Int32, min int32, timeout 
 		time.Sleep(2 * time.Millisecond)
 	}
 	t.Fatalf("expected counter >= %d, got=%d", min, counter.Load())
+}
+
+func waitForMailboxState(t *testing.T, p *Polis, active bool, timeout time.Duration) {
+	t.Helper()
+	deadline := time.Now().Add(timeout)
+	for time.Now().Before(deadline) {
+		if p.MailboxActive() == active {
+			return
+		}
+		time.Sleep(2 * time.Millisecond)
+	}
+	t.Fatalf("expected mailbox active=%t, got=%t", active, p.MailboxActive())
 }
 
 func resetDefaultPolisForTest() {
