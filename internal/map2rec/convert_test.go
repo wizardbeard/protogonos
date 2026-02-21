@@ -201,6 +201,14 @@ func TestConvertDispatchesSensorAndActuatorKinds(t *testing.T) {
 	if champion, ok := gotChampion.(ChampionRecord); !ok || champion.Fitness != 0.9 {
 		t.Fatalf("unexpected champion dispatch result: %#v", gotChampion)
 	}
+
+	gotExperiment, err := Convert("experiment", map[string]any{"id": "exp-1"})
+	if err != nil {
+		t.Fatalf("convert experiment: %v", err)
+	}
+	if experiment, ok := gotExperiment.(ExperimentRecord); !ok || experiment.ID != "exp-1" {
+		t.Fatalf("unexpected experiment dispatch result: %#v", gotExperiment)
+	}
 }
 
 func TestConvertConstraintOverridesKnownFieldsAndIgnoresUnknown(t *testing.T) {
@@ -263,6 +271,46 @@ func TestConvertPMPMapsFields(t *testing.T) {
 	}
 	if !math.IsInf(out.FitnessGoal, 1) {
 		t.Fatalf("expected infinite fitness goal, got %f", out.FitnessGoal)
+	}
+}
+
+func TestConvertExperimentMapsFields(t *testing.T) {
+	in := map[string]any{
+		"id":               "exp-1",
+		"backup_flag":      false,
+		"pm_parameters":    map[string]any{"mode": "fast"},
+		"init_constraints": []any{"c1"},
+		"progress_flag":    "completed",
+		"trace_acc":        []any{"t1", "t2"},
+		"run_index":        3,
+		"tot_runs":         12,
+		"notes":            "note",
+		"started":          []any{"2026-02-01", "10:00:00"},
+		"completed":        []any{"2026-02-01", "11:00:00"},
+		"interruptions":    []any{"none"},
+	}
+	out := ConvertExperiment(in)
+	if out.ID != "exp-1" || out.BackupFlag || out.RunIndex != 3 || out.TotalRuns != 12 {
+		t.Fatalf("unexpected experiment conversion: %+v", out)
+	}
+	if len(out.TraceAcc) != 2 || len(out.Interruptions) != 1 || out.ProgressFlag != "completed" {
+		t.Fatalf("unexpected experiment collections/flags: %+v", out)
+	}
+}
+
+func TestConvertExperimentMalformedKnownFieldKeepsDefault(t *testing.T) {
+	out := ConvertExperiment(map[string]any{
+		"backup_flag":   "bad",
+		"trace_acc":     "bad",
+		"interruptions": "bad",
+		"run_index":     "bad",
+		"tot_runs":      "bad",
+	})
+	if !out.BackupFlag || out.RunIndex != 1 || out.TotalRuns != 10 {
+		t.Fatalf("expected defaults for malformed typed fields, got %+v", out)
+	}
+	if len(out.TraceAcc) != 0 || len(out.Interruptions) != 0 {
+		t.Fatalf("expected default empty lists for malformed inputs, got trace=%+v interrupts=%+v", out.TraceAcc, out.Interruptions)
 	}
 }
 

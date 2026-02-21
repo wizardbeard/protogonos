@@ -55,6 +55,21 @@ type PMPRecord struct {
 	CommitteePID       string
 }
 
+type ExperimentRecord struct {
+	ID              any
+	BackupFlag      bool
+	PMParameters    any
+	InitConstraints any
+	ProgressFlag    any
+	TraceAcc        []any
+	RunIndex        int
+	TotalRuns       int
+	Notes           any
+	Started         any
+	Completed       any
+	Interruptions   []any
+}
+
 type SensorRecord struct {
 	ID           any
 	Name         string
@@ -425,6 +440,17 @@ func defaultPMPRecord() PMPRecord {
 		GenerationLimit:    100,
 		EvaluationsLimit:   100000,
 		FitnessGoal:        math.Inf(1),
+	}
+}
+
+func defaultExperimentRecord() ExperimentRecord {
+	return ExperimentRecord{
+		BackupFlag:    true,
+		ProgressFlag:  "in_progress",
+		TraceAcc:      []any{},
+		RunIndex:      1,
+		TotalRuns:     10,
+		Interruptions: []any{},
 	}
 }
 

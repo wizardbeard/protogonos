@@ -8,6 +8,8 @@ func Convert(kind string, in map[string]any) (any, error) {
 		return ConvertConstraint(in), nil
 	case "pmp":
 		return ConvertPMP(in), nil
+	case "experiment":
+		return ConvertExperiment(in), nil
 	case "sensor":
 		return ConvertSensor(in), nil
 	case "actuator":
@@ -202,6 +204,49 @@ func ConvertPMP(in map[string]any) PMPRecord {
 		case "committee_pid":
 			if s, ok := asString(val); ok {
 				out.CommitteePID = s
+			}
+		}
+	}
+	return out
+}
+
+func ConvertExperiment(in map[string]any) ExperimentRecord {
+	out := defaultExperimentRecord()
+	for key, val := range in {
+		switch key {
+		case "id":
+			out.ID = val
+		case "backup_flag":
+			if b, ok := asBool(val); ok {
+				out.BackupFlag = b
+			}
+		case "pm_parameters":
+			out.PMParameters = val
+		case "init_constraints":
+			out.InitConstraints = val
+		case "progress_flag":
+			out.ProgressFlag = val
+		case "trace_acc":
+			if xs, ok := asAnySlice(val); ok {
+				out.TraceAcc = xs
+			}
+		case "run_index":
+			if n, ok := asInt(val); ok {
+				out.RunIndex = n
+			}
+		case "tot_runs":
+			if n, ok := asInt(val); ok {
+				out.TotalRuns = n
+			}
+		case "notes":
+			out.Notes = val
+		case "started":
+			out.Started = val
+		case "completed":
+			out.Completed = val
+		case "interruptions":
+			if xs, ok := asAnySlice(val); ok {
+				out.Interruptions = xs
 			}
 		}
 	}

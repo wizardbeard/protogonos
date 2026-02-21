@@ -55,6 +55,15 @@ func asFloat64(v any) (float64, bool) {
 	}
 }
 
+func asBool(v any) (bool, bool) {
+	switch x := v.(type) {
+	case bool:
+		return x, true
+	default:
+		return false, false
+	}
+}
+
 func asStrings(v any) ([]string, bool) {
 	switch xs := v.(type) {
 	case []string:
