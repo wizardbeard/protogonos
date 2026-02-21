@@ -28,6 +28,8 @@ type SupervisorRestartPolicy string
 
 const (
 	SupervisorRestartPermanent SupervisorRestartPolicy = "permanent"
+	SupervisorRestartTransient SupervisorRestartPolicy = "transient"
+	SupervisorRestartTemporary SupervisorRestartPolicy = "temporary"
 )
 
 type SupervisorChildSpec struct {
@@ -133,6 +135,11 @@ func (s *Supervisor) StartSpec(spec SupervisorChildSpec, run func(ctx context.Co
 	if spec.Restart == "" {
 		spec.Restart = SupervisorRestartPermanent
 	}
+	switch spec.Restart {
+	case SupervisorRestartPermanent, SupervisorRestartTransient, SupervisorRestartTemporary:
+	default:
+		spec.Restart = SupervisorRestartPermanent
+	}
 
 	s.mu.Lock()
 	if _, exists := s.tasks[spec.Name]; exists {
@@ -170,7 +177,8 @@ func (s *Supervisor) runTask(name string, task *supervisorTask, ctx context.Cont
 		if ctx.Err() != nil {
 			return
 		}
-		if err == nil {
+		restart := shouldRestart(specRestartPolicy(task), err)
+		if !restart {
 			return
 		}
 		s.mu.Lock()
@@ -208,6 +216,29 @@ func (s *Supervisor) runTask(name string, task *supervisorTask, ctx context.Cont
 			next = s.policy.MaxBackoff
 		}
 		backoff = next
+	}
+}
+
+func specRestartPolicy(task *supervisorTask) SupervisorRestartPolicy {
+	if task == nil {
+		return SupervisorRestartPermanent
+	}
+	if task.spec.Restart == "" {
+		return SupervisorRestartPermanent
+	}
+	return task.spec.Restart
+}
+
+func shouldRestart(policy SupervisorRestartPolicy, err error) bool {
+	switch policy {
+	case SupervisorRestartPermanent:
+		return true
+	case SupervisorRestartTransient:
+		return err != nil
+	case SupervisorRestartTemporary:
+		return false
+	default:
+		return true
 	}
 }
 

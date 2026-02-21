@@ -115,6 +115,36 @@ func (s *supervisedManagedTestScape) Supervise(ctx context.Context) error {
 	return ctx.Err()
 }
 
+type scriptedSupervisedSupportModule struct {
+	testSupportModule
+	superviseRuns atomic.Int32
+	superviseFn   func(context.Context) error
+}
+
+func (m *scriptedSupervisedSupportModule) Supervise(ctx context.Context) error {
+	m.superviseRuns.Add(1)
+	if m.superviseFn != nil {
+		return m.superviseFn(ctx)
+	}
+	<-ctx.Done()
+	return ctx.Err()
+}
+
+type scriptedSupervisedManagedScape struct {
+	managedTestScape
+	superviseRuns atomic.Int32
+	superviseFn   func(context.Context) error
+}
+
+func (s *scriptedSupervisedManagedScape) Supervise(ctx context.Context) error {
+	s.superviseRuns.Add(1)
+	if s.superviseFn != nil {
+		return s.superviseFn(ctx)
+	}
+	<-ctx.Done()
+	return ctx.Err()
+}
+
 func TestPolisInitAndRegisterScape(t *testing.T) {
 	p := NewPolis(Config{Store: storage.NewMemoryStore()})
 	if err := p.Init(context.Background()); err != nil {
@@ -858,6 +888,72 @@ func TestPolisOneForAllSupervisorStrategyStopsSiblingTasks(t *testing.T) {
 	last := failures[len(failures)-1]
 	if last.TaskName != supervisedSupportTaskName("failing-module") {
 		t.Fatalf("unexpected supervision failure task name: %s", last.TaskName)
+	}
+}
+
+func TestPolisSupportModuleTemporaryPolicyNoRestartOnError(t *testing.T) {
+	module := &scriptedSupervisedSupportModule{
+		testSupportModule: testSupportModule{name: "temporary-module"},
+		superviseFn: func(context.Context) error {
+			return errors.New("boom")
+		},
+	}
+	p := NewPolis(Config{
+		Store: storage.NewMemoryStore(),
+	})
+	if err := p.Init(context.Background()); err != nil {
+		t.Fatalf("init failed: %v", err)
+	}
+	if err := p.AddSupportModuleWithPolicy(context.Background(), module, SupervisorRestartTemporary); err != nil {
+		t.Fatalf("add support module with temporary policy: %v", err)
+	}
+	time.Sleep(20 * time.Millisecond)
+	if module.superviseRuns.Load() != 1 {
+		t.Fatalf("expected temporary support module supervise runs=1, got=%d", module.superviseRuns.Load())
+	}
+	if len(p.ActiveSupervisedTasks()) != 0 {
+		t.Fatalf("expected temporary support module not supervised after error exit, got=%v", p.ActiveSupervisedTasks())
+	}
+	if !p.Started() {
+		t.Fatal("expected polis to remain started")
+	}
+	if len(p.SupervisionFailures()) != 0 {
+		t.Fatalf("expected no supervision failures for temporary policy, got=%+v", p.SupervisionFailures())
+	}
+}
+
+func TestPolisPublicScapeTransientPolicyNoRestartOnNormalExit(t *testing.T) {
+	public := &scriptedSupervisedManagedScape{
+		managedTestScape: managedTestScape{testScape: testScape{name: "transient-scape"}},
+		superviseFn: func(context.Context) error {
+			return nil
+		},
+	}
+	p := NewPolis(Config{
+		Store: storage.NewMemoryStore(),
+		PublicScapes: []PublicScapeSpec{
+			{
+				Scape:         public,
+				Type:          "transient-type",
+				RestartPolicy: SupervisorRestartTransient,
+			},
+		},
+	})
+	if err := p.Init(context.Background()); err != nil {
+		t.Fatalf("init failed: %v", err)
+	}
+	time.Sleep(20 * time.Millisecond)
+	if public.superviseRuns.Load() != 1 {
+		t.Fatalf("expected transient public scape supervise runs=1, got=%d", public.superviseRuns.Load())
+	}
+	if len(p.ActiveSupervisedTasks()) != 0 {
+		t.Fatalf("expected no active supervised tasks for transient normal exit, got=%v", p.ActiveSupervisedTasks())
+	}
+	if _, ok := p.GetScapeByType("transient-type"); !ok {
+		t.Fatal("expected transient public scape registration to remain available")
+	}
+	if len(p.SupervisionFailures()) != 0 {
+		t.Fatalf("expected no supervision failures for transient normal exit, got=%+v", p.SupervisionFailures())
 	}
 }
 

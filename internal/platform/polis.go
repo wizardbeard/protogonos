@@ -18,6 +18,7 @@ import (
 type Config struct {
 	Store                       storage.Store
 	SupportModules              []SupportModule
+	SupportModuleRestartPolicy  SupervisorRestartPolicy
 	PublicScapes                []PublicScapeSpec
 	SupervisorPolicy            SupervisorPolicy
 	EscalateOnSupervisorFailure bool
@@ -31,19 +32,21 @@ type SupportModule interface {
 }
 
 type PublicScapeSpec struct {
-	Scape      scape.Scape
-	Type       string
-	Parameters []any
-	Metabolics any
-	Physics    any
+	Scape         scape.Scape
+	Type          string
+	Parameters    []any
+	Metabolics    any
+	Physics       any
+	RestartPolicy SupervisorRestartPolicy
 }
 
 type PublicScapeSummary struct {
-	Name       string `json:"name"`
-	Type       string `json:"type,omitempty"`
-	Parameters []any  `json:"parameters,omitempty"`
-	Metabolics any    `json:"metabolics,omitempty"`
-	Physics    any    `json:"physics,omitempty"`
+	Name          string                  `json:"name"`
+	Type          string                  `json:"type,omitempty"`
+	Parameters    []any                   `json:"parameters,omitempty"`
+	Metabolics    any                     `json:"metabolics,omitempty"`
+	Physics       any                     `json:"physics,omitempty"`
+	RestartPolicy SupervisorRestartPolicy `json:"restart_policy,omitempty"`
 }
 
 type StopReason string
@@ -280,7 +283,7 @@ func (p *Polis) Init(ctx context.Context) error {
 			p.resetRuntimeStateLocked()
 			return fmt.Errorf("duplicate support module: %s", name)
 		}
-		if err := p.startSupportModule(ctx, name, module); err != nil {
+		if err := p.startSupportModule(ctx, name, module, p.config.SupportModuleRestartPolicy); err != nil {
 			stopSupportModules(ctx, startedModules)
 			p.resetRuntimeStateLocked()
 			return fmt.Errorf("start support module %s: %w", name, err)
@@ -311,7 +314,7 @@ func (p *Polis) Init(ctx context.Context) error {
 			return fmt.Errorf("duplicate public scape: %s", name)
 		}
 		summary := publicScapeSummaryFromSpec(name, spec)
-		if err := p.startPublicScape(ctx, name, spec.Scape, summary); err != nil {
+		if err := p.startPublicScape(ctx, name, spec.Scape, summary, summary.RestartPolicy); err != nil {
 			stopManagedScapes(ctx, startedScapes)
 			stopSupportModules(ctx, startedModules)
 			p.resetRuntimeStateLocked()
@@ -367,6 +370,14 @@ func (p *Polis) RegisterScape(s scape.Scape) error {
 }
 
 func (p *Polis) AddSupportModule(ctx context.Context, module SupportModule) error {
+	return p.AddSupportModuleWithPolicy(ctx, module, p.config.SupportModuleRestartPolicy)
+}
+
+func (p *Polis) AddSupportModuleWithPolicy(
+	ctx context.Context,
+	module SupportModule,
+	restartPolicy SupervisorRestartPolicy,
+) error {
 	if module == nil {
 		return fmt.Errorf("support module is nil")
 	}
@@ -384,7 +395,7 @@ func (p *Polis) AddSupportModule(ctx context.Context, module SupportModule) erro
 	if _, exists := p.supportModules[name]; exists {
 		return fmt.Errorf("support module already registered: %s", name)
 	}
-	if err := p.startSupportModule(ctx, name, module); err != nil {
+	if err := p.startSupportModule(ctx, name, module, restartPolicy); err != nil {
 		return fmt.Errorf("start support module %s: %w", name, err)
 	}
 	p.supportModules[name] = module
@@ -441,7 +452,7 @@ func (p *Polis) AddPublicScape(ctx context.Context, spec PublicScapeSpec) error 
 		return fmt.Errorf("duplicate public scape: %s", name)
 	}
 	summary := publicScapeSummaryFromSpec(name, spec)
-	if err := p.startPublicScape(ctx, name, spec.Scape, summary); err != nil {
+	if err := p.startPublicScape(ctx, name, spec.Scape, summary, summary.RestartPolicy); err != nil {
 		return fmt.Errorf("start public scape %s: %w", name, err)
 	}
 	p.scapes[name] = spec.Scape
@@ -1347,12 +1358,17 @@ func errString(err error) string {
 }
 
 func publicScapeSummaryFromSpec(name string, spec PublicScapeSpec) PublicScapeSummary {
+	restart := spec.RestartPolicy
+	if restart == "" {
+		restart = SupervisorRestartPermanent
+	}
 	summary := PublicScapeSummary{
-		Name:       name,
-		Type:       spec.Type,
-		Parameters: append([]any(nil), spec.Parameters...),
-		Metabolics: spec.Metabolics,
-		Physics:    spec.Physics,
+		Name:          name,
+		Type:          spec.Type,
+		Parameters:    append([]any(nil), spec.Parameters...),
+		Metabolics:    spec.Metabolics,
+		Physics:       spec.Physics,
+		RestartPolicy: restart,
 	}
 	if summary.Type == "" {
 		summary.Type = name
@@ -1368,7 +1384,12 @@ func supervisedScapeTaskName(name string) string {
 	return "scape:" + name
 }
 
-func (p *Polis) startSupportModule(ctx context.Context, name string, module SupportModule) error {
+func (p *Polis) startSupportModule(
+	ctx context.Context,
+	name string,
+	module SupportModule,
+	restartPolicy SupervisorRestartPolicy,
+) error {
 	if err := module.Start(ctx); err != nil {
 		return err
 	}
@@ -1382,7 +1403,7 @@ func (p *Polis) startSupportModule(ctx context.Context, name string, module Supp
 	spec := SupervisorChildSpec{
 		Name:    supervisedSupportTaskName(name),
 		Group:   "support",
-		Restart: SupervisorRestartPermanent,
+		Restart: restartPolicy,
 	}
 	if err := p.supervisor.StartSpec(spec, supervised.Supervise); err != nil {
 		_ = module.Stop(ctx)
@@ -1398,7 +1419,13 @@ func stopSupportModuleWithReason(ctx context.Context, module SupportModule, reas
 	return module.Stop(ctx)
 }
 
-func (p *Polis) startPublicScape(ctx context.Context, name string, sc scape.Scape, summary PublicScapeSummary) error {
+func (p *Polis) startPublicScape(
+	ctx context.Context,
+	name string,
+	sc scape.Scape,
+	summary PublicScapeSummary,
+	restartPolicy SupervisorRestartPolicy,
+) error {
 	managed, ok := sc.(managedScape)
 	managedStarted := false
 	if ok {
@@ -1424,7 +1451,7 @@ func (p *Polis) startPublicScape(ctx context.Context, name string, sc scape.Scap
 	spec := SupervisorChildSpec{
 		Name:    supervisedScapeTaskName(name),
 		Group:   "scape",
-		Restart: SupervisorRestartPermanent,
+		Restart: restartPolicy,
 	}
 	if err := p.supervisor.StartSpec(spec, supervised.Supervise); err != nil {
 		if managedStarted {

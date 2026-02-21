@@ -234,3 +234,87 @@ func TestSupervisorChildrenExposeSpecAndStatus(t *testing.T) {
 	}
 	t.Fatalf("expected child status with restart metadata, got=%+v", supervisor.Children())
 }
+
+func TestSupervisorPermanentRestartsOnNormalExit(t *testing.T) {
+	supervisor := NewSupervisor(SupervisorPolicy{
+		InitialBackoff: time.Millisecond,
+		MaxBackoff:     time.Millisecond,
+		BackoffFactor:  1,
+	})
+	var calls atomic.Int32
+	if err := supervisor.StartSpec(SupervisorChildSpec{
+		Name:    "permanent-normal",
+		Restart: SupervisorRestartPermanent,
+	}, func(ctx context.Context) error {
+		call := calls.Add(1)
+		if call <= 2 {
+			return nil
+		}
+		<-ctx.Done()
+		return ctx.Err()
+	}); err != nil {
+		t.Fatalf("start permanent-normal task: %v", err)
+	}
+	deadline := time.Now().Add(250 * time.Millisecond)
+	for time.Now().Before(deadline) {
+		if calls.Load() >= 3 {
+			break
+		}
+		time.Sleep(2 * time.Millisecond)
+	}
+	if calls.Load() < 3 {
+		t.Fatalf("expected permanent task restart on normal exit, got calls=%d", calls.Load())
+	}
+	supervisor.StopAll()
+}
+
+func TestSupervisorTransientDoesNotRestartOnNormalExit(t *testing.T) {
+	supervisor := NewSupervisor(SupervisorPolicy{
+		InitialBackoff: time.Millisecond,
+		MaxBackoff:     time.Millisecond,
+		BackoffFactor:  1,
+	})
+	var calls atomic.Int32
+	if err := supervisor.StartSpec(SupervisorChildSpec{
+		Name:    "transient-normal",
+		Restart: SupervisorRestartTransient,
+	}, func(context.Context) error {
+		calls.Add(1)
+		return nil
+	}); err != nil {
+		t.Fatalf("start transient-normal task: %v", err)
+	}
+	time.Sleep(20 * time.Millisecond)
+	if calls.Load() != 1 {
+		t.Fatalf("expected one transient call on normal exit, got=%d", calls.Load())
+	}
+	if len(supervisor.Tasks()) != 0 {
+		t.Fatalf("expected no active transient task after normal exit, got=%v", supervisor.Tasks())
+	}
+}
+
+func TestSupervisorTemporaryDoesNotRestartOnError(t *testing.T) {
+	supervisor := NewSupervisor(SupervisorPolicy{
+		InitialBackoff: time.Millisecond,
+		MaxBackoff:     time.Millisecond,
+		BackoffFactor:  1,
+		MaxRestarts:    100,
+	})
+	var calls atomic.Int32
+	if err := supervisor.StartSpec(SupervisorChildSpec{
+		Name:    "temporary-error",
+		Restart: SupervisorRestartTemporary,
+	}, func(context.Context) error {
+		calls.Add(1)
+		return errors.New("boom")
+	}); err != nil {
+		t.Fatalf("start temporary-error task: %v", err)
+	}
+	time.Sleep(20 * time.Millisecond)
+	if calls.Load() != 1 {
+		t.Fatalf("expected one temporary call on error, got=%d", calls.Load())
+	}
+	if len(supervisor.Tasks()) != 0 {
+		t.Fatalf("expected no active temporary task after error exit, got=%v", supervisor.Tasks())
+	}
+}
