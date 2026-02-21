@@ -41,7 +41,7 @@ Status keys:
 | `substrate.erl` | `partial` | Substrate scaffolding/runtime integrated; expanded behavior parity pending. |
 | `substrate_cpp.erl` | `partial` | CPP registry/runtime hooks implemented in baseline form. |
 | `substrate_cep.erl` | `partial` | CEP registry/runtime hooks implemented in baseline form. |
-| `benchmarker.erl` | `partial` | CLI benchmark workflow + run artifacts + parity profile loader implemented; full report/stat format parity pending. |
+| `benchmarker.erl` | `partial` | CLI benchmark workflow + run artifacts + parity profile loader implemented, with benchmark summary series stats (`best_mean`/`best_std`/`best_min`/`best_max`) persisted alongside initial/final improvement checks; full report/stat format parity pending. |
 | `data_extractor.erl` | `todo` | No dedicated ingestion utility module yet. |
 | `epitopes.erl` | `todo` | No equivalent utility module yet. |
 | `dxnn2_app.erl` | `n/a` | OTP app boot parity intentionally replaced by CLI/API runtime model. |
@@ -207,6 +207,7 @@ Status keys:
 - Expanded `map2rec` record-materialization coverage with `layer2` conversion (including record-default field values and malformed-field fallback tests) to track additional `records.hrl` surface.
 - Expanded `map2rec` record-materialization coverage with `layer_spec` conversion (including typed integer field fallback behavior) to track additional `records.hrl` surface.
 - Expanded `map2rec` record-materialization coverage with `neurode` conversion (including defaults and malformed-field fallback tests) to track additional `records.hrl` surface.
+- Expanded benchmark artifact parity by persisting series-level best-fitness summary stats (`best_mean`/`best_std`/`best_min`/`best_max`) in `benchmark_summary.json`, with CLI output and regression coverage.
 
 ## Highest-priority remaining gaps to reach strict parity
 
