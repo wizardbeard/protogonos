@@ -2436,6 +2436,34 @@ func TestChangePlasticityRuleMutation(t *testing.T) {
 	}
 }
 
+func TestDefaultPlasticityRulesIncludeExtendedReferenceSurface(t *testing.T) {
+	rules := defaultPlasticityRules()
+	required := []string{
+		nn.PlasticityNone,
+		nn.PlasticityHebbian,
+		nn.PlasticityOja,
+		nn.PlasticitySelfModulationV1,
+		nn.PlasticitySelfModulationV2,
+		nn.PlasticitySelfModulationV3,
+		nn.PlasticitySelfModulationV4,
+		nn.PlasticitySelfModulationV5,
+		nn.PlasticitySelfModulationV6,
+		nn.PlasticityNeuromodulation,
+	}
+	for _, want := range required {
+		found := false
+		for _, got := range rules {
+			if got == want {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Fatalf("default plasticity rule set missing %q: got=%v", want, rules)
+		}
+	}
+}
+
 func TestPlasticityRuleMutatorsCancelWithoutPlasticityConfig(t *testing.T) {
 	genome := randomGenome(rand.New(rand.NewSource(335)))
 

@@ -1309,7 +1309,7 @@ func (o *ChangePlasticityRule) Apply(_ context.Context, genome model.Genome) (mo
 	}
 	rules := o.Rules
 	if len(rules) == 0 {
-		rules = []string{nn.PlasticityNone, nn.PlasticityHebbian, nn.PlasticityOja}
+		rules = defaultPlasticityRules()
 	}
 
 	current := genome.Plasticity.Rule
@@ -1345,7 +1345,7 @@ func (o *MutatePF) Applicable(genome model.Genome, _ string) bool {
 	}
 	rules := append([]string(nil), o.Rules...)
 	if len(rules) == 0 {
-		rules = []string{nn.PlasticityNone, nn.PlasticityHebbian, nn.PlasticityOja}
+		rules = defaultPlasticityRules()
 	}
 	normalized := normalizePlasticityRuleOptions(rules)
 	if len(normalized) == 0 {
@@ -1371,7 +1371,7 @@ func (o *MutatePF) Apply(_ context.Context, genome model.Genome) (model.Genome, 
 	}
 	rules := append([]string(nil), o.Rules...)
 	if len(rules) == 0 {
-		rules = []string{nn.PlasticityNone, nn.PlasticityHebbian, nn.PlasticityOja}
+		rules = defaultPlasticityRules()
 	}
 	normalized := make([]string, 0, len(rules))
 	for _, rule := range rules {
@@ -2969,6 +2969,21 @@ func normalizePlasticityRuleOptions(rules []string) []string {
 		out = append(out, name)
 	}
 	return out
+}
+
+func defaultPlasticityRules() []string {
+	return []string{
+		nn.PlasticityNone,
+		nn.PlasticityHebbian,
+		nn.PlasticityOja,
+		nn.PlasticitySelfModulationV1,
+		nn.PlasticitySelfModulationV2,
+		nn.PlasticitySelfModulationV3,
+		nn.PlasticitySelfModulationV4,
+		nn.PlasticitySelfModulationV5,
+		nn.PlasticitySelfModulationV6,
+		nn.PlasticityNeuromodulation,
+	}
 }
 
 type neuronSpreadTarget struct {
