@@ -101,6 +101,11 @@ type Polis struct {
 	config Config
 }
 
+var (
+	defaultPolisMu sync.Mutex
+	defaultPolis   *Polis
+)
+
 func NewPolis(cfg Config) *Polis {
 	return &Polis{
 		store:          cfg.Store,
@@ -111,6 +116,51 @@ func NewPolis(cfg Config) *Polis {
 		config:         cfg,
 		lastStopReason: StopReasonNormal,
 	}
+}
+
+func StartDefault(ctx context.Context, cfg Config) (*Polis, error) {
+	defaultPolisMu.Lock()
+	defer defaultPolisMu.Unlock()
+
+	if defaultPolis != nil && defaultPolis.Started() {
+		return defaultPolis, nil
+	}
+
+	p := NewPolis(cfg)
+	if err := p.Init(ctx); err != nil {
+		return nil, err
+	}
+	defaultPolis = p
+	return defaultPolis, nil
+}
+
+func Default() (*Polis, bool) {
+	defaultPolisMu.Lock()
+	p := defaultPolis
+	defaultPolisMu.Unlock()
+
+	if p == nil || !p.Started() {
+		return nil, false
+	}
+	return p, true
+}
+
+func StopDefault(reason StopReason) error {
+	defaultPolisMu.Lock()
+	p := defaultPolis
+	defaultPolisMu.Unlock()
+	if p == nil {
+		return nil
+	}
+	if err := p.StopWithReason(reason); err != nil {
+		return err
+	}
+	defaultPolisMu.Lock()
+	if defaultPolis == p {
+		defaultPolis = nil
+	}
+	defaultPolisMu.Unlock()
+	return nil
 }
 
 func (p *Polis) Init(ctx context.Context) error {

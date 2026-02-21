@@ -295,3 +295,73 @@ func TestPolisStopWithReasonRejectsInvalidReason(t *testing.T) {
 		t.Fatal("expected polis to remain started after invalid stop reason")
 	}
 }
+
+func TestStartDefaultReusesRunningPolis(t *testing.T) {
+	resetDefaultPolisForTest()
+	t.Cleanup(resetDefaultPolisForTest)
+
+	ctx := context.Background()
+	first, err := StartDefault(ctx, Config{Store: storage.NewMemoryStore()})
+	if err != nil {
+		t.Fatalf("start default first: %v", err)
+	}
+	second, err := StartDefault(ctx, Config{Store: storage.NewMemoryStore()})
+	if err != nil {
+		t.Fatalf("start default second: %v", err)
+	}
+	if first != second {
+		t.Fatal("expected second start to reuse running default polis")
+	}
+	if _, ok := Default(); !ok {
+		t.Fatal("expected default polis to be discoverable while running")
+	}
+	if err := StopDefault(StopReasonNormal); err != nil {
+		t.Fatalf("stop default: %v", err)
+	}
+	if first.Started() {
+		t.Fatal("expected default polis instance to be stopped")
+	}
+	if first.LastStopReason() != StopReasonNormal {
+		t.Fatalf("expected default stop reason %q, got=%q", StopReasonNormal, first.LastStopReason())
+	}
+	if _, ok := Default(); ok {
+		t.Fatal("expected no default polis after stop")
+	}
+
+	third, err := StartDefault(ctx, Config{Store: storage.NewMemoryStore()})
+	if err != nil {
+		t.Fatalf("start default third: %v", err)
+	}
+	if third == first {
+		t.Fatal("expected restarted default polis to allocate a new instance")
+	}
+}
+
+func TestStopDefaultRejectsInvalidReason(t *testing.T) {
+	resetDefaultPolisForTest()
+	t.Cleanup(resetDefaultPolisForTest)
+
+	ctx := context.Background()
+	if _, err := StartDefault(ctx, Config{Store: storage.NewMemoryStore()}); err != nil {
+		t.Fatalf("start default: %v", err)
+	}
+	if err := StopDefault(StopReason("bad")); err == nil {
+		t.Fatal("expected invalid default stop reason to fail")
+	}
+	if _, ok := Default(); !ok {
+		t.Fatal("expected default polis to remain available after invalid stop reason")
+	}
+	if err := StopDefault(StopReasonShutdown); err != nil {
+		t.Fatalf("stop default shutdown: %v", err)
+	}
+}
+
+func resetDefaultPolisForTest() {
+	defaultPolisMu.Lock()
+	p := defaultPolis
+	defaultPolis = nil
+	defaultPolisMu.Unlock()
+	if p != nil {
+		p.Stop()
+	}
+}
