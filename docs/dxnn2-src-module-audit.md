@@ -4,7 +4,7 @@ This audit is based on the local reference implementation at `.ref/src`.
 
 ## Audit date
 
-- 2026-02-10
+- 2026-02-21
 
 ## Verification source
 
@@ -35,7 +35,7 @@ Status legend:
 | `tuning_selection.erl` | exoself selection schedule variants | `internal/tuning/exoself.go` with reference mode-name coverage (`dynamic`/`dynamic_random`/`active`/`active_random`/`current`/`current_random`/`all`/`all_random`) and legacy aliases (`recent`/`recent_random`/`lastgen`/`lastgen_random`) via CLI/API/config normalization, including probabilistic `*_random` subset selection (`1/sqrt(N)` + non-empty fallback), generation-aware age filtering inferred from genome IDs, `all`/`all_random` full-pool behavior, `lastgen*` alias alignment to current-generation selection semantics, reference-aligned mode-specific empty-pool fallback behavior in exoself and `mutate_weights` (`active` no fallback/no-op; `active_random`/`current*`/`dynamic*` first-candidate fallback), exoself age-annealed spread application (`perturbation_range*pi*annealing^age`) with direct actuator-local perturbation (per-actuator tunables), and mirrored age-annealed direct actuator-target handling in `mutate_weights` using neuron/actuator generation metadata with tagged-ID fallback | `implemented` | `internal/tuning/exoself.go`, `internal/tuning/exoself_test.go`, `cmd/protogonosctl/main.go`, `pkg/protogonos/api.go`, `cmd/protogonosctl/config.go`, `.ref/src/tuning_selection.erl` |
 | `tuning_duration.erl` | tuning-attempt duration policies | `internal/tuning/policy.go` + API/CLI/config alias normalization (`const`/`nsize_proportional`/`wsize_proportional`) with distinct `nsize_proportional` and `wsize_proportional` attempt formulas | `implemented` | `internal/tuning/policy.go`, `internal/tuning/policy_test.go`, `pkg/protogonos/api.go`, `cmd/protogonosctl/config.go`, `.ref/src/tuning_duration.erl` |
 | `tot_topological_mutations.erl` | mutation-count policy functions | `internal/evo/topological_mutations.go` + monitor integration + map2rec constraint materialization into run config, including stochastic `ncount_exponential` range semantics aligned to reference (`uniform(1..round(n^power))`) | `implemented` | `internal/evo/topological_mutations.go`, `internal/evo/topological_mutations_test.go`, `internal/evo/population_monitor.go`, `cmd/protogonosctl/config.go`, `.ref/src/tot_topological_mutations.erl` |
-| `functions.erl` | activation/math utility set | `internal/nn/registry.go` built-ins with expanded reference-style activation catalog (sin/cos/gaussian/sqrt/log/threshold families) | `partial` | `internal/nn/registry.go`, `internal/nn/registry_test.go`, `.ref/src/functions.erl` |
+| `functions.erl` | activation/math utility set | activation registry plus non-activation utility parity surface in `internal/nn/functions.go` (`saturation`/`sat`/`sat_dzone`/`scale`, `avg`/`std`, vector/coordinate helpers, IOW variants, and explicit-state `s/1` analogue via `XORDemoStep`) | `implemented` | `internal/nn/registry.go`, `internal/nn/registry_test.go`, `internal/nn/functions.go`, `internal/nn/functions_test.go`, `.ref/src/functions.erl` |
 | `derivatives.erl` | derivative functions for activations | `internal/nn/derivatives.go` with expanded reference-style derivative surface (`linear`/`sigmoid1`/`multiquadric`/`sqrt`/`log` plus clipping parity for `sigmoid`/`gaussian`) | `implemented` | `internal/nn/derivatives.go`, `internal/nn/derivatives_test.go`, `.ref/src/derivatives.erl` |
 | `plasticity.erl` | Hebbian/Oja/etc plasticity rules | `internal/nn/plasticity.go` + cortex integration with explicit PF handling for `hebbian`/`hebbian_w`, `oja`/`ojas`/`ojas_w`, `self_modulationV1..V6`, and `neuromodulation`; `hebbian_w`/`ojas_w` use per-synapse learning parameters (`synapse.plasticity_params`) with fallback-rate behavior, self-modulation retains per-target-neuron rule/rate precedence and generalized Hebbian coefficients (`A/B/C/D`) with dynamic-term extraction from both synapse and bias vectors (`plasticity_params`/`plasticity_bias_params`), and neuromodulation dead-zone scaling is integrated; mutation choreography now aligns to rule families via `mutate_pf` (rule-transition neural default reseeding + rule-family vector-width reseeding/clearing) and `mutate_plasticity_parameters` (rule-width vector perturbation `1/sqrt(total_parameters)`, V2/V3/V5 coefficient schedules, signed `hebbian`/`oja` neural-parameter updates, neuromodulation `[rate,A,B,C,D]` `1/sqrt(5)` scheduling, input-before-bias traversal ordering, and `none` cancellation with empty-neuron-rule fallback to genome defaults) | `implemented` | `internal/nn/plasticity.go`, `internal/nn/plasticity_test.go`, `internal/model/types.go`, `internal/genotype/clone.go`, `internal/genotype/genotype_test.go`, `internal/evo/mutations.go`, `internal/evo/mutations_test.go`, `internal/agent/cortex.go`, `.ref/src/plasticity.erl` |
 | `signal_aggregator.erl` | dot/mult/diff aggregation modes | selectable per-neuron aggregation in forward path with reference-aligned multiplicative `mult_product` behavior and stateful `diff_product` previous-input differencing semantics across cortex steps | `implemented` | `internal/nn/network.go`, `internal/nn/network_test.go`, `internal/agent/cortex.go`, `internal/agent/cortex_test.go`, `.ref/src/signal_aggregator.erl` |
@@ -43,7 +43,7 @@ Status legend:
 | `specie_identifier.erl` | species topology identifiers | `internal/evo/specie_identifier.go` + species tournament selector with explicit `tot_n` parity mapping (and topology fallback), wired through config/API/runtime selection | `implemented` | `internal/evo/specie_identifier.go`, `internal/evo/specie_identifier_test.go`, `internal/evo/selection.go`, `cmd/protogonosctl/config.go`, `pkg/protogonos/api.go`, `.ref/src/specie_identifier.erl` |
 | `fitness_postprocessor.erl` | post-fitness adjustment (size/novelty) | `internal/evo/fitness_postprocessor.go` + monitor integration + CLI/API alias mapping (`nsize_proportional`) + map2rec config materialization (`constraint.population_fitness_postprocessor_f`) + reference `size_proportional` exponent parity (`EFF=0.05`) + reference `novelty_proportional` placeholder parity (no-op) | `implemented` | `internal/evo/fitness_postprocessor.go`, `internal/evo/fitness_postprocessor_test.go`, `internal/evo/population_monitor.go`, `cmd/protogonosctl/main.go`, `cmd/protogonosctl/config.go`, `pkg/protogonos/api.go`, `.ref/src/fitness_postprocessor.erl` |
 | `benchmarker.erl` | experiment orchestration/reporting/graphs | `benchmark` command + artifacts + profile resolution views | `partial` | `cmd/protogonosctl/main.go`, `cmd/protogonosctl/profiles.go`, `internal/stats/artifacts.go`, `.ref/src/benchmarker.erl` |
-| `map2rec.erl` | map->record conversion helpers | `internal/map2rec` (broad baseline parity across core records including `constraint`/`pmp`/`sensor`/`actuator`/`neuron`/`agent`/`cortex`/`specie`/`population`/`trace`/`stat`/`topology_summary`/`signature`/`champion`) + runtime use in parity profile ingestion and `run/benchmark --config` ingestion | `partial` | `internal/map2rec/convert.go`, `internal/map2rec/convert_test.go`, `cmd/protogonosctl/profiles.go`, `cmd/protogonosctl/config.go`, `cmd/protogonosctl/main.go`, `cmd/protogonosctl/main_integration_test.go`, `.ref/src/map2rec.erl` |
+| `map2rec.erl` | map->record conversion helpers | `internal/map2rec` with broad record-materialization parity (`constraint`/`pmp`/`sensor`/`actuator`/`neuron`/`agent`/`cortex`/`substrate`/`polis`/`scape`/`sector`/`avatar`/`object`/`circle`/`square`/`line`/`e`/`a`/`specie`/`population`/`trace`/`stat`/`topology_summary`/`signature`/`champion`) plus runtime use in profile/config ingestion (`run`/`benchmark --config`) | `implemented` | `internal/map2rec/convert.go`, `internal/map2rec/convert_test.go`, `cmd/protogonosctl/profiles.go`, `cmd/protogonosctl/config.go`, `cmd/protogonosctl/main.go`, `cmd/protogonosctl/main_integration_test.go`, `.ref/src/map2rec.erl` |
 | `records.hrl` | central schema/extensibility surface | `internal/model/types.go`, registries | `partial` | `internal/model/types.go`, `internal/io/registry.go`, `internal/evo/registry.go`, `internal/nn/registry.go`, `.ref/src/records.hrl` |
 | `dxnn2_app.erl` | OTP application entrypoint | `cmd/protogonosctl/main.go` | `out-of-scope-now` | `cmd/protogonosctl/main.go`, `.ref/src/dxnn2_app.erl` |
 | `flatland.erl` | interactive multi-agent world/scape server | `internal/scape/flatland.go` | `partial` | `internal/scape/flatland.go`, `.ref/src/flatland.erl` |
@@ -58,21 +58,21 @@ Status legend:
 
 ## Summary
 
-- `implemented`: 8
-- `partial`: 21
+- `implemented`: 14
+- `partial`: 16
 - `missing`: 0
 - `out-of-scope-now`: 4
 
-Most core AGENTS responsibilities are present but still `partial` versus reference breadth. The largest parity gaps are:
+Most core AGENTS responsibilities are present, with remaining `partial` modules concentrated in orchestration breadth and environment/runtime surface area. The largest parity gaps are:
 
-1. Species-level behavior and advanced selection/competition variants.
-2. Substrate encoding family (`substrate*`) and plasticity.
-3. Full scape catalog and environment-specific sensor/actuator implementations.
-4. Rich records parity (many `records.hrl` fields not yet modeled).
+1. Platform/runtime orchestration depth in `polis.erl`, `population_monitor.erl`, and `exoself.erl`.
+2. Full scape catalog and environment-specific sensor/actuator/morphology breadth.
+3. Substrate encoding family behavior depth (`substrate.erl`, `substrate_cpp.erl`, `substrate_cep.erl`).
+4. Rich schema breadth in `records.hrl` and broader genotype lifecycle utilities.
 
 ## Recommended next parity increments
 
-1. Implement `fitness_postprocessor` + `selection_algorithm` equivalents in `internal/evo`.
-2. Add `tot_topological_mutations` policy support in `PopulationMonitor`.
-3. Add substrate feature gate with minimal `substrate` skeleton and tests.
-4. Expand scapes beyond XOR/regression-mimic (at least one dynamic control scape).
+1. Deepen `exoself.erl` parity (evaluation-mode orchestration details and remaining lifecycle edge semantics).
+2. Finish high-fidelity `population_monitor.erl` / `polis.erl` lifecycle behaviors still simplified versus OTP flows.
+3. Expand scape/morphology/IO breadth (`scape.erl`, `sensor.erl`, `actuator.erl`, `morphology.erl`) toward reference families.
+4. Complete substrate-family behavior parity (`substrate.erl`, `substrate_cpp.erl`, `substrate_cep.erl`) and benchmarking/reporting depth.
