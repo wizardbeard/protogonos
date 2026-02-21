@@ -54,6 +54,10 @@ type PlasticityConfig struct {
 	Rule            string  `json:"rule"`
 	Rate            float64 `json:"rate"`
 	SaturationLimit float64 `json:"saturation_limit"`
+	CoeffA          float64 `json:"coeff_a,omitempty"`
+	CoeffB          float64 `json:"coeff_b,omitempty"`
+	CoeffC          float64 `json:"coeff_c,omitempty"`
+	CoeffD          float64 `json:"coeff_d,omitempty"`
 }
 
 type Neuron struct {
@@ -63,6 +67,10 @@ type Neuron struct {
 	Aggregator     string  `json:"aggregator,omitempty"`
 	PlasticityRule string  `json:"plasticity_rule,omitempty"`
 	PlasticityRate float64 `json:"plasticity_rate,omitempty"`
+	PlasticityA    float64 `json:"plasticity_a,omitempty"`
+	PlasticityB    float64 `json:"plasticity_b,omitempty"`
+	PlasticityC    float64 `json:"plasticity_c,omitempty"`
+	PlasticityD    float64 `json:"plasticity_d,omitempty"`
 	Bias           float64 `json:"bias"`
 }
 

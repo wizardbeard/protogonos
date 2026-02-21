@@ -9,9 +9,16 @@ import (
 )
 
 const (
-	PlasticityNone    = "none"
-	PlasticityHebbian = "hebbian"
-	PlasticityOja     = "oja"
+	PlasticityNone             = "none"
+	PlasticityHebbian          = "hebbian"
+	PlasticityOja              = "oja"
+	PlasticityNeuromodulation  = "neuromodulation"
+	PlasticitySelfModulationV1 = "self_modulationv1"
+	PlasticitySelfModulationV2 = "self_modulationv2"
+	PlasticitySelfModulationV3 = "self_modulationv3"
+	PlasticitySelfModulationV4 = "self_modulationv4"
+	PlasticitySelfModulationV5 = "self_modulationv5"
+	PlasticitySelfModulationV6 = "self_modulationv6"
 )
 
 func NormalizePlasticityRuleName(rule string) string {
@@ -22,9 +29,30 @@ func NormalizePlasticityRuleName(rule string) string {
 		return PlasticityHebbian
 	case PlasticityOja, "ojas", "ojas_w":
 		return PlasticityOja
+	case PlasticityNeuromodulation:
+		return PlasticityNeuromodulation
+	case PlasticitySelfModulationV1, "self_modulation_v1":
+		return PlasticitySelfModulationV1
+	case PlasticitySelfModulationV2, "self_modulation_v2":
+		return PlasticitySelfModulationV2
+	case PlasticitySelfModulationV3, "self_modulation_v3":
+		return PlasticitySelfModulationV3
+	case PlasticitySelfModulationV4, "self_modulation_v4":
+		return PlasticitySelfModulationV4
+	case PlasticitySelfModulationV5, "self_modulation_v5":
+		return PlasticitySelfModulationV5
+	case PlasticitySelfModulationV6, "self_modulation_v6":
+		return PlasticitySelfModulationV6
 	default:
 		return strings.ToLower(strings.TrimSpace(rule))
 	}
+}
+
+type plasticityCoefficients struct {
+	A float64
+	B float64
+	C float64
+	D float64
 }
 
 func ApplyPlasticity(genome *model.Genome, neuronValues map[string]float64, cfg model.PlasticityConfig) error {
@@ -35,6 +63,7 @@ func ApplyPlasticity(genome *model.Genome, neuronValues map[string]float64, cfg 
 	if err := validatePlasticityRule(defaultRule, cfg.Rule); err != nil {
 		return err
 	}
+	defaultCoefficients := defaultPlasticityCoefficients(cfg)
 
 	limit := cfg.SaturationLimit
 	if limit <= 0 {
@@ -53,6 +82,7 @@ func ApplyPlasticity(genome *model.Genome, neuronValues map[string]float64, cfg 
 
 		rule := defaultRule
 		rate := cfg.Rate
+		coeffs := defaultCoefficients
 		if neuron, ok := neuronByID[s.To]; ok {
 			if neuronRule := NormalizePlasticityRuleName(neuron.PlasticityRule); neuronRule != PlasticityNone {
 				rule = neuronRule
@@ -60,6 +90,7 @@ func ApplyPlasticity(genome *model.Genome, neuronValues map[string]float64, cfg 
 			if neuron.PlasticityRate != 0 {
 				rate = neuron.PlasticityRate
 			}
+			coeffs = withNeuronPlasticityCoefficients(coeffs, neuron)
 		}
 		if rule == PlasticityNone || rate == 0 {
 			continue
@@ -77,6 +108,11 @@ func ApplyPlasticity(genome *model.Genome, neuronValues map[string]float64, cfg 
 			delta = rate * pre * post
 		case PlasticityOja:
 			delta = rate * post * (pre - (post * s.Weight))
+		case PlasticityNeuromodulation:
+			modulator := scaleDeadzone(post, 0.33, limit)
+			delta = modulator * generalizedHebbianDelta(rate, coeffs, pre, post)
+		case PlasticitySelfModulationV1, PlasticitySelfModulationV2, PlasticitySelfModulationV3, PlasticitySelfModulationV4, PlasticitySelfModulationV5, PlasticitySelfModulationV6:
+			delta = generalizedHebbianDelta(rate, coeffs, pre, post)
 		}
 
 		next := s.Weight + delta
@@ -92,9 +128,72 @@ func ApplyPlasticity(genome *model.Genome, neuronValues map[string]float64, cfg 
 
 func validatePlasticityRule(rule, original string) error {
 	switch rule {
-	case PlasticityNone, PlasticityHebbian, PlasticityOja:
+	case PlasticityNone,
+		PlasticityHebbian,
+		PlasticityOja,
+		PlasticityNeuromodulation,
+		PlasticitySelfModulationV1,
+		PlasticitySelfModulationV2,
+		PlasticitySelfModulationV3,
+		PlasticitySelfModulationV4,
+		PlasticitySelfModulationV5,
+		PlasticitySelfModulationV6:
 		return nil
 	default:
 		return fmt.Errorf("unsupported plasticity rule: %s", original)
 	}
+}
+
+func defaultPlasticityCoefficients(cfg model.PlasticityConfig) plasticityCoefficients {
+	return normalizePlasticityCoefficients(plasticityCoefficients{
+		A: cfg.CoeffA,
+		B: cfg.CoeffB,
+		C: cfg.CoeffC,
+		D: cfg.CoeffD,
+	})
+}
+
+func withNeuronPlasticityCoefficients(base plasticityCoefficients, neuron model.Neuron) plasticityCoefficients {
+	if neuron.PlasticityA != 0 {
+		base.A = neuron.PlasticityA
+	}
+	if neuron.PlasticityB != 0 {
+		base.B = neuron.PlasticityB
+	}
+	if neuron.PlasticityC != 0 {
+		base.C = neuron.PlasticityC
+	}
+	if neuron.PlasticityD != 0 {
+		base.D = neuron.PlasticityD
+	}
+	return normalizePlasticityCoefficients(base)
+}
+
+func normalizePlasticityCoefficients(coeffs plasticityCoefficients) plasticityCoefficients {
+	if coeffs.A == 0 && coeffs.B == 0 && coeffs.C == 0 && coeffs.D == 0 {
+		coeffs.A = 1
+	}
+	return coeffs
+}
+
+func generalizedHebbianDelta(rate float64, coeffs plasticityCoefficients, pre, post float64) float64 {
+	return rate * (coeffs.A*pre*post + coeffs.B*pre + coeffs.C*post + coeffs.D)
+}
+
+func scaleDeadzone(value, threshold, maxMagnitude float64) float64 {
+	switch {
+	case value > threshold:
+		return (scaleLinear(value, maxMagnitude, threshold) + 1) * maxMagnitude / 2
+	case value < -threshold:
+		return (scaleLinear(value, -threshold, -maxMagnitude) - 1) * maxMagnitude / 2
+	default:
+		return 0
+	}
+}
+
+func scaleLinear(value, max, min float64) float64 {
+	if max == min {
+		return 0
+	}
+	return (value*2 - (max + min)) / (max - min)
 }

@@ -1,6 +1,7 @@
 package nn
 
 import (
+	"math"
 	"testing"
 
 	"protogonos/internal/model"
@@ -192,16 +193,113 @@ func TestApplyPlasticityRejectsUnsupportedNeuronRuleOverride(t *testing.T) {
 	}
 }
 
+func TestApplyPlasticitySelfModulationUsesGeneralizedHebbianCoefficients(t *testing.T) {
+	g := model.Genome{
+		Synapses: []model.Synapse{
+			{ID: "s1", From: "in", To: "h", Weight: 1.0, Enabled: true},
+		},
+	}
+	values := map[string]float64{"in": 2.0, "h": 3.0}
+
+	err := ApplyPlasticity(&g, values, model.PlasticityConfig{
+		Rule:   "self_modulationV3",
+		Rate:   0.5,
+		CoeffA: 0.2,
+		CoeffB: 0.1,
+		CoeffC: -0.05,
+		CoeffD: 0.4,
+	})
+	if err != nil {
+		t.Fatalf("apply self-modulation: %v", err)
+	}
+	// w += rate*(A*pre*post + B*pre + C*post + D)
+	const want = 1.825
+	if math.Abs(g.Synapses[0].Weight-want) > 1e-12 {
+		t.Fatalf("unexpected self-modulation weight: got=%f want=%f", g.Synapses[0].Weight, want)
+	}
+}
+
+func TestApplyPlasticitySelfModulationUsesNeuronCoefficientOverrides(t *testing.T) {
+	g := model.Genome{
+		Neurons: []model.Neuron{
+			{
+				ID:             "h",
+				PlasticityRule: "self_modulationV1",
+				PlasticityRate: 0.1,
+				PlasticityA:    0.5,
+				PlasticityB:    0.1,
+			},
+		},
+		Synapses: []model.Synapse{
+			{ID: "s1", From: "in", To: "h", Weight: 1.0, Enabled: true},
+		},
+	}
+	values := map[string]float64{"in": 1.0, "h": 2.0}
+
+	err := ApplyPlasticity(&g, values, model.PlasticityConfig{
+		Rule:   "self_modulationV1",
+		Rate:   0.2,
+		CoeffA: 0.2,
+	})
+	if err != nil {
+		t.Fatalf("apply self-modulation with neuron overrides: %v", err)
+	}
+	// neuron overrides A=0.5, B=0.1 and rate=0.1:
+	// w += 0.1*(0.5*1*2 + 0.1*1) = 0.11
+	const want = 1.11
+	if math.Abs(g.Synapses[0].Weight-want) > 1e-12 {
+		t.Fatalf("unexpected neuron override weight: got=%f want=%f", g.Synapses[0].Weight, want)
+	}
+}
+
+func TestApplyPlasticityNeuromodulationUsesDeadzoneScaling(t *testing.T) {
+	g := model.Genome{
+		Synapses: []model.Synapse{
+			{ID: "s1", From: "in", To: "h", Weight: 1.0, Enabled: true},
+		},
+	}
+	cfg := model.PlasticityConfig{
+		Rule:   PlasticityNeuromodulation,
+		Rate:   0.5,
+		CoeffA: 1.0,
+	}
+
+	values := map[string]float64{"in": 1.0, "h": 0.2}
+	if err := ApplyPlasticity(&g, values, cfg); err != nil {
+		t.Fatalf("apply neuromodulation (deadzone): %v", err)
+	}
+	if g.Synapses[0].Weight != 1.0 {
+		t.Fatalf("expected no update in deadzone, got=%f", g.Synapses[0].Weight)
+	}
+
+	values["h"] = 0.8
+	if err := ApplyPlasticity(&g, values, cfg); err != nil {
+		t.Fatalf("apply neuromodulation (outside deadzone): %v", err)
+	}
+	modulator := scaleDeadzone(values["h"], 0.33, math.Pi*2)
+	want := 1.0 + modulator*0.5*(1.0*values["in"]*values["h"])
+	if math.Abs(g.Synapses[0].Weight-want) > 1e-12 {
+		t.Fatalf("unexpected neuromodulation weight: got=%f want=%f", g.Synapses[0].Weight, want)
+	}
+}
+
 func TestNormalizePlasticityRuleName(t *testing.T) {
 	cases := map[string]string{
-		"":          "none",
-		"none":      "none",
-		"hebbian":   "hebbian",
-		"hebbian_w": "hebbian",
-		"oja":       "oja",
-		"ojas":      "oja",
-		"ojas_w":    "oja",
-		"custom":    "custom",
+		"":                   "none",
+		"none":               "none",
+		"hebbian":            "hebbian",
+		"hebbian_w":          "hebbian",
+		"oja":                "oja",
+		"ojas":               "oja",
+		"ojas_w":             "oja",
+		"neuromodulation":    "neuromodulation",
+		"self_modulationV1":  "self_modulationv1",
+		"self_modulation_v2": "self_modulationv2",
+		"self_modulationV3":  "self_modulationv3",
+		"self_modulationV4":  "self_modulationv4",
+		"self_modulationV5":  "self_modulationv5",
+		"self_modulationV6":  "self_modulationv6",
+		"custom":             "custom",
 	}
 	for in, want := range cases {
 		if got := NormalizePlasticityRuleName(in); got != want {
