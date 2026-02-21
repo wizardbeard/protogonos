@@ -238,3 +238,36 @@ func TestSQLiteStorePersistsAcrossReopen(t *testing.T) {
 		t.Fatalf("expected persisted genome, got ok=%t value=%+v", ok, loaded)
 	}
 }
+
+func TestSQLiteStoreResetClearsData(t *testing.T) {
+	ctx := context.Background()
+	dbPath := filepath.Join(t.TempDir(), "protogonos.db")
+
+	store := NewSQLiteStore(dbPath)
+	if err := store.Init(ctx); err != nil {
+		t.Fatalf("init: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = store.Close()
+	})
+
+	pop := model.Population{
+		VersionedRecord: model.VersionedRecord{SchemaVersion: CurrentSchemaVersion, CodecVersion: CurrentCodecVersion},
+		ID:              "pop-reset",
+		AgentIDs:        []string{"a1"},
+		Generation:      1,
+	}
+	if err := store.SavePopulation(ctx, pop); err != nil {
+		t.Fatalf("save population: %v", err)
+	}
+	if err := store.Reset(ctx); err != nil {
+		t.Fatalf("reset: %v", err)
+	}
+	_, ok, err := store.GetPopulation(ctx, pop.ID)
+	if err != nil {
+		t.Fatalf("get population after reset: %v", err)
+	}
+	if ok {
+		t.Fatal("expected reset to clear populations")
+	}
+}

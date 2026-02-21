@@ -208,6 +208,20 @@ func (p *Polis) Init(ctx context.Context) error {
 	return nil
 }
 
+func (p *Polis) Create(ctx context.Context) error {
+	return p.Init(ctx)
+}
+
+func (p *Polis) Reset(ctx context.Context) error {
+	p.Stop()
+	if resetter, ok := p.store.(storage.Resetter); ok {
+		if err := resetter.Reset(ctx); err != nil {
+			return err
+		}
+	}
+	return p.Init(ctx)
+}
+
 func (p *Polis) RegisterScape(s scape.Scape) error {
 	if s == nil {
 		return fmt.Errorf("scape is nil")

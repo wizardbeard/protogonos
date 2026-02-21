@@ -40,6 +40,10 @@ func (s *MemoryStore) Init(_ context.Context) error {
 	return nil
 }
 
+func (s *MemoryStore) Reset(ctx context.Context) error {
+	return s.Init(ctx)
+}
+
 func (s *MemoryStore) SaveGenome(_ context.Context, genome model.Genome) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()

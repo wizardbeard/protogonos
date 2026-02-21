@@ -7,6 +7,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"os"
 	"sync"
 
 	"protogonos/internal/model"
@@ -53,6 +54,27 @@ func (s *SQLiteStore) Init(ctx context.Context) error {
 
 	s.db = db
 	return nil
+}
+
+func (s *SQLiteStore) Reset(ctx context.Context) error {
+	s.mu.Lock()
+	path := s.path
+	db := s.db
+	s.db = nil
+	s.mu.Unlock()
+
+	if db != nil {
+		if err := db.Close(); err != nil {
+			return err
+		}
+	}
+	if path == "" {
+		return errors.New("sqlite path is required")
+	}
+	if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
+		return err
+	}
+	return s.Init(ctx)
 }
 
 func (s *SQLiteStore) SaveGenome(ctx context.Context, genome model.Genome) error {

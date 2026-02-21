@@ -27,3 +27,8 @@ type Store interface {
 	SaveLineage(ctx context.Context, runID string, lineage []model.LineageRecord) error
 	GetLineage(ctx context.Context, runID string) ([]model.LineageRecord, bool, error)
 }
+
+// Resetter is an optional schema-reset capability used by polis reset flows.
+type Resetter interface {
+	Reset(ctx context.Context) error
+}

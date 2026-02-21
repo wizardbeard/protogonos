@@ -191,3 +191,26 @@ func TestMemoryStoreDeletePopulation(t *testing.T) {
 		t.Fatal("expected deleted population to be missing")
 	}
 }
+
+func TestMemoryStoreResetClearsData(t *testing.T) {
+	ctx := context.Background()
+	store := NewMemoryStore()
+	if err := store.Init(ctx); err != nil {
+		t.Fatalf("init: %v", err)
+	}
+
+	pop := model.Population{ID: "pop-reset", AgentIDs: []string{"a1"}}
+	if err := store.SavePopulation(ctx, pop); err != nil {
+		t.Fatalf("save population: %v", err)
+	}
+	if err := store.Reset(ctx); err != nil {
+		t.Fatalf("reset: %v", err)
+	}
+	_, ok, err := store.GetPopulation(ctx, pop.ID)
+	if err != nil {
+		t.Fatalf("get population after reset: %v", err)
+	}
+	if ok {
+		t.Fatal("expected reset to clear populations")
+	}
+}
