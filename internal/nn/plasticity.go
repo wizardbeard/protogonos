@@ -11,7 +11,9 @@ import (
 const (
 	PlasticityNone             = "none"
 	PlasticityHebbian          = "hebbian"
+	PlasticityHebbianW         = "hebbian_w"
 	PlasticityOja              = "oja"
+	PlasticityOjaW             = "ojas_w"
 	PlasticityNeuromodulation  = "neuromodulation"
 	PlasticitySelfModulationV1 = "self_modulationv1"
 	PlasticitySelfModulationV2 = "self_modulationv2"
@@ -25,10 +27,14 @@ func NormalizePlasticityRuleName(rule string) string {
 	switch strings.ToLower(strings.TrimSpace(rule)) {
 	case "", PlasticityNone:
 		return PlasticityNone
-	case PlasticityHebbian, "hebbian_w":
+	case PlasticityHebbian:
 		return PlasticityHebbian
-	case PlasticityOja, "ojas", "ojas_w":
+	case PlasticityHebbianW:
+		return PlasticityHebbianW
+	case PlasticityOja, "ojas":
 		return PlasticityOja
+	case PlasticityOjaW:
+		return PlasticityOjaW
 	case PlasticityNeuromodulation:
 		return PlasticityNeuromodulation
 	case PlasticitySelfModulationV1, "self_modulation_v1":
@@ -120,8 +126,14 @@ func ApplyPlasticity(genome *model.Genome, neuronValues map[string]float64, cfg 
 		switch rule {
 		case PlasticityHebbian:
 			delta = rate * pre * post
+		case PlasticityHebbianW:
+			h := synapsePlasticityParameter(*s, 0, rate)
+			delta = h * pre * post
 		case PlasticityOja:
 			delta = rate * post * (pre - (post * s.Weight))
+		case PlasticityOjaW:
+			h := synapsePlasticityParameter(*s, 0, rate)
+			delta = h * post * (pre - (post * s.Weight))
 		case PlasticityNeuromodulation:
 			modulator := scaleDeadzone(post, 0.33, limit)
 			delta = modulator * generalizedHebbianDelta(rate, coeffs, pre, post)
@@ -145,7 +157,9 @@ func validatePlasticityRule(rule, original string) error {
 	switch rule {
 	case PlasticityNone,
 		PlasticityHebbian,
+		PlasticityHebbianW,
 		PlasticityOja,
+		PlasticityOjaW,
 		PlasticityNeuromodulation,
 		PlasticitySelfModulationV1,
 		PlasticitySelfModulationV2,
@@ -157,6 +171,13 @@ func validatePlasticityRule(rule, original string) error {
 	default:
 		return fmt.Errorf("unsupported plasticity rule: %s", original)
 	}
+}
+
+func synapsePlasticityParameter(synapse model.Synapse, index int, fallback float64) float64 {
+	if index >= 0 && index < len(synapse.PlasticityParams) {
+		return synapse.PlasticityParams[index]
+	}
+	return fallback
 }
 
 func defaultPlasticityCoefficients(cfg model.PlasticityConfig) plasticityCoefficients {

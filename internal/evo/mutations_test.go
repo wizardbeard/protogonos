@@ -2441,7 +2441,9 @@ func TestDefaultPlasticityRulesIncludeExtendedReferenceSurface(t *testing.T) {
 	required := []string{
 		nn.PlasticityNone,
 		nn.PlasticityHebbian,
+		nn.PlasticityHebbianW,
 		nn.PlasticityOja,
+		nn.PlasticityOjaW,
 		nn.PlasticitySelfModulationV1,
 		nn.PlasticitySelfModulationV2,
 		nn.PlasticitySelfModulationV3,
@@ -2537,6 +2539,51 @@ func TestMutatePlasticityParametersMutatesNeuronRate(t *testing.T) {
 	}
 	if !changed {
 		t.Fatalf("expected one neuron plasticity rate change, before=%+v after=%+v", genome.Neurons, mutated.Neurons)
+	}
+}
+
+func TestMutatePlasticityParametersMutatesHebbianWSynapseAndBiasVectors(t *testing.T) {
+	genome := model.Genome{
+		Neurons: []model.Neuron{
+			{
+				ID:             "n0",
+				Activation:     "identity",
+				Aggregator:     "dot_product",
+				PlasticityRule: nn.PlasticityHebbianW,
+				PlasticityRate: 0.2,
+			},
+		},
+		Synapses: []model.Synapse{
+			{ID: "s0", From: "n0", To: "n0", Weight: 0.5, Enabled: true, Recurrent: true},
+		},
+	}
+
+	op := &MutatePlasticityParameters{
+		Rand:     rand.New(rand.NewSource(2517)),
+		MaxDelta: 0.1,
+	}
+	mutated, err := op.Apply(context.Background(), genome)
+	if err != nil {
+		t.Fatalf("apply failed: %v", err)
+	}
+	if mutated.Neurons[0].PlasticityRate != genome.Neurons[0].PlasticityRate {
+		t.Fatalf("expected hebbian_w mutation to leave rate untouched, before=%f after=%f", genome.Neurons[0].PlasticityRate, mutated.Neurons[0].PlasticityRate)
+	}
+	if len(mutated.Synapses[0].PlasticityParams) < 1 {
+		t.Fatalf("expected hebbian_w mutation to materialize synapse param vector, got=%v", mutated.Synapses[0].PlasticityParams)
+	}
+	if len(mutated.Neurons[0].PlasticityBiasParams) < 1 {
+		t.Fatalf("expected hebbian_w mutation to materialize bias param vector, got=%v", mutated.Neurons[0].PlasticityBiasParams)
+	}
+	changed := false
+	if mutated.Synapses[0].PlasticityParams[0] != 0 {
+		changed = true
+	}
+	if mutated.Neurons[0].PlasticityBiasParams[0] != 0 {
+		changed = true
+	}
+	if !changed {
+		t.Fatalf("expected at least one hebbian_w vector parameter mutation, syn=%v bias=%v", mutated.Synapses[0].PlasticityParams, mutated.Neurons[0].PlasticityBiasParams)
 	}
 }
 

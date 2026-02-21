@@ -96,6 +96,48 @@ func TestApplyPlasticityAcceptsReferenceRuleAliases(t *testing.T) {
 	}
 }
 
+func TestApplyPlasticityHebbianWUsesPerSynapseLearningParameter(t *testing.T) {
+	g := model.Genome{
+		Synapses: []model.Synapse{
+			{ID: "s1", From: "a", To: "b", Weight: 1.0, Enabled: true, PlasticityParams: []float64{0.05}},
+		},
+	}
+	values := map[string]float64{"a": 2, "b": 3}
+
+	err := ApplyPlasticity(&g, values, model.PlasticityConfig{
+		Rule: PlasticityHebbianW,
+		Rate: 0.1,
+	})
+	if err != nil {
+		t.Fatalf("apply hebbian_w with synapse parameter: %v", err)
+	}
+	// uses synapse H=0.05 (not fallback rate): 1.0 + 0.05*2*3 = 1.3
+	if g.Synapses[0].Weight != 1.3 {
+		t.Fatalf("unexpected weight after hebbian_w per-synapse parameter update: %f", g.Synapses[0].Weight)
+	}
+}
+
+func TestApplyPlasticityOjasWUsesPerSynapseLearningParameter(t *testing.T) {
+	g := model.Genome{
+		Synapses: []model.Synapse{
+			{ID: "s1", From: "a", To: "b", Weight: 0.5, Enabled: true, PlasticityParams: []float64{0.2}},
+		},
+	}
+	values := map[string]float64{"a": 1, "b": 2}
+
+	err := ApplyPlasticity(&g, values, model.PlasticityConfig{
+		Rule: PlasticityOjaW,
+		Rate: 0.1,
+	})
+	if err != nil {
+		t.Fatalf("apply ojas_w with synapse parameter: %v", err)
+	}
+	// uses synapse H=0.2: w += H*post*(pre-post*w) = 0.5 + 0.2*2*(1 - 2*0.5) = 0.5
+	if g.Synapses[0].Weight != 0.5 {
+		t.Fatalf("unexpected weight after ojas_w per-synapse parameter update: %f", g.Synapses[0].Weight)
+	}
+}
+
 func TestApplyPlasticityUsesPerNeuronRuleAndRateOverrides(t *testing.T) {
 	g := model.Genome{
 		Neurons: []model.Neuron{
@@ -448,10 +490,10 @@ func TestNormalizePlasticityRuleName(t *testing.T) {
 		"":                   "none",
 		"none":               "none",
 		"hebbian":            "hebbian",
-		"hebbian_w":          "hebbian",
+		"hebbian_w":          "hebbian_w",
 		"oja":                "oja",
 		"ojas":               "oja",
-		"ojas_w":             "oja",
+		"ojas_w":             "ojas_w",
 		"neuromodulation":    "neuromodulation",
 		"self_modulationV1":  "self_modulationv1",
 		"self_modulation_v2": "self_modulationv2",

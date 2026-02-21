@@ -1267,6 +1267,11 @@ func (o *MutatePlasticityParameters) Apply(_ context.Context, genome model.Genom
 	idx := o.Rand.Intn(len(genome.Neurons))
 	mutated := cloneGenome(genome)
 	rule := nn.NormalizePlasticityRuleName(neuronPlasticityRule(genome, idx))
+	if plasticityRuleUsesSynapseParameterMutation(rule) {
+		mutateSelfModulationParameterVectors(&mutated, genome, idx, 1, maxDelta, o.Rand)
+		mutated.Neurons[idx].Generation = currentGenomeGeneration(mutated)
+		return mutated, nil
+	}
 	if width := selfModulationParameterWidth(rule); width > 0 {
 		vectorMutated := mutateSelfModulationParameterVectors(&mutated, genome, idx, width, maxDelta, o.Rand)
 		if selfModulationRuleUsesCoefficientMutation(rule) {
@@ -2946,6 +2951,15 @@ func plasticityRuleUsesGeneralizedCoefficients(rule string) bool {
 	}
 }
 
+func plasticityRuleUsesSynapseParameterMutation(rule string) bool {
+	switch nn.NormalizePlasticityRuleName(rule) {
+	case nn.PlasticityHebbianW, nn.PlasticityOjaW:
+		return true
+	default:
+		return false
+	}
+}
+
 func selfModulationParameterWidth(rule string) int {
 	switch nn.NormalizePlasticityRuleName(rule) {
 	case nn.PlasticitySelfModulationV1, nn.PlasticitySelfModulationV2, nn.PlasticitySelfModulationV3:
@@ -3166,7 +3180,9 @@ func defaultPlasticityRules() []string {
 	return []string{
 		nn.PlasticityNone,
 		nn.PlasticityHebbian,
+		nn.PlasticityHebbianW,
 		nn.PlasticityOja,
+		nn.PlasticityOjaW,
 		nn.PlasticitySelfModulationV1,
 		nn.PlasticitySelfModulationV2,
 		nn.PlasticitySelfModulationV3,
