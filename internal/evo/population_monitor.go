@@ -79,6 +79,7 @@ type LineageRecord struct {
 
 type MonitorConfig struct {
 	Scape                scape.Scape
+	OpMode               string
 	Mutation             Operator
 	MutationPolicy       []WeightedMutation
 	Selector             Selector
@@ -130,10 +131,25 @@ const (
 	CommandStop     MonitorCommand = "stop"
 )
 
+const (
+	OpModeGT         = "gt"
+	OpModeValidation = "validation"
+	OpModeTest       = "test"
+)
+
 func NewPopulationMonitor(cfg MonitorConfig) (*PopulationMonitor, error) {
 	if cfg.Scape == nil {
 		return nil, fmt.Errorf("scape is required")
 	}
+	if cfg.OpMode == "" {
+		cfg.OpMode = OpModeGT
+	}
+	switch cfg.OpMode {
+	case OpModeGT, OpModeValidation, OpModeTest:
+	default:
+		return nil, fmt.Errorf("unsupported op mode: %s", cfg.OpMode)
+	}
+
 	if cfg.Mutation == nil && len(cfg.MutationPolicy) == 0 {
 		return nil, fmt.Errorf("mutation operator or policy is required")
 	}
@@ -279,6 +295,9 @@ func (m *PopulationMonitor) Run(ctx context.Context, initial []model.Genome) (Ru
 		history, currentSet := summarizeSpeciesGeneration(scored, speciesByGenomeID, logicalGeneration+1, prevSpeciesSet)
 		speciesHistory = append(speciesHistory, history)
 		prevSpeciesSet = currentSet
+		if m.cfg.OpMode != OpModeGT {
+			break
+		}
 		if (m.cfg.FitnessGoal > 0 && scored[0].Fitness >= m.cfg.FitnessGoal) ||
 			(m.cfg.EvaluationsLimit > 0 && evaluations >= m.cfg.EvaluationsLimit) {
 			break
@@ -472,7 +491,7 @@ func (m *PopulationMonitor) evaluatePopulation(ctx context.Context, population [
 				if m.cfg.TuneAttemptPolicy != nil {
 					attempts = m.cfg.TuneAttemptPolicy.Attempts(m.cfg.TuneAttempts, generation, m.cfg.Generations, j.genome)
 				}
-				if m.cfg.Tuner != nil && attempts > 0 {
+				if m.cfg.OpMode == OpModeGT && m.cfg.Tuner != nil && attempts > 0 {
 					if reporting, ok := m.cfg.Tuner.(tuning.ReportingTuner); ok {
 						tuned, report, err := reporting.TuneWithReport(ctx, j.genome, attempts, func(ctx context.Context, g model.Genome) (float64, error) {
 							fitness, _, err := m.evaluateGenome(ctx, g)

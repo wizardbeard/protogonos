@@ -45,6 +45,7 @@ type RunRequest struct {
 	RunID                 string
 	ContinuePopulationID  string
 	SpecieIdentifier      string
+	OpMode                string
 	Scape                 string
 	Population            int
 	Generations           int
@@ -372,6 +373,7 @@ func (c *Client) Run(ctx context.Context, req RunRequest) (RunSummary, error) {
 		}
 		return p.RunEvolution(ctx, platform.EvolutionConfig{
 			RunID:                runID,
+			OpMode:               req.OpMode,
 			ScapeName:            req.Scape,
 			PopulationSize:       req.Population,
 			Generations:          req.Generations,
@@ -478,6 +480,7 @@ func (c *Client) Run(ctx context.Context, req RunRequest) (RunSummary, error) {
 	runDir, err := stats.WriteRunArtifacts(c.benchmarksDir, stats.RunArtifacts{
 		Config: stats.RunConfig{
 			RunID:                 runID,
+			OpMode:                req.OpMode,
 			Scape:                 req.Scape,
 			ContinuePopulationID:  req.ContinuePopulationID,
 			SpecieIdentifier:      req.SpecieIdentifier,
@@ -1091,6 +1094,14 @@ func registerDefaultScapes(p *platform.Polis) error {
 }
 
 func materializeRunConfigFromRequest(req RunRequest) (materializedRunConfig, error) {
+	if req.OpMode == "" {
+		req.OpMode = evo.OpModeGT
+	}
+	switch req.OpMode {
+	case evo.OpModeGT, evo.OpModeValidation, evo.OpModeTest:
+	default:
+		return materializedRunConfig{}, errors.New("op mode must be one of gt|validation|test")
+	}
 	if req.Scape == "" {
 		req.Scape = "xor"
 	}

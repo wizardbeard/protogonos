@@ -22,6 +22,7 @@ func TestLoadRunRequestFromConfigUsesConstraintAndPMP(t *testing.T) {
 		"tune_annealing_factor":   0.95,
 		"tune_min_improvement":    0.015,
 		"pmp": map[string]any{
+			"op_mode":             "validation",
 			"survival_percentage": 0.6,
 			"specie_size_limit":   3,
 			"init_specie_size":    12,
@@ -70,6 +71,9 @@ func TestLoadRunRequestFromConfigUsesConstraintAndPMP(t *testing.T) {
 	}
 	if req.Population != 12 || req.Generations != 9 {
 		t.Fatalf("expected pmp derived population/generations, got pop=%d gens=%d", req.Population, req.Generations)
+	}
+	if req.OpMode != "validation" {
+		t.Fatalf("expected pmp-derived op mode validation, got %s", req.OpMode)
 	}
 	if req.SurvivalPercentage != 0.6 || req.EvaluationsLimit != 111 || req.FitnessGoal != 0.88 {
 		t.Fatalf("expected pmp-derived monitor controls, got survival=%f eval_limit=%d fitness_goal=%f", req.SurvivalPercentage, req.EvaluationsLimit, req.FitnessGoal)

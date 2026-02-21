@@ -34,6 +34,9 @@ func loadRunRequestFromConfig(path string) (protoapi.RunRequest, error) {
 	if v, ok := asString(raw["scape"]); ok {
 		req.Scape = v
 	}
+	if v, ok := asString(raw["op_mode"]); ok {
+		req.OpMode = v
+	}
 	if v, ok := asInt(raw["population"]); ok {
 		req.Population = v
 	}
@@ -168,6 +171,9 @@ func loadRunRequestFromConfig(path string) (protoapi.RunRequest, error) {
 
 	if pmpMap, ok := raw["pmp"].(map[string]any); ok {
 		pmp := map2rec.ConvertPMP(pmpMap)
+		if req.OpMode == "" && pmp.OpMode != "" {
+			req.OpMode = pmp.OpMode
+		}
 		if _, hasPopulationID := pmpMap["population_id"]; hasPopulationID {
 			if req.ContinuePopulationID == "" && pmp.PopulationID != "" {
 				req.ContinuePopulationID = pmp.PopulationID

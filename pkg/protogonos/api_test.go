@@ -612,6 +612,62 @@ func TestClientRunRejectsNegativeNumericConfig(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected auto continue duration validation error")
 	}
+
+	_, err = client.Run(context.Background(), RunRequest{
+		Scape:       "xor",
+		Population:  6,
+		Generations: 2,
+		OpMode:      "unknown_mode",
+	})
+	if err == nil {
+		t.Fatal("expected op mode validation error")
+	}
+}
+
+func TestClientRunValidationOpModeSkipsEvolutionAndTuning(t *testing.T) {
+	base := t.TempDir()
+	client, err := New(Options{
+		StoreKind:     "memory",
+		BenchmarksDir: filepath.Join(base, "benchmarks"),
+		ExportsDir:    filepath.Join(base, "exports"),
+	})
+	if err != nil {
+		t.Fatalf("new client: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = client.Close()
+	})
+
+	summary, err := client.Run(context.Background(), RunRequest{
+		Scape:             "xor",
+		Population:        8,
+		Generations:       5,
+		OpMode:            "validation",
+		EnableTuning:      true,
+		TuneAttempts:      3,
+		TuneSteps:         3,
+		TuneStepSize:      0.25,
+		TuneDurationParam: 1.0,
+		Selection:         "elite",
+		WeightPerturb:     1.0,
+	})
+	if err != nil {
+		t.Fatalf("run: %v", err)
+	}
+	if len(summary.BestByGeneration) != 1 {
+		t.Fatalf("expected validation mode to evaluate exactly one generation, got %d", len(summary.BestByGeneration))
+	}
+
+	diagnostics, err := client.Diagnostics(context.Background(), DiagnosticsRequest{RunID: summary.RunID})
+	if err != nil {
+		t.Fatalf("diagnostics: %v", err)
+	}
+	if len(diagnostics) != 1 {
+		t.Fatalf("expected single diagnostics generation in validation mode, got %d", len(diagnostics))
+	}
+	if diagnostics[0].TuningInvocations != 0 || diagnostics[0].TuningAttempts != 0 {
+		t.Fatalf("expected tuning to be skipped outside gt mode, got diagnostics=%+v", diagnostics[0])
+	}
 }
 
 func TestClientRunStartPausedControls(t *testing.T) {

@@ -1048,6 +1048,61 @@ func TestNoveltyPostprocessorIsNoopForReferenceParity(t *testing.T) {
 	}
 }
 
+func TestPopulationMonitorValidationModeRunsSingleGenerationWithoutEvolution(t *testing.T) {
+	initial := []model.Genome{
+		newLinearGenome("g0", -1.0),
+		newLinearGenome("g1", -0.8),
+		newLinearGenome("g2", -0.6),
+		newLinearGenome("g3", -0.4),
+	}
+	monitor, err := NewPopulationMonitor(MonitorConfig{
+		Scape:           oneDimScape{},
+		OpMode:          OpModeValidation,
+		Mutation:        failingMutation{name: "fail_if_called"},
+		PopulationSize:  len(initial),
+		EliteCount:      1,
+		Generations:     5,
+		Workers:         1,
+		Seed:            1,
+		InputNeuronIDs:  []string{"i"},
+		OutputNeuronIDs: []string{"o"},
+	})
+	if err != nil {
+		t.Fatalf("new monitor: %v", err)
+	}
+	result, err := monitor.Run(context.Background(), initial)
+	if err != nil {
+		t.Fatalf("run: %v", err)
+	}
+	if len(result.BestByGeneration) != 1 {
+		t.Fatalf("expected single-generation evaluation in validation mode, got %d", len(result.BestByGeneration))
+	}
+	if len(result.FinalPopulation) != len(initial) {
+		t.Fatalf("unexpected final population size: got=%d want=%d", len(result.FinalPopulation), len(initial))
+	}
+	if len(result.Lineage) != len(initial) {
+		t.Fatalf("expected no offspring lineage in validation mode, got=%d want=%d", len(result.Lineage), len(initial))
+	}
+}
+
+func TestPopulationMonitorRejectsUnknownOpMode(t *testing.T) {
+	_, err := NewPopulationMonitor(MonitorConfig{
+		Scape:           oneDimScape{},
+		OpMode:          "unknown_mode",
+		Mutation:        namedNoopMutation{name: "noop"},
+		PopulationSize:  2,
+		EliteCount:      1,
+		Generations:     1,
+		Workers:         1,
+		Seed:            1,
+		InputNeuronIDs:  []string{"i"},
+		OutputNeuronIDs: []string{"o"},
+	})
+	if err == nil {
+		t.Fatal("expected unsupported op mode validation error")
+	}
+}
+
 func TestEliteSelectorValidation(t *testing.T) {
 	_, err := (EliteSelector{}).PickParent(nil, []ScoredGenome{}, 1)
 	if err == nil {
