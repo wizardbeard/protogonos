@@ -313,6 +313,162 @@ func (p *Polis) RegisterScape(s scape.Scape) error {
 	return nil
 }
 
+func (p *Polis) AddSupportModule(ctx context.Context, module SupportModule) error {
+	if module == nil {
+		return fmt.Errorf("support module is nil")
+	}
+	name := module.Name()
+	if name == "" {
+		return fmt.Errorf("support module name is required")
+	}
+
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	if !p.started {
+		return fmt.Errorf("polis is not initialized")
+	}
+	if _, exists := p.supportModules[name]; exists {
+		return fmt.Errorf("support module already registered: %s", name)
+	}
+	if err := module.Start(ctx); err != nil {
+		return fmt.Errorf("start support module %s: %w", name, err)
+	}
+	p.supportModules[name] = module
+	return nil
+}
+
+func (p *Polis) RemoveSupportModule(ctx context.Context, name string, reason StopReason) error {
+	if name == "" {
+		return fmt.Errorf("support module name is required")
+	}
+	if reason == "" {
+		reason = StopReasonNormal
+	}
+	if !isValidStopReason(reason) {
+		return fmt.Errorf("unsupported stop reason: %s", reason)
+	}
+
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	if !p.started {
+		return fmt.Errorf("polis is not initialized")
+	}
+	module, ok := p.supportModules[name]
+	if !ok {
+		return fmt.Errorf("support module not found: %s", name)
+	}
+	if withReason, ok := module.(reasonAwareSupportModule); ok {
+		if err := withReason.StopWithReason(ctx, reason); err != nil {
+			return fmt.Errorf("stop support module %s: %w", name, err)
+		}
+	} else {
+		if err := module.Stop(ctx); err != nil {
+			return fmt.Errorf("stop support module %s: %w", name, err)
+		}
+	}
+	delete(p.supportModules, name)
+	return nil
+}
+
+func (p *Polis) AddPublicScape(ctx context.Context, spec PublicScapeSpec) error {
+	if spec.Scape == nil {
+		return fmt.Errorf("public scape is nil")
+	}
+	name := spec.Scape.Name()
+	if name == "" {
+		return fmt.Errorf("public scape name is required")
+	}
+
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	if !p.started {
+		return fmt.Errorf("polis is not initialized")
+	}
+	if _, exists := p.scapes[name]; exists {
+		return fmt.Errorf("duplicate public scape: %s", name)
+	}
+	if managed, ok := spec.Scape.(managedScape); ok {
+		if err := managed.Start(ctx); err != nil {
+			return fmt.Errorf("start public scape %s: %w", name, err)
+		}
+	}
+	summary := PublicScapeSummary{
+		Name:       name,
+		Type:       spec.Type,
+		Parameters: append([]any(nil), spec.Parameters...),
+		Metabolics: spec.Metabolics,
+		Physics:    spec.Physics,
+	}
+	if summary.Type == "" {
+		summary.Type = name
+	}
+	p.scapes[name] = spec.Scape
+	p.publicScapes[name] = summary
+	if _, exists := p.publicScapeByType[summary.Type]; !exists {
+		p.publicScapeByType[summary.Type] = name
+	}
+	return nil
+}
+
+func (p *Polis) RemovePublicScape(ctx context.Context, name string, reason StopReason) error {
+	if name == "" {
+		return fmt.Errorf("public scape name is required")
+	}
+	if reason == "" {
+		reason = StopReasonNormal
+	}
+	if !isValidStopReason(reason) {
+		return fmt.Errorf("unsupported stop reason: %s", reason)
+	}
+
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	if !p.started {
+		return fmt.Errorf("polis is not initialized")
+	}
+	sc, ok := p.scapes[name]
+	if !ok {
+		return fmt.Errorf("public scape not found: %s", name)
+	}
+	summary, ok := p.publicScapes[name]
+	if !ok {
+		return fmt.Errorf("public scape not found: %s", name)
+	}
+	if managed, ok := sc.(managedScape); ok {
+		if withReason, ok := sc.(reasonAwareManagedScape); ok {
+			if err := withReason.StopWithReason(ctx, reason); err != nil {
+				return fmt.Errorf("stop public scape %s: %w", name, err)
+			}
+		} else {
+			if err := managed.Stop(ctx); err != nil {
+				return fmt.Errorf("stop public scape %s: %w", name, err)
+			}
+		}
+	}
+	delete(p.scapes, name)
+	delete(p.publicScapes, name)
+	if mappedName, ok := p.publicScapeByType[summary.Type]; ok && mappedName == name {
+		delete(p.publicScapeByType, summary.Type)
+		replacement := ""
+		for candidateName, candidateSummary := range p.publicScapes {
+			if candidateSummary.Type != summary.Type {
+				continue
+			}
+			if replacement == "" || candidateName < replacement {
+				replacement = candidateName
+			}
+		}
+		if replacement != "" {
+			p.publicScapeByType[summary.Type] = replacement
+		}
+	}
+	return nil
+}
+
 func (p *Polis) GetScape(name string) (scape.Scape, bool) {
 	p.mu.RLock()
 	defer p.mu.RUnlock()

@@ -296,6 +296,105 @@ func TestPolisResetClearsStoreAndRestartsLifecycle(t *testing.T) {
 	}
 }
 
+func TestPolisAddAndRemoveSupportModule(t *testing.T) {
+	ctx := context.Background()
+	module := &testSupportModule{name: "dynamic-metrics"}
+	p := NewPolis(Config{Store: storage.NewMemoryStore()})
+
+	if err := p.AddSupportModule(ctx, module); err == nil {
+		t.Fatal("expected add support module before init to fail")
+	}
+	if err := p.Init(ctx); err != nil {
+		t.Fatalf("init failed: %v", err)
+	}
+	if err := p.AddSupportModule(ctx, module); err != nil {
+		t.Fatalf("add support module: %v", err)
+	}
+	if module.startCalls != 1 {
+		t.Fatalf("expected support module start call, got=%d", module.startCalls)
+	}
+	if len(p.ActiveSupportModules()) != 1 || p.ActiveSupportModules()[0] != "dynamic-metrics" {
+		t.Fatalf("expected dynamic support module registration, got=%+v", p.ActiveSupportModules())
+	}
+	if err := p.AddSupportModule(ctx, module); err == nil {
+		t.Fatal("expected duplicate support module add to fail")
+	}
+	if err := p.RemoveSupportModule(ctx, "dynamic-metrics", StopReasonShutdown); err != nil {
+		t.Fatalf("remove support module: %v", err)
+	}
+	if module.stopCalls != 1 {
+		t.Fatalf("expected support module stop call, got=%d", module.stopCalls)
+	}
+	if module.stopReason != StopReasonShutdown {
+		t.Fatalf("expected support module stop reason %q, got=%q", StopReasonShutdown, module.stopReason)
+	}
+	if len(p.ActiveSupportModules()) != 0 {
+		t.Fatalf("expected dynamic support module removal, got=%+v", p.ActiveSupportModules())
+	}
+	if err := p.RemoveSupportModule(ctx, "dynamic-metrics", StopReasonNormal); err == nil {
+		t.Fatal("expected removing missing support module to fail")
+	}
+}
+
+func TestPolisAddAndRemovePublicScape(t *testing.T) {
+	ctx := context.Background()
+	first := &managedTestScape{testScape: testScape{name: "public-a"}}
+	second := &managedTestScape{testScape: testScape{name: "public-b"}}
+	p := NewPolis(Config{Store: storage.NewMemoryStore()})
+
+	if err := p.AddPublicScape(ctx, PublicScapeSpec{Scape: first, Type: "flatland"}); err == nil {
+		t.Fatal("expected add public scape before init to fail")
+	}
+	if err := p.Init(ctx); err != nil {
+		t.Fatalf("init failed: %v", err)
+	}
+	if err := p.AddPublicScape(ctx, PublicScapeSpec{Scape: first, Type: "flatland"}); err != nil {
+		t.Fatalf("add first public scape: %v", err)
+	}
+	if first.startCalls != 1 {
+		t.Fatalf("expected first public scape start call, got=%d", first.startCalls)
+	}
+	if _, ok := p.GetScape("public-a"); !ok {
+		t.Fatal("expected first public scape to be registered by name")
+	}
+	gotByType, ok := p.GetScapeByType("flatland")
+	if !ok || gotByType != first {
+		t.Fatal("expected type lookup to resolve first public scape")
+	}
+	if err := p.AddPublicScape(ctx, PublicScapeSpec{Scape: second, Type: "flatland"}); err != nil {
+		t.Fatalf("add second public scape: %v", err)
+	}
+	gotByType, ok = p.GetScapeByType("flatland")
+	if !ok || gotByType != first {
+		t.Fatal("expected type lookup to stay pinned to first public scape")
+	}
+	if err := p.RemovePublicScape(ctx, "public-a", StopReasonShutdown); err != nil {
+		t.Fatalf("remove first public scape: %v", err)
+	}
+	if first.stopCalls != 1 || first.stopReason != StopReasonShutdown {
+		t.Fatalf("expected first public scape shutdown stop semantics, calls=%d reason=%q", first.stopCalls, first.stopReason)
+	}
+	if _, ok := p.GetScape("public-a"); ok {
+		t.Fatal("expected first public scape name lookup removed")
+	}
+	gotByType, ok = p.GetScapeByType("flatland")
+	if !ok || gotByType != second {
+		t.Fatal("expected type lookup to remap to remaining public scape")
+	}
+	if err := p.RemovePublicScape(ctx, "public-b", ""); err != nil {
+		t.Fatalf("remove second public scape: %v", err)
+	}
+	if second.stopCalls != 1 || second.stopReason != StopReasonNormal {
+		t.Fatalf("expected second public scape normal stop semantics, calls=%d reason=%q", second.stopCalls, second.stopReason)
+	}
+	if len(p.ActivePublicScapes()) != 0 {
+		t.Fatalf("expected no active public scapes after removals, got=%+v", p.ActivePublicScapes())
+	}
+	if err := p.RemovePublicScape(ctx, "public-b", StopReasonNormal); err == nil {
+		t.Fatal("expected removing missing public scape to fail")
+	}
+}
+
 func TestPolisStopWithReasonRejectsInvalidReason(t *testing.T) {
 	p := NewPolis(Config{Store: storage.NewMemoryStore()})
 	if err := p.Init(context.Background()); err != nil {
