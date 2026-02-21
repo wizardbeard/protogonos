@@ -2540,7 +2540,7 @@ func TestMutatePlasticityParametersMutatesNeuronRate(t *testing.T) {
 	}
 }
 
-func TestMutatePlasticityParametersMutatesSelfModulationSynapseParams(t *testing.T) {
+func TestMutatePlasticityParametersMutatesSelfModulationParameterVectors(t *testing.T) {
 	genome := model.Genome{
 		Neurons: []model.Neuron{
 			{
@@ -2574,19 +2574,30 @@ func TestMutatePlasticityParametersMutatesSelfModulationSynapseParams(t *testing
 	if len(mutated.Synapses[0].PlasticityParams) < 5 {
 		t.Fatalf("expected self-modulation V6 mutation to materialize 5 synapse params, got=%v", mutated.Synapses[0].PlasticityParams)
 	}
-	changed := 0
+	if len(mutated.Neurons[0].PlasticityBiasParams) < 5 {
+		t.Fatalf("expected self-modulation V6 mutation to materialize 5 bias params, got=%v", mutated.Neurons[0].PlasticityBiasParams)
+	}
+	vectorChanges := 0
 	for i := 0; i < 5; i++ {
-		before := 0.0
+		beforeSyn := 0.0
 		if i < len(genome.Synapses[0].PlasticityParams) {
-			before = genome.Synapses[0].PlasticityParams[i]
+			beforeSyn = genome.Synapses[0].PlasticityParams[i]
 		}
-		after := mutated.Synapses[0].PlasticityParams[i]
-		if after != before {
-			changed++
+		afterSyn := mutated.Synapses[0].PlasticityParams[i]
+		if afterSyn != beforeSyn {
+			vectorChanges++
+		}
+		beforeBias := 0.0
+		if i < len(genome.Neurons[0].PlasticityBiasParams) {
+			beforeBias = genome.Neurons[0].PlasticityBiasParams[i]
+		}
+		afterBias := mutated.Neurons[0].PlasticityBiasParams[i]
+		if afterBias != beforeBias {
+			vectorChanges++
 		}
 	}
-	if changed != 1 {
-		t.Fatalf("expected exactly one self-modulation synapse-parameter change, before=%+v after=%+v", genome.Synapses[0].PlasticityParams, mutated.Synapses[0].PlasticityParams)
+	if vectorChanges == 0 {
+		t.Fatalf("expected at least one self-modulation parameter-vector change, before syn=%+v bias=%+v after syn=%+v bias=%+v", genome.Synapses[0].PlasticityParams, genome.Neurons[0].PlasticityBiasParams, mutated.Synapses[0].PlasticityParams, mutated.Neurons[0].PlasticityBiasParams)
 	}
 	if mutated.Neurons[0].PlasticityA != genome.Neurons[0].PlasticityA ||
 		mutated.Neurons[0].PlasticityB != genome.Neurons[0].PlasticityB ||

@@ -1266,20 +1266,24 @@ func (o *MutatePlasticityParameters) Apply(_ context.Context, genome model.Genom
 	}
 	idx := o.Rand.Intn(len(genome.Neurons))
 	mutated := cloneGenome(genome)
-	delta := (o.Rand.Float64()*2 - 1) * maxDelta
 	rule := nn.NormalizePlasticityRuleName(neuronPlasticityRule(genome, idx))
 	if width := selfModulationParameterWidth(rule); width > 0 {
-		vectorMutated := mutateSelfModulationParameterVector(&mutated, genome, idx, width, delta, o.Rand)
+		vectorMutated := mutateSelfModulationParameterVectors(&mutated, genome, idx, width, maxDelta, o.Rand)
 		if selfModulationRuleUsesCoefficientMutation(rule) {
-			mutateNeuronPlasticityCoefficients(&mutated, genome, idx, delta, o.Rand)
+			mutateSelfModulationCoefficients(&mutated, genome, idx, rule, maxDelta*10, o.Rand)
 			mutated.Neurons[idx].Generation = currentGenomeGeneration(mutated)
 			return mutated, nil
 		}
-		if vectorMutated {
+		if !vectorMutated {
+			// Reference perturbation may mutate zero parameters depending on probability.
+			// Preserve operator application semantics without forcing a mutation fallback.
 			mutated.Neurons[idx].Generation = currentGenomeGeneration(mutated)
 			return mutated, nil
 		}
+		mutated.Neurons[idx].Generation = currentGenomeGeneration(mutated)
+		return mutated, nil
 	}
+	delta := (o.Rand.Float64()*2 - 1) * maxDelta
 	if plasticityRuleUsesGeneralizedCoefficients(rule) {
 		mutateNeuronPlasticityCoefficients(&mutated, genome, idx, delta, o.Rand)
 	} else {
@@ -2980,16 +2984,89 @@ func mutateNeuronPlasticityCoefficients(mutated *model.Genome, base model.Genome
 	}
 }
 
-func mutateSelfModulationParameterVector(
+func mutateSelfModulationCoefficients(
+	mutated *model.Genome,
+	base model.Genome,
+	neuronIdx int,
+	rule string,
+	spread float64,
+	rng *rand.Rand,
+) bool {
+	if mutated == nil || rng == nil || neuronIdx < 0 || neuronIdx >= len(mutated.Neurons) {
+		return false
+	}
+	if spread <= 0 {
+		spread = 0.15
+	}
+
+	type coeffField struct {
+		getter func(model.Genome, int) float64
+		setter func(*model.Neuron, float64)
+	}
+	coeffFields := []coeffField{
+		{
+			getter: neuronPlasticityA,
+			setter: func(n *model.Neuron, v float64) { n.PlasticityA = v },
+		},
+		{
+			getter: neuronPlasticityB,
+			setter: func(n *model.Neuron, v float64) { n.PlasticityB = v },
+		},
+		{
+			getter: neuronPlasticityC,
+			setter: func(n *model.Neuron, v float64) { n.PlasticityC = v },
+		},
+		{
+			getter: neuronPlasticityD,
+			setter: func(n *model.Neuron, v float64) { n.PlasticityD = v },
+		},
+	}
+
+	var selected []coeffField
+	switch nn.NormalizePlasticityRuleName(rule) {
+	case nn.PlasticitySelfModulationV2:
+		selected = coeffFields[:1] // A only
+	case nn.PlasticitySelfModulationV3:
+		selected = coeffFields // A,B,C,D
+	case nn.PlasticitySelfModulationV5:
+		selected = coeffFields[1:] // B,C,D
+	default:
+		return false
+	}
+	if len(selected) == 0 {
+		return false
+	}
+
+	mutationProb := 1.0 / math.Sqrt(float64(len(selected)))
+	if nn.NormalizePlasticityRuleName(rule) == nn.PlasticitySelfModulationV2 {
+		mutationProb = 0.5
+	}
+	changed := false
+	for _, field := range selected {
+		if rng.Float64() >= mutationProb {
+			continue
+		}
+		current := field.getter(base, neuronIdx)
+		next := saturateSigned(current+(rng.Float64()*2-1)*spread, spread)
+		field.setter(&mutated.Neurons[neuronIdx], next)
+		changed = true
+	}
+	return changed
+}
+
+func mutateSelfModulationParameterVectors(
 	mutated *model.Genome,
 	base model.Genome,
 	neuronIdx int,
 	width int,
-	delta float64,
+	spread float64,
 	rng *rand.Rand,
 ) bool {
 	if mutated == nil || width <= 0 || rng == nil || neuronIdx < 0 || neuronIdx >= len(base.Neurons) {
 		return false
+	}
+	if spread <= 0 {
+		spread = 0.15
 	}
 
 	type vectorTarget struct {
@@ -3001,30 +3078,55 @@ func mutateSelfModulationParameterVector(
 	candidates := make([]vectorTarget, 0, 1)
 	candidates = append(candidates, vectorTarget{bias: true})
 	for i := range base.Synapses {
-		if !base.Synapses[i].Enabled || base.Synapses[i].To != neuronID {
+		if base.Synapses[i].To != neuronID {
 			continue
 		}
 		candidates = append(candidates, vectorTarget{synapseIdx: i})
 	}
+	totalParams := width * len(candidates)
+	if totalParams <= 0 {
+		return false
+	}
+	mutationProb := 1.0 / math.Sqrt(float64(totalParams))
 
-	target := candidates[rng.Intn(len(candidates))]
-	var params []float64
-	if target.bias {
-		params = append([]float64(nil), mutated.Neurons[neuronIdx].PlasticityBiasParams...)
-	} else {
-		params = append([]float64(nil), mutated.Synapses[target.synapseIdx].PlasticityParams...)
+	changed := false
+	for _, target := range candidates {
+		var params []float64
+		if target.bias {
+			params = append([]float64(nil), mutated.Neurons[neuronIdx].PlasticityBiasParams...)
+		} else {
+			params = append([]float64(nil), mutated.Synapses[target.synapseIdx].PlasticityParams...)
+		}
+		if len(params) < width {
+			params = append(params, make([]float64, width-len(params))...)
+		}
+		for i := 0; i < width; i++ {
+			if rng.Float64() >= mutationProb {
+				continue
+			}
+			params[i] = saturateSigned(params[i]+(rng.Float64()*2-1)*spread, spread)
+			changed = true
+		}
+		if target.bias {
+			mutated.Neurons[neuronIdx].PlasticityBiasParams = params
+		} else {
+			mutated.Synapses[target.synapseIdx].PlasticityParams = params
+		}
 	}
-	if len(params) < width {
-		params = append(params, make([]float64, width-len(params))...)
+	return changed
+}
+
+func saturateSigned(value, limit float64) float64 {
+	if limit <= 0 {
+		return value
 	}
-	paramIdx := rng.Intn(width)
-	params[paramIdx] += delta
-	if target.bias {
-		mutated.Neurons[neuronIdx].PlasticityBiasParams = params
-	} else {
-		mutated.Synapses[target.synapseIdx].PlasticityParams = params
+	if value > limit {
+		return limit
 	}
-	return true
+	if value < -limit {
+		return -limit
+	}
+	return value
 }
 
 func normalizeNonEmptyStrings(values []string) []string {
