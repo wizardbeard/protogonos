@@ -640,3 +640,30 @@ func TestSelectedNeuronPerturbTargetsActiveRandomFallsBackToFirstElement(t *test
 		t.Fatalf("expected fallback spread=pi, got=%f", targets[0].spread)
 	}
 }
+
+func TestScalarFitnessDominatesUsesRelativeThreshold(t *testing.T) {
+	if scalarFitnessDominates(11.0, 10.0, 0.1) {
+		t.Fatal("expected strict greater-than check at relative threshold boundary")
+	}
+	if !scalarFitnessDominates(11.0001, 10.0, 0.1) {
+		t.Fatal("expected dominance when candidate exceeds incumbent*(1+mip)")
+	}
+	if !scalarFitnessDominates(-1.05, -1.0, 0.1) {
+		t.Fatal("expected dominance for less-negative candidate above negative threshold")
+	}
+	if scalarFitnessDominates(-1.11, -1.0, 0.1) {
+		t.Fatal("expected no dominance for worse candidate below negative threshold")
+	}
+}
+
+func TestVectorFitnessDominatesUsesPerElementRelativeThreshold(t *testing.T) {
+	if !vectorFitnessDominates([]float64{1.2, 2.3}, []float64{1.0, 2.0}, 0.1) {
+		t.Fatal("expected full vector dominance when every element exceeds threshold")
+	}
+	if vectorFitnessDominates([]float64{1.2, 2.1}, []float64{1.0, 2.0}, 0.1) {
+		t.Fatal("expected no dominance when any element fails threshold")
+	}
+	if vectorFitnessDominates([]float64{1.0}, []float64{1.0, 2.0}, 0.1) {
+		t.Fatal("expected length mismatch to fail dominance")
+	}
+}

@@ -125,7 +125,7 @@ func (e *Exoself) TuneWithReport(ctx context.Context, genome model.Genome, attem
 				return model.Genome{}, report, err
 			}
 			report.CandidateEvaluations++
-			if candidateFitness > localBestFitness+e.MinImprovement {
+			if scalarFitnessDominates(candidateFitness, localBestFitness, e.MinImprovement) {
 				report.AcceptedCandidates++
 				localBest = candidate
 				localBestFitness = candidateFitness
@@ -134,7 +134,7 @@ func (e *Exoself) TuneWithReport(ctx context.Context, genome model.Genome, attem
 			}
 		}
 		recentBase = cloneGenome(localBest)
-		if localBestFitness > bestFitness+e.MinImprovement {
+		if scalarFitnessDominates(localBestFitness, bestFitness, e.MinImprovement) {
 			best = localBest
 			bestFitness = localBestFitness
 		}
@@ -798,4 +798,22 @@ func touchActuatorGeneration(genome *model.Genome, actuatorID string, generation
 		genome.ActuatorGenerations = map[string]int{}
 	}
 	genome.ActuatorGenerations[actuatorID] = generation
+}
+
+func scalarFitnessDominates(candidate, incumbent, minImprovement float64) bool {
+	threshold := incumbent + incumbent*minImprovement
+	return candidate > threshold
+}
+
+func vectorFitnessDominates(candidate, incumbent []float64, minImprovement float64) bool {
+	if len(candidate) == 0 || len(candidate) != len(incumbent) {
+		return false
+	}
+	for i := range candidate {
+		threshold := incumbent[i] + incumbent[i]*minImprovement
+		if candidate[i] <= threshold {
+			return false
+		}
+	}
+	return true
 }
