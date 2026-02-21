@@ -2596,19 +2596,15 @@ func TestMutatePlasticityParametersMutatesSelfModulationSynapseParams(t *testing
 	}
 }
 
-func TestMutatePlasticityParametersFallsBackToSelfModulationCoefficientsWhenNoIncomingSynapse(t *testing.T) {
+func TestMutatePlasticityParametersMutatesSelfModulationBiasVectorWhenNoIncomingSynapse(t *testing.T) {
 	genome := model.Genome{
 		Neurons: []model.Neuron{
 			{
 				ID:             "n0",
 				Activation:     "identity",
 				Aggregator:     "dot_product",
-				PlasticityRule: nn.PlasticitySelfModulationV3,
+				PlasticityRule: nn.PlasticitySelfModulationV1,
 				PlasticityRate: 0.2,
-				PlasticityA:    0.1,
-				PlasticityB:    0.2,
-				PlasticityC:    -0.1,
-				PlasticityD:    0.0,
 			},
 		},
 		Synapses: nil,
@@ -2622,23 +2618,30 @@ func TestMutatePlasticityParametersFallsBackToSelfModulationCoefficientsWhenNoIn
 		t.Fatalf("apply failed: %v", err)
 	}
 	if mutated.Neurons[0].PlasticityRate != genome.Neurons[0].PlasticityRate {
-		t.Fatalf("expected fallback self-modulation mutation to leave rate untouched, before=%f after=%f", genome.Neurons[0].PlasticityRate, mutated.Neurons[0].PlasticityRate)
+		t.Fatalf("expected self-modulation vector mutation to leave rate untouched, before=%f after=%f", genome.Neurons[0].PlasticityRate, mutated.Neurons[0].PlasticityRate)
+	}
+	if len(mutated.Neurons[0].PlasticityBiasParams) < 1 {
+		t.Fatalf("expected self-modulation mutation to materialize bias param vector, got=%v", mutated.Neurons[0].PlasticityBiasParams)
 	}
 	changed := 0
-	if mutated.Neurons[0].PlasticityA != genome.Neurons[0].PlasticityA {
-		changed++
-	}
-	if mutated.Neurons[0].PlasticityB != genome.Neurons[0].PlasticityB {
-		changed++
-	}
-	if mutated.Neurons[0].PlasticityC != genome.Neurons[0].PlasticityC {
-		changed++
-	}
-	if mutated.Neurons[0].PlasticityD != genome.Neurons[0].PlasticityD {
-		changed++
+	for i := 0; i < 1; i++ {
+		before := 0.0
+		if i < len(genome.Neurons[0].PlasticityBiasParams) {
+			before = genome.Neurons[0].PlasticityBiasParams[i]
+		}
+		after := mutated.Neurons[0].PlasticityBiasParams[i]
+		if after != before {
+			changed++
+		}
 	}
 	if changed != 1 {
-		t.Fatalf("expected exactly one fallback self-modulation coefficient change, before=%+v after=%+v", genome.Neurons[0], mutated.Neurons[0])
+		t.Fatalf("expected exactly one self-modulation bias-vector change, before=%+v after=%+v", genome.Neurons[0].PlasticityBiasParams, mutated.Neurons[0].PlasticityBiasParams)
+	}
+	if mutated.Neurons[0].PlasticityA != genome.Neurons[0].PlasticityA ||
+		mutated.Neurons[0].PlasticityB != genome.Neurons[0].PlasticityB ||
+		mutated.Neurons[0].PlasticityC != genome.Neurons[0].PlasticityC ||
+		mutated.Neurons[0].PlasticityD != genome.Neurons[0].PlasticityD {
+		t.Fatalf("expected self-modulation bias-vector mutation to leave neuron coefficients unchanged, before=%+v after=%+v", genome.Neurons[0], mutated.Neurons[0])
 	}
 }
 

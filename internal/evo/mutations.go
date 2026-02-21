@@ -1269,22 +1269,18 @@ func (o *MutatePlasticityParameters) Apply(_ context.Context, genome model.Genom
 	delta := (o.Rand.Float64()*2 - 1) * maxDelta
 	rule := nn.NormalizePlasticityRuleName(neuronPlasticityRule(genome, idx))
 	if width := selfModulationParameterWidth(rule); width > 0 {
-		if ok := mutateSelfModulationSynapseParameter(&mutated, genome, idx, width, delta, o.Rand); ok {
+		if selfModulationRuleUsesCoefficientMutation(rule) && o.Rand.Intn(2) == 0 {
+			mutateNeuronPlasticityCoefficients(&mutated, genome, idx, delta, o.Rand)
+			mutated.Neurons[idx].Generation = currentGenomeGeneration(mutated)
+			return mutated, nil
+		}
+		if ok := mutateSelfModulationParameterVector(&mutated, genome, idx, width, delta, o.Rand); ok {
 			mutated.Neurons[idx].Generation = currentGenomeGeneration(mutated)
 			return mutated, nil
 		}
 	}
 	if plasticityRuleUsesGeneralizedCoefficients(rule) {
-		switch o.Rand.Intn(4) {
-		case 0:
-			mutated.Neurons[idx].PlasticityA = neuronPlasticityA(genome, idx) + delta
-		case 1:
-			mutated.Neurons[idx].PlasticityB = neuronPlasticityB(genome, idx) + delta
-		case 2:
-			mutated.Neurons[idx].PlasticityC = neuronPlasticityC(genome, idx) + delta
-		default:
-			mutated.Neurons[idx].PlasticityD = neuronPlasticityD(genome, idx) + delta
-		}
+		mutateNeuronPlasticityCoefficients(&mutated, genome, idx, delta, o.Rand)
 	} else {
 		baseRate := neuronPlasticityRate(genome, idx)
 		mutated.Neurons[idx].PlasticityRate = math.Max(0, baseRate+delta)
@@ -2958,7 +2954,32 @@ func selfModulationParameterWidth(rule string) int {
 	}
 }
 
-func mutateSelfModulationSynapseParameter(
+func selfModulationRuleUsesCoefficientMutation(rule string) bool {
+	switch nn.NormalizePlasticityRuleName(rule) {
+	case nn.PlasticitySelfModulationV2, nn.PlasticitySelfModulationV3, nn.PlasticitySelfModulationV5:
+		return true
+	default:
+		return false
+	}
+}
+
+func mutateNeuronPlasticityCoefficients(mutated *model.Genome, base model.Genome, neuronIdx int, delta float64, rng *rand.Rand) {
+	if mutated == nil || rng == nil || neuronIdx < 0 || neuronIdx >= len(mutated.Neurons) {
+		return
+	}
+	switch rng.Intn(4) {
+	case 0:
+		mutated.Neurons[neuronIdx].PlasticityA = neuronPlasticityA(base, neuronIdx) + delta
+	case 1:
+		mutated.Neurons[neuronIdx].PlasticityB = neuronPlasticityB(base, neuronIdx) + delta
+	case 2:
+		mutated.Neurons[neuronIdx].PlasticityC = neuronPlasticityC(base, neuronIdx) + delta
+	default:
+		mutated.Neurons[neuronIdx].PlasticityD = neuronPlasticityD(base, neuronIdx) + delta
+	}
+}
+
+func mutateSelfModulationParameterVector(
 	mutated *model.Genome,
 	base model.Genome,
 	neuronIdx int,
@@ -2969,25 +2990,39 @@ func mutateSelfModulationSynapseParameter(
 	if mutated == nil || width <= 0 || rng == nil || neuronIdx < 0 || neuronIdx >= len(base.Neurons) {
 		return false
 	}
+
+	type vectorTarget struct {
+		synapseIdx int
+		bias       bool
+	}
+
 	neuronID := base.Neurons[neuronIdx].ID
-	candidates := make([]int, 0)
+	candidates := make([]vectorTarget, 0, 1)
+	candidates = append(candidates, vectorTarget{bias: true})
 	for i := range base.Synapses {
 		if !base.Synapses[i].Enabled || base.Synapses[i].To != neuronID {
 			continue
 		}
-		candidates = append(candidates, i)
+		candidates = append(candidates, vectorTarget{synapseIdx: i})
 	}
-	if len(candidates) == 0 {
-		return false
+
+	target := candidates[rng.Intn(len(candidates))]
+	var params []float64
+	if target.bias {
+		params = append([]float64(nil), mutated.Neurons[neuronIdx].PlasticityBiasParams...)
+	} else {
+		params = append([]float64(nil), mutated.Synapses[target.synapseIdx].PlasticityParams...)
 	}
-	synapseIdx := candidates[rng.Intn(len(candidates))]
-	params := append([]float64(nil), mutated.Synapses[synapseIdx].PlasticityParams...)
 	if len(params) < width {
 		params = append(params, make([]float64, width-len(params))...)
 	}
 	paramIdx := rng.Intn(width)
 	params[paramIdx] += delta
-	mutated.Synapses[synapseIdx].PlasticityParams = params
+	if target.bias {
+		mutated.Neurons[neuronIdx].PlasticityBiasParams = params
+	} else {
+		mutated.Synapses[target.synapseIdx].PlasticityParams = params
+	}
 	return true
 }
 
