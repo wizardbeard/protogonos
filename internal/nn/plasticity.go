@@ -55,6 +55,11 @@ type plasticityCoefficients struct {
 	D float64
 }
 
+type selfModulationDynamics struct {
+	H            float64
+	Coefficients plasticityCoefficients
+}
+
 func ApplyPlasticity(genome *model.Genome, neuronValues map[string]float64, cfg model.PlasticityConfig) error {
 	if genome == nil {
 		return fmt.Errorf("genome is required")
@@ -72,6 +77,13 @@ func ApplyPlasticity(genome *model.Genome, neuronValues map[string]float64, cfg 
 	neuronByID := make(map[string]model.Neuron, len(genome.Neurons))
 	for _, neuron := range genome.Neurons {
 		neuronByID[neuron.ID] = neuron
+	}
+	incomingByTarget := make(map[string][]model.Synapse, len(genome.Neurons))
+	for _, synapse := range genome.Synapses {
+		if !synapse.Enabled {
+			continue
+		}
+		incomingByTarget[synapse.To] = append(incomingByTarget[synapse.To], synapse)
 	}
 
 	for i := range genome.Synapses {
@@ -112,7 +124,8 @@ func ApplyPlasticity(genome *model.Genome, neuronValues map[string]float64, cfg 
 			modulator := scaleDeadzone(post, 0.33, limit)
 			delta = modulator * generalizedHebbianDelta(rate, coeffs, pre, post)
 		case PlasticitySelfModulationV1, PlasticitySelfModulationV2, PlasticitySelfModulationV3, PlasticitySelfModulationV4, PlasticitySelfModulationV5, PlasticitySelfModulationV6:
-			delta = generalizedHebbianDelta(rate, coeffs, pre, post)
+			dynamics := deriveSelfModulationDynamics(rule, coeffs, incomingByTarget[s.To], neuronValues)
+			delta = dynamics.H * generalizedHebbianDelta(rate, dynamics.Coefficients, pre, post)
 		}
 
 		next := s.Weight + delta
@@ -178,6 +191,64 @@ func normalizePlasticityCoefficients(coeffs plasticityCoefficients) plasticityCo
 
 func generalizedHebbianDelta(rate float64, coeffs plasticityCoefficients, pre, post float64) float64 {
 	return rate * (coeffs.A*pre*post + coeffs.B*pre + coeffs.C*post + coeffs.D)
+}
+
+func deriveSelfModulationDynamics(
+	rule string,
+	coeffs plasticityCoefficients,
+	incoming []model.Synapse,
+	neuronValues map[string]float64,
+) selfModulationDynamics {
+	dynamics := selfModulationDynamics{
+		H:            1,
+		Coefficients: coeffs,
+	}
+
+	switch rule {
+	case PlasticitySelfModulationV1, PlasticitySelfModulationV2, PlasticitySelfModulationV3:
+		if dot, ok := dotPlasticityParameter(incoming, neuronValues, 0); ok {
+			dynamics.H = math.Tanh(dot)
+		}
+	case PlasticitySelfModulationV4, PlasticitySelfModulationV5:
+		if dot, ok := dotPlasticityParameter(incoming, neuronValues, 0); ok {
+			dynamics.H = math.Tanh(dot)
+		}
+		if dot, ok := dotPlasticityParameter(incoming, neuronValues, 1); ok {
+			dynamics.Coefficients.A = math.Tanh(dot)
+		}
+	case PlasticitySelfModulationV6:
+		if dot, ok := dotPlasticityParameter(incoming, neuronValues, 0); ok {
+			dynamics.H = math.Tanh(dot)
+		}
+		if dot, ok := dotPlasticityParameter(incoming, neuronValues, 1); ok {
+			dynamics.Coefficients.A = math.Tanh(dot)
+		}
+		if dot, ok := dotPlasticityParameter(incoming, neuronValues, 2); ok {
+			dynamics.Coefficients.B = math.Tanh(dot)
+		}
+		if dot, ok := dotPlasticityParameter(incoming, neuronValues, 3); ok {
+			dynamics.Coefficients.C = math.Tanh(dot)
+		}
+		if dot, ok := dotPlasticityParameter(incoming, neuronValues, 4); ok {
+			dynamics.Coefficients.D = math.Tanh(dot)
+		}
+	}
+
+	dynamics.Coefficients = normalizePlasticityCoefficients(dynamics.Coefficients)
+	return dynamics
+}
+
+func dotPlasticityParameter(incoming []model.Synapse, neuronValues map[string]float64, index int) (float64, bool) {
+	total := 0.0
+	used := false
+	for _, synapse := range incoming {
+		if len(synapse.PlasticityParams) <= index {
+			continue
+		}
+		total += neuronValues[synapse.From] * synapse.PlasticityParams[index]
+		used = true
+	}
+	return total, used
 }
 
 func scaleDeadzone(value, threshold, maxMagnitude float64) float64 {

@@ -75,12 +75,13 @@ type Neuron struct {
 }
 
 type Synapse struct {
-	ID        string  `json:"id"`
-	From      string  `json:"from"`
-	To        string  `json:"to"`
-	Weight    float64 `json:"weight"`
-	Enabled   bool    `json:"enabled"`
-	Recurrent bool    `json:"recurrent"`
+	ID               string    `json:"id"`
+	From             string    `json:"from"`
+	To               string    `json:"to"`
+	Weight           float64   `json:"weight"`
+	Enabled          bool      `json:"enabled"`
+	Recurrent        bool      `json:"recurrent"`
+	PlasticityParams []float64 `json:"plasticity_params,omitempty"`
 }
 
 type Agent struct {

@@ -12,7 +12,7 @@ func TestCloneGenomeDeepCopy(t *testing.T) {
 	in := model.Genome{
 		ID:          "g1",
 		Neurons:     []model.Neuron{{ID: "n1", Activation: "identity"}},
-		Synapses:    []model.Synapse{{ID: "s1", From: "n1", To: "n1", Weight: 1, Enabled: true}},
+		Synapses:    []model.Synapse{{ID: "s1", From: "n1", To: "n1", Weight: 1, Enabled: true, PlasticityParams: []float64{0.3, -0.1}}},
 		SensorIDs:   []string{"s"},
 		ActuatorIDs: []string{"a"},
 		ActuatorTunables: map[string]float64{
@@ -27,6 +27,7 @@ func TestCloneGenomeDeepCopy(t *testing.T) {
 
 	out := CloneGenome(in)
 	out.Neurons[0].Activation = "relu"
+	out.Synapses[0].PlasticityParams[0] = 9
 	out.ActuatorTunables["a"] = 0.75
 	out.Substrate.Parameters["scale"] = 2
 
@@ -38,6 +39,9 @@ func TestCloneGenomeDeepCopy(t *testing.T) {
 	}
 	if in.ActuatorTunables["a"] != 0.25 {
 		t.Fatal("expected original actuator tunable map to remain unchanged")
+	}
+	if in.Synapses[0].PlasticityParams[0] != 0.3 {
+		t.Fatal("expected original synapse plasticity parameters to remain unchanged")
 	}
 }
 

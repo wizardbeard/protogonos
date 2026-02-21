@@ -283,6 +283,105 @@ func TestApplyPlasticityNeuromodulationUsesDeadzoneScaling(t *testing.T) {
 	}
 }
 
+func TestApplyPlasticitySelfModulationV1UsesDynamicHFromSynapseParameters(t *testing.T) {
+	g := model.Genome{
+		Synapses: []model.Synapse{
+			{ID: "s1", From: "in1", To: "h", Weight: 1.0, Enabled: true, PlasticityParams: []float64{0.5}},
+			{ID: "s2", From: "in2", To: "h", Weight: 1.0, Enabled: true, PlasticityParams: []float64{0.25}},
+		},
+	}
+	values := map[string]float64{
+		"in1": 1.0,
+		"in2": 2.0,
+		"h":   0.4,
+	}
+	cfg := model.PlasticityConfig{
+		Rule:   PlasticitySelfModulationV1,
+		Rate:   1.0,
+		CoeffA: 1.0,
+	}
+	if err := ApplyPlasticity(&g, values, cfg); err != nil {
+		t.Fatalf("apply self_modulationV1: %v", err)
+	}
+
+	h := math.Tanh(values["in1"]*0.5 + values["in2"]*0.25)
+	want1 := 1.0 + h*(values["in1"]*values["h"])
+	want2 := 1.0 + h*(values["in2"]*values["h"])
+	if math.Abs(g.Synapses[0].Weight-want1) > 1e-12 {
+		t.Fatalf("unexpected self_modulationV1 weight s1: got=%f want=%f", g.Synapses[0].Weight, want1)
+	}
+	if math.Abs(g.Synapses[1].Weight-want2) > 1e-12 {
+		t.Fatalf("unexpected self_modulationV1 weight s2: got=%f want=%f", g.Synapses[1].Weight, want2)
+	}
+}
+
+func TestApplyPlasticitySelfModulationV4UsesDynamicAFromSynapseParameters(t *testing.T) {
+	g := model.Genome{
+		Synapses: []model.Synapse{
+			{ID: "s1", From: "in1", To: "h", Weight: 0.0, Enabled: true, PlasticityParams: []float64{0.5, 0.2}},
+			{ID: "s2", From: "in2", To: "h", Weight: 0.0, Enabled: true, PlasticityParams: []float64{0.5, -0.1}},
+		},
+	}
+	values := map[string]float64{
+		"in1": 1.0,
+		"in2": 1.0,
+		"h":   0.5,
+	}
+	cfg := model.PlasticityConfig{
+		Rule: PlasticitySelfModulationV4,
+		Rate: 1.0,
+	}
+	if err := ApplyPlasticity(&g, values, cfg); err != nil {
+		t.Fatalf("apply self_modulationV4: %v", err)
+	}
+
+	h := math.Tanh(values["in1"]*0.5 + values["in2"]*0.5)
+	a := math.Tanh(values["in1"]*0.2 + values["in2"]*-0.1)
+	want := h * (a * values["in1"] * values["h"])
+	if math.Abs(g.Synapses[0].Weight-want) > 1e-12 {
+		t.Fatalf("unexpected self_modulationV4 weight s1: got=%f want=%f", g.Synapses[0].Weight, want)
+	}
+	if math.Abs(g.Synapses[1].Weight-want) > 1e-12 {
+		t.Fatalf("unexpected self_modulationV4 weight s2: got=%f want=%f", g.Synapses[1].Weight, want)
+	}
+}
+
+func TestApplyPlasticitySelfModulationV6UsesDynamicABCDFromSynapseParameters(t *testing.T) {
+	g := model.Genome{
+		Synapses: []model.Synapse{
+			{
+				ID:               "s1",
+				From:             "in",
+				To:               "h",
+				Weight:           0.0,
+				Enabled:          true,
+				PlasticityParams: []float64{1.0, 0.5, -0.25, 0.125, 0.05},
+			},
+		},
+	}
+	values := map[string]float64{
+		"in": 2.0,
+		"h":  0.25,
+	}
+	cfg := model.PlasticityConfig{
+		Rule: PlasticitySelfModulationV6,
+		Rate: 1.0,
+	}
+	if err := ApplyPlasticity(&g, values, cfg); err != nil {
+		t.Fatalf("apply self_modulationV6: %v", err)
+	}
+
+	h := math.Tanh(values["in"] * 1.0)
+	a := math.Tanh(values["in"] * 0.5)
+	b := math.Tanh(values["in"] * -0.25)
+	c := math.Tanh(values["in"] * 0.125)
+	d := math.Tanh(values["in"] * 0.05)
+	want := h * (a*values["in"]*values["h"] + b*values["in"] + c*values["h"] + d)
+	if math.Abs(g.Synapses[0].Weight-want) > 1e-12 {
+		t.Fatalf("unexpected self_modulationV6 weight: got=%f want=%f", g.Synapses[0].Weight, want)
+	}
+}
+
 func TestNormalizePlasticityRuleName(t *testing.T) {
 	cases := map[string]string{
 		"":                   "none",

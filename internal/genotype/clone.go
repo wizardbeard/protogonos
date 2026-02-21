@@ -6,6 +6,12 @@ func CloneGenome(g model.Genome) model.Genome {
 	out := g
 	out.Neurons = append([]model.Neuron(nil), g.Neurons...)
 	out.Synapses = append([]model.Synapse(nil), g.Synapses...)
+	for i := range out.Synapses {
+		if len(out.Synapses[i].PlasticityParams) == 0 {
+			continue
+		}
+		out.Synapses[i].PlasticityParams = append([]float64(nil), out.Synapses[i].PlasticityParams...)
+	}
 	out.SensorIDs = append([]string(nil), g.SensorIDs...)
 	out.ActuatorIDs = append([]string(nil), g.ActuatorIDs...)
 	if g.ActuatorTunables != nil {
