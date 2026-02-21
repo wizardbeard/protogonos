@@ -12,7 +12,7 @@ Status keys:
 
 | Reference module | Status | Notes |
 |---|---|---|
-| `polis.erl` | `partial` | Core lifecycle + persistence orchestration implemented, including idempotent init/start state, explicit stop lifecycle, and scape lookup semantics; OTP process/supervision semantics still simplified. |
+| `polis.erl` | `partial` | Core lifecycle + persistence orchestration implemented, including idempotent init/start state, explicit stop lifecycle, scape lookup semantics, configured supporting-module start/stop lifecycle, and configured public-scape autostart with tracked scape summary metadata (`type`/`parameters`/`metabolics`/`physics`); OTP process/supervision semantics still simplified. |
 | `population_monitor.erl` | `partial` | Generation loop, species-aware selection, quotas, diagnostics, lineage implemented, including early-stop lifecycle controls for fitness-goal/evaluation-limit, `survival_percentage`-driven elite retention semantics, `specie_size_limit` parent-pool capping, pause/continue/stop control-channel semantics with live run control via platform/API and explicit `run_id`, continuation from persisted population snapshots (`continue_population_id`), and success-only mutation-step retry semantics (failed/inapplicable mutators no longer consume mutation count); remaining fine-grained lifecycle parity pending. |
 | `genotype.erl` | `partial` | Seed/clone/lifecycle/store flows implemented; full reference operation surface still broader. |
 | `records.hrl` | `partial` | Core record equivalents implemented with versioned codecs; full field-level parity still pending. |
@@ -112,6 +112,7 @@ Status keys:
 - Added dedicated bias-removal mutation operator (`remove_random_bias`) and mapped reference `remove_bias` config/profile operators to a distinct remove-bias mutation-weight path.
 - Added dedicated plasticity-function mutation operator (`change_plasticity_rule`) and mapped reference `mutate_pf` config/profile operators to a distinct plasticity-rule mutation-weight path.
 - Hardened `polis` lifecycle semantics with idempotent init, explicit stop/reset of in-memory runtime registration, and direct registered-scape lookup coverage.
+- Extended `polis` lifecycle parity with configured support-module startup/shutdown and configured public-scape autostart/summary tracking (including metadata fields and managed start/stop hooks with rollback on init failure).
 - Added population-monitor lifecycle stop controls (`fitness_goal`, `evaluations_limit`) with early-termination coverage and fixed persisted generation to reflect executed generations under early stop.
 - Added `survival_percentage` parity semantics in `PopulationMonitor` to derive elite retention count when `elite_count` is unset, with validation and lineage-backed behavioral tests.
 - Added map2rec/CLI/API parity wiring for lifecycle controls (`survival_percentage`, `fitness_goal`, `evaluations_limit`) through `run --config` and persisted run artifacts, with sqlite integration and API validation coverage.
