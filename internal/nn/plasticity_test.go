@@ -95,6 +95,103 @@ func TestApplyPlasticityAcceptsReferenceRuleAliases(t *testing.T) {
 	}
 }
 
+func TestApplyPlasticityUsesPerNeuronRuleAndRateOverrides(t *testing.T) {
+	g := model.Genome{
+		Neurons: []model.Neuron{
+			{ID: "h-hebb", PlasticityRule: PlasticityHebbian, PlasticityRate: 0.1},
+			{ID: "h-oja", PlasticityRule: PlasticityOja, PlasticityRate: 0.2},
+		},
+		Synapses: []model.Synapse{
+			{ID: "s1", From: "in", To: "h-hebb", Weight: 1.0, Enabled: true},
+			{ID: "s2", From: "in", To: "h-oja", Weight: 0.5, Enabled: true},
+		},
+	}
+	values := map[string]float64{"in": 1.0, "h-hebb": 2.0, "h-oja": 2.0}
+
+	err := ApplyPlasticity(&g, values, model.PlasticityConfig{
+		Rule: PlasticityHebbian,
+		Rate: 0.01,
+	})
+	if err != nil {
+		t.Fatalf("apply plasticity: %v", err)
+	}
+	// s1 (hebbian, 0.1): 1.0 + 0.1*1*2 = 1.2
+	if g.Synapses[0].Weight != 1.2 {
+		t.Fatalf("unexpected weight for hebbian override: %f", g.Synapses[0].Weight)
+	}
+	// s2 (oja, 0.2): 0.5 + 0.2*2*(1 - 2*0.5) = 0.5
+	if g.Synapses[1].Weight != 0.5 {
+		t.Fatalf("unexpected weight for oja override: %f", g.Synapses[1].Weight)
+	}
+}
+
+func TestApplyPlasticityFallsBackToGenomeRuleWhenNeuronRuleMissing(t *testing.T) {
+	g := model.Genome{
+		Neurons: []model.Neuron{
+			{ID: "h"},
+		},
+		Synapses: []model.Synapse{
+			{ID: "s1", From: "in", To: "h", Weight: 1.0, Enabled: true},
+		},
+	}
+	values := map[string]float64{"in": 2.0, "h": 3.0}
+
+	err := ApplyPlasticity(&g, values, model.PlasticityConfig{
+		Rule: PlasticityHebbian,
+		Rate: 0.1,
+	})
+	if err != nil {
+		t.Fatalf("apply plasticity: %v", err)
+	}
+	if g.Synapses[0].Weight != 1.6 {
+		t.Fatalf("unexpected weight with genome fallback rule/rate: %f", g.Synapses[0].Weight)
+	}
+}
+
+func TestApplyPlasticityUsesNeuronRateWithGenomeRuleFallback(t *testing.T) {
+	g := model.Genome{
+		Neurons: []model.Neuron{
+			{ID: "h", PlasticityRate: 0.2},
+		},
+		Synapses: []model.Synapse{
+			{ID: "s1", From: "in", To: "h", Weight: 1.0, Enabled: true},
+		},
+	}
+	values := map[string]float64{"in": 2.0, "h": 3.0}
+
+	err := ApplyPlasticity(&g, values, model.PlasticityConfig{
+		Rule: PlasticityHebbian,
+		Rate: 0.1,
+	})
+	if err != nil {
+		t.Fatalf("apply plasticity: %v", err)
+	}
+	// neuron rate override: 1.0 + 0.2*2*3 = 2.2
+	if g.Synapses[0].Weight != 2.2 {
+		t.Fatalf("unexpected weight with neuron rate override: %f", g.Synapses[0].Weight)
+	}
+}
+
+func TestApplyPlasticityRejectsUnsupportedNeuronRuleOverride(t *testing.T) {
+	g := model.Genome{
+		Neurons: []model.Neuron{
+			{ID: "h", PlasticityRule: "custom-rule", PlasticityRate: 0.2},
+		},
+		Synapses: []model.Synapse{
+			{ID: "s1", From: "in", To: "h", Weight: 1.0, Enabled: true},
+		},
+	}
+	values := map[string]float64{"in": 2.0, "h": 3.0}
+
+	err := ApplyPlasticity(&g, values, model.PlasticityConfig{
+		Rule: PlasticityHebbian,
+		Rate: 0.1,
+	})
+	if err == nil {
+		t.Fatal("expected unsupported neuron plasticity rule error")
+	}
+}
+
 func TestNormalizePlasticityRuleName(t *testing.T) {
 	cases := map[string]string{
 		"":          "none",

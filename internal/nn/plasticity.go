@@ -31,22 +31,18 @@ func ApplyPlasticity(genome *model.Genome, neuronValues map[string]float64, cfg 
 	if genome == nil {
 		return fmt.Errorf("genome is required")
 	}
-	rule := NormalizePlasticityRuleName(cfg.Rule)
-	if rule == PlasticityNone {
-		return nil
-	}
-	switch rule {
-	case PlasticityHebbian, PlasticityOja:
-	default:
-		return fmt.Errorf("unsupported plasticity rule: %s", cfg.Rule)
-	}
-	if cfg.Rate == 0 {
-		return nil
+	defaultRule := NormalizePlasticityRuleName(cfg.Rule)
+	if err := validatePlasticityRule(defaultRule, cfg.Rule); err != nil {
+		return err
 	}
 
 	limit := cfg.SaturationLimit
 	if limit <= 0 {
 		limit = math.Pi * 2
+	}
+	neuronByID := make(map[string]model.Neuron, len(genome.Neurons))
+	for _, neuron := range genome.Neurons {
+		neuronByID[neuron.ID] = neuron
 	}
 
 	for i := range genome.Synapses {
@@ -54,15 +50,33 @@ func ApplyPlasticity(genome *model.Genome, neuronValues map[string]float64, cfg 
 		if !s.Enabled {
 			continue
 		}
+
+		rule := defaultRule
+		rate := cfg.Rate
+		if neuron, ok := neuronByID[s.To]; ok {
+			if neuronRule := NormalizePlasticityRuleName(neuron.PlasticityRule); neuronRule != PlasticityNone {
+				rule = neuronRule
+			}
+			if neuron.PlasticityRate != 0 {
+				rate = neuron.PlasticityRate
+			}
+		}
+		if rule == PlasticityNone || rate == 0 {
+			continue
+		}
+		if err := validatePlasticityRule(rule, rule); err != nil {
+			return err
+		}
+
 		pre := neuronValues[s.From]
 		post := neuronValues[s.To]
 
 		var delta float64
 		switch rule {
 		case PlasticityHebbian:
-			delta = cfg.Rate * pre * post
+			delta = rate * pre * post
 		case PlasticityOja:
-			delta = cfg.Rate * post * (pre - (post * s.Weight))
+			delta = rate * post * (pre - (post * s.Weight))
 		}
 
 		next := s.Weight + delta
@@ -74,4 +88,13 @@ func ApplyPlasticity(genome *model.Genome, neuronValues map[string]float64, cfg 
 		s.Weight = next
 	}
 	return nil
+}
+
+func validatePlasticityRule(rule, original string) error {
+	switch rule {
+	case PlasticityNone, PlasticityHebbian, PlasticityOja:
+		return nil
+	default:
+		return fmt.Errorf("unsupported plasticity rule: %s", original)
+	}
 }
