@@ -717,3 +717,68 @@ func TestExoselfAttemptsResetOnImprovement(t *testing.T) {
 		t.Fatalf("expected improvement resets to allow attempts beyond planned budget, report=%+v", report)
 	}
 }
+
+func TestTransposeVectorsUsesShortestLength(t *testing.T) {
+	in := [][]float64{
+		{1, 2, 3},
+		{4, 5},
+		{6, 7, 8, 9},
+	}
+	out := transposeVectors(in)
+	if len(out) != 2 {
+		t.Fatalf("expected transpose length 2 from shortest vector, got=%d", len(out))
+	}
+	if len(out[0]) != 3 || out[0][0] != 1 || out[0][1] != 4 || out[0][2] != 6 {
+		t.Fatalf("unexpected first transpose column: %+v", out[0])
+	}
+	if len(out[1]) != 3 || out[1][0] != 2 || out[1][1] != 5 || out[1][2] != 7 {
+		t.Fatalf("unexpected second transpose column: %+v", out[1])
+	}
+}
+
+func TestVectorAvgComputesColumnMeans(t *testing.T) {
+	in := [][]float64{
+		{1, 2, 3},
+		{4, 5},
+		{6, 7, 8, 9},
+	}
+	avg := vectorAvg(in)
+	if len(avg) != 2 {
+		t.Fatalf("expected avg length 2, got=%d", len(avg))
+	}
+	if math.Abs(avg[0]-11.0/3.0) > 1e-12 {
+		t.Fatalf("unexpected avg[0]=%f", avg[0])
+	}
+	if math.Abs(avg[1]-14.0/3.0) > 1e-12 {
+		t.Fatalf("unexpected avg[1]=%f", avg[1])
+	}
+}
+
+func TestVectorBasicStatsMatchesReferenceSemantics(t *testing.T) {
+	in := [][]float64{
+		{1, 3},
+		{2, 1},
+		{0, 5},
+	}
+	maxV, minV, avgV, stdV := vectorBasicStats(in)
+
+	if len(maxV) != 2 || maxV[0] != 2 || maxV[1] != 1 {
+		t.Fatalf("unexpected lexicographic max vector: %+v", maxV)
+	}
+	if len(minV) != 2 || minV[0] != 0 || minV[1] != 5 {
+		t.Fatalf("unexpected lexicographic min vector: %+v", minV)
+	}
+	if len(avgV) != 2 || math.Abs(avgV[0]-1.0) > 1e-12 || math.Abs(avgV[1]-3.0) > 1e-12 {
+		t.Fatalf("unexpected avg vector: %+v", avgV)
+	}
+	if len(stdV) != 2 || math.Abs(stdV[0]-math.Sqrt(2.0/3.0)) > 1e-12 || math.Abs(stdV[1]-math.Sqrt(8.0/3.0)) > 1e-12 {
+		t.Fatalf("unexpected std vector: %+v", stdV)
+	}
+}
+
+func TestVectorBasicStatsEmptyInput(t *testing.T) {
+	maxV, minV, avgV, stdV := vectorBasicStats(nil)
+	if maxV != nil || minV != nil || avgV != nil || stdV != nil {
+		t.Fatalf("expected nil stats for empty input, got max=%+v min=%+v avg=%+v std=%+v", maxV, minV, avgV, stdV)
+	}
+}

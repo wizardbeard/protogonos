@@ -830,3 +830,113 @@ func vectorFitnessDominates(candidate, incumbent []float64, minImprovement float
 	}
 	return true
 }
+
+func transposeVectors(vectors [][]float64) [][]float64 {
+	if len(vectors) == 0 {
+		return nil
+	}
+	minLen := -1
+	for _, vector := range vectors {
+		if minLen == -1 || len(vector) < minLen {
+			minLen = len(vector)
+		}
+	}
+	if minLen <= 0 {
+		return nil
+	}
+	transposed := make([][]float64, minLen)
+	for i := 0; i < minLen; i++ {
+		column := make([]float64, 0, len(vectors))
+		for _, vector := range vectors {
+			column = append(column, vector[i])
+		}
+		transposed[i] = column
+	}
+	return transposed
+}
+
+func vectorAvg(vectors [][]float64) []float64 {
+	transposed := transposeVectors(vectors)
+	if len(transposed) == 0 {
+		return nil
+	}
+	averages := make([]float64, len(transposed))
+	for i, column := range transposed {
+		if len(column) == 0 {
+			continue
+		}
+		total := 0.0
+		for _, value := range column {
+			total += value
+		}
+		averages[i] = total / float64(len(column))
+	}
+	return averages
+}
+
+func vectorBasicStats(vectors [][]float64) (max []float64, min []float64, avg []float64, std []float64) {
+	if len(vectors) == 0 {
+		return nil, nil, nil, nil
+	}
+
+	avg = vectorAvg(vectors)
+	transposed := transposeVectors(vectors)
+	if len(transposed) == 0 {
+		return cloneFloatSlice(vectors[0]), cloneFloatSlice(vectors[0]), nil, nil
+	}
+	std = make([]float64, len(transposed))
+	for i, column := range transposed {
+		if len(column) == 0 {
+			continue
+		}
+		mean := avg[i]
+		sumSq := 0.0
+		for _, value := range column {
+			diff := mean - value
+			sumSq += diff * diff
+		}
+		std[i] = math.Sqrt(sumSq / float64(len(column)))
+	}
+
+	max = cloneFloatSlice(vectors[0])
+	min = cloneFloatSlice(vectors[0])
+	for _, vector := range vectors[1:] {
+		if compareFloatSlicesLex(vector, max) > 0 {
+			max = cloneFloatSlice(vector)
+		}
+		if compareFloatSlicesLex(vector, min) < 0 {
+			min = cloneFloatSlice(vector)
+		}
+	}
+	return max, min, avg, std
+}
+
+func compareFloatSlicesLex(left, right []float64) int {
+	shared := len(left)
+	if len(right) < shared {
+		shared = len(right)
+	}
+	for i := 0; i < shared; i++ {
+		if left[i] > right[i] {
+			return 1
+		}
+		if left[i] < right[i] {
+			return -1
+		}
+	}
+	switch {
+	case len(left) > len(right):
+		return 1
+	case len(left) < len(right):
+		return -1
+	default:
+		return 0
+	}
+}
+
+func cloneFloatSlice(values []float64) []float64 {
+	if values == nil {
+		return nil
+	}
+	return append([]float64(nil), values...)
+}
