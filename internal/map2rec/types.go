@@ -117,6 +117,32 @@ type LayerRecord struct {
 	Parameters     []any
 }
 
+type Layer2Record struct {
+	ID             any
+	InputPIDPs     []any
+	OutputPIDs     []any
+	Noise          any
+	Type           any
+	NeurodeType    any
+	Dynamics       any
+	Neurodes       []any
+	TotalNeurodes  int
+	Input          any
+	Output         any
+	IVL            int
+	OVL            any
+	ReceptiveField any
+	Step           int
+	Decoder        []any
+	BackpropTuning any
+	ValidationErr  any
+	TestingErr     any
+	ErrAcc         float64
+	BlockSize      int
+	TrainingLength int
+	Parameters     []any
+}
+
 type LayerSpecRecord struct {
 	Type           any
 	AF             any
@@ -546,6 +572,25 @@ func defaultLayerRecord() LayerRecord {
 		Encoder:        []any{},
 		Decoder:        []any{},
 		BackpropTuning: "off",
+		Parameters:     []any{},
+	}
+}
+
+func defaultLayer2Record() Layer2Record {
+	return Layer2Record{
+		InputPIDPs:     []any{},
+		OutputPIDs:     []any{},
+		Type:           "dae",
+		NeurodeType:    "tanh",
+		Dynamics:       "dynamic",
+		Neurodes:       []any{},
+		ReceptiveField: "full",
+		Step:           0,
+		Decoder:        []any{},
+		BackpropTuning: "off",
+		ErrAcc:         0,
+		BlockSize:      100,
+		TrainingLength: 1000,
 		Parameters:     []any{},
 	}
 }

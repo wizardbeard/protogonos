@@ -226,6 +226,14 @@ func TestConvertDispatchesSensorAndActuatorKinds(t *testing.T) {
 		t.Fatalf("unexpected layer dispatch result: %#v", gotLayer)
 	}
 
+	gotLayer2, err := Convert("layer2", map[string]any{"ivl": 6})
+	if err != nil {
+		t.Fatalf("convert layer2: %v", err)
+	}
+	if layer2, ok := gotLayer2.(Layer2Record); !ok || layer2.IVL != 6 {
+		t.Fatalf("unexpected layer2 dispatch result: %#v", gotLayer2)
+	}
+
 	gotLayerSpec, err := Convert("layer_spec", map[string]any{"ivl": 4})
 	if err != nil {
 		t.Fatalf("convert layer_spec: %v", err)
@@ -455,6 +463,66 @@ func TestConvertLayerMalformedKnownFieldKeepsDefault(t *testing.T) {
 	}
 	if len(out.Neurodes) != 0 || len(out.Encoder) != 0 || len(out.Decoder) != 0 || len(out.Parameters) != 0 {
 		t.Fatalf("expected default layer slices on malformed input, got %+v", out)
+	}
+}
+
+func TestConvertLayer2MapsFields(t *testing.T) {
+	in := map[string]any{
+		"id":              "layer2-1",
+		"i_pidps":         []any{"i1", "i2"},
+		"o_pids":          []any{"o1"},
+		"noise":           0.05,
+		"type":            "dae",
+		"neurode_type":    "cos",
+		"dynamics":        "static",
+		"neurodes":        []any{"n1"},
+		"tot_neurodes":    1,
+		"input":           []any{0.2, 0.4},
+		"output":          []any{0.9},
+		"ivl":             12,
+		"ovl":             3,
+		"receptive_field": 4,
+		"step":            2,
+		"decoder":         []any{"d1"},
+		"backprop_tuning": "on",
+		"validation_err":  []any{0.1},
+		"testing_err":     []any{0.2},
+		"err_acc":         0.8,
+		"block_size":      64,
+		"training_length": 1500,
+		"parameters":      []any{"p", 2},
+	}
+	out := ConvertLayer2(in)
+	if out.ID != "layer2-1" || out.NeurodeType != "cos" || out.IVL != 12 {
+		t.Fatalf("unexpected layer2 conversion identity/core fields: %+v", out)
+	}
+	if out.TotalNeurodes != 1 || out.Step != 2 || out.BlockSize != 64 || out.TrainingLength != 1500 {
+		t.Fatalf("unexpected layer2 numeric conversion: %+v", out)
+	}
+	if len(out.InputPIDPs) != 2 || len(out.OutputPIDs) != 1 || len(out.Decoder) != 1 || len(out.Parameters) != 2 {
+		t.Fatalf("unexpected layer2 slice conversion: %+v", out)
+	}
+}
+
+func TestConvertLayer2MalformedKnownFieldKeepsDefault(t *testing.T) {
+	out := ConvertLayer2(map[string]any{
+		"i_pidps":         "bad",
+		"o_pids":          "bad",
+		"neurodes":        "bad",
+		"tot_neurodes":    "bad",
+		"ivl":             "bad",
+		"step":            "bad",
+		"decoder":         "bad",
+		"err_acc":         "bad",
+		"block_size":      "bad",
+		"training_length": "bad",
+		"parameters":      "bad",
+	})
+	if out.TotalNeurodes != 0 || out.IVL != 0 || out.Step != 0 || out.BlockSize != 100 || out.TrainingLength != 1000 || out.ErrAcc != 0 {
+		t.Fatalf("expected default layer2 numerics on malformed input, got %+v", out)
+	}
+	if len(out.InputPIDPs) != 0 || len(out.OutputPIDs) != 0 || len(out.Neurodes) != 0 || len(out.Decoder) != 0 || len(out.Parameters) != 0 {
+		t.Fatalf("expected default layer2 slices on malformed input, got %+v", out)
 	}
 }
 

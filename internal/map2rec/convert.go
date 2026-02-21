@@ -14,6 +14,8 @@ func Convert(kind string, in map[string]any) (any, error) {
 		return ConvertCircuit(in), nil
 	case "layer":
 		return ConvertLayer(in), nil
+	case "layer2":
+		return ConvertLayer2(in), nil
 	case "layer_spec":
 		return ConvertLayerSpec(in), nil
 	case "neurode":
@@ -383,6 +385,83 @@ func ConvertLayer(in map[string]any) LayerRecord {
 		case "index_end":
 			if n, ok := asInt(val); ok {
 				out.IndexEnd = n
+			}
+		case "parameters":
+			if xs, ok := asAnySlice(val); ok {
+				out.Parameters = xs
+			}
+		}
+	}
+	return out
+}
+
+func ConvertLayer2(in map[string]any) Layer2Record {
+	out := defaultLayer2Record()
+	for key, val := range in {
+		switch key {
+		case "id":
+			out.ID = val
+		case "i_pidps":
+			if xs, ok := asAnySlice(val); ok {
+				out.InputPIDPs = xs
+			}
+		case "o_pids":
+			if xs, ok := asAnySlice(val); ok {
+				out.OutputPIDs = xs
+			}
+		case "noise":
+			out.Noise = val
+		case "type":
+			out.Type = val
+		case "neurode_type":
+			out.NeurodeType = val
+		case "dynamics":
+			out.Dynamics = val
+		case "neurodes":
+			if xs, ok := asAnySlice(val); ok {
+				out.Neurodes = xs
+			}
+		case "tot_neurodes":
+			if n, ok := asInt(val); ok {
+				out.TotalNeurodes = n
+			}
+		case "input":
+			out.Input = val
+		case "output":
+			out.Output = val
+		case "ivl":
+			if n, ok := asInt(val); ok {
+				out.IVL = n
+			}
+		case "ovl":
+			out.OVL = val
+		case "receptive_field":
+			out.ReceptiveField = val
+		case "step":
+			if n, ok := asInt(val); ok {
+				out.Step = n
+			}
+		case "decoder":
+			if xs, ok := asAnySlice(val); ok {
+				out.Decoder = xs
+			}
+		case "backprop_tuning":
+			out.BackpropTuning = val
+		case "validation_err":
+			out.ValidationErr = val
+		case "testing_err":
+			out.TestingErr = val
+		case "err_acc":
+			if f, ok := asFloat64(val); ok {
+				out.ErrAcc = f
+			}
+		case "block_size":
+			if n, ok := asInt(val); ok {
+				out.BlockSize = n
+			}
+		case "training_length":
+			if n, ok := asInt(val); ok {
+				out.TrainingLength = n
 			}
 		case "parameters":
 			if xs, ok := asAnySlice(val); ok {
