@@ -551,6 +551,48 @@ func TestSelectedNeuronSpreadsForMutateWeightsActiveUsesAgeAnnealing(t *testing.
 	}
 }
 
+func TestSelectedNeuronSpreadsForMutateWeightsActiveHasNoFallbackWhenPoolEmpty(t *testing.T) {
+	genome := model.Genome{
+		ID: "xor-g5-i0",
+		Neurons: []model.Neuron{
+			{ID: "n-g0-a", Generation: 0, Activation: "identity"},
+			{ID: "n-g0-b", Generation: 0, Activation: "identity"},
+		},
+		Strategy: &model.StrategyConfig{
+			TuningSelection: tuning.CandidateSelectActive,
+			AnnealingFactor: 0.5,
+		},
+	}
+	got := selectedNeuronSpreadsForMutateWeights(genome, rand.New(rand.NewSource(81)), 1.0, 0.5)
+	if len(got) != 0 {
+		t.Fatalf("expected active mode empty pool without fallback, got=%d", len(got))
+	}
+}
+
+func TestSelectedNeuronSpreadsForMutateWeightsActiveRandomFallsBackToFirstElement(t *testing.T) {
+	genome := model.Genome{
+		ID: "xor-g5-i0",
+		Neurons: []model.Neuron{
+			{ID: "n-g0-a", Generation: 0, Activation: "identity"},
+			{ID: "n-g0-b", Generation: 0, Activation: "identity"},
+		},
+		Strategy: &model.StrategyConfig{
+			TuningSelection: tuning.CandidateSelectActiveRnd,
+			AnnealingFactor: 0.5,
+		},
+	}
+	got := selectedNeuronSpreadsForMutateWeights(genome, rand.New(rand.NewSource(82)), 1.0, 0.5)
+	if len(got) != 1 {
+		t.Fatalf("expected active_random fallback to one target, got=%d", len(got))
+	}
+	if got[0].id != "n-g0-a" {
+		t.Fatalf("expected fallback to first candidate n-g0-a, got=%s", got[0].id)
+	}
+	if got[0].sourceKind != tuningElementNeuron || got[0].sourceID != "n-g0-a" {
+		t.Fatalf("expected fallback source metadata for n-g0-a, got kind=%s id=%s", got[0].sourceKind, got[0].sourceID)
+	}
+}
+
 func TestSelectedNeuronSpreadsForMutateWeightsIncludesDirectActuatorTargets(t *testing.T) {
 	genome := model.Genome{
 		ID: "xor-g5-i0",

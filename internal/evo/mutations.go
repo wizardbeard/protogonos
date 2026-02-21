@@ -2943,7 +2943,9 @@ func selectedNeuronSpreadsForMutateWeights(
 	selected := filterTuningElementsByMode(candidates, mode, currentGeneration, rng)
 	targets := spreadTargetsFromElements(genome, selected, currentGeneration, baseSpread, annealing)
 	if len(targets) == 0 {
-		targets = fallbackSpreadTargetsFromCandidates(genome, candidates, baseSpread)
+		if shouldFallbackToFirstTuningTarget(mode) {
+			targets = fallbackSpreadTargetsFromCandidates(genome, candidates, baseSpread)
+		}
 	}
 	if len(targets) == 0 {
 		return nil
@@ -2952,6 +2954,24 @@ func selectedNeuronSpreadsForMutateWeights(
 		return randomNeuronSpreadSubset(targets, rng)
 	}
 	return targets
+}
+
+func shouldFallbackToFirstTuningTarget(mode string) bool {
+	switch mode {
+	case tuning.CandidateSelectDynamicA,
+		tuning.CandidateSelectDynamic,
+		tuning.CandidateSelectActiveRnd,
+		tuning.CandidateSelectRecentRnd,
+		tuning.CandidateSelectCurrent,
+		tuning.CandidateSelectCurrentRd,
+		tuning.CandidateSelectLastGen,
+		tuning.CandidateSelectLastGenRd,
+		tuning.CandidateSelectBestSoFar,
+		tuning.CandidateSelectOriginal:
+		return true
+	default:
+		return false
+	}
 }
 
 func fallbackSpreadTargetsFromCandidates(
