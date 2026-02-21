@@ -1085,6 +1085,55 @@ func TestPopulationMonitorValidationModeRunsSingleGenerationWithoutEvolution(t *
 	}
 }
 
+type subtractivePostprocessor struct {
+	delta float64
+}
+
+func (p subtractivePostprocessor) Name() string {
+	return "subtractive_postprocessor"
+}
+
+func (p subtractivePostprocessor) Process(scored []ScoredGenome) []ScoredGenome {
+	out := make([]ScoredGenome, len(scored))
+	copy(out, scored)
+	for i := range out {
+		out[i].Fitness -= p.delta
+	}
+	return out
+}
+
+func TestPopulationMonitorValidationModeBypassesPostprocessorAndAllowsNilMutation(t *testing.T) {
+	initial := []model.Genome{
+		newLinearGenome("g0", 1.0),
+	}
+	monitor, err := NewPopulationMonitor(MonitorConfig{
+		Scape:           oneDimScape{},
+		OpMode:          OpModeValidation,
+		Mutation:        nil,
+		Postprocessor:   subtractivePostprocessor{delta: 100},
+		PopulationSize:  len(initial),
+		EliteCount:      1,
+		Generations:     3,
+		Workers:         1,
+		Seed:            1,
+		InputNeuronIDs:  []string{"i"},
+		OutputNeuronIDs: []string{"o"},
+	})
+	if err != nil {
+		t.Fatalf("new monitor: %v", err)
+	}
+	result, err := monitor.Run(context.Background(), initial)
+	if err != nil {
+		t.Fatalf("run: %v", err)
+	}
+	if len(result.BestByGeneration) != 1 {
+		t.Fatalf("expected single-generation validation run, got %d", len(result.BestByGeneration))
+	}
+	if result.BestByGeneration[0] < 0.9 {
+		t.Fatalf("expected raw fitness without postprocessing penalty, got %f", result.BestByGeneration[0])
+	}
+}
+
 func TestPopulationMonitorRejectsUnknownOpMode(t *testing.T) {
 	_, err := NewPopulationMonitor(MonitorConfig{
 		Scape:           oneDimScape{},

@@ -137,6 +137,14 @@ const (
 	OpModeTest       = "test"
 )
 
+type noOpMutation struct{}
+
+func (noOpMutation) Name() string { return "noop" }
+
+func (noOpMutation) Apply(_ context.Context, genome model.Genome) (model.Genome, error) {
+	return genome, nil
+}
+
 func NewPopulationMonitor(cfg MonitorConfig) (*PopulationMonitor, error) {
 	if cfg.Scape == nil {
 		return nil, fmt.Errorf("scape is required")
@@ -150,8 +158,11 @@ func NewPopulationMonitor(cfg MonitorConfig) (*PopulationMonitor, error) {
 		return nil, fmt.Errorf("unsupported op mode: %s", cfg.OpMode)
 	}
 
-	if cfg.Mutation == nil && len(cfg.MutationPolicy) == 0 {
+	if cfg.OpMode == OpModeGT && cfg.Mutation == nil && len(cfg.MutationPolicy) == 0 {
 		return nil, fmt.Errorf("mutation operator or policy is required")
+	}
+	if cfg.OpMode != OpModeGT && cfg.Mutation == nil {
+		cfg.Mutation = noOpMutation{}
 	}
 	positivePolicyWeight := false
 	for i, item := range cfg.MutationPolicy {
@@ -283,7 +294,9 @@ func (m *PopulationMonitor) Run(ctx context.Context, initial []model.Genome) (Ru
 		if err != nil {
 			return RunResult{}, err
 		}
-		scored = m.cfg.Postprocessor.Process(scored)
+		if m.cfg.OpMode == OpModeGT {
+			scored = m.cfg.Postprocessor.Process(scored)
+		}
 
 		sort.Slice(scored, func(i, j int) bool {
 			return scored[i].Fitness > scored[j].Fitness
