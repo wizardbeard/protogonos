@@ -1267,7 +1267,14 @@ func (o *MutatePlasticityParameters) Apply(_ context.Context, genome model.Genom
 	idx := o.Rand.Intn(len(genome.Neurons))
 	mutated := cloneGenome(genome)
 	delta := (o.Rand.Float64()*2 - 1) * maxDelta
-	if plasticityRuleUsesGeneralizedCoefficients(neuronPlasticityRule(genome, idx)) {
+	rule := nn.NormalizePlasticityRuleName(neuronPlasticityRule(genome, idx))
+	if width := selfModulationParameterWidth(rule); width > 0 {
+		if ok := mutateSelfModulationSynapseParameter(&mutated, genome, idx, width, delta, o.Rand); ok {
+			mutated.Neurons[idx].Generation = currentGenomeGeneration(mutated)
+			return mutated, nil
+		}
+	}
+	if plasticityRuleUsesGeneralizedCoefficients(rule) {
 		switch o.Rand.Intn(4) {
 		case 0:
 			mutated.Neurons[idx].PlasticityA = neuronPlasticityA(genome, idx) + delta
@@ -2936,6 +2943,52 @@ func plasticityRuleUsesGeneralizedCoefficients(rule string) bool {
 	default:
 		return false
 	}
+}
+
+func selfModulationParameterWidth(rule string) int {
+	switch nn.NormalizePlasticityRuleName(rule) {
+	case nn.PlasticitySelfModulationV1, nn.PlasticitySelfModulationV2, nn.PlasticitySelfModulationV3:
+		return 1
+	case nn.PlasticitySelfModulationV4, nn.PlasticitySelfModulationV5:
+		return 2
+	case nn.PlasticitySelfModulationV6:
+		return 5
+	default:
+		return 0
+	}
+}
+
+func mutateSelfModulationSynapseParameter(
+	mutated *model.Genome,
+	base model.Genome,
+	neuronIdx int,
+	width int,
+	delta float64,
+	rng *rand.Rand,
+) bool {
+	if mutated == nil || width <= 0 || rng == nil || neuronIdx < 0 || neuronIdx >= len(base.Neurons) {
+		return false
+	}
+	neuronID := base.Neurons[neuronIdx].ID
+	candidates := make([]int, 0)
+	for i := range base.Synapses {
+		if !base.Synapses[i].Enabled || base.Synapses[i].To != neuronID {
+			continue
+		}
+		candidates = append(candidates, i)
+	}
+	if len(candidates) == 0 {
+		return false
+	}
+	synapseIdx := candidates[rng.Intn(len(candidates))]
+	params := append([]float64(nil), mutated.Synapses[synapseIdx].PlasticityParams...)
+	if len(params) < width {
+		params = append(params, make([]float64, width-len(params))...)
+	}
+	paramIdx := rng.Intn(width)
+	params[paramIdx] += delta
+	mutated.Synapses[synapseIdx].PlasticityParams = params
+	return true
 }
 
 func normalizeNonEmptyStrings(values []string) []string {
