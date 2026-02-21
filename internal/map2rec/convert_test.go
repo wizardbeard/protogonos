@@ -209,6 +209,14 @@ func TestConvertDispatchesSensorAndActuatorKinds(t *testing.T) {
 	if experiment, ok := gotExperiment.(ExperimentRecord); !ok || experiment.ID != "exp-1" {
 		t.Fatalf("unexpected experiment dispatch result: %#v", gotExperiment)
 	}
+
+	gotCircuit, err := Convert("circuit", map[string]any{"id": "circuit-1"})
+	if err != nil {
+		t.Fatalf("convert circuit: %v", err)
+	}
+	if circuit, ok := gotCircuit.(CircuitRecord); !ok || circuit.ID != "circuit-1" {
+		t.Fatalf("unexpected circuit dispatch result: %#v", gotCircuit)
+	}
 }
 
 func TestConvertConstraintOverridesKnownFieldsAndIgnoresUnknown(t *testing.T) {
@@ -311,6 +319,68 @@ func TestConvertExperimentMalformedKnownFieldKeepsDefault(t *testing.T) {
 	}
 	if len(out.TraceAcc) != 0 || len(out.Interruptions) != 0 {
 		t.Fatalf("expected default empty lists for malformed inputs, got trace=%+v interrupts=%+v", out.TraceAcc, out.Interruptions)
+	}
+}
+
+func TestConvertCircuitMapsFields(t *testing.T) {
+	in := map[string]any{
+		"id":              "circuit-1",
+		"i":               []any{"input"},
+		"ovl":             3,
+		"ivl":             2,
+		"training":        []any{"bp", 100},
+		"output":          []any{0.1, 0.2},
+		"parameters":      map[string]any{"alpha": 0.1},
+		"dynamics":        "dynamic",
+		"layers":          []any{"layer-1"},
+		"type":            "dae",
+		"noise":           0.25,
+		"noise_type":      "gaussian",
+		"lp_decay":        0.95,
+		"lp_min":          0.001,
+		"lp_max":          0.2,
+		"memory":          []any{"m1"},
+		"memory_size":     []any{2, 200},
+		"validation":      []any{0.1, 0.2},
+		"testing":         []any{0.3, 0.4},
+		"receptive_field": 5,
+		"step":            2,
+		"block_size":      16,
+		"err_acc":         0.8,
+		"backprop_tuning": "on",
+		"training_length": 500,
+	}
+	out := ConvertCircuit(in)
+	if out.ID != "circuit-1" || out.Type != "dae" || out.NoiseType != "gaussian" {
+		t.Fatalf("unexpected circuit conversion identity/type: %+v", out)
+	}
+	if out.LPDecay != 0.95 || out.LPMin != 0.001 || out.LPMax != 0.2 {
+		t.Fatalf("unexpected circuit lp params: %+v", out)
+	}
+	if out.Step != 2 || out.BlockSize != 16 || out.TrainingLength != 500 {
+		t.Fatalf("unexpected circuit numeric conversion: %+v", out)
+	}
+	if len(out.Memory) != 1 || out.BackpropTuning != "on" {
+		t.Fatalf("unexpected circuit memory/tuning conversion: %+v", out)
+	}
+}
+
+func TestConvertCircuitMalformedKnownFieldKeepsDefault(t *testing.T) {
+	out := ConvertCircuit(map[string]any{
+		"lp_decay":        "bad",
+		"lp_min":          "bad",
+		"lp_max":          "bad",
+		"memory":          "bad",
+		"step":            "bad",
+		"block_size":      "bad",
+		"err_acc":         "bad",
+		"training_length": "bad",
+	})
+	if out.LPDecay != 0.999999 || out.LPMin != 0.0000001 || out.LPMax != 0.1 {
+		t.Fatalf("expected default lp values, got %+v", out)
+	}
+	if len(out.Memory) != 0 || out.Step != 0 || out.BlockSize != 100 || out.ErrAcc != 0 || out.TrainingLength != 1000 {
+		t.Fatalf("expected default malformed-field fallbacks, got %+v", out)
 	}
 }
 

@@ -10,6 +10,8 @@ func Convert(kind string, in map[string]any) (any, error) {
 		return ConvertPMP(in), nil
 	case "experiment":
 		return ConvertExperiment(in), nil
+	case "circuit":
+		return ConvertCircuit(in), nil
 	case "sensor":
 		return ConvertSensor(in), nil
 	case "actuator":
@@ -247,6 +249,81 @@ func ConvertExperiment(in map[string]any) ExperimentRecord {
 		case "interruptions":
 			if xs, ok := asAnySlice(val); ok {
 				out.Interruptions = xs
+			}
+		}
+	}
+	return out
+}
+
+func ConvertCircuit(in map[string]any) CircuitRecord {
+	out := defaultCircuitRecord()
+	for key, val := range in {
+		switch key {
+		case "id":
+			out.ID = val
+		case "i":
+			out.Input = val
+		case "ovl":
+			out.OutputVectorL = val
+		case "ivl":
+			out.InputVectorL = val
+		case "training":
+			out.Training = val
+		case "output":
+			out.Output = val
+		case "parameters":
+			out.Parameters = val
+		case "dynamics":
+			out.Dynamics = val
+		case "layers":
+			out.Layers = val
+		case "type":
+			out.Type = val
+		case "noise":
+			out.Noise = val
+		case "noise_type":
+			out.NoiseType = val
+		case "lp_decay":
+			if f, ok := asFloat64(val); ok {
+				out.LPDecay = f
+			}
+		case "lp_min":
+			if f, ok := asFloat64(val); ok {
+				out.LPMin = f
+			}
+		case "lp_max":
+			if f, ok := asFloat64(val); ok {
+				out.LPMax = f
+			}
+		case "memory":
+			if xs, ok := asAnySlice(val); ok {
+				out.Memory = xs
+			}
+		case "memory_size":
+			out.MemorySize = val
+		case "validation":
+			out.Validation = val
+		case "testing":
+			out.Testing = val
+		case "receptive_field":
+			out.ReceptiveField = val
+		case "step":
+			if n, ok := asInt(val); ok {
+				out.Step = n
+			}
+		case "block_size":
+			if n, ok := asInt(val); ok {
+				out.BlockSize = n
+			}
+		case "err_acc":
+			if f, ok := asFloat64(val); ok {
+				out.ErrAcc = f
+			}
+		case "backprop_tuning":
+			out.BackpropTuning = val
+		case "training_length":
+			if n, ok := asInt(val); ok {
+				out.TrainingLength = n
 			}
 		}
 	}

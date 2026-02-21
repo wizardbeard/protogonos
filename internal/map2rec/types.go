@@ -70,6 +70,34 @@ type ExperimentRecord struct {
 	Interruptions   []any
 }
 
+type CircuitRecord struct {
+	ID             any
+	Input          any
+	OutputVectorL  any
+	InputVectorL   any
+	Training       any
+	Output         any
+	Parameters     any
+	Dynamics       any
+	Layers         any
+	Type           any
+	Noise          any
+	NoiseType      any
+	LPDecay        float64
+	LPMin          float64
+	LPMax          float64
+	Memory         []any
+	MemorySize     any
+	Validation     any
+	Testing        any
+	ReceptiveField any
+	Step           int
+	BlockSize      int
+	ErrAcc         float64
+	BackpropTuning any
+	TrainingLength int
+}
+
 type SensorRecord struct {
 	ID           any
 	Name         string
@@ -451,6 +479,24 @@ func defaultExperimentRecord() ExperimentRecord {
 		RunIndex:      1,
 		TotalRuns:     10,
 		Interruptions: []any{},
+	}
+}
+
+func defaultCircuitRecord() CircuitRecord {
+	return CircuitRecord{
+		Type:           "standard",
+		NoiseType:      "zero_mask",
+		LPDecay:        0.999999,
+		LPMin:          0.0000001,
+		LPMax:          0.1,
+		Memory:         []any{},
+		MemorySize:     []any{0, 100000},
+		ReceptiveField: "full",
+		Step:           0,
+		BlockSize:      100,
+		ErrAcc:         0,
+		BackpropTuning: "off",
+		TrainingLength: 1000,
 	}
 }
 
