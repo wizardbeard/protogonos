@@ -11,10 +11,14 @@ const outputSaturationLimit = 1.0
 
 type ForwardState struct {
 	prevDiffInputs map[string][]float64
+	prevOutputs    map[string]float64
 }
 
 func NewForwardState() *ForwardState {
-	return &ForwardState{prevDiffInputs: map[string][]float64{}}
+	return &ForwardState{
+		prevDiffInputs: map[string][]float64{},
+		prevOutputs:    map[string]float64{},
+	}
 }
 
 func Forward(genome model.Genome, inputByNeuron map[string]float64) (map[string]float64, error) {
@@ -25,6 +29,10 @@ func ForwardWithState(genome model.Genome, inputByNeuron map[string]float64, sta
 	values := make(map[string]float64, len(genome.Neurons))
 	for neuronID, value := range inputByNeuron {
 		values[neuronID] = value
+	}
+	var prevOutputs map[string]float64
+	if state != nil {
+		prevOutputs = state.prevOutputs
 	}
 
 	incoming := make(map[string][]model.Synapse, len(genome.Neurons))
@@ -40,7 +48,7 @@ func ForwardWithState(genome model.Genome, inputByNeuron map[string]float64, sta
 			continue
 		}
 
-		total, err := aggregateIncoming(neuron.ID, neuron.Aggregator, neuron.Bias, incoming[neuron.ID], values, state)
+		total, err := aggregateIncoming(neuron.ID, neuron.Aggregator, neuron.Bias, incoming[neuron.ID], values, prevOutputs, state)
 		if err != nil {
 			return nil, fmt.Errorf("neuron %s: %w", neuron.ID, err)
 		}
@@ -52,6 +60,13 @@ func ForwardWithState(genome model.Genome, inputByNeuron map[string]float64, sta
 		values[neuron.ID] = saturate(activated, -outputSaturationLimit, outputSaturationLimit)
 	}
 
+	if state != nil {
+		nextOutputs := make(map[string]float64, len(values))
+		for neuronID, value := range values {
+			nextOutputs[neuronID] = value
+		}
+		state.prevOutputs = nextOutputs
+	}
 	return values, nil
 }
 
@@ -78,13 +93,14 @@ func aggregateIncoming(
 	bias float64,
 	synapses []model.Synapse,
 	values map[string]float64,
+	prevOutputs map[string]float64,
 	state *ForwardState,
 ) (float64, error) {
 	switch mode {
 	case "", "dot_product":
 		total := bias
 		for _, synapse := range synapses {
-			total += values[synapse.From] * synapse.Weight
+			total += synapseInputValue(synapse, values, prevOutputs) * synapse.Weight
 		}
 		return total, nil
 	case "mult_product":
@@ -93,7 +109,7 @@ func aggregateIncoming(
 		}
 		total := 1.0
 		for _, synapse := range synapses {
-			total *= values[synapse.From] * synapse.Weight
+			total *= synapseInputValue(synapse, values, prevOutputs) * synapse.Weight
 		}
 		// Reference mult_product is multiplicative; treat neuron bias as a
 		// multiplicative factor when present.
@@ -107,7 +123,7 @@ func aggregateIncoming(
 		}
 		rawInputs := make([]float64, len(synapses))
 		for i, synapse := range synapses {
-			rawInputs[i] = values[synapse.From]
+			rawInputs[i] = synapseInputValue(synapse, values, prevOutputs)
 		}
 		diffInputs := rawInputs
 		if state != nil {
@@ -132,4 +148,11 @@ func aggregateIncoming(
 	default:
 		return 0, fmt.Errorf("unsupported aggregator: %s", mode)
 	}
+}
+
+func synapseInputValue(synapse model.Synapse, values, prevOutputs map[string]float64) float64 {
+	if synapse.Recurrent && prevOutputs != nil {
+		return prevOutputs[synapse.From]
+	}
+	return values[synapse.From]
 }

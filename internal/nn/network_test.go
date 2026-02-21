@@ -196,3 +196,56 @@ func TestDiffProductUsesPreviousInputsWhenStateProvided(t *testing.T) {
 		t.Fatalf("unexpected second diff_product output: got=%f want=0.3", values["o"])
 	}
 }
+
+func TestForwardRecurrentSynapseUsesPreviousStepOutputWhenStateProvided(t *testing.T) {
+	genome := model.Genome{
+		Neurons: []model.Neuron{
+			{ID: "i", Activation: "identity"},
+			{ID: "o", Activation: "identity", Aggregator: "dot_product"},
+		},
+		Synapses: []model.Synapse{
+			{ID: "s_in", From: "i", To: "o", Weight: 1, Enabled: true},
+			{ID: "s_rec", From: "o", To: "o", Weight: 0.5, Enabled: true, Recurrent: true},
+		},
+	}
+	state := NewForwardState()
+
+	values, err := ForwardWithState(genome, map[string]float64{"i": 1.0}, state)
+	if err != nil {
+		t.Fatalf("first forward: %v", err)
+	}
+	if math.Abs(values["o"]-1.0) > 1e-9 {
+		t.Fatalf("unexpected first recurrent output: got=%f want=1.0", values["o"])
+	}
+
+	values, err = ForwardWithState(genome, map[string]float64{"i": 0.0}, state)
+	if err != nil {
+		t.Fatalf("second forward: %v", err)
+	}
+	// Recurrent input should use previous-step output: 0 + 0.5*1.0 = 0.5.
+	if math.Abs(values["o"]-0.5) > 1e-9 {
+		t.Fatalf("unexpected second recurrent output: got=%f want=0.5", values["o"])
+	}
+}
+
+func TestForwardRecurrentSynapseWithoutStateFallsBackToCurrentValues(t *testing.T) {
+	genome := model.Genome{
+		Neurons: []model.Neuron{
+			{ID: "i", Activation: "identity"},
+			{ID: "o", Activation: "identity", Aggregator: "dot_product"},
+		},
+		Synapses: []model.Synapse{
+			{ID: "s_in", From: "i", To: "o", Weight: 1, Enabled: true},
+			{ID: "s_rec", From: "o", To: "o", Weight: 0.5, Enabled: true, Recurrent: true},
+		},
+	}
+
+	values, err := ForwardWithState(genome, map[string]float64{"i": 0.0}, nil)
+	if err != nil {
+		t.Fatalf("forward: %v", err)
+	}
+	// No state means no previous-step memory: recurrent term resolves to current map default 0.
+	if math.Abs(values["o"]-0.0) > 1e-9 {
+		t.Fatalf("unexpected recurrent output without state: got=%f want=0.0", values["o"])
+	}
+}
