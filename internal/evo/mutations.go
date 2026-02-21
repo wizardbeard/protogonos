@@ -175,7 +175,7 @@ func (o *MutateWeights) Apply(ctx context.Context, genome model.Genome) (model.G
 		mutated.Strategy.AnnealingFactor,
 	)
 	if len(selectedNeuronSpreads) == 0 {
-		return model.Genome{}, ErrNoMutationChoice
+		return mutated, nil
 	}
 
 	changed := 0

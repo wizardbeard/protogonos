@@ -405,20 +405,13 @@ func (e *Exoself) randomSubset(pool []model.Genome) []model.Genome {
 func (e *Exoself) perturbCandidate(ctx context.Context, base model.Genome, perturbationRange, annealingFactor float64) (model.Genome, error) {
 	candidate := cloneGenome(base)
 	targets := e.selectedNeuronPerturbTargets(candidate, perturbationRange, annealingFactor)
+	if len(targets) == 0 {
+		return candidate, nil
+	}
 	currentGeneration := currentGenomeGeneration(candidate)
 	for s := 0; s < e.Steps; s++ {
 		if err := ctx.Err(); err != nil {
 			return model.Genome{}, err
-		}
-		if len(targets) == 0 {
-			if len(candidate.Synapses) == 0 {
-				break
-			}
-			idx := e.randIntn(len(candidate.Synapses))
-			spread := e.StepSize * perturbationRange
-			delta := (e.randFloat64()*2 - 1) * spread
-			candidate.Synapses[idx].Weight += delta
-			continue
 		}
 		target := targets[e.randIntn(len(targets))]
 		if target.sourceKind == tuningElementActuator {

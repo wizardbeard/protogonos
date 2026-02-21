@@ -314,34 +314,33 @@ func TestExoselfStopsEarlyWhenGoalReached(t *testing.T) {
 
 func TestExoselfPerturbationRangeAffectsDelta(t *testing.T) {
 	genome := model.Genome{
-		ID:       "g",
-		Synapses: []model.Synapse{{ID: "s", Weight: 0, Enabled: true}},
+		ID: "g",
+		Neurons: []model.Neuron{
+			{ID: "n", Activation: "identity"},
+		},
+		Synapses: []model.Synapse{{ID: "s", From: "n", To: "n", Weight: 0, Enabled: true}},
 	}
-	fitnessFn := func(_ context.Context, g model.Genome) (float64, error) {
-		return g.Synapses[0].Weight, nil
-	}
-
-	base := Exoself{
+	base := &Exoself{
 		Rand:               rand.New(rand.NewSource(23)),
 		Steps:              1,
 		StepSize:           0.25,
 		CandidateSelection: CandidateSelectOriginal,
 	}
-	tunedBase, err := base.Tune(context.Background(), genome, 1, fitnessFn)
+	tunedBase, err := base.perturbCandidate(context.Background(), genome, 1.0, 1.0)
 	if err != nil {
-		t.Fatalf("base tune: %v", err)
+		t.Fatalf("base perturb: %v", err)
 	}
 
-	ranged := Exoself{
+	ranged := &Exoself{
 		Rand:               rand.New(rand.NewSource(23)),
 		Steps:              1,
 		StepSize:           0.25,
 		PerturbationRange:  2.0,
 		CandidateSelection: CandidateSelectOriginal,
 	}
-	tunedRanged, err := ranged.Tune(context.Background(), genome, 1, fitnessFn)
+	tunedRanged, err := ranged.perturbCandidate(context.Background(), genome, 2.0, 1.0)
 	if err != nil {
-		t.Fatalf("ranged tune: %v", err)
+		t.Fatalf("ranged perturb: %v", err)
 	}
 
 	baseDelta := math.Abs(tunedBase.Synapses[0].Weight - genome.Synapses[0].Weight)
@@ -587,6 +586,34 @@ func TestSelectedNeuronPerturbTargetsActiveHasNoFallbackWhenPoolEmpty(t *testing
 	targets := tuner.selectedNeuronPerturbTargets(genome, 1.0, 0.5)
 	if len(targets) != 0 {
 		t.Fatalf("expected active mode empty target pool when no young elements, got=%d", len(targets))
+	}
+}
+
+func TestExoselfPerturbCandidateActiveEmptyPoolNoOp(t *testing.T) {
+	tuner := &Exoself{
+		Rand:               rand.New(rand.NewSource(63)),
+		Steps:              6,
+		StepSize:           0.4,
+		CandidateSelection: CandidateSelectActive,
+	}
+	base := model.Genome{
+		ID: "xor-g5-i0",
+		Neurons: []model.Neuron{
+			{ID: "n-g0-a", Generation: 0, Activation: "identity"},
+			{ID: "n-g0-b", Generation: 0, Activation: "identity"},
+		},
+		Synapses: []model.Synapse{
+			{ID: "s-a", From: "n-g0-a", To: "n-g0-a", Weight: 0.3, Enabled: true},
+			{ID: "s-b", From: "n-g0-b", To: "n-g0-b", Weight: -0.2, Enabled: true},
+		},
+	}
+
+	mutated, err := tuner.perturbCandidate(context.Background(), base, 1.0, 0.5)
+	if err != nil {
+		t.Fatalf("perturbCandidate: %v", err)
+	}
+	if mutated.Synapses[0].Weight != base.Synapses[0].Weight || mutated.Synapses[1].Weight != base.Synapses[1].Weight {
+		t.Fatalf("expected active-empty perturbation to be no-op, before=%+v after=%+v", base.Synapses, mutated.Synapses)
 	}
 }
 

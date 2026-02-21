@@ -569,6 +569,36 @@ func TestSelectedNeuronSpreadsForMutateWeightsActiveHasNoFallbackWhenPoolEmpty(t
 	}
 }
 
+func TestMutateWeightsActiveEmptyPoolNoOp(t *testing.T) {
+	genome := model.Genome{
+		ID: "xor-g5-i0",
+		Neurons: []model.Neuron{
+			{ID: "n-g0-a", Generation: 0, Activation: "identity"},
+			{ID: "n-g0-b", Generation: 0, Activation: "identity"},
+		},
+		Synapses: []model.Synapse{
+			{ID: "s-a", From: "n-g0-a", To: "n-g0-a", Weight: 0.3, Enabled: true},
+			{ID: "s-b", From: "n-g0-b", To: "n-g0-b", Weight: -0.2, Enabled: true},
+		},
+		Strategy: &model.StrategyConfig{
+			TuningSelection: tuning.CandidateSelectActive,
+			AnnealingFactor: 0.5,
+		},
+	}
+	op := &MutateWeights{
+		Rand:     rand.New(rand.NewSource(96)),
+		MaxDelta: 0.5,
+	}
+
+	mutated, err := op.Apply(context.Background(), genome)
+	if err != nil {
+		t.Fatalf("apply failed: %v", err)
+	}
+	if mutated.Synapses[0].Weight != genome.Synapses[0].Weight || mutated.Synapses[1].Weight != genome.Synapses[1].Weight {
+		t.Fatalf("expected active-empty mutate_weights no-op, before=%+v after=%+v", genome.Synapses, mutated.Synapses)
+	}
+}
+
 func TestSelectedNeuronSpreadsForMutateWeightsActiveRandomFallsBackToFirstElement(t *testing.T) {
 	genome := model.Genome{
 		ID: "xor-g5-i0",
