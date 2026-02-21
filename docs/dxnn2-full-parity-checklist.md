@@ -197,6 +197,7 @@ Status keys:
 - Aligned exoself acceptance gating to reference-style relative `MIN_PIMPROVEMENT` dominance semantics (scalar comparator now uses `candidate > incumbent + incumbent * mip`) and added vector/scalar dominance tests for parity coverage.
 - Aligned exoself attempt-budget semantics to reference behavior by counting consecutive non-improvements (reset on accepted improvement) instead of fixed total attempts, with regression coverage for both no-improvement stop and improvement-reset continuation paths.
 - Added exoself-aligned operation mode routing for `validation`/`test` semantics by supporting monitor/API/config `op_mode` with single-generation evaluation and tuning/evolution bypass outside `gt`.
+- Exposed `op_mode` selection in CLI (`run`/`benchmark` via `--op-mode`) and config-override plumbing so non-`gt` validation/test flows are accessible without manual JSON edits.
 
 ## Highest-priority remaining gaps to reach strict parity
 
