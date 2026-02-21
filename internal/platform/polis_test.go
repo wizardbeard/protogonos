@@ -27,16 +27,24 @@ func (s testScape) Evaluate(context.Context, scape.Agent) (scape.Fitness, scape.
 
 type managedTestScape struct {
 	testScape
-	startCalls int
-	stopCalls  int
-	startErr   error
-	stopErr    error
-	stopReason StopReason
+	startCalls            int
+	startWithSummaryCalls int
+	stopCalls             int
+	startErr              error
+	stopErr               error
+	stopReason            StopReason
+	lastStartWithSummary  PublicScapeSummary
 }
 
 func (s *managedTestScape) Start(context.Context) error {
 	s.startCalls++
 	return s.startErr
+}
+
+func (s *managedTestScape) StartWithSummary(ctx context.Context, summary PublicScapeSummary) error {
+	s.startWithSummaryCalls++
+	s.lastStartWithSummary = summary
+	return s.Start(ctx)
 }
 
 func (s *managedTestScape) Stop(context.Context) error {
@@ -169,6 +177,18 @@ func TestPolisInitStartsConfiguredModulesAndPublicScapes(t *testing.T) {
 	}
 	if public.startCalls != 1 {
 		t.Fatalf("expected public scape start call, got=%d", public.startCalls)
+	}
+	if public.startWithSummaryCalls != 1 {
+		t.Fatalf("expected public scape start-with-summary call, got=%d", public.startWithSummaryCalls)
+	}
+	if public.lastStartWithSummary.Name != "public-xor" ||
+		public.lastStartWithSummary.Type != "flatland" ||
+		public.lastStartWithSummary.Metabolics != "static" ||
+		public.lastStartWithSummary.Physics != "default" {
+		t.Fatalf("unexpected public scape start summary: %+v", public.lastStartWithSummary)
+	}
+	if len(public.lastStartWithSummary.Parameters) != 1 || public.lastStartWithSummary.Parameters[0] != "seeded" {
+		t.Fatalf("unexpected public scape start summary parameters: %+v", public.lastStartWithSummary.Parameters)
 	}
 	if len(p.ActiveSupportModules()) != 1 || p.ActiveSupportModules()[0] != "metrics" {
 		t.Fatalf("unexpected active support modules: %+v", p.ActiveSupportModules())
@@ -354,6 +374,12 @@ func TestPolisAddAndRemovePublicScape(t *testing.T) {
 	if first.startCalls != 1 {
 		t.Fatalf("expected first public scape start call, got=%d", first.startCalls)
 	}
+	if first.startWithSummaryCalls != 1 {
+		t.Fatalf("expected first public scape start-with-summary call, got=%d", first.startWithSummaryCalls)
+	}
+	if first.lastStartWithSummary.Type != "flatland" {
+		t.Fatalf("expected first public scape start summary type flatland, got=%q", first.lastStartWithSummary.Type)
+	}
 	if _, ok := p.GetScape("public-a"); !ok {
 		t.Fatal("expected first public scape to be registered by name")
 	}
@@ -363,6 +389,9 @@ func TestPolisAddAndRemovePublicScape(t *testing.T) {
 	}
 	if err := p.AddPublicScape(ctx, PublicScapeSpec{Scape: second, Type: "flatland"}); err != nil {
 		t.Fatalf("add second public scape: %v", err)
+	}
+	if second.startWithSummaryCalls != 1 {
+		t.Fatalf("expected second public scape start-with-summary call, got=%d", second.startWithSummaryCalls)
 	}
 	gotByType, ok = p.GetScapeByType("flatland")
 	if !ok || gotByType != first {
@@ -487,6 +516,23 @@ func TestPolisGetScapeByTypeUsesFirstConfiguredType(t *testing.T) {
 	}
 	if got != first {
 		t.Fatal("expected shared type lookup to resolve first configured scape")
+	}
+}
+
+func TestPolisStartWithSummaryDefaultsTypeToScapeName(t *testing.T) {
+	public := &managedTestScape{testScape: testScape{name: "fallback-type"}}
+	p := NewPolis(Config{
+		Store:        storage.NewMemoryStore(),
+		PublicScapes: []PublicScapeSpec{{Scape: public}},
+	})
+	if err := p.Init(context.Background()); err != nil {
+		t.Fatalf("init failed: %v", err)
+	}
+	if public.startWithSummaryCalls != 1 {
+		t.Fatalf("expected start-with-summary call, got=%d", public.startWithSummaryCalls)
+	}
+	if public.lastStartWithSummary.Type != "fallback-type" {
+		t.Fatalf("expected defaulted start-summary type fallback-type, got=%q", public.lastStartWithSummary.Type)
 	}
 }
 

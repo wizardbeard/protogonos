@@ -247,29 +247,20 @@ func (p *Polis) Init(ctx context.Context) error {
 			p.scapes = make(map[string]scape.Scape)
 			return fmt.Errorf("duplicate public scape: %s", name)
 		}
+		summary := publicScapeSummaryFromSpec(name, spec)
+		if err := startPublicScape(ctx, spec.Scape, summary); err != nil {
+			stopManagedScapes(ctx, startedScapes)
+			stopSupportModules(ctx, startedModules)
+			p.supportModules = make(map[string]SupportModule)
+			p.publicScapes = make(map[string]PublicScapeSummary)
+			p.publicScapeByType = make(map[string]string)
+			p.scapes = make(map[string]scape.Scape)
+			return fmt.Errorf("start public scape %s: %w", name, err)
+		}
 		if managed, ok := spec.Scape.(managedScape); ok {
-			if err := managed.Start(ctx); err != nil {
-				stopManagedScapes(ctx, startedScapes)
-				stopSupportModules(ctx, startedModules)
-				p.supportModules = make(map[string]SupportModule)
-				p.publicScapes = make(map[string]PublicScapeSummary)
-				p.publicScapeByType = make(map[string]string)
-				p.scapes = make(map[string]scape.Scape)
-				return fmt.Errorf("start public scape %s: %w", name, err)
-			}
 			startedScapes = append(startedScapes, managed)
 		}
 		p.scapes[name] = spec.Scape
-		summary := PublicScapeSummary{
-			Name:       name,
-			Type:       spec.Type,
-			Parameters: append([]any(nil), spec.Parameters...),
-			Metabolics: spec.Metabolics,
-			Physics:    spec.Physics,
-		}
-		if summary.Type == "" {
-			summary.Type = name
-		}
 		p.publicScapes[name] = summary
 		if _, exists := p.publicScapeByType[summary.Type]; !exists {
 			p.publicScapeByType[summary.Type] = name
@@ -390,20 +381,9 @@ func (p *Polis) AddPublicScape(ctx context.Context, spec PublicScapeSpec) error 
 	if _, exists := p.scapes[name]; exists {
 		return fmt.Errorf("duplicate public scape: %s", name)
 	}
-	if managed, ok := spec.Scape.(managedScape); ok {
-		if err := managed.Start(ctx); err != nil {
-			return fmt.Errorf("start public scape %s: %w", name, err)
-		}
-	}
-	summary := PublicScapeSummary{
-		Name:       name,
-		Type:       spec.Type,
-		Parameters: append([]any(nil), spec.Parameters...),
-		Metabolics: spec.Metabolics,
-		Physics:    spec.Physics,
-	}
-	if summary.Type == "" {
-		summary.Type = name
+	summary := publicScapeSummaryFromSpec(name, spec)
+	if err := startPublicScape(ctx, spec.Scape, summary); err != nil {
+		return fmt.Errorf("start public scape %s: %w", name, err)
 	}
 	p.scapes[name] = spec.Scape
 	p.publicScapes[name] = summary
@@ -1029,6 +1009,11 @@ type managedScape interface {
 	Stop(ctx context.Context) error
 }
 
+type summaryAwareManagedScape interface {
+	managedScape
+	StartWithSummary(ctx context.Context, summary PublicScapeSummary) error
+}
+
 type reasonAwareManagedScape interface {
 	managedScape
 	StopWithReason(ctx context.Context, reason StopReason) error
@@ -1046,6 +1031,31 @@ func isValidStopReason(reason StopReason) bool {
 	default:
 		return false
 	}
+}
+
+func publicScapeSummaryFromSpec(name string, spec PublicScapeSpec) PublicScapeSummary {
+	summary := PublicScapeSummary{
+		Name:       name,
+		Type:       spec.Type,
+		Parameters: append([]any(nil), spec.Parameters...),
+		Metabolics: spec.Metabolics,
+		Physics:    spec.Physics,
+	}
+	if summary.Type == "" {
+		summary.Type = name
+	}
+	return summary
+}
+
+func startPublicScape(ctx context.Context, sc scape.Scape, summary PublicScapeSummary) error {
+	managed, ok := sc.(managedScape)
+	if !ok {
+		return nil
+	}
+	if withSummary, ok := sc.(summaryAwareManagedScape); ok {
+		return withSummary.StartWithSummary(ctx, summary)
+	}
+	return managed.Start(ctx)
 }
 
 func stopSupportModules(ctx context.Context, modules []SupportModule) {
