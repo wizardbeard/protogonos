@@ -3090,13 +3090,14 @@ func mutateSelfModulationParameterVectors(
 
 	neuronID := base.Neurons[neuronIdx].ID
 	candidates := make([]vectorTarget, 0, 1)
-	candidates = append(candidates, vectorTarget{bias: true})
 	for i := range base.Synapses {
 		if base.Synapses[i].To != neuronID {
 			continue
 		}
 		candidates = append(candidates, vectorTarget{synapseIdx: i})
 	}
+	// Keep bias-channel parameters last to mirror the reference input-idp traversal.
+	candidates = append(candidates, vectorTarget{bias: true})
 	totalParams := width * len(candidates)
 	if totalParams <= 0 {
 		return false
