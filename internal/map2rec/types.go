@@ -98,6 +98,15 @@ type CircuitRecord struct {
 	TrainingLength int
 }
 
+type LayerSpecRecord struct {
+	Type           any
+	AF             any
+	IVL            int
+	Dynamics       any
+	ReceptiveField any
+	Step           int
+}
+
 type SensorRecord struct {
 	ID           any
 	Name         string
@@ -498,6 +507,10 @@ func defaultCircuitRecord() CircuitRecord {
 		BackpropTuning: "off",
 		TrainingLength: 1000,
 	}
+}
+
+func defaultLayerSpecRecord() LayerSpecRecord {
+	return LayerSpecRecord{}
 }
 
 func defaultSensorRecord() SensorRecord {

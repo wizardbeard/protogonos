@@ -217,6 +217,14 @@ func TestConvertDispatchesSensorAndActuatorKinds(t *testing.T) {
 	if circuit, ok := gotCircuit.(CircuitRecord); !ok || circuit.ID != "circuit-1" {
 		t.Fatalf("unexpected circuit dispatch result: %#v", gotCircuit)
 	}
+
+	gotLayerSpec, err := Convert("layer_spec", map[string]any{"ivl": 4})
+	if err != nil {
+		t.Fatalf("convert layer_spec: %v", err)
+	}
+	if layerSpec, ok := gotLayerSpec.(LayerSpecRecord); !ok || layerSpec.IVL != 4 {
+		t.Fatalf("unexpected layer_spec dispatch result: %#v", gotLayerSpec)
+	}
 }
 
 func TestConvertConstraintOverridesKnownFieldsAndIgnoresUnknown(t *testing.T) {
@@ -381,6 +389,31 @@ func TestConvertCircuitMalformedKnownFieldKeepsDefault(t *testing.T) {
 	}
 	if len(out.Memory) != 0 || out.Step != 0 || out.BlockSize != 100 || out.ErrAcc != 0 || out.TrainingLength != 1000 {
 		t.Fatalf("expected default malformed-field fallbacks, got %+v", out)
+	}
+}
+
+func TestConvertLayerSpecMapsFields(t *testing.T) {
+	in := map[string]any{
+		"type":            "dae",
+		"af":              "tanh",
+		"ivl":             16,
+		"dynamics":        "dynamic",
+		"receptive_field": 5,
+		"step":            2,
+	}
+	out := ConvertLayerSpec(in)
+	if out.Type != "dae" || out.AF != "tanh" || out.IVL != 16 {
+		t.Fatalf("unexpected layer_spec conversion: %+v", out)
+	}
+	if out.Dynamics != "dynamic" || out.ReceptiveField != 5 || out.Step != 2 {
+		t.Fatalf("unexpected layer_spec dynamics fields: %+v", out)
+	}
+}
+
+func TestConvertLayerSpecMalformedKnownFieldKeepsDefault(t *testing.T) {
+	out := ConvertLayerSpec(map[string]any{"ivl": "bad", "step": "bad"})
+	if out.IVL != 0 || out.Step != 0 {
+		t.Fatalf("expected default layer_spec ints on malformed values, got %+v", out)
 	}
 }
 

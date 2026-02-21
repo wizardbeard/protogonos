@@ -12,6 +12,8 @@ func Convert(kind string, in map[string]any) (any, error) {
 		return ConvertExperiment(in), nil
 	case "circuit":
 		return ConvertCircuit(in), nil
+	case "layer_spec":
+		return ConvertLayerSpec(in), nil
 	case "sensor":
 		return ConvertSensor(in), nil
 	case "actuator":
@@ -324,6 +326,31 @@ func ConvertCircuit(in map[string]any) CircuitRecord {
 		case "training_length":
 			if n, ok := asInt(val); ok {
 				out.TrainingLength = n
+			}
+		}
+	}
+	return out
+}
+
+func ConvertLayerSpec(in map[string]any) LayerSpecRecord {
+	out := defaultLayerSpecRecord()
+	for key, val := range in {
+		switch key {
+		case "type":
+			out.Type = val
+		case "af":
+			out.AF = val
+		case "ivl":
+			if n, ok := asInt(val); ok {
+				out.IVL = n
+			}
+		case "dynamics":
+			out.Dynamics = val
+		case "receptive_field":
+			out.ReceptiveField = val
+		case "step":
+			if n, ok := asInt(val); ok {
+				out.Step = n
 			}
 		}
 	}
