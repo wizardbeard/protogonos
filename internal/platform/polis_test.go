@@ -3,7 +3,9 @@ package platform
 import (
 	"context"
 	"errors"
+	"sync/atomic"
 	"testing"
+	"time"
 
 	"protogonos/internal/model"
 	"protogonos/internal/scape"
@@ -81,6 +83,36 @@ func (m *testSupportModule) Stop(context.Context) error {
 func (m *testSupportModule) StopWithReason(ctx context.Context, reason StopReason) error {
 	m.stopReason = reason
 	return m.Stop(ctx)
+}
+
+type supervisedTestSupportModule struct {
+	testSupportModule
+	failRuns      int32
+	superviseRuns atomic.Int32
+}
+
+func (m *supervisedTestSupportModule) Supervise(ctx context.Context) error {
+	run := m.superviseRuns.Add(1)
+	if run <= m.failRuns {
+		return errors.New("supervise failure")
+	}
+	<-ctx.Done()
+	return ctx.Err()
+}
+
+type supervisedManagedTestScape struct {
+	managedTestScape
+	failRuns      int32
+	superviseRuns atomic.Int32
+}
+
+func (s *supervisedManagedTestScape) Supervise(ctx context.Context) error {
+	run := s.superviseRuns.Add(1)
+	if run <= s.failRuns {
+		return errors.New("supervise failure")
+	}
+	<-ctx.Done()
+	return ctx.Err()
 }
 
 func TestPolisInitAndRegisterScape(t *testing.T) {
@@ -566,6 +598,76 @@ func TestPolisStartWithSummaryDefaultsTypeToScapeName(t *testing.T) {
 	if public.lastStartWithSummary.Type != "fallback-type" {
 		t.Fatalf("expected defaulted start-summary type fallback-type, got=%q", public.lastStartWithSummary.Type)
 	}
+}
+
+func TestPolisSupervisesConfiguredSupportModuleRuntime(t *testing.T) {
+	module := &supervisedTestSupportModule{
+		testSupportModule: testSupportModule{name: "supervised-metrics"},
+		failRuns:          1,
+	}
+	p := NewPolis(Config{
+		Store:          storage.NewMemoryStore(),
+		SupportModules: []SupportModule{module},
+		SupervisorPolicy: SupervisorPolicy{
+			InitialBackoff: time.Millisecond,
+			MaxBackoff:     time.Millisecond,
+			BackoffFactor:  1,
+		},
+	})
+	if err := p.Init(context.Background()); err != nil {
+		t.Fatalf("init failed: %v", err)
+	}
+	waitForAtLeastRuns(t, &module.superviseRuns, 2, 250*time.Millisecond)
+	if len(p.ActiveSupervisedTasks()) == 0 {
+		t.Fatal("expected active supervised task for support module")
+	}
+	p.Stop()
+	if len(p.ActiveSupervisedTasks()) != 0 {
+		t.Fatalf("expected no supervised tasks after stop, got=%v", p.ActiveSupervisedTasks())
+	}
+}
+
+func TestPolisSupervisesPublicScapeRuntime(t *testing.T) {
+	public := &supervisedManagedTestScape{
+		managedTestScape: managedTestScape{testScape: testScape{name: "supervised-scape"}},
+		failRuns:         1,
+	}
+	p := NewPolis(Config{
+		Store: storage.NewMemoryStore(),
+		PublicScapes: []PublicScapeSpec{
+			{Scape: public, Type: "supervised-type"},
+		},
+		SupervisorPolicy: SupervisorPolicy{
+			InitialBackoff: time.Millisecond,
+			MaxBackoff:     time.Millisecond,
+			BackoffFactor:  1,
+		},
+	})
+	if err := p.Init(context.Background()); err != nil {
+		t.Fatalf("init failed: %v", err)
+	}
+	waitForAtLeastRuns(t, &public.superviseRuns, 2, 250*time.Millisecond)
+	if len(p.ActiveSupervisedTasks()) == 0 {
+		t.Fatal("expected active supervised task for public scape")
+	}
+	if err := p.RemovePublicScape(context.Background(), "supervised-scape", StopReasonNormal); err != nil {
+		t.Fatalf("remove public scape: %v", err)
+	}
+	if len(p.ActiveSupervisedTasks()) != 0 {
+		t.Fatalf("expected no supervised tasks after public scape removal, got=%v", p.ActiveSupervisedTasks())
+	}
+}
+
+func waitForAtLeastRuns(t *testing.T, counter *atomic.Int32, min int32, timeout time.Duration) {
+	t.Helper()
+	deadline := time.Now().Add(timeout)
+	for time.Now().Before(deadline) {
+		if counter.Load() >= min {
+			return
+		}
+		time.Sleep(2 * time.Millisecond)
+	}
+	t.Fatalf("expected counter >= %d, got=%d", min, counter.Load())
 }
 
 func resetDefaultPolisForTest() {

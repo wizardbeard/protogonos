@@ -15,9 +15,10 @@ import (
 )
 
 type Config struct {
-	Store          storage.Store
-	SupportModules []SupportModule
-	PublicScapes   []PublicScapeSpec
+	Store            storage.Store
+	SupportModules   []SupportModule
+	PublicScapes     []PublicScapeSpec
+	SupervisorPolicy SupervisorPolicy
 }
 
 type SupportModule interface {
@@ -100,7 +101,8 @@ type Polis struct {
 	lastStopReason       StopReason
 	runs                 map[string]chan evo.MonitorCommand
 
-	config Config
+	supervisor *Supervisor
+	config     Config
 }
 
 var (
@@ -117,6 +119,7 @@ func NewPolis(cfg Config) *Polis {
 		publicScapeByType:    make(map[string]string),
 		publicScapeTypeOrder: make(map[string][]string),
 		runs:                 make(map[string]chan evo.MonitorCommand),
+		supervisor:           NewSupervisor(cfg.SupervisorPolicy),
 		config:               cfg,
 		lastStopReason:       StopReasonNormal,
 	}
@@ -179,44 +182,31 @@ func (p *Polis) Init(ctx context.Context) error {
 	if err := p.store.Init(ctx); err != nil {
 		return err
 	}
+	if p.supervisor == nil {
+		p.supervisor = NewSupervisor(p.config.SupervisorPolicy)
+	}
 
 	startedModules := make([]SupportModule, 0, len(p.config.SupportModules))
 	for i, module := range p.config.SupportModules {
 		if module == nil {
 			stopSupportModules(ctx, startedModules)
-			p.supportModules = make(map[string]SupportModule)
-			p.publicScapes = make(map[string]PublicScapeSummary)
-			p.publicScapeByType = make(map[string]string)
-			p.publicScapeTypeOrder = make(map[string][]string)
-			p.scapes = make(map[string]scape.Scape)
+			p.resetRuntimeStateLocked()
 			return fmt.Errorf("support module is nil at index %d", i)
 		}
 		name := module.Name()
 		if name == "" {
 			stopSupportModules(ctx, startedModules)
-			p.supportModules = make(map[string]SupportModule)
-			p.publicScapes = make(map[string]PublicScapeSummary)
-			p.publicScapeByType = make(map[string]string)
-			p.publicScapeTypeOrder = make(map[string][]string)
-			p.scapes = make(map[string]scape.Scape)
+			p.resetRuntimeStateLocked()
 			return fmt.Errorf("support module name is required at index %d", i)
 		}
 		if _, exists := p.supportModules[name]; exists {
 			stopSupportModules(ctx, startedModules)
-			p.supportModules = make(map[string]SupportModule)
-			p.publicScapes = make(map[string]PublicScapeSummary)
-			p.publicScapeByType = make(map[string]string)
-			p.publicScapeTypeOrder = make(map[string][]string)
-			p.scapes = make(map[string]scape.Scape)
+			p.resetRuntimeStateLocked()
 			return fmt.Errorf("duplicate support module: %s", name)
 		}
-		if err := module.Start(ctx); err != nil {
+		if err := p.startSupportModule(ctx, name, module); err != nil {
 			stopSupportModules(ctx, startedModules)
-			p.supportModules = make(map[string]SupportModule)
-			p.publicScapes = make(map[string]PublicScapeSummary)
-			p.publicScapeByType = make(map[string]string)
-			p.publicScapeTypeOrder = make(map[string][]string)
-			p.scapes = make(map[string]scape.Scape)
+			p.resetRuntimeStateLocked()
 			return fmt.Errorf("start support module %s: %w", name, err)
 		}
 		p.supportModules[name] = module
@@ -228,43 +218,27 @@ func (p *Polis) Init(ctx context.Context) error {
 		if spec.Scape == nil {
 			stopManagedScapes(ctx, startedScapes)
 			stopSupportModules(ctx, startedModules)
-			p.supportModules = make(map[string]SupportModule)
-			p.publicScapes = make(map[string]PublicScapeSummary)
-			p.publicScapeByType = make(map[string]string)
-			p.publicScapeTypeOrder = make(map[string][]string)
-			p.scapes = make(map[string]scape.Scape)
+			p.resetRuntimeStateLocked()
 			return fmt.Errorf("public scape is nil at index %d", i)
 		}
 		name := spec.Scape.Name()
 		if name == "" {
 			stopManagedScapes(ctx, startedScapes)
 			stopSupportModules(ctx, startedModules)
-			p.supportModules = make(map[string]SupportModule)
-			p.publicScapes = make(map[string]PublicScapeSummary)
-			p.publicScapeByType = make(map[string]string)
-			p.publicScapeTypeOrder = make(map[string][]string)
-			p.scapes = make(map[string]scape.Scape)
+			p.resetRuntimeStateLocked()
 			return fmt.Errorf("public scape name is required at index %d", i)
 		}
 		if _, exists := p.scapes[name]; exists {
 			stopManagedScapes(ctx, startedScapes)
 			stopSupportModules(ctx, startedModules)
-			p.supportModules = make(map[string]SupportModule)
-			p.publicScapes = make(map[string]PublicScapeSummary)
-			p.publicScapeByType = make(map[string]string)
-			p.publicScapeTypeOrder = make(map[string][]string)
-			p.scapes = make(map[string]scape.Scape)
+			p.resetRuntimeStateLocked()
 			return fmt.Errorf("duplicate public scape: %s", name)
 		}
 		summary := publicScapeSummaryFromSpec(name, spec)
-		if err := startPublicScape(ctx, spec.Scape, summary); err != nil {
+		if err := p.startPublicScape(ctx, name, spec.Scape, summary); err != nil {
 			stopManagedScapes(ctx, startedScapes)
 			stopSupportModules(ctx, startedModules)
-			p.supportModules = make(map[string]SupportModule)
-			p.publicScapes = make(map[string]PublicScapeSummary)
-			p.publicScapeByType = make(map[string]string)
-			p.publicScapeTypeOrder = make(map[string][]string)
-			p.scapes = make(map[string]scape.Scape)
+			p.resetRuntimeStateLocked()
 			return fmt.Errorf("start public scape %s: %w", name, err)
 		}
 		if managed, ok := spec.Scape.(managedScape); ok {
@@ -333,7 +307,7 @@ func (p *Polis) AddSupportModule(ctx context.Context, module SupportModule) erro
 	if _, exists := p.supportModules[name]; exists {
 		return fmt.Errorf("support module already registered: %s", name)
 	}
-	if err := module.Start(ctx); err != nil {
+	if err := p.startSupportModule(ctx, name, module); err != nil {
 		return fmt.Errorf("start support module %s: %w", name, err)
 	}
 	p.supportModules[name] = module
@@ -361,14 +335,11 @@ func (p *Polis) RemoveSupportModule(ctx context.Context, name string, reason Sto
 	if !ok {
 		return fmt.Errorf("support module not found: %s", name)
 	}
-	if withReason, ok := module.(reasonAwareSupportModule); ok {
-		if err := withReason.StopWithReason(ctx, reason); err != nil {
-			return fmt.Errorf("stop support module %s: %w", name, err)
-		}
-	} else {
-		if err := module.Stop(ctx); err != nil {
-			return fmt.Errorf("stop support module %s: %w", name, err)
-		}
+	if p.supervisor != nil {
+		p.supervisor.Stop(supervisedSupportTaskName(name))
+	}
+	if err := stopSupportModuleWithReason(ctx, module, reason); err != nil {
+		return fmt.Errorf("stop support module %s: %w", name, err)
 	}
 	delete(p.supportModules, name)
 	return nil
@@ -393,7 +364,7 @@ func (p *Polis) AddPublicScape(ctx context.Context, spec PublicScapeSpec) error 
 		return fmt.Errorf("duplicate public scape: %s", name)
 	}
 	summary := publicScapeSummaryFromSpec(name, spec)
-	if err := startPublicScape(ctx, spec.Scape, summary); err != nil {
+	if err := p.startPublicScape(ctx, name, spec.Scape, summary); err != nil {
 		return fmt.Errorf("start public scape %s: %w", name, err)
 	}
 	p.scapes[name] = spec.Scape
@@ -430,16 +401,11 @@ func (p *Polis) RemovePublicScape(ctx context.Context, name string, reason StopR
 	if !ok {
 		return fmt.Errorf("public scape not found: %s", name)
 	}
-	if managed, ok := sc.(managedScape); ok {
-		if withReason, ok := sc.(reasonAwareManagedScape); ok {
-			if err := withReason.StopWithReason(ctx, reason); err != nil {
-				return fmt.Errorf("stop public scape %s: %w", name, err)
-			}
-		} else {
-			if err := managed.Stop(ctx); err != nil {
-				return fmt.Errorf("stop public scape %s: %w", name, err)
-			}
-		}
+	if p.supervisor != nil {
+		p.supervisor.Stop(supervisedScapeTaskName(name))
+	}
+	if err := stopPublicScapeWithReason(ctx, sc, reason); err != nil {
+		return fmt.Errorf("stop public scape %s: %w", name, err)
 	}
 	delete(p.scapes, name)
 	delete(p.publicScapes, name)
@@ -511,6 +477,9 @@ func (p *Polis) StopWithReason(reason StopReason) error {
 
 	p.mu.Lock()
 	defer p.mu.Unlock()
+	if p.supervisor != nil {
+		p.supervisor.StopAll()
+	}
 	for _, control := range p.runs {
 		select {
 		case control <- evo.CommandStop:
@@ -518,30 +487,14 @@ func (p *Polis) StopWithReason(reason StopReason) error {
 		}
 	}
 	for _, sc := range p.scapes {
-		if managed, ok := sc.(managedScape); ok {
-			if withReason, ok := sc.(reasonAwareManagedScape); ok {
-				_ = withReason.StopWithReason(context.Background(), reason)
-			} else {
-				_ = managed.Stop(context.Background())
-			}
-		}
+		_ = stopPublicScapeWithReason(context.Background(), sc, reason)
 	}
 	for _, module := range p.supportModules {
-		if withReason, ok := module.(reasonAwareSupportModule); ok {
-			_ = withReason.StopWithReason(context.Background(), reason)
-		} else {
-			_ = module.Stop(context.Background())
-		}
+		_ = stopSupportModuleWithReason(context.Background(), module, reason)
 	}
 
-	p.started = false
 	p.lastStopReason = reason
-	p.scapes = make(map[string]scape.Scape)
-	p.supportModules = make(map[string]SupportModule)
-	p.publicScapes = make(map[string]PublicScapeSummary)
-	p.publicScapeByType = make(map[string]string)
-	p.publicScapeTypeOrder = make(map[string][]string)
-	p.runs = make(map[string]chan evo.MonitorCommand)
+	p.resetRuntimeStateLocked()
 	return nil
 }
 
@@ -1025,6 +978,16 @@ func (p *Polis) LastStopReason() StopReason {
 	return p.lastStopReason
 }
 
+func (p *Polis) ActiveSupervisedTasks() []string {
+	p.mu.RLock()
+	supervisor := p.supervisor
+	p.mu.RUnlock()
+	if supervisor == nil {
+		return nil
+	}
+	return supervisor.Tasks()
+}
+
 type managedScape interface {
 	Start(ctx context.Context) error
 	Stop(ctx context.Context) error
@@ -1045,6 +1008,10 @@ type reasonAwareSupportModule interface {
 	StopWithReason(ctx context.Context, reason StopReason) error
 }
 
+type supervisedRuntime interface {
+	Supervise(ctx context.Context) error
+}
+
 func isValidStopReason(reason StopReason) bool {
 	switch reason {
 	case StopReasonNormal, StopReasonShutdown:
@@ -1052,6 +1019,20 @@ func isValidStopReason(reason StopReason) bool {
 	default:
 		return false
 	}
+}
+
+func (p *Polis) resetRuntimeStateLocked() {
+	p.started = false
+	p.scapes = make(map[string]scape.Scape)
+	p.supportModules = make(map[string]SupportModule)
+	p.publicScapes = make(map[string]PublicScapeSummary)
+	p.publicScapeByType = make(map[string]string)
+	p.publicScapeTypeOrder = make(map[string][]string)
+	p.runs = make(map[string]chan evo.MonitorCommand)
+	if p.supervisor != nil {
+		p.supervisor.StopAll()
+	}
+	p.supervisor = NewSupervisor(p.config.SupervisorPolicy)
 }
 
 func publicScapeSummaryFromSpec(name string, spec PublicScapeSpec) PublicScapeSummary {
@@ -1068,15 +1049,80 @@ func publicScapeSummaryFromSpec(name string, spec PublicScapeSpec) PublicScapeSu
 	return summary
 }
 
-func startPublicScape(ctx context.Context, sc scape.Scape, summary PublicScapeSummary) error {
+func supervisedSupportTaskName(name string) string {
+	return "support:" + name
+}
+
+func supervisedScapeTaskName(name string) string {
+	return "scape:" + name
+}
+
+func (p *Polis) startSupportModule(ctx context.Context, name string, module SupportModule) error {
+	if err := module.Start(ctx); err != nil {
+		return err
+	}
+	supervised, ok := module.(supervisedRuntime)
+	if !ok {
+		return nil
+	}
+	if p.supervisor == nil {
+		p.supervisor = NewSupervisor(p.config.SupervisorPolicy)
+	}
+	if err := p.supervisor.Start(supervisedSupportTaskName(name), supervised.Supervise); err != nil {
+		_ = module.Stop(ctx)
+		return err
+	}
+	return nil
+}
+
+func stopSupportModuleWithReason(ctx context.Context, module SupportModule, reason StopReason) error {
+	if withReason, ok := module.(reasonAwareSupportModule); ok {
+		return withReason.StopWithReason(ctx, reason)
+	}
+	return module.Stop(ctx)
+}
+
+func (p *Polis) startPublicScape(ctx context.Context, name string, sc scape.Scape, summary PublicScapeSummary) error {
+	managed, ok := sc.(managedScape)
+	managedStarted := false
+	if ok {
+		if withSummary, ok := sc.(summaryAwareManagedScape); ok {
+			if err := withSummary.StartWithSummary(ctx, summary); err != nil {
+				return err
+			}
+		} else {
+			if err := managed.Start(ctx); err != nil {
+				return err
+			}
+		}
+		managedStarted = true
+	}
+
+	supervised, ok := sc.(supervisedRuntime)
+	if !ok {
+		return nil
+	}
+	if p.supervisor == nil {
+		p.supervisor = NewSupervisor(p.config.SupervisorPolicy)
+	}
+	if err := p.supervisor.Start(supervisedScapeTaskName(name), supervised.Supervise); err != nil {
+		if managedStarted {
+			_ = managed.Stop(ctx)
+		}
+		return err
+	}
+	return nil
+}
+
+func stopPublicScapeWithReason(ctx context.Context, sc scape.Scape, reason StopReason) error {
 	managed, ok := sc.(managedScape)
 	if !ok {
 		return nil
 	}
-	if withSummary, ok := sc.(summaryAwareManagedScape); ok {
-		return withSummary.StartWithSummary(ctx, summary)
+	if withReason, ok := sc.(reasonAwareManagedScape); ok {
+		return withReason.StopWithReason(ctx, reason)
 	}
-	return managed.Start(ctx)
+	return managed.Stop(ctx)
 }
 
 func stopSupportModules(ctx context.Context, modules []SupportModule) {
