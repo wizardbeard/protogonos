@@ -1299,6 +1299,11 @@ func (o *MutatePlasticityParameters) Apply(_ context.Context, genome model.Genom
 		mutated.Neurons[idx].Generation = currentGenomeGeneration(mutated)
 		return mutated, nil
 	}
+	if rule == nn.PlasticityNeuromodulation {
+		mutateNeuromodulationParameters(&mutated, genome, idx, maxDelta*10, o.Rand)
+		mutated.Neurons[idx].Generation = currentGenomeGeneration(mutated)
+		return mutated, nil
+	}
 	delta := (o.Rand.Float64()*2 - 1) * maxDelta
 	if plasticityRuleUsesGeneralizedCoefficients(rule) {
 		mutateNeuronPlasticityCoefficients(&mutated, genome, idx, delta, o.Rand)
@@ -3142,6 +3147,63 @@ func mutateSelfModulationParameterVectors(
 		} else {
 			mutated.Synapses[target.synapseIdx].PlasticityParams = params
 		}
+	}
+	return changed
+}
+
+func mutateNeuromodulationParameters(
+	mutated *model.Genome,
+	base model.Genome,
+	neuronIdx int,
+	spread float64,
+	rng *rand.Rand,
+) bool {
+	if mutated == nil || rng == nil || neuronIdx < 0 || neuronIdx >= len(mutated.Neurons) {
+		return false
+	}
+	if spread <= 0 {
+		spread = 0.15
+	}
+
+	// Neuromodulation mutates [H,A,B,C,D]; H maps to the runtime rate.
+	mutationProb := 1.0 / math.Sqrt(5)
+	changed := false
+	if rng.Float64() < mutationProb {
+		baseRate := neuronPlasticityRate(base, neuronIdx)
+		mutated.Neurons[neuronIdx].PlasticityRate = saturateSigned(baseRate+(rng.Float64()*2-1)*spread, spread)
+		changed = true
+	}
+
+	type coeffSetter struct {
+		getter func(model.Genome, int) float64
+		setter func(*model.Neuron, float64)
+	}
+	coeffs := []coeffSetter{
+		{
+			getter: neuronPlasticityA,
+			setter: func(n *model.Neuron, v float64) { n.PlasticityA = v },
+		},
+		{
+			getter: neuronPlasticityB,
+			setter: func(n *model.Neuron, v float64) { n.PlasticityB = v },
+		},
+		{
+			getter: neuronPlasticityC,
+			setter: func(n *model.Neuron, v float64) { n.PlasticityC = v },
+		},
+		{
+			getter: neuronPlasticityD,
+			setter: func(n *model.Neuron, v float64) { n.PlasticityD = v },
+		},
+	}
+	for _, coeff := range coeffs {
+		if rng.Float64() >= mutationProb {
+			continue
+		}
+		current := coeff.getter(base, neuronIdx)
+		next := saturateSigned(current+(rng.Float64()*2-1)*spread, spread)
+		coeff.setter(&mutated.Neurons[neuronIdx], next)
+		changed = true
 	}
 	return changed
 }

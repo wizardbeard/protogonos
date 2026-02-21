@@ -2612,6 +2612,60 @@ func TestMutatePlasticityParametersMutatesHebbianWSynapseAndBiasVectors(t *testi
 	}
 }
 
+func TestMutatePlasticityParametersMutatesNeuromodulationParameterSet(t *testing.T) {
+	genome := model.Genome{
+		Neurons: []model.Neuron{
+			{
+				ID:             "n0",
+				Activation:     "identity",
+				Aggregator:     "dot_product",
+				PlasticityRule: nn.PlasticityNeuromodulation,
+				PlasticityRate: 0.2,
+				PlasticityA:    0.1,
+				PlasticityB:    -0.2,
+				PlasticityC:    0.3,
+				PlasticityD:    -0.1,
+			},
+		},
+		Synapses: []model.Synapse{
+			{ID: "s0", From: "n0", To: "n0", Weight: 0.5, Enabled: true, Recurrent: true},
+		},
+	}
+	op := &MutatePlasticityParameters{
+		Rand:     rand.New(rand.NewSource(2529)),
+		MaxDelta: 0.1,
+	}
+	mutated, err := op.Apply(context.Background(), genome)
+	if err != nil {
+		t.Fatalf("apply failed: %v", err)
+	}
+	changed := 0
+	if mutated.Neurons[0].PlasticityRate != genome.Neurons[0].PlasticityRate {
+		changed++
+	}
+	if mutated.Neurons[0].PlasticityA != genome.Neurons[0].PlasticityA {
+		changed++
+	}
+	if mutated.Neurons[0].PlasticityB != genome.Neurons[0].PlasticityB {
+		changed++
+	}
+	if mutated.Neurons[0].PlasticityC != genome.Neurons[0].PlasticityC {
+		changed++
+	}
+	if mutated.Neurons[0].PlasticityD != genome.Neurons[0].PlasticityD {
+		changed++
+	}
+	if changed == 0 {
+		t.Fatalf("expected neuromodulation mutation to perturb at least one of [rate,A,B,C,D], before=%+v after=%+v", genome.Neurons[0], mutated.Neurons[0])
+	}
+	if len(mutated.Synapses[0].PlasticityParams) != len(genome.Synapses[0].PlasticityParams) {
+		t.Fatalf("expected neuromodulation mutation to leave synapse parameter vectors unchanged, before=%v after=%v", genome.Synapses[0].PlasticityParams, mutated.Synapses[0].PlasticityParams)
+	}
+	if len(mutated.Neurons[0].PlasticityBiasParams) != len(genome.Neurons[0].PlasticityBiasParams) {
+		t.Fatalf("expected neuromodulation mutation to leave bias parameter vectors unchanged, before=%v after=%v", genome.Neurons[0].PlasticityBiasParams, mutated.Neurons[0].PlasticityBiasParams)
+	}
+}
+
 func TestMutatePlasticityParametersMutatesSelfModulationParameterVectors(t *testing.T) {
 	genome := model.Genome{
 		Neurons: []model.Neuron{
