@@ -2,6 +2,7 @@ package agent
 
 import (
 	"context"
+	"errors"
 	"math"
 	"testing"
 
@@ -29,6 +30,27 @@ func (a *testActuator) Name() string { return "actuator" }
 func (a *testActuator) Write(_ context.Context, values []float64) error {
 	a.last = append([]float64(nil), values...)
 	return nil
+}
+
+type scriptedFeedbackActuator struct {
+	last      []float64
+	feedbacks []ActuatorSyncFeedback
+}
+
+func (a *scriptedFeedbackActuator) Name() string { return "scripted-feedback" }
+
+func (a *scriptedFeedbackActuator) Write(_ context.Context, values []float64) error {
+	a.last = append([]float64(nil), values...)
+	return nil
+}
+
+func (a *scriptedFeedbackActuator) ConsumeSyncFeedback() (ActuatorSyncFeedback, bool) {
+	if len(a.feedbacks) == 0 {
+		return ActuatorSyncFeedback{}, false
+	}
+	feedback := a.feedbacks[0]
+	a.feedbacks = a.feedbacks[1:]
+	return feedback, true
 }
 
 func TestCortexTickSensorToActuator(t *testing.T) {
@@ -348,5 +370,160 @@ func TestCortexDiffProductUsesStepInputDeltas(t *testing.T) {
 	}
 	if len(out2) != 1 || math.Abs(out2[0]-0.3) > 1e-9 {
 		t.Fatalf("unexpected output 2: %+v", out2)
+	}
+}
+
+func TestCortexRunUntilEvaluationCompleteAggregatesActuatorFeedback(t *testing.T) {
+	genome := model.Genome{
+		SensorIDs:   []string{"s1"},
+		ActuatorIDs: []string{"a1"},
+		Neurons: []model.Neuron{
+			{ID: "i", Activation: "identity"},
+			{ID: "o", Activation: "identity"},
+		},
+		Synapses: []model.Synapse{
+			{ID: "s", From: "i", To: "o", Weight: 1, Enabled: true},
+		},
+	}
+	sensors := map[string]protoio.Sensor{
+		"s1": testSensor{values: []float64{0.5}},
+	}
+	actuator := &scriptedFeedbackActuator{
+		feedbacks: []ActuatorSyncFeedback{
+			{Fitness: []float64{1.0, 2.0}},
+			{Fitness: []float64{3.0, 4.0}, EndFlag: 1},
+		},
+	}
+	actuators := map[string]protoio.Actuator{"a1": actuator}
+
+	c, err := NewCortex("agent-episode", genome, sensors, actuators, []string{"i"}, []string{"o"}, nil)
+	if err != nil {
+		t.Fatalf("new cortex: %v", err)
+	}
+	report, err := c.RunUntilEvaluationComplete(context.Background(), 10)
+	if err != nil {
+		t.Fatalf("run episode: %v", err)
+	}
+	if !report.Completed {
+		t.Fatal("expected episode to complete on actuator end-flag")
+	}
+	if report.Cycles != 2 {
+		t.Fatalf("expected 2 cycles before completion, got=%d", report.Cycles)
+	}
+	if len(report.Fitness) != 2 || report.Fitness[0] != 4.0 || report.Fitness[1] != 6.0 {
+		t.Fatalf("unexpected aggregated fitness vector: %+v", report.Fitness)
+	}
+	if c.Status() != CortexStatusInactive {
+		t.Fatalf("expected cortex inactive after completed episode, got=%s", c.Status())
+	}
+}
+
+func TestCortexRunUntilEvaluationCompleteRequiresReactivateAfterCompletion(t *testing.T) {
+	genome := model.Genome{
+		SensorIDs:   []string{"s1"},
+		ActuatorIDs: []string{"a1"},
+		Neurons: []model.Neuron{
+			{ID: "i", Activation: "identity"},
+			{ID: "o", Activation: "identity"},
+		},
+		Synapses: []model.Synapse{
+			{ID: "s", From: "i", To: "o", Weight: 1, Enabled: true},
+		},
+	}
+	sensors := map[string]protoio.Sensor{
+		"s1": testSensor{values: []float64{0.5}},
+	}
+	actuator := &scriptedFeedbackActuator{
+		feedbacks: []ActuatorSyncFeedback{
+			{Fitness: []float64{1.0}, EndFlag: 1},
+			{Fitness: []float64{2.0}, EndFlag: 1},
+		},
+	}
+	actuators := map[string]protoio.Actuator{"a1": actuator}
+
+	c, err := NewCortex("agent-reactivate", genome, sensors, actuators, []string{"i"}, []string{"o"}, nil)
+	if err != nil {
+		t.Fatalf("new cortex: %v", err)
+	}
+	if _, err := c.RunUntilEvaluationComplete(context.Background(), 5); err != nil {
+		t.Fatalf("first run episode: %v", err)
+	}
+	if _, err := c.RunUntilEvaluationComplete(context.Background(), 5); !errors.Is(err, ErrCortexInactive) {
+		t.Fatalf("expected ErrCortexInactive before reactivation, got %v", err)
+	}
+	if err := c.Reactivate(); err != nil {
+		t.Fatalf("reactivate: %v", err)
+	}
+	report, err := c.RunUntilEvaluationComplete(context.Background(), 5)
+	if err != nil {
+		t.Fatalf("second run episode: %v", err)
+	}
+	if !report.Completed || report.Cycles != 1 {
+		t.Fatalf("expected one-cycle completion after reactivation, report=%+v", report)
+	}
+}
+
+func TestCortexRunUntilEvaluationCompleteGoalReachedTerminatesEpisode(t *testing.T) {
+	genome := model.Genome{
+		SensorIDs:   []string{"s1"},
+		ActuatorIDs: []string{"a1"},
+		Neurons: []model.Neuron{
+			{ID: "i", Activation: "identity"},
+			{ID: "o", Activation: "identity"},
+		},
+		Synapses: []model.Synapse{
+			{ID: "s", From: "i", To: "o", Weight: 1, Enabled: true},
+		},
+	}
+	sensors := map[string]protoio.Sensor{
+		"s1": testSensor{values: []float64{0.5}},
+	}
+	actuator := &scriptedFeedbackActuator{
+		feedbacks: []ActuatorSyncFeedback{
+			{Fitness: []float64{0.75}, GoalReached: true},
+		},
+	}
+	actuators := map[string]protoio.Actuator{"a1": actuator}
+
+	c, err := NewCortex("agent-goal", genome, sensors, actuators, []string{"i"}, []string{"o"}, nil)
+	if err != nil {
+		t.Fatalf("new cortex: %v", err)
+	}
+	report, err := c.RunUntilEvaluationComplete(context.Background(), 5)
+	if err != nil {
+		t.Fatalf("run episode: %v", err)
+	}
+	if !report.Completed || !report.GoalReached {
+		t.Fatalf("expected goal-driven completion, report=%+v", report)
+	}
+	if report.EndFlagTotal <= 0 {
+		t.Fatalf("expected positive end-flag total from goal-reached feedback, report=%+v", report)
+	}
+}
+
+func TestCortexTerminateBlocksFurtherExecution(t *testing.T) {
+	genome := model.Genome{
+		SensorIDs: []string{"s1"},
+		Neurons: []model.Neuron{
+			{ID: "i", Activation: "identity"},
+			{ID: "o", Activation: "identity"},
+		},
+		Synapses: []model.Synapse{
+			{ID: "s", From: "i", To: "o", Weight: 1, Enabled: true},
+		},
+	}
+	sensors := map[string]protoio.Sensor{
+		"s1": testSensor{values: []float64{0.5}},
+	}
+	c, err := NewCortex("agent-terminated", genome, sensors, nil, []string{"i"}, []string{"o"}, nil)
+	if err != nil {
+		t.Fatalf("new cortex: %v", err)
+	}
+	c.Terminate()
+	if _, err := c.Tick(context.Background()); !errors.Is(err, ErrCortexTerminated) {
+		t.Fatalf("expected ErrCortexTerminated on Tick, got %v", err)
+	}
+	if err := c.Reactivate(); !errors.Is(err, ErrCortexTerminated) {
+		t.Fatalf("expected ErrCortexTerminated on Reactivate, got %v", err)
 	}
 }
