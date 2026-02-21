@@ -15,7 +15,31 @@ import (
 )
 
 type Config struct {
-	Store storage.Store
+	Store          storage.Store
+	SupportModules []SupportModule
+	PublicScapes   []PublicScapeSpec
+}
+
+type SupportModule interface {
+	Name() string
+	Start(ctx context.Context) error
+	Stop(ctx context.Context) error
+}
+
+type PublicScapeSpec struct {
+	Scape      scape.Scape
+	Type       string
+	Parameters []any
+	Metabolics any
+	Physics    any
+}
+
+type PublicScapeSummary struct {
+	Name       string `json:"name"`
+	Type       string `json:"type,omitempty"`
+	Parameters []any  `json:"parameters,omitempty"`
+	Metabolics any    `json:"metabolics,omitempty"`
+	Physics    any    `json:"physics,omitempty"`
 }
 
 type EvolutionConfig struct {
@@ -58,17 +82,25 @@ type EvolutionResult struct {
 type Polis struct {
 	store storage.Store
 
-	mu      sync.RWMutex
-	scapes  map[string]scape.Scape
-	started bool
-	runs    map[string]chan evo.MonitorCommand
+	mu sync.RWMutex
+
+	scapes         map[string]scape.Scape
+	supportModules map[string]SupportModule
+	publicScapes   map[string]PublicScapeSummary
+	started        bool
+	runs           map[string]chan evo.MonitorCommand
+
+	config Config
 }
 
 func NewPolis(cfg Config) *Polis {
 	return &Polis{
-		store:  cfg.Store,
-		scapes: make(map[string]scape.Scape),
-		runs:   make(map[string]chan evo.MonitorCommand),
+		store:          cfg.Store,
+		scapes:         make(map[string]scape.Scape),
+		supportModules: make(map[string]SupportModule),
+		publicScapes:   make(map[string]PublicScapeSummary),
+		runs:           make(map[string]chan evo.MonitorCommand),
+		config:         cfg,
 	}
 }
 
@@ -76,19 +108,103 @@ func (p *Polis) Init(ctx context.Context) error {
 	if p.store == nil {
 		return fmt.Errorf("store is required")
 	}
-	p.mu.RLock()
-	alreadyStarted := p.started
-	p.mu.RUnlock()
-	if alreadyStarted {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if p.started {
 		return nil
 	}
 	if err := p.store.Init(ctx); err != nil {
 		return err
 	}
 
-	p.mu.Lock()
+	startedModules := make([]SupportModule, 0, len(p.config.SupportModules))
+	for i, module := range p.config.SupportModules {
+		if module == nil {
+			stopSupportModules(ctx, startedModules)
+			p.supportModules = make(map[string]SupportModule)
+			p.publicScapes = make(map[string]PublicScapeSummary)
+			p.scapes = make(map[string]scape.Scape)
+			return fmt.Errorf("support module is nil at index %d", i)
+		}
+		name := module.Name()
+		if name == "" {
+			stopSupportModules(ctx, startedModules)
+			p.supportModules = make(map[string]SupportModule)
+			p.publicScapes = make(map[string]PublicScapeSummary)
+			p.scapes = make(map[string]scape.Scape)
+			return fmt.Errorf("support module name is required at index %d", i)
+		}
+		if _, exists := p.supportModules[name]; exists {
+			stopSupportModules(ctx, startedModules)
+			p.supportModules = make(map[string]SupportModule)
+			p.publicScapes = make(map[string]PublicScapeSummary)
+			p.scapes = make(map[string]scape.Scape)
+			return fmt.Errorf("duplicate support module: %s", name)
+		}
+		if err := module.Start(ctx); err != nil {
+			stopSupportModules(ctx, startedModules)
+			p.supportModules = make(map[string]SupportModule)
+			p.publicScapes = make(map[string]PublicScapeSummary)
+			p.scapes = make(map[string]scape.Scape)
+			return fmt.Errorf("start support module %s: %w", name, err)
+		}
+		p.supportModules[name] = module
+		startedModules = append(startedModules, module)
+	}
+
+	startedScapes := make([]managedScape, 0, len(p.config.PublicScapes))
+	for i, spec := range p.config.PublicScapes {
+		if spec.Scape == nil {
+			stopManagedScapes(ctx, startedScapes)
+			stopSupportModules(ctx, startedModules)
+			p.supportModules = make(map[string]SupportModule)
+			p.publicScapes = make(map[string]PublicScapeSummary)
+			p.scapes = make(map[string]scape.Scape)
+			return fmt.Errorf("public scape is nil at index %d", i)
+		}
+		name := spec.Scape.Name()
+		if name == "" {
+			stopManagedScapes(ctx, startedScapes)
+			stopSupportModules(ctx, startedModules)
+			p.supportModules = make(map[string]SupportModule)
+			p.publicScapes = make(map[string]PublicScapeSummary)
+			p.scapes = make(map[string]scape.Scape)
+			return fmt.Errorf("public scape name is required at index %d", i)
+		}
+		if _, exists := p.scapes[name]; exists {
+			stopManagedScapes(ctx, startedScapes)
+			stopSupportModules(ctx, startedModules)
+			p.supportModules = make(map[string]SupportModule)
+			p.publicScapes = make(map[string]PublicScapeSummary)
+			p.scapes = make(map[string]scape.Scape)
+			return fmt.Errorf("duplicate public scape: %s", name)
+		}
+		if managed, ok := spec.Scape.(managedScape); ok {
+			if err := managed.Start(ctx); err != nil {
+				stopManagedScapes(ctx, startedScapes)
+				stopSupportModules(ctx, startedModules)
+				p.supportModules = make(map[string]SupportModule)
+				p.publicScapes = make(map[string]PublicScapeSummary)
+				p.scapes = make(map[string]scape.Scape)
+				return fmt.Errorf("start public scape %s: %w", name, err)
+			}
+			startedScapes = append(startedScapes, managed)
+		}
+		p.scapes[name] = spec.Scape
+		summary := PublicScapeSummary{
+			Name:       name,
+			Type:       spec.Type,
+			Parameters: append([]any(nil), spec.Parameters...),
+			Metabolics: spec.Metabolics,
+			Physics:    spec.Physics,
+		}
+		if summary.Type == "" {
+			summary.Type = name
+		}
+		p.publicScapes[name] = summary
+	}
+
 	p.started = true
-	p.mu.Unlock()
 	return nil
 }
 
@@ -128,9 +244,19 @@ func (p *Polis) Stop() {
 		default:
 		}
 	}
+	for _, sc := range p.scapes {
+		if managed, ok := sc.(managedScape); ok {
+			_ = managed.Stop(context.Background())
+		}
+	}
+	for _, module := range p.supportModules {
+		_ = module.Stop(context.Background())
+	}
 
 	p.started = false
 	p.scapes = make(map[string]scape.Scape)
+	p.supportModules = make(map[string]SupportModule)
+	p.publicScapes = make(map[string]PublicScapeSummary)
 	p.runs = make(map[string]chan evo.MonitorCommand)
 }
 
@@ -572,8 +698,55 @@ func (p *Polis) RegisteredScapes() []string {
 	return names
 }
 
+func (p *Polis) ActiveSupportModules() []string {
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+
+	names := make([]string, 0, len(p.supportModules))
+	for name := range p.supportModules {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	return names
+}
+
+func (p *Polis) ActivePublicScapes() []PublicScapeSummary {
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+
+	names := make([]string, 0, len(p.publicScapes))
+	for name := range p.publicScapes {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	out := make([]PublicScapeSummary, 0, len(names))
+	for _, name := range names {
+		summary := p.publicScapes[name]
+		summary.Parameters = append([]any(nil), summary.Parameters...)
+		out = append(out, summary)
+	}
+	return out
+}
+
 func (p *Polis) Started() bool {
 	p.mu.RLock()
 	defer p.mu.RUnlock()
 	return p.started
+}
+
+type managedScape interface {
+	Start(ctx context.Context) error
+	Stop(ctx context.Context) error
+}
+
+func stopSupportModules(ctx context.Context, modules []SupportModule) {
+	for i := len(modules) - 1; i >= 0; i-- {
+		_ = modules[i].Stop(ctx)
+	}
+}
+
+func stopManagedScapes(ctx context.Context, scapes []managedScape) {
+	for i := len(scapes) - 1; i >= 0; i-- {
+		_ = scapes[i].Stop(ctx)
+	}
 }
