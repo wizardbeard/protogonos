@@ -519,6 +519,38 @@ func TestPolisGetScapeByTypeUsesFirstConfiguredType(t *testing.T) {
 	}
 }
 
+func TestPolisGetScapeByTypeKeepsInsertionOrderAfterRemoval(t *testing.T) {
+	ctx := context.Background()
+	first := &managedTestScape{testScape: testScape{name: "scape-c"}}
+	second := &managedTestScape{testScape: testScape{name: "scape-b"}}
+	third := &managedTestScape{testScape: testScape{name: "scape-a"}}
+	p := NewPolis(Config{Store: storage.NewMemoryStore()})
+	if err := p.Init(ctx); err != nil {
+		t.Fatalf("init failed: %v", err)
+	}
+	if err := p.AddPublicScape(ctx, PublicScapeSpec{Scape: first, Type: "shared"}); err != nil {
+		t.Fatalf("add first public scape: %v", err)
+	}
+	if err := p.AddPublicScape(ctx, PublicScapeSpec{Scape: second, Type: "shared"}); err != nil {
+		t.Fatalf("add second public scape: %v", err)
+	}
+	if err := p.AddPublicScape(ctx, PublicScapeSpec{Scape: third, Type: "shared"}); err != nil {
+		t.Fatalf("add third public scape: %v", err)
+	}
+
+	got, ok := p.GetScapeByType("shared")
+	if !ok || got != first {
+		t.Fatal("expected first-insertion scape lookup before removal")
+	}
+	if err := p.RemovePublicScape(ctx, "scape-c", StopReasonNormal); err != nil {
+		t.Fatalf("remove first-insertion public scape: %v", err)
+	}
+	got, ok = p.GetScapeByType("shared")
+	if !ok || got != second {
+		t.Fatal("expected type lookup to advance to next insertion-order scape after removal")
+	}
+}
+
 func TestPolisStartWithSummaryDefaultsTypeToScapeName(t *testing.T) {
 	public := &managedTestScape{testScape: testScape{name: "fallback-type"}}
 	p := NewPolis(Config{
