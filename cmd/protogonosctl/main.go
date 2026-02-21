@@ -135,6 +135,7 @@ func runRun(ctx context.Context, args []string) error {
 	runID := fs.String("run-id", "", "explicit run id (optional)")
 	continuePopID := fs.String("continue-pop-id", "", "continue from persisted population snapshot id")
 	specieIdentifier := fs.String("specie-identifier", "topology", "species identifier: topology|tot_n")
+	opMode := fs.String("op-mode", "gt", "operation mode: gt|validation|test")
 	scapeName := fs.String("scape", "xor", "scape name")
 	population := fs.Int("pop", 50, "population size")
 	generations := fs.Int("gens", 100, "generation count")
@@ -193,6 +194,7 @@ func runRun(ctx context.Context, args []string) error {
 	if *configPath == "" {
 		req = protoapi.RunRequest{
 			Scape:                 *scapeName,
+			OpMode:                *opMode,
 			RunID:                 *runID,
 			ContinuePopulationID:  *continuePopID,
 			SpecieIdentifier:      *specieIdentifier,
@@ -239,6 +241,7 @@ func runRun(ctx context.Context, args []string) error {
 	} else {
 		err := overrideFromFlags(&req, setFlags, map[string]any{
 			"scape":                   *scapeName,
+			"op-mode":                 *opMode,
 			"run-id":                  *runID,
 			"continue-pop-id":         *continuePopID,
 			"specie-identifier":       *specieIdentifier,
@@ -924,6 +927,7 @@ func runBenchmark(ctx context.Context, args []string) error {
 	runID := fs.String("run-id", "", "explicit run id (optional)")
 	continuePopID := fs.String("continue-pop-id", "", "continue from persisted population snapshot id")
 	specieIdentifier := fs.String("specie-identifier", "topology", "species identifier: topology|tot_n")
+	opMode := fs.String("op-mode", "gt", "operation mode: gt|validation|test")
 	scapeName := fs.String("scape", "xor", "scape name")
 	population := fs.Int("pop", 50, "population size")
 	generations := fs.Int("gens", 100, "generation count")
@@ -982,6 +986,7 @@ func runBenchmark(ctx context.Context, args []string) error {
 	if *configPath == "" {
 		req = protoapi.RunRequest{
 			Scape:                 *scapeName,
+			OpMode:                *opMode,
 			RunID:                 *runID,
 			ContinuePopulationID:  *continuePopID,
 			SpecieIdentifier:      *specieIdentifier,
@@ -1027,6 +1032,7 @@ func runBenchmark(ctx context.Context, args []string) error {
 	} else {
 		err := overrideFromFlags(&req, setFlags, map[string]any{
 			"scape":                   *scapeName,
+			"op-mode":                 *opMode,
 			"run-id":                  *runID,
 			"continue-pop-id":         *continuePopID,
 			"specie-identifier":       *specieIdentifier,

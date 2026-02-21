@@ -265,6 +265,8 @@ func overrideFromFlags(req *protoapi.RunRequest, set map[string]bool, flagValue 
 			req.SpecieIdentifier = v.(string)
 		case "scape":
 			req.Scape = v.(string)
+		case "op-mode":
+			req.OpMode = v.(string)
 		case "pop":
 			req.Population = v.(int)
 		case "gens":
