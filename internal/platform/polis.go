@@ -91,12 +91,13 @@ type Polis struct {
 
 	mu sync.RWMutex
 
-	scapes         map[string]scape.Scape
-	supportModules map[string]SupportModule
-	publicScapes   map[string]PublicScapeSummary
-	started        bool
-	lastStopReason StopReason
-	runs           map[string]chan evo.MonitorCommand
+	scapes            map[string]scape.Scape
+	supportModules    map[string]SupportModule
+	publicScapes      map[string]PublicScapeSummary
+	publicScapeByType map[string]string
+	started           bool
+	lastStopReason    StopReason
+	runs              map[string]chan evo.MonitorCommand
 
 	config Config
 }
@@ -108,13 +109,14 @@ var (
 
 func NewPolis(cfg Config) *Polis {
 	return &Polis{
-		store:          cfg.Store,
-		scapes:         make(map[string]scape.Scape),
-		supportModules: make(map[string]SupportModule),
-		publicScapes:   make(map[string]PublicScapeSummary),
-		runs:           make(map[string]chan evo.MonitorCommand),
-		config:         cfg,
-		lastStopReason: StopReasonNormal,
+		store:             cfg.Store,
+		scapes:            make(map[string]scape.Scape),
+		supportModules:    make(map[string]SupportModule),
+		publicScapes:      make(map[string]PublicScapeSummary),
+		publicScapeByType: make(map[string]string),
+		runs:              make(map[string]chan evo.MonitorCommand),
+		config:            cfg,
+		lastStopReason:    StopReasonNormal,
 	}
 }
 
@@ -182,6 +184,7 @@ func (p *Polis) Init(ctx context.Context) error {
 			stopSupportModules(ctx, startedModules)
 			p.supportModules = make(map[string]SupportModule)
 			p.publicScapes = make(map[string]PublicScapeSummary)
+			p.publicScapeByType = make(map[string]string)
 			p.scapes = make(map[string]scape.Scape)
 			return fmt.Errorf("support module is nil at index %d", i)
 		}
@@ -190,6 +193,7 @@ func (p *Polis) Init(ctx context.Context) error {
 			stopSupportModules(ctx, startedModules)
 			p.supportModules = make(map[string]SupportModule)
 			p.publicScapes = make(map[string]PublicScapeSummary)
+			p.publicScapeByType = make(map[string]string)
 			p.scapes = make(map[string]scape.Scape)
 			return fmt.Errorf("support module name is required at index %d", i)
 		}
@@ -197,6 +201,7 @@ func (p *Polis) Init(ctx context.Context) error {
 			stopSupportModules(ctx, startedModules)
 			p.supportModules = make(map[string]SupportModule)
 			p.publicScapes = make(map[string]PublicScapeSummary)
+			p.publicScapeByType = make(map[string]string)
 			p.scapes = make(map[string]scape.Scape)
 			return fmt.Errorf("duplicate support module: %s", name)
 		}
@@ -204,6 +209,7 @@ func (p *Polis) Init(ctx context.Context) error {
 			stopSupportModules(ctx, startedModules)
 			p.supportModules = make(map[string]SupportModule)
 			p.publicScapes = make(map[string]PublicScapeSummary)
+			p.publicScapeByType = make(map[string]string)
 			p.scapes = make(map[string]scape.Scape)
 			return fmt.Errorf("start support module %s: %w", name, err)
 		}
@@ -218,6 +224,7 @@ func (p *Polis) Init(ctx context.Context) error {
 			stopSupportModules(ctx, startedModules)
 			p.supportModules = make(map[string]SupportModule)
 			p.publicScapes = make(map[string]PublicScapeSummary)
+			p.publicScapeByType = make(map[string]string)
 			p.scapes = make(map[string]scape.Scape)
 			return fmt.Errorf("public scape is nil at index %d", i)
 		}
@@ -227,6 +234,7 @@ func (p *Polis) Init(ctx context.Context) error {
 			stopSupportModules(ctx, startedModules)
 			p.supportModules = make(map[string]SupportModule)
 			p.publicScapes = make(map[string]PublicScapeSummary)
+			p.publicScapeByType = make(map[string]string)
 			p.scapes = make(map[string]scape.Scape)
 			return fmt.Errorf("public scape name is required at index %d", i)
 		}
@@ -235,6 +243,7 @@ func (p *Polis) Init(ctx context.Context) error {
 			stopSupportModules(ctx, startedModules)
 			p.supportModules = make(map[string]SupportModule)
 			p.publicScapes = make(map[string]PublicScapeSummary)
+			p.publicScapeByType = make(map[string]string)
 			p.scapes = make(map[string]scape.Scape)
 			return fmt.Errorf("duplicate public scape: %s", name)
 		}
@@ -244,6 +253,7 @@ func (p *Polis) Init(ctx context.Context) error {
 				stopSupportModules(ctx, startedModules)
 				p.supportModules = make(map[string]SupportModule)
 				p.publicScapes = make(map[string]PublicScapeSummary)
+				p.publicScapeByType = make(map[string]string)
 				p.scapes = make(map[string]scape.Scape)
 				return fmt.Errorf("start public scape %s: %w", name, err)
 			}
@@ -261,6 +271,9 @@ func (p *Polis) Init(ctx context.Context) error {
 			summary.Type = name
 		}
 		p.publicScapes[name] = summary
+		if _, exists := p.publicScapeByType[summary.Type]; !exists {
+			p.publicScapeByType[summary.Type] = name
+		}
 	}
 
 	p.started = true
@@ -304,6 +317,22 @@ func (p *Polis) GetScape(name string) (scape.Scape, bool) {
 	p.mu.RLock()
 	defer p.mu.RUnlock()
 
+	s, ok := p.scapes[name]
+	return s, ok
+}
+
+func (p *Polis) GetScapeByType(scapeType string) (scape.Scape, bool) {
+	if scapeType == "" {
+		return nil, false
+	}
+
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+
+	name, ok := p.publicScapeByType[scapeType]
+	if !ok {
+		return nil, false
+	}
 	s, ok := p.scapes[name]
 	return s, ok
 }
@@ -354,6 +383,7 @@ func (p *Polis) StopWithReason(reason StopReason) error {
 	p.scapes = make(map[string]scape.Scape)
 	p.supportModules = make(map[string]SupportModule)
 	p.publicScapes = make(map[string]PublicScapeSummary)
+	p.publicScapeByType = make(map[string]string)
 	p.runs = make(map[string]chan evo.MonitorCommand)
 	return nil
 }

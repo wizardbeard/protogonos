@@ -92,6 +92,9 @@ func TestPolisInitAndRegisterScape(t *testing.T) {
 	if _, ok := p.GetScape("noop"); !ok {
 		t.Fatal("expected get scape to resolve registered scape")
 	}
+	if _, ok := p.GetScapeByType("noop"); ok {
+		t.Fatal("expected type lookup to skip non-public registered scape")
+	}
 }
 
 func TestPolisCreateAliasInit(t *testing.T) {
@@ -182,6 +185,16 @@ func TestPolisInitStartsConfiguredModulesAndPublicScapes(t *testing.T) {
 	}
 	if len(summaries[0].Parameters) != 1 || summaries[0].Parameters[0] != "seeded" {
 		t.Fatalf("unexpected public scape summary parameters: %+v", summaries[0].Parameters)
+	}
+	gotByType, ok := p.GetScapeByType("flatland")
+	if !ok {
+		t.Fatal("expected scape lookup by type to resolve public scape")
+	}
+	if gotByType != public {
+		t.Fatal("expected scape lookup by type to resolve configured public scape instance")
+	}
+	if _, ok := p.GetScapeByType("unknown"); ok {
+		t.Fatal("expected unknown scape type lookup to return not found")
 	}
 
 	p.Stop()
@@ -353,6 +366,28 @@ func TestStopDefaultRejectsInvalidReason(t *testing.T) {
 	}
 	if err := StopDefault(StopReasonShutdown); err != nil {
 		t.Fatalf("stop default shutdown: %v", err)
+	}
+}
+
+func TestPolisGetScapeByTypeUsesFirstConfiguredType(t *testing.T) {
+	first := &managedTestScape{testScape: testScape{name: "scape-a"}}
+	second := &managedTestScape{testScape: testScape{name: "scape-b"}}
+	p := NewPolis(Config{
+		Store: storage.NewMemoryStore(),
+		PublicScapes: []PublicScapeSpec{
+			{Scape: first, Type: "shared"},
+			{Scape: second, Type: "shared"},
+		},
+	})
+	if err := p.Init(context.Background()); err != nil {
+		t.Fatalf("init failed: %v", err)
+	}
+	got, ok := p.GetScapeByType("shared")
+	if !ok {
+		t.Fatal("expected shared type lookup to resolve a scape")
+	}
+	if got != first {
+		t.Fatal("expected shared type lookup to resolve first configured scape")
 	}
 }
 
