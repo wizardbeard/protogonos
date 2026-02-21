@@ -16,6 +16,11 @@ type SupervisorPolicy struct {
 	MaxRestarts    int
 }
 
+type SupervisorHooks struct {
+	OnTaskRestart          func(name string, err error, restartCount int)
+	OnTaskPermanentFailure func(name string, err error, restartCount int)
+}
+
 func defaultSupervisorPolicy() SupervisorPolicy {
 	return SupervisorPolicy{
 		InitialBackoff: 10 * time.Millisecond,
@@ -44,6 +49,7 @@ func normalizeSupervisorPolicy(policy SupervisorPolicy) SupervisorPolicy {
 
 type Supervisor struct {
 	policy SupervisorPolicy
+	hooks  SupervisorHooks
 
 	mu    sync.Mutex
 	tasks map[string]*supervisorTask
@@ -55,8 +61,13 @@ type supervisorTask struct {
 }
 
 func NewSupervisor(policy SupervisorPolicy) *Supervisor {
+	return NewSupervisorWithHooks(policy, SupervisorHooks{})
+}
+
+func NewSupervisorWithHooks(policy SupervisorPolicy, hooks SupervisorHooks) *Supervisor {
 	return &Supervisor{
 		policy: normalizeSupervisorPolicy(policy),
+		hooks:  hooks,
 		tasks:  make(map[string]*supervisorTask),
 	}
 }
@@ -108,9 +119,15 @@ func (s *Supervisor) runTask(name string, task *supervisorTask, ctx context.Cont
 			return
 		}
 		if s.policy.MaxRestarts > 0 && restarts >= s.policy.MaxRestarts {
+			if s.hooks.OnTaskPermanentFailure != nil {
+				go s.hooks.OnTaskPermanentFailure(name, err, restarts)
+			}
 			return
 		}
 		restarts++
+		if s.hooks.OnTaskRestart != nil {
+			s.hooks.OnTaskRestart(name, err, restarts)
+		}
 		timer := time.NewTimer(backoff)
 		select {
 		case <-ctx.Done():

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"sort"
 	"sync"
+	"time"
 
 	"protogonos/internal/evo"
 	"protogonos/internal/genotype"
@@ -15,10 +16,12 @@ import (
 )
 
 type Config struct {
-	Store            storage.Store
-	SupportModules   []SupportModule
-	PublicScapes     []PublicScapeSpec
-	SupervisorPolicy SupervisorPolicy
+	Store                       storage.Store
+	SupportModules              []SupportModule
+	PublicScapes                []PublicScapeSpec
+	SupervisorPolicy            SupervisorPolicy
+	EscalateOnSupervisorFailure bool
+	SupervisorFailureReason     StopReason
 }
 
 type SupportModule interface {
@@ -139,6 +142,13 @@ type EvolutionResult struct {
 	Lineage               []evo.LineageRecord
 }
 
+type SupervisionFailure struct {
+	TaskName     string    `json:"task_name"`
+	ErrorMessage string    `json:"error_message"`
+	RestartCount int       `json:"restart_count"`
+	ObservedAt   time.Time `json:"observed_at"`
+}
+
 type Polis struct {
 	store storage.Store
 
@@ -159,8 +169,9 @@ type Polis struct {
 	mailboxCancel context.CancelFunc
 	mailboxDone   chan struct{}
 
-	supervisor *Supervisor
-	config     Config
+	supervisor          *Supervisor
+	supervisionFailures []SupervisionFailure
+	config              Config
 }
 
 var (
@@ -169,7 +180,7 @@ var (
 )
 
 func NewPolis(cfg Config) *Polis {
-	return &Polis{
+	p := &Polis{
 		store:                cfg.Store,
 		scapes:               make(map[string]scape.Scape),
 		supportModules:       make(map[string]SupportModule),
@@ -177,10 +188,17 @@ func NewPolis(cfg Config) *Polis {
 		publicScapeByType:    make(map[string]string),
 		publicScapeTypeOrder: make(map[string][]string),
 		runs:                 make(map[string]chan evo.MonitorCommand),
-		supervisor:           NewSupervisor(cfg.SupervisorPolicy),
 		config:               cfg,
 		lastStopReason:       StopReasonNormal,
 	}
+	p.supervisor = p.newSupervisor()
+	return p
+}
+
+func (p *Polis) newSupervisor() *Supervisor {
+	return NewSupervisorWithHooks(p.config.SupervisorPolicy, SupervisorHooks{
+		OnTaskPermanentFailure: p.handleSupervisionFailure,
+	})
 }
 
 func StartDefault(ctx context.Context, cfg Config) (*Polis, error) {
@@ -241,7 +259,7 @@ func (p *Polis) Init(ctx context.Context) error {
 		return err
 	}
 	if p.supervisor == nil {
-		p.supervisor = NewSupervisor(p.config.SupervisorPolicy)
+		p.supervisor = p.newSupervisor()
 	}
 
 	startedModules := make([]SupportModule, 0, len(p.config.SupportModules))
@@ -1132,6 +1150,14 @@ func (p *Polis) ActiveSupervisedTasks() []string {
 	return supervisor.Tasks()
 }
 
+func (p *Polis) SupervisionFailures() []SupervisionFailure {
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+	out := make([]SupervisionFailure, len(p.supervisionFailures))
+	copy(out, p.supervisionFailures)
+	return out
+}
+
 type managedScape interface {
 	Start(ctx context.Context) error
 	Stop(ctx context.Context) error
@@ -1176,7 +1202,7 @@ func (p *Polis) resetRuntimeStateLocked() {
 	if p.supervisor != nil {
 		p.supervisor.StopAll()
 	}
-	p.supervisor = NewSupervisor(p.config.SupervisorPolicy)
+	p.supervisor = p.newSupervisor()
 }
 
 func (p *Polis) ensureMailboxLocked() {
@@ -1279,6 +1305,37 @@ func (p *Polis) handleCastMessage(ctx context.Context, msg CastMessage, fromMail
 	}
 }
 
+func (p *Polis) handleSupervisionFailure(taskName string, err error, restartCount int) {
+	failure := SupervisionFailure{
+		TaskName:     taskName,
+		ErrorMessage: errString(err),
+		RestartCount: restartCount,
+		ObservedAt:   time.Now().UTC(),
+	}
+
+	p.mu.Lock()
+	p.supervisionFailures = append(p.supervisionFailures, failure)
+	started := p.started
+	escalate := p.config.EscalateOnSupervisorFailure
+	reason := p.config.SupervisorFailureReason
+	p.mu.Unlock()
+
+	if !started || !escalate {
+		return
+	}
+	if reason == "" || !isValidStopReason(reason) {
+		reason = StopReasonShutdown
+	}
+	_ = p.stopWithReason(reason, false)
+}
+
+func errString(err error) string {
+	if err == nil {
+		return ""
+	}
+	return err.Error()
+}
+
 func publicScapeSummaryFromSpec(name string, spec PublicScapeSpec) PublicScapeSummary {
 	summary := PublicScapeSummary{
 		Name:       name,
@@ -1310,7 +1367,7 @@ func (p *Polis) startSupportModule(ctx context.Context, name string, module Supp
 		return nil
 	}
 	if p.supervisor == nil {
-		p.supervisor = NewSupervisor(p.config.SupervisorPolicy)
+		p.supervisor = p.newSupervisor()
 	}
 	if err := p.supervisor.Start(supervisedSupportTaskName(name), supervised.Supervise); err != nil {
 		_ = module.Stop(ctx)
@@ -1347,7 +1404,7 @@ func (p *Polis) startPublicScape(ctx context.Context, name string, sc scape.Scap
 		return nil
 	}
 	if p.supervisor == nil {
-		p.supervisor = NewSupervisor(p.config.SupervisorPolicy)
+		p.supervisor = p.newSupervisor()
 	}
 	if err := p.supervisor.Start(supervisedScapeTaskName(name), supervised.Supervise); err != nil {
 		if managedStarted {

@@ -736,6 +736,78 @@ func TestPolisSupervisesPublicScapeRuntime(t *testing.T) {
 	}
 }
 
+func TestPolisEscalatesOnSupervisorPermanentFailure(t *testing.T) {
+	module := &supervisedTestSupportModule{
+		testSupportModule: testSupportModule{name: "fatal-module"},
+		failRuns:          1000,
+	}
+	p := NewPolis(Config{
+		Store:                       storage.NewMemoryStore(),
+		SupportModules:              []SupportModule{module},
+		EscalateOnSupervisorFailure: true,
+		SupervisorPolicy: SupervisorPolicy{
+			InitialBackoff: time.Millisecond,
+			MaxBackoff:     time.Millisecond,
+			BackoffFactor:  1,
+			MaxRestarts:    1,
+		},
+	})
+	if err := p.Init(context.Background()); err != nil {
+		t.Fatalf("init failed: %v", err)
+	}
+	waitForPolisStarted(t, p, false, 300*time.Millisecond)
+	if p.LastStopReason() != StopReasonShutdown {
+		t.Fatalf("expected escalation stop reason %q, got=%q", StopReasonShutdown, p.LastStopReason())
+	}
+	failures := p.SupervisionFailures()
+	if len(failures) == 0 {
+		t.Fatal("expected supervision failure history")
+	}
+	last := failures[len(failures)-1]
+	if last.TaskName != supervisedSupportTaskName("fatal-module") {
+		t.Fatalf("unexpected supervision failure task name: %s", last.TaskName)
+	}
+	if last.RestartCount != 1 {
+		t.Fatalf("expected supervision restart count=1, got=%d", last.RestartCount)
+	}
+}
+
+func TestPolisRecordsSupervisorPermanentFailureWithoutEscalation(t *testing.T) {
+	module := &supervisedTestSupportModule{
+		testSupportModule: testSupportModule{name: "nonfatal-module"},
+		failRuns:          1000,
+	}
+	p := NewPolis(Config{
+		Store:          storage.NewMemoryStore(),
+		SupportModules: []SupportModule{module},
+		SupervisorPolicy: SupervisorPolicy{
+			InitialBackoff: time.Millisecond,
+			MaxBackoff:     time.Millisecond,
+			BackoffFactor:  1,
+			MaxRestarts:    1,
+		},
+	})
+	if err := p.Init(context.Background()); err != nil {
+		t.Fatalf("init failed: %v", err)
+	}
+	waitForAtLeastRuns(t, &module.superviseRuns, 2, 300*time.Millisecond)
+	time.Sleep(20 * time.Millisecond)
+	if !p.Started() {
+		t.Fatal("expected polis to remain started without escalation")
+	}
+	if len(p.ActiveSupervisedTasks()) != 0 {
+		t.Fatalf("expected failed supervised task to be removed, got=%v", p.ActiveSupervisedTasks())
+	}
+	failures := p.SupervisionFailures()
+	if len(failures) == 0 {
+		t.Fatal("expected supervision failure history")
+	}
+	last := failures[len(failures)-1]
+	if last.TaskName != supervisedSupportTaskName("nonfatal-module") {
+		t.Fatalf("unexpected supervision failure task name: %s", last.TaskName)
+	}
+}
+
 func waitForAtLeastRuns(t *testing.T, counter *atomic.Int32, min int32, timeout time.Duration) {
 	t.Helper()
 	deadline := time.Now().Add(timeout)
@@ -746,6 +818,18 @@ func waitForAtLeastRuns(t *testing.T, counter *atomic.Int32, min int32, timeout 
 		time.Sleep(2 * time.Millisecond)
 	}
 	t.Fatalf("expected counter >= %d, got=%d", min, counter.Load())
+}
+
+func waitForPolisStarted(t *testing.T, p *Polis, started bool, timeout time.Duration) {
+	t.Helper()
+	deadline := time.Now().Add(timeout)
+	for time.Now().Before(deadline) {
+		if p.Started() == started {
+			return
+		}
+		time.Sleep(2 * time.Millisecond)
+	}
+	t.Fatalf("expected polis started=%t, got=%t", started, p.Started())
 }
 
 func waitForMailboxState(t *testing.T, p *Polis, active bool, timeout time.Duration) {

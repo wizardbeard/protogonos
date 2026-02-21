@@ -81,3 +81,79 @@ func TestSupervisorRejectsDuplicateTaskName(t *testing.T) {
 	}
 	supervisor.StopAll()
 }
+
+func TestSupervisorPermanentFailureHook(t *testing.T) {
+	failures := make(chan struct {
+		name      string
+		restarts  int
+		errString string
+	}, 1)
+	supervisor := NewSupervisorWithHooks(SupervisorPolicy{
+		InitialBackoff: time.Millisecond,
+		MaxBackoff:     time.Millisecond,
+		BackoffFactor:  1,
+		MaxRestarts:    1,
+	}, SupervisorHooks{
+		OnTaskPermanentFailure: func(name string, err error, restartCount int) {
+			failures <- struct {
+				name      string
+				restarts  int
+				errString string
+			}{
+				name:      name,
+				restarts:  restartCount,
+				errString: err.Error(),
+			}
+		},
+	})
+	if err := supervisor.Start("permanent", func(context.Context) error {
+		return errors.New("boom")
+	}); err != nil {
+		t.Fatalf("start supervisor task: %v", err)
+	}
+	select {
+	case failure := <-failures:
+		if failure.name != "permanent" {
+			t.Fatalf("unexpected failure task name: %s", failure.name)
+		}
+		if failure.restarts != 1 {
+			t.Fatalf("expected restart count 1, got=%d", failure.restarts)
+		}
+		if failure.errString != "boom" {
+			t.Fatalf("unexpected failure error string: %s", failure.errString)
+		}
+	case <-time.After(200 * time.Millisecond):
+		t.Fatal("expected permanent failure hook callback")
+	}
+	supervisor.StopAll()
+}
+
+func TestSupervisorRestartHook(t *testing.T) {
+	var restartCount atomic.Int32
+	supervisor := NewSupervisorWithHooks(SupervisorPolicy{
+		InitialBackoff: time.Millisecond,
+		MaxBackoff:     time.Millisecond,
+		BackoffFactor:  1,
+		MaxRestarts:    2,
+	}, SupervisorHooks{
+		OnTaskRestart: func(string, error, int) {
+			restartCount.Add(1)
+		},
+	})
+	if err := supervisor.Start("restart-hook", func(context.Context) error {
+		return errors.New("boom")
+	}); err != nil {
+		t.Fatalf("start supervisor task: %v", err)
+	}
+	deadline := time.Now().Add(200 * time.Millisecond)
+	for time.Now().Before(deadline) {
+		if restartCount.Load() >= 2 {
+			break
+		}
+		time.Sleep(2 * time.Millisecond)
+	}
+	if restartCount.Load() < 2 {
+		t.Fatalf("expected at least 2 restart callbacks, got=%d", restartCount.Load())
+	}
+	supervisor.StopAll()
+}
