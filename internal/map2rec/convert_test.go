@@ -218,6 +218,14 @@ func TestConvertDispatchesSensorAndActuatorKinds(t *testing.T) {
 		t.Fatalf("unexpected circuit dispatch result: %#v", gotCircuit)
 	}
 
+	gotLayer, err := Convert("layer", map[string]any{"ivl": 8})
+	if err != nil {
+		t.Fatalf("convert layer: %v", err)
+	}
+	if layer, ok := gotLayer.(LayerRecord); !ok || layer.IVL != 8 {
+		t.Fatalf("unexpected layer dispatch result: %#v", gotLayer)
+	}
+
 	gotLayerSpec, err := Convert("layer_spec", map[string]any{"ivl": 4})
 	if err != nil {
 		t.Fatalf("convert layer_spec: %v", err)
@@ -397,6 +405,56 @@ func TestConvertCircuitMalformedKnownFieldKeepsDefault(t *testing.T) {
 	}
 	if len(out.Memory) != 0 || out.Step != 0 || out.BlockSize != 100 || out.ErrAcc != 0 || out.TrainingLength != 1000 {
 		t.Fatalf("expected default malformed-field fallbacks, got %+v", out)
+	}
+}
+
+func TestConvertLayerMapsFields(t *testing.T) {
+	in := map[string]any{
+		"id":              "layer-1",
+		"type":            []any{"convolutional", 4},
+		"noise":           0.02,
+		"neurode_type":    "rbf",
+		"dynamics":        "dynamic",
+		"neurodes":        []any{"n1", "n2"},
+		"tot_neurodes":    2,
+		"input":           []any{0.1, 0.2},
+		"output":          []any{0.3},
+		"ivl":             32,
+		"encoder":         []any{"e1"},
+		"decoder":         []any{"d1"},
+		"backprop_tuning": "on",
+		"index_start":     3,
+		"index_end":       9,
+		"parameters":      []any{"p1", 7},
+	}
+	out := ConvertLayer(in)
+	if out.ID != "layer-1" || out.NeurodeType != "rbf" || out.IVL != 32 {
+		t.Fatalf("unexpected layer conversion identity/core fields: %+v", out)
+	}
+	if out.TotalNeurodes != 2 || out.IndexStart != 3 || out.IndexEnd != 9 {
+		t.Fatalf("unexpected layer numeric conversion: %+v", out)
+	}
+	if len(out.Neurodes) != 2 || len(out.Encoder) != 1 || len(out.Decoder) != 1 || len(out.Parameters) != 2 {
+		t.Fatalf("unexpected layer slice conversion: %+v", out)
+	}
+}
+
+func TestConvertLayerMalformedKnownFieldKeepsDefault(t *testing.T) {
+	out := ConvertLayer(map[string]any{
+		"neurodes":     "bad",
+		"tot_neurodes": "bad",
+		"ivl":          "bad",
+		"encoder":      "bad",
+		"decoder":      "bad",
+		"index_start":  "bad",
+		"index_end":    "bad",
+		"parameters":   "bad",
+	})
+	if out.TotalNeurodes != 0 || out.IVL != 0 || out.IndexStart != 0 || out.IndexEnd != 0 {
+		t.Fatalf("expected default layer ints on malformed input, got %+v", out)
+	}
+	if len(out.Neurodes) != 0 || len(out.Encoder) != 0 || len(out.Decoder) != 0 || len(out.Parameters) != 0 {
+		t.Fatalf("expected default layer slices on malformed input, got %+v", out)
 	}
 }
 

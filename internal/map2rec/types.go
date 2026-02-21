@@ -98,6 +98,25 @@ type CircuitRecord struct {
 	TrainingLength int
 }
 
+type LayerRecord struct {
+	ID             any
+	Type           any
+	Noise          any
+	NeurodeType    any
+	Dynamics       any
+	Neurodes       []any
+	TotalNeurodes  int
+	Input          any
+	Output         any
+	IVL            int
+	Encoder        []any
+	Decoder        []any
+	BackpropTuning any
+	IndexStart     int
+	IndexEnd       int
+	Parameters     []any
+}
+
 type LayerSpecRecord struct {
 	Type           any
 	AF             any
@@ -516,6 +535,18 @@ func defaultCircuitRecord() CircuitRecord {
 		ErrAcc:         0,
 		BackpropTuning: "off",
 		TrainingLength: 1000,
+	}
+}
+
+func defaultLayerRecord() LayerRecord {
+	return LayerRecord{
+		NeurodeType:    "tanh",
+		Dynamics:       "dynamic",
+		Neurodes:       []any{},
+		Encoder:        []any{},
+		Decoder:        []any{},
+		BackpropTuning: "off",
+		Parameters:     []any{},
 	}
 }
 

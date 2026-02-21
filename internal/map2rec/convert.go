@@ -12,6 +12,8 @@ func Convert(kind string, in map[string]any) (any, error) {
 		return ConvertExperiment(in), nil
 	case "circuit":
 		return ConvertCircuit(in), nil
+	case "layer":
+		return ConvertLayer(in), nil
 	case "layer_spec":
 		return ConvertLayerSpec(in), nil
 	case "neurode":
@@ -328,6 +330,63 @@ func ConvertCircuit(in map[string]any) CircuitRecord {
 		case "training_length":
 			if n, ok := asInt(val); ok {
 				out.TrainingLength = n
+			}
+		}
+	}
+	return out
+}
+
+func ConvertLayer(in map[string]any) LayerRecord {
+	out := defaultLayerRecord()
+	for key, val := range in {
+		switch key {
+		case "id":
+			out.ID = val
+		case "type":
+			out.Type = val
+		case "noise":
+			out.Noise = val
+		case "neurode_type":
+			out.NeurodeType = val
+		case "dynamics":
+			out.Dynamics = val
+		case "neurodes":
+			if xs, ok := asAnySlice(val); ok {
+				out.Neurodes = xs
+			}
+		case "tot_neurodes":
+			if n, ok := asInt(val); ok {
+				out.TotalNeurodes = n
+			}
+		case "input":
+			out.Input = val
+		case "output":
+			out.Output = val
+		case "ivl":
+			if n, ok := asInt(val); ok {
+				out.IVL = n
+			}
+		case "encoder":
+			if xs, ok := asAnySlice(val); ok {
+				out.Encoder = xs
+			}
+		case "decoder":
+			if xs, ok := asAnySlice(val); ok {
+				out.Decoder = xs
+			}
+		case "backprop_tuning":
+			out.BackpropTuning = val
+		case "index_start":
+			if n, ok := asInt(val); ok {
+				out.IndexStart = n
+			}
+		case "index_end":
+			if n, ok := asInt(val); ok {
+				out.IndexEnd = n
+			}
+		case "parameters":
+			if xs, ok := asAnySlice(val); ok {
+				out.Parameters = xs
 			}
 		}
 	}
