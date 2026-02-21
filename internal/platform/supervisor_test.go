@@ -157,3 +157,41 @@ func TestSupervisorRestartHook(t *testing.T) {
 	}
 	supervisor.StopAll()
 }
+
+func TestSupervisorOneForAllStopsSiblingTasksOnPermanentFailure(t *testing.T) {
+	stopped := make(chan struct{}, 1)
+	supervisor := NewSupervisorWithHooks(SupervisorPolicy{
+		InitialBackoff: time.Millisecond,
+		MaxBackoff:     time.Millisecond,
+		BackoffFactor:  1,
+		MaxRestarts:    1,
+		Strategy:       SupervisorStrategyOneForAll,
+	}, SupervisorHooks{})
+
+	if err := supervisor.Start("stable", func(ctx context.Context) error {
+		<-ctx.Done()
+		stopped <- struct{}{}
+		return ctx.Err()
+	}); err != nil {
+		t.Fatalf("start stable supervisor task: %v", err)
+	}
+	if err := supervisor.Start("failing", func(context.Context) error {
+		return errors.New("boom")
+	}); err != nil {
+		t.Fatalf("start failing supervisor task: %v", err)
+	}
+
+	select {
+	case <-stopped:
+	case <-time.After(300 * time.Millisecond):
+		t.Fatal("expected stable sibling task to be stopped by one_for_all strategy")
+	}
+	deadline := time.Now().Add(200 * time.Millisecond)
+	for time.Now().Before(deadline) {
+		if len(supervisor.Tasks()) == 0 {
+			return
+		}
+		time.Sleep(2 * time.Millisecond)
+	}
+	t.Fatalf("expected no running tasks after one_for_all failure, got=%v", supervisor.Tasks())
+}

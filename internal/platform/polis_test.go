@@ -808,6 +808,45 @@ func TestPolisRecordsSupervisorPermanentFailureWithoutEscalation(t *testing.T) {
 	}
 }
 
+func TestPolisOneForAllSupervisorStrategyStopsSiblingTasks(t *testing.T) {
+	stable := &supervisedTestSupportModule{
+		testSupportModule: testSupportModule{name: "stable-module"},
+	}
+	failing := &supervisedTestSupportModule{
+		testSupportModule: testSupportModule{name: "failing-module"},
+		failRuns:          1000,
+	}
+	p := NewPolis(Config{
+		Store:          storage.NewMemoryStore(),
+		SupportModules: []SupportModule{stable, failing},
+		SupervisorPolicy: SupervisorPolicy{
+			InitialBackoff: time.Millisecond,
+			MaxBackoff:     time.Millisecond,
+			BackoffFactor:  1,
+			MaxRestarts:    1,
+			Strategy:       SupervisorStrategyOneForAll,
+		},
+	})
+	if err := p.Init(context.Background()); err != nil {
+		t.Fatalf("init failed: %v", err)
+	}
+	waitForActiveSupervisedTaskCount(t, p, 0, 300*time.Millisecond)
+	if !p.Started() {
+		t.Fatal("expected polis to remain started without escalation")
+	}
+	if stable.superviseRuns.Load() == 0 {
+		t.Fatal("expected stable sibling module to have started before one_for_all stop")
+	}
+	failures := p.SupervisionFailures()
+	if len(failures) == 0 {
+		t.Fatal("expected supervision failure history")
+	}
+	last := failures[len(failures)-1]
+	if last.TaskName != supervisedSupportTaskName("failing-module") {
+		t.Fatalf("unexpected supervision failure task name: %s", last.TaskName)
+	}
+}
+
 func waitForAtLeastRuns(t *testing.T, counter *atomic.Int32, min int32, timeout time.Duration) {
 	t.Helper()
 	deadline := time.Now().Add(timeout)
@@ -842,6 +881,18 @@ func waitForMailboxState(t *testing.T, p *Polis, active bool, timeout time.Durat
 		time.Sleep(2 * time.Millisecond)
 	}
 	t.Fatalf("expected mailbox active=%t, got=%t", active, p.MailboxActive())
+}
+
+func waitForActiveSupervisedTaskCount(t *testing.T, p *Polis, want int, timeout time.Duration) {
+	t.Helper()
+	deadline := time.Now().Add(timeout)
+	for time.Now().Before(deadline) {
+		if len(p.ActiveSupervisedTasks()) == want {
+			return
+		}
+		time.Sleep(2 * time.Millisecond)
+	}
+	t.Fatalf("expected active supervised task count=%d, got=%d (%v)", want, len(p.ActiveSupervisedTasks()), p.ActiveSupervisedTasks())
 }
 
 func resetDefaultPolisForTest() {
