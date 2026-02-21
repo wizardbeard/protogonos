@@ -648,8 +648,8 @@ func TestScalarFitnessDominatesUsesRelativeThreshold(t *testing.T) {
 	if !scalarFitnessDominates(11.0001, 10.0, 0.1) {
 		t.Fatal("expected dominance when candidate exceeds incumbent*(1+mip)")
 	}
-	if !scalarFitnessDominates(-1.05, -1.0, 0.1) {
-		t.Fatal("expected dominance for less-negative candidate above negative threshold")
+	if !scalarFitnessDominates(-0.95, -1.0, 0.1) {
+		t.Fatal("expected dominance for monotonic improvement above relative threshold")
 	}
 	if scalarFitnessDominates(-1.11, -1.0, 0.1) {
 		t.Fatal("expected no dominance for worse candidate below negative threshold")
@@ -665,5 +665,55 @@ func TestVectorFitnessDominatesUsesPerElementRelativeThreshold(t *testing.T) {
 	}
 	if vectorFitnessDominates([]float64{1.0}, []float64{1.0, 2.0}, 0.1) {
 		t.Fatal("expected length mismatch to fail dominance")
+	}
+}
+
+func TestExoselfAttemptsStopAtConsecutiveNoImprovementBudget(t *testing.T) {
+	genome := model.Genome{
+		ID:       "g",
+		Synapses: []model.Synapse{{ID: "s", Weight: 0.2, Enabled: true}},
+	}
+	tuner := &Exoself{
+		Rand:               rand.New(rand.NewSource(71)),
+		Steps:              1,
+		StepSize:           0.2,
+		CandidateSelection: CandidateSelectOriginal,
+	}
+	_, report, err := tuner.TuneWithReport(context.Background(), genome, 3, func(context.Context, model.Genome) (float64, error) {
+		return 1.0, nil
+	})
+	if err != nil {
+		t.Fatalf("tune with report: %v", err)
+	}
+	if report.AttemptsExecuted != 3 {
+		t.Fatalf("expected attempts to stop at planned consecutive no-improvement budget, got=%d", report.AttemptsExecuted)
+	}
+}
+
+func TestExoselfAttemptsResetOnImprovement(t *testing.T) {
+	genome := model.Genome{
+		ID:       "g",
+		Synapses: []model.Synapse{{ID: "s", Weight: 0.2, Enabled: true}},
+	}
+	tuner := &Exoself{
+		Rand:               rand.New(rand.NewSource(73)),
+		Steps:              1,
+		StepSize:           0.2,
+		GoalFitness:        4.0,
+		CandidateSelection: CandidateSelectOriginal,
+	}
+	evals := 0
+	_, report, err := tuner.TuneWithReport(context.Background(), genome, 2, func(context.Context, model.Genome) (float64, error) {
+		evals++
+		return float64(evals), nil
+	})
+	if err != nil {
+		t.Fatalf("tune with report: %v", err)
+	}
+	if !report.GoalReached {
+		t.Fatalf("expected goal to be reached, report=%+v", report)
+	}
+	if report.AttemptsExecuted <= report.AttemptsPlanned {
+		t.Fatalf("expected improvement resets to allow attempts beyond planned budget, report=%+v", report)
 	}
 }
