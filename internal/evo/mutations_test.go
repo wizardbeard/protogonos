@@ -2517,6 +2517,92 @@ func TestMutatePFMutatesNeuronPlasticityRule(t *testing.T) {
 	}
 }
 
+func TestMutatePFResetsWeightParameterWidthsForRuleFamily(t *testing.T) {
+	genome := model.Genome{
+		Neurons: []model.Neuron{
+			{
+				ID:                   "n0",
+				Activation:           "identity",
+				Aggregator:           "dot_product",
+				PlasticityRule:       nn.PlasticityHebbian,
+				PlasticityRate:       0.2,
+				PlasticityBiasParams: []float64{0.25},
+			},
+		},
+		Synapses: []model.Synapse{
+			{
+				ID:               "s0",
+				From:             "n0",
+				To:               "n0",
+				Weight:           0.5,
+				Enabled:          true,
+				Recurrent:        true,
+				PlasticityParams: []float64{0.1},
+			},
+		},
+	}
+	op := &MutatePF{
+		Rand:  rand.New(rand.NewSource(2527)),
+		Rules: []string{nn.PlasticityHebbian, nn.PlasticitySelfModulationV6},
+	}
+	mutated, err := op.Apply(context.Background(), genome)
+	if err != nil {
+		t.Fatalf("apply failed: %v", err)
+	}
+	if mutated.Neurons[0].PlasticityRule != nn.PlasticitySelfModulationV6 {
+		t.Fatalf("expected mutate_pf to switch to self_modulationV6, got %q", mutated.Neurons[0].PlasticityRule)
+	}
+	if len(mutated.Synapses[0].PlasticityParams) != 5 {
+		t.Fatalf("expected self_modulationV6 synapse parameter width 5, got=%v", mutated.Synapses[0].PlasticityParams)
+	}
+	if len(mutated.Neurons[0].PlasticityBiasParams) != 5 {
+		t.Fatalf("expected self_modulationV6 bias parameter width 5, got=%v", mutated.Neurons[0].PlasticityBiasParams)
+	}
+}
+
+func TestMutatePFClearsWeightParametersForNonWeightRules(t *testing.T) {
+	genome := model.Genome{
+		Neurons: []model.Neuron{
+			{
+				ID:                   "n0",
+				Activation:           "identity",
+				Aggregator:           "dot_product",
+				PlasticityRule:       nn.PlasticitySelfModulationV6,
+				PlasticityRate:       0.2,
+				PlasticityBiasParams: []float64{0.1, -0.1, 0.2, -0.2, 0.3},
+			},
+		},
+		Synapses: []model.Synapse{
+			{
+				ID:               "s0",
+				From:             "n0",
+				To:               "n0",
+				Weight:           0.5,
+				Enabled:          true,
+				Recurrent:        true,
+				PlasticityParams: []float64{0.1, -0.1, 0.2, -0.2, 0.3},
+			},
+		},
+	}
+	op := &MutatePF{
+		Rand:  rand.New(rand.NewSource(2531)),
+		Rules: []string{nn.PlasticitySelfModulationV6, nn.PlasticityNeuromodulation},
+	}
+	mutated, err := op.Apply(context.Background(), genome)
+	if err != nil {
+		t.Fatalf("apply failed: %v", err)
+	}
+	if mutated.Neurons[0].PlasticityRule != nn.PlasticityNeuromodulation {
+		t.Fatalf("expected mutate_pf to switch to neuromodulation, got %q", mutated.Neurons[0].PlasticityRule)
+	}
+	if len(mutated.Synapses[0].PlasticityParams) != 0 {
+		t.Fatalf("expected neuromodulation synapse parameter width 0, got=%v", mutated.Synapses[0].PlasticityParams)
+	}
+	if len(mutated.Neurons[0].PlasticityBiasParams) != 0 {
+		t.Fatalf("expected neuromodulation bias parameter width 0, got=%v", mutated.Neurons[0].PlasticityBiasParams)
+	}
+}
+
 func TestMutatePlasticityParametersMutatesNeuronRate(t *testing.T) {
 	genome := randomGenome(rand.New(rand.NewSource(17)))
 	genome.Plasticity = &model.PlasticityConfig{

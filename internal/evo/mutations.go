@@ -1423,6 +1423,7 @@ func (o *MutatePF) Apply(_ context.Context, genome model.Genome) (model.Genome, 
 
 	mutated := cloneGenome(genome)
 	mutated.Neurons[idx].PlasticityRule = choices[o.Rand.Intn(len(choices))]
+	resetPlasticityWeightParameterVectors(&mutated, idx, mutated.Neurons[idx].PlasticityRule, o.Rand)
 	if mutated.Neurons[idx].PlasticityRate <= 0 {
 		mutated.Neurons[idx].PlasticityRate = neuronPlasticityRate(genome, idx)
 	}
@@ -2991,6 +2992,52 @@ func selfModulationParameterWidth(rule string) int {
 	default:
 		return 0
 	}
+}
+
+func plasticityWeightParameterWidth(rule string) int {
+	switch nn.NormalizePlasticityRuleName(rule) {
+	case nn.PlasticityHebbianW, nn.PlasticityOjaW:
+		return 1
+	default:
+		return selfModulationParameterWidth(rule)
+	}
+}
+
+func resetPlasticityWeightParameterVectors(genome *model.Genome, neuronIdx int, rule string, rng *rand.Rand) {
+	if genome == nil || rng == nil || neuronIdx < 0 || neuronIdx >= len(genome.Neurons) {
+		return
+	}
+	width := plasticityWeightParameterWidth(rule)
+	neuronID := genome.Neurons[neuronIdx].ID
+	if width <= 0 {
+		genome.Neurons[neuronIdx].PlasticityBiasParams = nil
+		for i := range genome.Synapses {
+			if genome.Synapses[i].To != neuronID {
+				continue
+			}
+			genome.Synapses[i].PlasticityParams = nil
+		}
+		return
+	}
+
+	genome.Neurons[neuronIdx].PlasticityBiasParams = randomPlasticityParams(width, rng)
+	for i := range genome.Synapses {
+		if genome.Synapses[i].To != neuronID {
+			continue
+		}
+		genome.Synapses[i].PlasticityParams = randomPlasticityParams(width, rng)
+	}
+}
+
+func randomPlasticityParams(width int, rng *rand.Rand) []float64 {
+	if width <= 0 || rng == nil {
+		return nil
+	}
+	params := make([]float64, width)
+	for i := 0; i < width; i++ {
+		params[i] = rng.Float64() - 0.5
+	}
+	return params
 }
 
 func selfModulationRuleUsesCoefficientMutation(rule string) bool {
