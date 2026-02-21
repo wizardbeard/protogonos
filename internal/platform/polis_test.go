@@ -583,6 +583,76 @@ func TestPolisGetScapeByTypeKeepsInsertionOrderAfterRemoval(t *testing.T) {
 	}
 }
 
+func TestPolisCallGetScapeByType(t *testing.T) {
+	ctx := context.Background()
+	public := &managedTestScape{testScape: testScape{name: "call-scape"}}
+	p := NewPolis(Config{
+		Store:        storage.NewMemoryStore(),
+		PublicScapes: []PublicScapeSpec{{Scape: public, Type: "call-type"}},
+	})
+	if _, err := p.Call(ctx, GetScapeCall{Type: "call-type"}); err == nil {
+		t.Fatal("expected call get_scape before init to fail")
+	}
+	if err := p.Init(ctx); err != nil {
+		t.Fatalf("init failed: %v", err)
+	}
+	out, err := p.Call(ctx, GetScapeCall{Type: "call-type"})
+	if err != nil {
+		t.Fatalf("call get_scape: %v", err)
+	}
+	result, ok := out.(GetScapeCallResult)
+	if !ok {
+		t.Fatalf("expected GetScapeCallResult, got %T", out)
+	}
+	if !result.Found || result.Scape != public {
+		t.Fatalf("unexpected call get_scape result: %+v", result)
+	}
+}
+
+func TestPolisCallAndCastStopReason(t *testing.T) {
+	ctx := context.Background()
+	module := &testSupportModule{name: "call-stop-module"}
+	p := NewPolis(Config{
+		Store:          storage.NewMemoryStore(),
+		SupportModules: []SupportModule{module},
+	})
+	if err := p.Cast(ctx, InitCast{}); err != nil {
+		t.Fatalf("cast init: %v", err)
+	}
+	if _, err := p.Call(ctx, StopCall{Reason: StopReasonShutdown}); err != nil {
+		t.Fatalf("call stop: %v", err)
+	}
+	if p.Started() {
+		t.Fatal("expected polis stopped by stop call")
+	}
+	if p.LastStopReason() != StopReasonShutdown {
+		t.Fatalf("expected call stop reason %q, got=%q", StopReasonShutdown, p.LastStopReason())
+	}
+	if module.stopReason != StopReasonShutdown {
+		t.Fatalf("expected module stop reason %q, got=%q", StopReasonShutdown, module.stopReason)
+	}
+
+	if err := p.Cast(ctx, InitCast{}); err != nil {
+		t.Fatalf("cast re-init: %v", err)
+	}
+	if err := p.Cast(ctx, StopCast{}); err != nil {
+		t.Fatalf("cast stop default: %v", err)
+	}
+	if p.LastStopReason() != StopReasonNormal {
+		t.Fatalf("expected cast default stop reason %q, got=%q", StopReasonNormal, p.LastStopReason())
+	}
+}
+
+func TestPolisCallCastRejectUnsupportedMessage(t *testing.T) {
+	p := NewPolis(Config{Store: storage.NewMemoryStore()})
+	if _, err := p.Call(context.Background(), nil); err == nil {
+		t.Fatal("expected nil call message to fail")
+	}
+	if err := p.Cast(context.Background(), nil); err == nil {
+		t.Fatal("expected nil cast message to fail")
+	}
+}
+
 func TestPolisStartWithSummaryDefaultsTypeToScapeName(t *testing.T) {
 	public := &managedTestScape{testScape: testScape{name: "fallback-type"}}
 	p := NewPolis(Config{

@@ -50,6 +50,41 @@ const (
 	StopReasonShutdown StopReason = "shutdown"
 )
 
+type CallMessage interface {
+	isPolisCallMessage()
+}
+
+type CastMessage interface {
+	isPolisCastMessage()
+}
+
+type GetScapeCall struct {
+	Type string
+}
+
+func (GetScapeCall) isPolisCallMessage() {}
+
+type StopCall struct {
+	Reason StopReason
+}
+
+func (StopCall) isPolisCallMessage() {}
+
+type GetScapeCallResult struct {
+	Scape scape.Scape
+	Found bool
+}
+
+type StopCast struct {
+	Reason StopReason
+}
+
+func (StopCast) isPolisCastMessage() {}
+
+type InitCast struct{}
+
+func (InitCast) isPolisCastMessage() {}
+
 type EvolutionConfig struct {
 	RunID                string
 	OpMode               string
@@ -457,6 +492,41 @@ func (p *Polis) GetScapeByType(scapeType string) (scape.Scape, bool) {
 		}
 	}
 	return nil, false
+}
+
+func (p *Polis) Call(ctx context.Context, msg CallMessage) (any, error) {
+	if msg == nil {
+		return nil, fmt.Errorf("call message is required")
+	}
+	switch req := msg.(type) {
+	case GetScapeCall:
+		p.mu.RLock()
+		started := p.started
+		p.mu.RUnlock()
+		if !started {
+			return GetScapeCallResult{}, fmt.Errorf("polis is not initialized")
+		}
+		sc, ok := p.GetScapeByType(req.Type)
+		return GetScapeCallResult{Scape: sc, Found: ok}, nil
+	case StopCall:
+		return nil, p.StopWithReason(req.Reason)
+	default:
+		return nil, fmt.Errorf("unsupported call message: %T", msg)
+	}
+}
+
+func (p *Polis) Cast(ctx context.Context, msg CastMessage) error {
+	if msg == nil {
+		return fmt.Errorf("cast message is required")
+	}
+	switch req := msg.(type) {
+	case StopCast:
+		return p.StopWithReason(req.Reason)
+	case InitCast:
+		return p.Init(ctx)
+	default:
+		return fmt.Errorf("unsupported cast message: %T", msg)
+	}
 }
 
 func (p *Polis) Stop() {
