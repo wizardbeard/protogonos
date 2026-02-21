@@ -1269,12 +1269,13 @@ func (o *MutatePlasticityParameters) Apply(_ context.Context, genome model.Genom
 	delta := (o.Rand.Float64()*2 - 1) * maxDelta
 	rule := nn.NormalizePlasticityRuleName(neuronPlasticityRule(genome, idx))
 	if width := selfModulationParameterWidth(rule); width > 0 {
-		if selfModulationRuleUsesCoefficientMutation(rule) && o.Rand.Intn(2) == 0 {
+		vectorMutated := mutateSelfModulationParameterVector(&mutated, genome, idx, width, delta, o.Rand)
+		if selfModulationRuleUsesCoefficientMutation(rule) {
 			mutateNeuronPlasticityCoefficients(&mutated, genome, idx, delta, o.Rand)
 			mutated.Neurons[idx].Generation = currentGenomeGeneration(mutated)
 			return mutated, nil
 		}
-		if ok := mutateSelfModulationParameterVector(&mutated, genome, idx, width, delta, o.Rand); ok {
+		if vectorMutated {
 			mutated.Neurons[idx].Generation = currentGenomeGeneration(mutated)
 			return mutated, nil
 		}

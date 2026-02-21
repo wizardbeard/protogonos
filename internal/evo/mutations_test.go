@@ -2645,6 +2645,82 @@ func TestMutatePlasticityParametersMutatesSelfModulationBiasVectorWhenNoIncoming
 	}
 }
 
+func TestMutatePlasticityParametersCoMutatesV3VectorsAndCoefficients(t *testing.T) {
+	genome := model.Genome{
+		Neurons: []model.Neuron{
+			{
+				ID:             "n0",
+				Activation:     "identity",
+				Aggregator:     "dot_product",
+				PlasticityRule: nn.PlasticitySelfModulationV3,
+				PlasticityRate: 0.2,
+				PlasticityA:    0.1,
+				PlasticityB:    0.2,
+				PlasticityC:    -0.1,
+				PlasticityD:    0.0,
+			},
+		},
+		Synapses: []model.Synapse{
+			{ID: "s0", From: "n0", To: "n0", Weight: 0.5, Enabled: true, Recurrent: true, PlasticityParams: []float64{0.3}},
+		},
+	}
+	op := &MutatePlasticityParameters{
+		Rand:     rand.New(rand.NewSource(2511)),
+		MaxDelta: 0.1,
+	}
+	mutated, err := op.Apply(context.Background(), genome)
+	if err != nil {
+		t.Fatalf("apply failed: %v", err)
+	}
+	if mutated.Neurons[0].PlasticityRate != genome.Neurons[0].PlasticityRate {
+		t.Fatalf("expected self-modulation V3 mutation to leave rate untouched, before=%f after=%f", genome.Neurons[0].PlasticityRate, mutated.Neurons[0].PlasticityRate)
+	}
+
+	vectorChanges := 0
+	beforeSyn := 0.0
+	if len(genome.Synapses[0].PlasticityParams) > 0 {
+		beforeSyn = genome.Synapses[0].PlasticityParams[0]
+	}
+	afterSyn := 0.0
+	if len(mutated.Synapses[0].PlasticityParams) > 0 {
+		afterSyn = mutated.Synapses[0].PlasticityParams[0]
+	}
+	if afterSyn != beforeSyn {
+		vectorChanges++
+	}
+	beforeBias := 0.0
+	if len(genome.Neurons[0].PlasticityBiasParams) > 0 {
+		beforeBias = genome.Neurons[0].PlasticityBiasParams[0]
+	}
+	afterBias := 0.0
+	if len(mutated.Neurons[0].PlasticityBiasParams) > 0 {
+		afterBias = mutated.Neurons[0].PlasticityBiasParams[0]
+	}
+	if afterBias != beforeBias {
+		vectorChanges++
+	}
+	if vectorChanges != 1 {
+		t.Fatalf("expected exactly one self-modulation V3 vector mutation, before syn=%v bias=%v after syn=%v bias=%v", genome.Synapses[0].PlasticityParams, genome.Neurons[0].PlasticityBiasParams, mutated.Synapses[0].PlasticityParams, mutated.Neurons[0].PlasticityBiasParams)
+	}
+
+	coefChanges := 0
+	if mutated.Neurons[0].PlasticityA != genome.Neurons[0].PlasticityA {
+		coefChanges++
+	}
+	if mutated.Neurons[0].PlasticityB != genome.Neurons[0].PlasticityB {
+		coefChanges++
+	}
+	if mutated.Neurons[0].PlasticityC != genome.Neurons[0].PlasticityC {
+		coefChanges++
+	}
+	if mutated.Neurons[0].PlasticityD != genome.Neurons[0].PlasticityD {
+		coefChanges++
+	}
+	if coefChanges != 1 {
+		t.Fatalf("expected exactly one self-modulation V3 coefficient mutation, before=%+v after=%+v", genome.Neurons[0], mutated.Neurons[0])
+	}
+}
+
 func TestMutatePFAndPlasticityParametersApplicableWithNeuronsOnly(t *testing.T) {
 	genome := randomGenome(rand.New(rand.NewSource(19)))
 	genome.Plasticity = nil
