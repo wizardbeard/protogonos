@@ -670,6 +670,56 @@ func TestClientRunValidationOpModeSkipsEvolutionAndTuning(t *testing.T) {
 	}
 }
 
+func TestClientRunValidationOpModeForcesTuningFlagsOffInArtifacts(t *testing.T) {
+	base := t.TempDir()
+	client, err := New(Options{
+		StoreKind:     "memory",
+		BenchmarksDir: filepath.Join(base, "benchmarks"),
+		ExportsDir:    filepath.Join(base, "exports"),
+	})
+	if err != nil {
+		t.Fatalf("new client: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = client.Close()
+	})
+
+	summary, err := client.Run(context.Background(), RunRequest{
+		Scape:             "xor",
+		Population:        8,
+		Generations:       3,
+		OpMode:            "validation",
+		EnableTuning:      true,
+		CompareTuning:     true,
+		TuneAttempts:      4,
+		TuneSteps:         3,
+		TuneStepSize:      0.25,
+		TuneDurationParam: 1.0,
+		Selection:         "elite",
+		WeightPerturb:     1.0,
+	})
+	if err != nil {
+		t.Fatalf("run: %v", err)
+	}
+	if summary.Compare != nil {
+		t.Fatalf("expected compare summary to be disabled outside gt mode, got %+v", summary.Compare)
+	}
+
+	runs, err := client.Runs(context.Background(), RunsRequest{Limit: 1})
+	if err != nil {
+		t.Fatalf("runs: %v", err)
+	}
+	if len(runs) != 1 {
+		t.Fatalf("expected one run entry, got %d", len(runs))
+	}
+	if runs[0].RunID != summary.RunID {
+		t.Fatalf("unexpected run id in index: got=%s want=%s", runs[0].RunID, summary.RunID)
+	}
+	if runs[0].TuningEnabled {
+		t.Fatal("expected tuning_enabled=false in run index for validation mode")
+	}
+}
+
 func TestClientRunStartPausedControls(t *testing.T) {
 	base := t.TempDir()
 	client, err := New(Options{

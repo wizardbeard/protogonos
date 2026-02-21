@@ -1102,6 +1102,10 @@ func materializeRunConfigFromRequest(req RunRequest) (materializedRunConfig, err
 	default:
 		return materializedRunConfig{}, errors.New("op mode must be one of gt|validation|test")
 	}
+	if req.OpMode != evo.OpModeGT {
+		req.EnableTuning = false
+		req.CompareTuning = false
+	}
 	if req.Scape == "" {
 		req.Scape = "xor"
 	}
