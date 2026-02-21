@@ -910,6 +910,12 @@ func TestBenchmarkCommandWritesSummary(t *testing.T) {
 	if summary.Scape != "xor" {
 		t.Fatalf("unexpected scape in summary: %s", summary.Scape)
 	}
+	if summary.BestMax < summary.BestMin {
+		t.Fatalf("expected best_max >= best_min, got max=%f min=%f", summary.BestMax, summary.BestMin)
+	}
+	if summary.BestStd < 0 {
+		t.Fatalf("expected non-negative best_std, got %f", summary.BestStd)
+	}
 }
 
 func TestBenchmarkCommandConfigLoadsMap2RecAndAllowsFlagOverrides(t *testing.T) {

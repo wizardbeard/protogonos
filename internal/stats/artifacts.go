@@ -106,6 +106,10 @@ type BenchmarkSummary struct {
 	Seed           int64   `json:"seed"`
 	InitialBest    float64 `json:"initial_best"`
 	FinalBest      float64 `json:"final_best"`
+	BestMean       float64 `json:"best_mean"`
+	BestStd        float64 `json:"best_std"`
+	BestMax        float64 `json:"best_max"`
+	BestMin        float64 `json:"best_min"`
 	Improvement    float64 `json:"improvement"`
 	MinImprovement float64 `json:"min_improvement"`
 	Passed         bool    `json:"passed"`

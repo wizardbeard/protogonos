@@ -6,6 +6,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"math"
 	"math/rand"
 	"os"
 	"path/filepath"
@@ -1133,6 +1134,7 @@ func runBenchmark(ctx context.Context, args []string) error {
 	}
 
 	initialBest := runSummary.BestByGeneration[0]
+	bestMean, bestStd, bestMax, bestMin := bestSeriesStats(runSummary.BestByGeneration)
 	improvement := runSummary.FinalBestFitness - initialBest
 	passed := improvement >= *minImprovement
 	report := stats.BenchmarkSummary{
@@ -1143,6 +1145,10 @@ func runBenchmark(ctx context.Context, args []string) error {
 		Seed:           req.Seed,
 		InitialBest:    initialBest,
 		FinalBest:      runSummary.FinalBestFitness,
+		BestMean:       bestMean,
+		BestStd:        bestStd,
+		BestMax:        bestMax,
+		BestMin:        bestMin,
 		Improvement:    improvement,
 		MinImprovement: *minImprovement,
 		Passed:         passed,
@@ -1151,17 +1157,47 @@ func runBenchmark(ctx context.Context, args []string) error {
 		return err
 	}
 
-	fmt.Printf("benchmark run_id=%s scape=%s initial_best=%.6f final_best=%.6f improvement=%.6f threshold=%.6f passed=%t\n",
+	fmt.Printf("benchmark run_id=%s scape=%s initial_best=%.6f final_best=%.6f mean_best=%.6f std_best=%.6f best_min=%.6f best_max=%.6f improvement=%.6f threshold=%.6f passed=%t\n",
 		runSummary.RunID,
 		req.Scape,
 		initialBest,
 		runSummary.FinalBestFitness,
+		bestMean,
+		bestStd,
+		bestMin,
+		bestMax,
 		improvement,
 		*minImprovement,
 		passed,
 	)
 	fmt.Printf("benchmark_summary=%s\n", filepath.Join(runSummary.ArtifactsDir, "benchmark_summary.json"))
 	return nil
+}
+
+func bestSeriesStats(values []float64) (mean, std, max, min float64) {
+	if len(values) == 0 {
+		return 0, 0, 0, 0
+	}
+	min = values[0]
+	max = values[0]
+	total := 0.0
+	for _, value := range values {
+		total += value
+		if value > max {
+			max = value
+		}
+		if value < min {
+			min = value
+		}
+	}
+	mean = total / float64(len(values))
+	sumSq := 0.0
+	for _, value := range values {
+		diff := mean - value
+		sumSq += diff * diff
+	}
+	std = math.Sqrt(sumSq / float64(len(values)))
+	return mean, std, max, min
 }
 
 func runProfile(_ context.Context, args []string) error {
