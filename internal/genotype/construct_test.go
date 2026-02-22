@@ -259,6 +259,41 @@ func TestConstructSeedNNCircuitModeStripsCircuitTagFromRelayAFPool(t *testing.T)
 	}
 }
 
+func TestConstructSeedNNWithActuatorVLBuildsMultipleOutputsPerActuator(t *testing.T) {
+	seed, err := ConstructSeedNNWithActuatorVL(
+		0,
+		[]string{"s1"},
+		[]string{"a1", "a2"},
+		map[string]int{
+			"a1": 2,
+			"a2": 1,
+		},
+		[]string{"sigmoid"},
+		[]string{"none"},
+		[]string{"dot_product"},
+		rand.New(rand.NewSource(23)),
+	)
+	if err != nil {
+		t.Fatalf("construct seed nn with vl: %v", err)
+	}
+	if len(seed.OutputNeuronIDs) != 3 {
+		t.Fatalf("expected 3 output neurons from vl map, got=%v", seed.OutputNeuronIDs)
+	}
+	if len(seed.NeuronActuatorLinks) != 3 {
+		t.Fatalf("expected 3 neuron-actuator links, got=%d", len(seed.NeuronActuatorLinks))
+	}
+	countByActuator := map[string]int{}
+	for _, link := range seed.NeuronActuatorLinks {
+		countByActuator[link.ActuatorID]++
+	}
+	if countByActuator["a1"] != 2 || countByActuator["a2"] != 1 {
+		t.Fatalf("unexpected link distribution by actuator: %v", countByActuator)
+	}
+	if len(seed.Synapses) != 3 {
+		t.Fatalf("expected one input synapse per output neuron, got=%d", len(seed.Synapses))
+	}
+}
+
 func TestGenerateIDsReturnsCountAndUniqueValues(t *testing.T) {
 	ids := GenerateIDs(4, rand.New(rand.NewSource(1)))
 	if len(ids) != 4 {

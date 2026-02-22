@@ -108,6 +108,37 @@ func TestConstructCortexRejectsUnknownMorphology(t *testing.T) {
 	}
 }
 
+func TestConstructCortexSupportsActuatorVectorLengths(t *testing.T) {
+	constraint := DefaultConstructConstraint()
+	constraint.Morphology = "xor"
+	constraint.ActuatorVectorLengths = map[string]int{
+		"xor_output": 3,
+	}
+	out, err := ConstructCortex(
+		"agent-vl",
+		0,
+		constraint,
+		"neural",
+		"none",
+		"l2l_feedforward",
+		rand.New(rand.NewSource(15)),
+	)
+	if err != nil {
+		t.Fatalf("construct cortex with actuator vl: %v", err)
+	}
+	if len(out.OutputNeuronIDs) != 3 {
+		t.Fatalf("expected 3 output neurons for xor_output vl=3, got=%v", out.OutputNeuronIDs)
+	}
+	if len(out.Genome.NeuronActuatorLinks) != 3 {
+		t.Fatalf("expected 3 neuron-actuator links, got=%v", out.Genome.NeuronActuatorLinks)
+	}
+	for _, link := range out.Genome.NeuronActuatorLinks {
+		if link.ActuatorID != "xor_output" {
+			t.Fatalf("expected all output links to xor_output, got=%+v", out.Genome.NeuronActuatorLinks)
+		}
+	}
+}
+
 func TestDefaultSubstrateDensities(t *testing.T) {
 	got := defaultSubstrateDensities(5)
 	want := []int{1, 1, 5, 5, 5}

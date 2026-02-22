@@ -20,6 +20,7 @@ type TopologicalMutationOption struct {
 // used by genotype construction helpers.
 type ConstructConstraint struct {
 	Morphology                string
+	ActuatorVectorLengths     map[string]int
 	NeuralAFs                 []string
 	NeuralPFNs                []string
 	NeuralAggrFs              []string
@@ -163,10 +164,11 @@ func ConstructCortex(
 
 	sensors := append([]string(nil), morph.Sensors()...)
 	actuators := append([]string(nil), morph.Actuators()...)
-	seed, err := ConstructSeedNN(
+	seed, err := ConstructSeedNNWithActuatorVL(
 		generation,
 		sensors,
 		actuators,
+		constraint.ActuatorVectorLengths,
 		constraint.NeuralAFs,
 		constraint.NeuralPFNs,
 		constraint.NeuralAggrFs,

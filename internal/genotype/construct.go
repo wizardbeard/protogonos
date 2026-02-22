@@ -52,6 +52,31 @@ func ConstructSeedNN(
 	neuralAggrFs []string,
 	rng *rand.Rand,
 ) (SeedNetwork, error) {
+	return ConstructSeedNNWithActuatorVL(
+		generation,
+		sensors,
+		actuators,
+		nil,
+		neuralAFs,
+		neuralPFs,
+		neuralAggrFs,
+		rng,
+	)
+}
+
+// ConstructSeedNNWithActuatorVL extends ConstructSeedNN with explicit
+// per-actuator vector-length hints, mirroring reference actuator.vl-driven
+// output-neuron multiplicity in non-circuit mode.
+func ConstructSeedNNWithActuatorVL(
+	generation int,
+	sensors []string,
+	actuators []string,
+	actuatorVectorLengths map[string]int,
+	neuralAFs []string,
+	neuralPFs []string,
+	neuralAggrFs []string,
+	rng *rand.Rand,
+) (SeedNetwork, error) {
 	rng = ensureRNG(rng)
 	uniqSensors := uniqueNonEmpty(sensors)
 	uniqActuators := uniqueNonEmpty(actuators)
@@ -145,28 +170,38 @@ func ConstructSeedNN(
 		}, nil
 	}
 
-	for i, actuatorID := range uniqActuators {
-		neuronID := fmt.Sprintf("L1:out:%d", i)
-		outputNeuronIDs = append(outputNeuronIDs, neuronID)
-		neuron, inboundSynapses, _, err := ConstructNeuron(
-			generation,
-			neuronID,
-			inputSpecs,
-			nil,
-			neuralAFs,
-			neuralPFs,
-			neuralAggrFs,
-			rng,
-		)
-		if err != nil {
-			return SeedNetwork{}, err
+	nextOutputIndex := 0
+	for _, actuatorID := range uniqActuators {
+		vectorLength := 1
+		if actuatorVectorLengths != nil {
+			if configured := actuatorVectorLengths[actuatorID]; configured > 0 {
+				vectorLength = configured
+			}
 		}
-		neurons = append(neurons, neuron)
-		synapses = append(synapses, inboundSynapses...)
-		actuatorLinks = append(actuatorLinks, model.NeuronActuatorLink{
-			NeuronID:   neuronID,
-			ActuatorID: actuatorID,
-		})
+		for i := 0; i < vectorLength; i++ {
+			neuronID := fmt.Sprintf("L1:out:%d", nextOutputIndex)
+			nextOutputIndex++
+			outputNeuronIDs = append(outputNeuronIDs, neuronID)
+			neuron, inboundSynapses, _, err := ConstructNeuron(
+				generation,
+				neuronID,
+				inputSpecs,
+				nil,
+				neuralAFs,
+				neuralPFs,
+				neuralAggrFs,
+				rng,
+			)
+			if err != nil {
+				return SeedNetwork{}, err
+			}
+			neurons = append(neurons, neuron)
+			synapses = append(synapses, inboundSynapses...)
+			actuatorLinks = append(actuatorLinks, model.NeuronActuatorLink{
+				NeuronID:   neuronID,
+				ActuatorID: actuatorID,
+			})
+		}
 	}
 
 	return SeedNetwork{
