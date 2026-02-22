@@ -12,6 +12,7 @@ import (
 const (
 	RecordTableGenome     = "genome"
 	RecordTablePopulation = "population"
+	RecordTableScape      = "scape"
 )
 
 type RecordKey struct {
@@ -32,6 +33,8 @@ func Read(ctx context.Context, store storage.Store, key RecordKey) (any, bool, e
 		return store.GetGenome(ctx, key.ID)
 	case RecordTablePopulation:
 		return store.GetPopulation(ctx, key.ID)
+	case RecordTableScape:
+		return store.GetScapeSummary(ctx, key.ID)
 	default:
 		return nil, false, fmt.Errorf("unsupported record table: %s", key.Table)
 	}
@@ -63,6 +66,13 @@ func Write(ctx context.Context, store storage.Store, record any) error {
 			return fmt.Errorf("record is required")
 		}
 		return store.SavePopulation(ctx, *rec)
+	case model.ScapeSummary:
+		return store.SaveScapeSummary(ctx, rec)
+	case *model.ScapeSummary:
+		if rec == nil {
+			return fmt.Errorf("record is required")
+		}
+		return store.SaveScapeSummary(ctx, *rec)
 	default:
 		return fmt.Errorf("unsupported record type: %T", record)
 	}
@@ -87,6 +97,8 @@ func Delete(ctx context.Context, store storage.Store, key RecordKey) error {
 		return store.DeleteGenome(ctx, key.ID)
 	case RecordTablePopulation:
 		return store.DeletePopulation(ctx, key.ID)
+	case RecordTableScape:
+		return fmt.Errorf("delete is not supported for record table: %s", key.Table)
 	default:
 		return fmt.Errorf("unsupported record table: %s", key.Table)
 	}

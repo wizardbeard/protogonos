@@ -94,6 +94,39 @@ func TestDirtyAliasesPopulationWrappers(t *testing.T) {
 	}
 }
 
+func TestReadWriteScapeSummaryWrappers(t *testing.T) {
+	ctx := context.Background()
+	store := storage.NewMemoryStore()
+	if err := store.Init(ctx); err != nil {
+		t.Fatalf("init store: %v", err)
+	}
+
+	summary := model.ScapeSummary{
+		VersionedRecord: model.VersionedRecord{SchemaVersion: 1, CodecVersion: 1},
+		Name:            "xor",
+		Description:     "xor scape",
+		BestFitness:     1.0,
+	}
+	if err := Write(ctx, store, summary); err != nil {
+		t.Fatalf("write scape summary: %v", err)
+	}
+
+	got, ok, err := Read(ctx, store, RecordKey{Table: RecordTableScape, ID: "xor"})
+	if err != nil {
+		t.Fatalf("read scape summary: %v", err)
+	}
+	if !ok {
+		t.Fatal("expected stored scape summary")
+	}
+	scape, ok := got.(model.ScapeSummary)
+	if !ok {
+		t.Fatalf("expected model.ScapeSummary result type, got %T", got)
+	}
+	if scape.Name != "xor" || scape.BestFitness != 1.0 {
+		t.Fatalf("unexpected scape summary result: %+v", scape)
+	}
+}
+
 func TestStoreWrappersValidateInputs(t *testing.T) {
 	ctx := context.Background()
 	store := storage.NewMemoryStore()
@@ -112,5 +145,8 @@ func TestStoreWrappersValidateInputs(t *testing.T) {
 	}
 	if err := Delete(ctx, store, RecordKey{Table: "unknown", ID: "x"}); err == nil {
 		t.Fatal("expected delete to fail for unsupported table")
+	}
+	if err := Delete(ctx, store, RecordKey{Table: RecordTableScape, ID: "xor"}); err == nil {
+		t.Fatal("expected delete to fail for scape table without delete support")
 	}
 }
