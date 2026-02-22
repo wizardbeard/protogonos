@@ -1359,11 +1359,46 @@ func TestPopulationMonitorSteadyStateEvolutionMode(t *testing.T) {
 	if len(result.SpeciesHistory) != 4 {
 		t.Fatalf("expected steady-state species history across 4 cycles, got %d", len(result.SpeciesHistory))
 	}
-	if len(result.Lineage) <= len(initial) {
-		t.Fatalf("expected offspring lineage records in steady-state mode, got=%d initial=%d", len(result.Lineage), len(initial))
+	expectedLineage := len(initial) + 4
+	if len(result.Lineage) != expectedLineage {
+		t.Fatalf("expected one offspring lineage record per steady-state cycle, got=%d want=%d", len(result.Lineage), expectedLineage)
 	}
 	if len(result.FinalPopulation) != len(initial) {
 		t.Fatalf("unexpected steady-state final population size: got=%d want=%d", len(result.FinalPopulation), len(initial))
+	}
+}
+
+func TestPopulationMonitorSteadyStateSingleReplacementPerCycle(t *testing.T) {
+	initial := []model.Genome{
+		newLinearGenome("g0", -1.0),
+		newLinearGenome("g1", -0.6),
+		newLinearGenome("g2", -0.2),
+		newLinearGenome("g3", 0.2),
+	}
+	cycles := 6
+	monitor, err := NewPopulationMonitor(MonitorConfig{
+		Scape:           oneDimScape{},
+		OpMode:          OpModeGT,
+		EvolutionType:   EvolutionTypeSteadyState,
+		Mutation:        PerturbWeightAt{Index: 0, Delta: 0.2},
+		PopulationSize:  len(initial),
+		EliteCount:      1,
+		Generations:     cycles,
+		Workers:         1,
+		Seed:            11,
+		InputNeuronIDs:  []string{"i"},
+		OutputNeuronIDs: []string{"o"},
+	})
+	if err != nil {
+		t.Fatalf("new monitor: %v", err)
+	}
+	result, err := monitor.Run(context.Background(), initial)
+	if err != nil {
+		t.Fatalf("run: %v", err)
+	}
+	expectedLineage := len(initial) + cycles
+	if len(result.Lineage) != expectedLineage {
+		t.Fatalf("expected steady-state lineage=%d (seed+one child per cycle), got=%d", expectedLineage, len(result.Lineage))
 	}
 }
 

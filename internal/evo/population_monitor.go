@@ -500,6 +500,9 @@ func (m *PopulationMonitor) nextSteadyStatePopulation(
 	speciesByGenomeID map[string]string,
 	generation int,
 ) ([]model.Genome, []LineageRecord, error) {
+	if len(ranked) == 0 {
+		return nil, nil, fmt.Errorf("steady-state population is empty")
+	}
 	parentPool := ranked
 	if m.cfg.SpecieSizeLimit > 0 {
 		parentPool = limitSpeciesParentPool(ranked, speciesByGenomeID, m.cfg.SpecieSizeLimit)
@@ -508,28 +511,34 @@ func (m *PopulationMonitor) nextSteadyStatePopulation(
 		}
 	}
 
-	next := make([]model.Genome, 0, m.cfg.PopulationSize)
-	lineage := make([]LineageRecord, 0, m.cfg.PopulationSize)
+	next := make([]model.Genome, len(ranked))
 	for i, item := range ranked {
-		if err := ctx.Err(); err != nil {
-			return nil, nil, err
-		}
-		speciesKey := speciesByGenomeID[item.Genome.ID]
-		speciesRanked := filterRankedBySpecies(parentPool, speciesByGenomeID, speciesKey)
-		if len(speciesRanked) == 0 {
-			speciesRanked = parentPool
-		}
-		parent, err := m.pickParentForSpecies(parentPool, speciesRanked, speciesByGenomeID, generation)
-		if err != nil {
-			return nil, nil, err
-		}
-		child, record, err := m.mutateFromParent(ctx, parent, generation, i)
-		if err != nil {
-			return nil, nil, err
-		}
-		next = append(next, child)
-		lineage = append(lineage, record)
+		next[i] = item.Genome
 	}
+
+	if err := ctx.Err(); err != nil {
+		return nil, nil, err
+	}
+
+	// Reference steady-state semantics replace one terminated agent at a time.
+	replacementIndex := m.rng.Intn(len(ranked))
+	replaced := ranked[replacementIndex]
+	speciesKey := speciesByGenomeID[replaced.Genome.ID]
+	speciesRanked := filterRankedBySpecies(parentPool, speciesByGenomeID, speciesKey)
+	if len(speciesRanked) == 0 {
+		speciesRanked = parentPool
+	}
+	parent, err := m.pickParentForSpecies(parentPool, speciesRanked, speciesByGenomeID, generation)
+	if err != nil {
+		return nil, nil, err
+	}
+	child, record, err := m.mutateFromParent(ctx, parent, generation, replacementIndex)
+	if err != nil {
+		return nil, nil, err
+	}
+	next[replacementIndex] = child
+	lineage := []LineageRecord{record}
+
 	return next, lineage, nil
 }
 
