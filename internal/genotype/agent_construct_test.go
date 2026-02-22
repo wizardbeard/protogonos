@@ -74,6 +74,18 @@ func TestConstructAgentMaterializesStrategyAndSubstrate(t *testing.T) {
 	if got := agent.Genome.Substrate.Parameters["dimensions"]; got < 3 {
 		t.Fatalf("expected stored optimal substrate dimension >= 3, got=%f", got)
 	}
+	if got := agent.Genome.Substrate.Parameters["cpp_count"]; got != 2 {
+		t.Fatalf("expected cpp_count=2 (xor sensors), got=%f", got)
+	}
+	if got := agent.Genome.Substrate.Parameters["cep_count"]; got != 1 {
+		t.Fatalf("expected cep_count=1 (xor actuators), got=%f", got)
+	}
+	if len(agent.SubstrateCPPIDs) != 2 || len(agent.SubstrateCEPIDs) != 1 {
+		t.Fatalf("expected substrate endpoint IDs in constructed agent, cpp=%v cep=%v", agent.SubstrateCPPIDs, agent.SubstrateCEPIDs)
+	}
+	if len(agent.SubstrateCPPIDs) > 0 && len(agent.SubstrateCPPIDs[0]) == 0 {
+		t.Fatalf("expected non-empty cpp id values: %v", agent.SubstrateCPPIDs)
+	}
 	if agent.Genome.Strategy == nil {
 		t.Fatal("expected strategy config to be materialized")
 	}
@@ -149,5 +161,20 @@ func TestDefaultSubstrateDensities(t *testing.T) {
 		if got[i] != want[i] {
 			t.Fatalf("unexpected densities at index %d: got=%v want=%v", i, got, want)
 		}
+	}
+}
+
+func TestConstructSubstrateEndpointIDs(t *testing.T) {
+	cpp, cep := constructSubstrateEndpointIDs(4, 2, 3)
+	if len(cpp) != 2 || len(cep) != 3 {
+		t.Fatalf("expected cpp=2 cep=3, got cpp=%v cep=%v", cpp, cep)
+	}
+	if cpp[0] != "substrate:cpp:d4:0" || cep[0] != "substrate:cep:d4:0" {
+		t.Fatalf("unexpected substrate endpoint naming, cpp=%v cep=%v", cpp, cep)
+	}
+
+	defaultCPP, defaultCEP := constructSubstrateEndpointIDs(0, 0, 0)
+	if len(defaultCPP) != 1 || len(defaultCEP) != 1 {
+		t.Fatalf("expected default endpoint counts 1/1, got cpp=%v cep=%v", defaultCPP, defaultCEP)
 	}
 }

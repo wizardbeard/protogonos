@@ -40,6 +40,8 @@ type ConstructedCortex struct {
 	InputNeuronIDs  []string
 	OutputNeuronIDs []string
 	Pattern         []PatternLayer
+	SubstrateCPPIDs []string
+	SubstrateCEPIDs []string
 }
 
 // ConstructedAgent is the Go analog return payload for construct_Agent/3.
@@ -58,6 +60,8 @@ type ConstructedAgent struct {
 	Pattern             []PatternLayer
 	InputNeuronIDs      []string
 	OutputNeuronIDs     []string
+	SubstrateCPPIDs     []string
+	SubstrateCEPIDs     []string
 }
 
 // DefaultConstructConstraint mirrors the reference default constraint intent in
@@ -139,6 +143,8 @@ func ConstructAgent(specieID, agentID string, constraint ConstructConstraint, rn
 		Pattern:             append([]PatternLayer(nil), cortex.Pattern...),
 		InputNeuronIDs:      append([]string(nil), cortex.InputNeuronIDs...),
 		OutputNeuronIDs:     append([]string(nil), cortex.OutputNeuronIDs...),
+		SubstrateCPPIDs:     append([]string(nil), cortex.SubstrateCPPIDs...),
+		SubstrateCEPIDs:     append([]string(nil), cortex.SubstrateCEPIDs...),
 	}, nil
 }
 
@@ -193,6 +199,8 @@ func ConstructCortex(
 		SensorLinks:         len(seed.SensorNeuronLinks),
 		ActuatorLinks:       len(seed.NeuronActuatorLinks),
 	}
+	var substrateCPPIDs []string
+	var substrateCEPIDs []string
 
 	if strings.EqualFold(strings.TrimSpace(encodingType), "substrate") {
 		formatInputs := make([]any, 0, len(sensors))
@@ -205,6 +213,7 @@ func ConstructCortex(
 		}
 		optimalDimension := CalculateOptimalSubstrateDimension(formatInputs, formatOutputs)
 		densities := defaultSubstrateDensities(optimalDimension)
+		substrateCPPIDs, substrateCEPIDs = constructSubstrateEndpointIDs(optimalDimension, len(sensors), len(actuators))
 		genome.Substrate = &model.SubstrateConfig{
 			CPPName:    strings.TrimSpace(substratePlasticity),
 			CEPName:    strings.TrimSpace(substrateLinkform),
@@ -213,6 +222,8 @@ func ConstructCortex(
 				"depth":      1,
 				"density":    5,
 				"dimensions": float64(optimalDimension),
+				"cpp_count":  float64(len(substrateCPPIDs)),
+				"cep_count":  float64(len(substrateCEPIDs)),
 			},
 		}
 	}
@@ -222,6 +233,8 @@ func ConstructCortex(
 		InputNeuronIDs:  append([]string(nil), seed.InputNeuronIDs...),
 		OutputNeuronIDs: append([]string(nil), seed.OutputNeuronIDs...),
 		Pattern:         append([]PatternLayer(nil), seed.Pattern...),
+		SubstrateCPPIDs: substrateCPPIDs,
+		SubstrateCEPIDs: substrateCEPIDs,
 	}, nil
 }
 
@@ -284,4 +297,25 @@ func defaultSubstrateDensities(dimension int) []int {
 		densities = append(densities, 5)
 	}
 	return densities
+}
+
+func constructSubstrateEndpointIDs(dimensions, cppCount, cepCount int) ([]string, []string) {
+	if dimensions <= 0 {
+		dimensions = 1
+	}
+	if cppCount <= 0 {
+		cppCount = 1
+	}
+	if cepCount <= 0 {
+		cepCount = 1
+	}
+	cppIDs := make([]string, 0, cppCount)
+	cepIDs := make([]string, 0, cepCount)
+	for i := 0; i < cppCount; i++ {
+		cppIDs = append(cppIDs, fmt.Sprintf("substrate:cpp:d%d:%d", dimensions, i))
+	}
+	for i := 0; i < cepCount; i++ {
+		cepIDs = append(cepIDs, fmt.Sprintf("substrate:cep:d%d:%d", dimensions, i))
+	}
+	return cppIDs, cepIDs
 }
