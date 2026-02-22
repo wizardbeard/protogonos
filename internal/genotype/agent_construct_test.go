@@ -92,6 +92,13 @@ func TestConstructAgentMaterializesStrategyAndSubstrate(t *testing.T) {
 	if len(agent.SubstrateCPPIDs) > 0 && len(agent.SubstrateCPPIDs[0]) == 0 {
 		t.Fatalf("expected non-empty cpp id values: %v", agent.SubstrateCPPIDs)
 	}
+	if len(agent.Genome.Substrate.CPPIDs) != 2 || len(agent.Genome.Substrate.CEPIDs) != 1 {
+		t.Fatalf("expected persisted substrate endpoint ids on genome, cpp=%v cep=%v", agent.Genome.Substrate.CPPIDs, agent.Genome.Substrate.CEPIDs)
+	}
+	if agent.Genome.Substrate.CPPIDs[0] != agent.SubstrateCPPIDs[0] || agent.Genome.Substrate.CEPIDs[0] != agent.SubstrateCEPIDs[0] {
+		t.Fatalf("expected constructed endpoint ids to match persisted substrate ids, constructed_cpp=%v genome_cpp=%v constructed_cep=%v genome_cep=%v",
+			agent.SubstrateCPPIDs, agent.Genome.Substrate.CPPIDs, agent.SubstrateCEPIDs, agent.Genome.Substrate.CEPIDs)
+	}
 	if len(agent.Genome.SensorIDs) != 2 || len(agent.Genome.ActuatorIDs) != 1 {
 		t.Fatalf("expected external morphology io ids (2 sensors/1 actuator), got sensors=%v actuators=%v", agent.Genome.SensorIDs, agent.Genome.ActuatorIDs)
 	}

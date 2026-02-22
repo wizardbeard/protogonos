@@ -41,6 +41,8 @@ func CloneGenome(g model.Genome) model.Genome {
 
 	if g.Substrate != nil {
 		sub := *g.Substrate
+		sub.CPPIDs = append([]string(nil), g.Substrate.CPPIDs...)
+		sub.CEPIDs = append([]string(nil), g.Substrate.CEPIDs...)
 		sub.Dimensions = append([]int(nil), g.Substrate.Dimensions...)
 		if g.Substrate.Parameters != nil {
 			sub.Parameters = make(map[string]float64, len(g.Substrate.Parameters))
@@ -112,10 +114,45 @@ func CloneGenomeWithRemappedIDs(g model.Genome, newID string, preserveNeuronIDs 
 		newSynapseID := nextUniqueCloneID(base, "sclone", i, usedSynapseIDs)
 		synapseIDMap[oldSynapseID] = newSynapseID
 	}
+	sensorIDMap := make(map[string]string)
+	actuatorIDMap := make(map[string]string)
+	if out.Substrate != nil {
+		usedCPPIDs := make(map[string]struct{}, len(out.Substrate.CPPIDs))
+		for i, oldID := range out.Substrate.CPPIDs {
+			if oldID == "" {
+				continue
+			}
+			if _, exists := sensorIDMap[oldID]; exists {
+				continue
+			}
+			sensorIDMap[oldID] = nextUniqueCloneID(base, "cppclone", i, usedCPPIDs)
+		}
+		for i, oldID := range out.Substrate.CPPIDs {
+			if mappedID, ok := sensorIDMap[oldID]; ok {
+				out.Substrate.CPPIDs[i] = mappedID
+			}
+		}
+
+		usedCEPIDs := make(map[string]struct{}, len(out.Substrate.CEPIDs))
+		for i, oldID := range out.Substrate.CEPIDs {
+			if oldID == "" {
+				continue
+			}
+			if _, exists := actuatorIDMap[oldID]; exists {
+				continue
+			}
+			actuatorIDMap[oldID] = nextUniqueCloneID(base, "cepclone", i, usedCEPIDs)
+		}
+		for i, oldID := range out.Substrate.CEPIDs {
+			if mappedID, ok := actuatorIDMap[oldID]; ok {
+				out.Substrate.CEPIDs[i] = mappedID
+			}
+		}
+	}
 	out.Neurons = CloneNeuronsWithIDMap(out.Neurons, neuronIDMap)
 	out.Synapses = CloneSynapsesWithIDMap(out.Synapses, synapseIDMap, neuronIDMap)
-	out.SensorNeuronLinks = CloneSensorLinksWithIDMap(out.SensorNeuronLinks, nil, neuronIDMap)
-	out.NeuronActuatorLinks = CloneActuatorLinksWithIDMap(out.NeuronActuatorLinks, nil, neuronIDMap)
+	out.SensorNeuronLinks = CloneSensorLinksWithIDMap(out.SensorNeuronLinks, sensorIDMap, neuronIDMap)
+	out.NeuronActuatorLinks = CloneActuatorLinksWithIDMap(out.NeuronActuatorLinks, actuatorIDMap, neuronIDMap)
 
 	return out
 }

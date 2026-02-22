@@ -45,6 +45,8 @@ type StrategyConfig struct {
 type SubstrateConfig struct {
 	CPPName     string             `json:"cpp_name"`
 	CEPName     string             `json:"cep_name"`
+	CPPIDs      []string           `json:"cpp_ids,omitempty"`
+	CEPIDs      []string           `json:"cep_ids,omitempty"`
 	Dimensions  []int              `json:"dimensions"`
 	Parameters  map[string]float64 `json:"parameters"`
 	WeightCount int                `json:"weight_count"`

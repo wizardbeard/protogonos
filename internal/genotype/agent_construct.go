@@ -252,6 +252,8 @@ func ConstructCortex(
 		genome.Substrate = &model.SubstrateConfig{
 			CPPName:    strings.TrimSpace(substratePlasticity),
 			CEPName:    strings.TrimSpace(substrateLinkform),
+			CPPIDs:     append([]string(nil), substrateCPPIDs...),
+			CEPIDs:     append([]string(nil), substrateCEPIDs...),
 			Dimensions: substrateDensities,
 			Parameters: map[string]float64{
 				"depth":          1,

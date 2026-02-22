@@ -20,6 +20,8 @@ func TestCloneGenomeDeepCopy(t *testing.T) {
 		},
 		Substrate: &model.SubstrateConfig{
 			CPPName:    "set_weight",
+			CPPIDs:     []string{"substrate:cpp:d3:0"},
+			CEPIDs:     []string{"substrate:cep:d3:0"},
 			Parameters: map[string]float64{"scale": 1},
 		},
 		Plasticity: &model.PlasticityConfig{Rule: "hebbian", Rate: 0.1},
@@ -31,6 +33,8 @@ func TestCloneGenomeDeepCopy(t *testing.T) {
 	out.Synapses[0].PlasticityParams[0] = 9
 	out.ActuatorTunables["a"] = 0.75
 	out.Substrate.Parameters["scale"] = 2
+	out.Substrate.CPPIDs[0] = "substrate:cpp:d3:99"
+	out.Substrate.CEPIDs[0] = "substrate:cep:d3:99"
 
 	if in.Neurons[0].Activation != "identity" {
 		t.Fatal("expected original neuron slice to remain unchanged")
@@ -40,6 +44,9 @@ func TestCloneGenomeDeepCopy(t *testing.T) {
 	}
 	if in.Substrate.Parameters["scale"] != 1 {
 		t.Fatal("expected original substrate map to remain unchanged")
+	}
+	if in.Substrate.CPPIDs[0] != "substrate:cpp:d3:0" || in.Substrate.CEPIDs[0] != "substrate:cep:d3:0" {
+		t.Fatal("expected original substrate endpoint id slices to remain unchanged")
 	}
 	if in.ActuatorTunables["a"] != 0.25 {
 		t.Fatal("expected original actuator tunable map to remain unchanged")

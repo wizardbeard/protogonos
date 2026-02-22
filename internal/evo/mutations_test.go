@@ -1823,6 +1823,33 @@ func TestAddRandomCPPRequiresSubstrateConfig(t *testing.T) {
 			t.Fatalf("expected synchronized sensor link counter, count=%d explicit=%d", mutated.SensorLinks, len(mutated.SensorNeuronLinks))
 		}
 	}
+
+	cppEndpointsOnly := model.Genome{
+		Neurons: genome.Neurons,
+		Substrate: &model.SubstrateConfig{
+			CPPName:    substrate.DefaultCPPName,
+			CEPName:    substrate.DefaultCEPName,
+			CPPIDs:     []string{"substrate:cpp:d3:0"},
+			Dimensions: []int{1, 1, 5},
+			Parameters: map[string]float64{},
+		},
+	}
+	mutatedCPPOnly, err := op.Apply(context.Background(), cppEndpointsOnly)
+	if len(availableCPPChoices(cppEndpointsOnly)) == 0 {
+		if !errors.Is(err, ErrNoMutationChoice) {
+			t.Fatalf("expected exhausted cpp choices error for cpp-endpoint-only substrate, got %v", err)
+		}
+	} else {
+		if err != nil {
+			t.Fatalf("apply with cpp-endpoint-only substrate failed: %v", err)
+		}
+		if len(mutatedCPPOnly.SensorNeuronLinks) != 1 {
+			t.Fatalf("expected one scaffold link for cpp-endpoint-only substrate, got=%v", mutatedCPPOnly.SensorNeuronLinks)
+		}
+		if mutatedCPPOnly.SensorNeuronLinks[0].SensorID != cppEndpointsOnly.Substrate.CPPIDs[0] {
+			t.Fatalf("expected scaffold link from substrate cpp endpoint %q, got link=%+v", cppEndpointsOnly.Substrate.CPPIDs[0], mutatedCPPOnly.SensorNeuronLinks[0])
+		}
+	}
 }
 
 func TestAddRandomCEPRequiresSubstrateConfig(t *testing.T) {

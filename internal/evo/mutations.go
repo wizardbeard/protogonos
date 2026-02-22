@@ -2132,9 +2132,10 @@ func (o *AddRandomCPP) Apply(_ context.Context, genome model.Genome) (model.Geno
 	}
 	// In the simplified model, approximate CPP structural growth by adding one
 	// extra sensor->neuron endpoint link when such a connection is available.
-	if len(mutated.Neurons) > 0 && len(mutated.SensorIDs) > 0 {
+	cppSensorIDs := substrateCPPOrSensorIDs(mutated)
+	if len(mutated.Neurons) > 0 && len(cppSensorIDs) > 0 {
 		toCandidates := filterNeuronIDs(mutated, nil)
-		sensorPairs := availableSensorToNeuronPairs(mutated, toCandidates)
+		sensorPairs := availableSensorToNeuronPairsFromSensors(mutated, cppSensorIDs, toCandidates)
 		if len(sensorPairs) > 0 {
 			mutated.SensorNeuronLinks = append(mutated.SensorNeuronLinks, sensorPairs[o.Rand.Intn(len(sensorPairs))])
 			syncIOLinkCounts(&mutated)
@@ -2788,15 +2789,19 @@ func availableInlinkNeuronPairs(genome model.Genome, fromCandidates, toCandidate
 }
 
 func availableSensorToNeuronPairs(genome model.Genome, toCandidates []string) []model.SensorNeuronLink {
-	if len(genome.SensorIDs) == 0 || len(toCandidates) == 0 {
+	return availableSensorToNeuronPairsFromSensors(genome, genome.SensorIDs, toCandidates)
+}
+
+func availableSensorToNeuronPairsFromSensors(genome model.Genome, sensorIDs, toCandidates []string) []model.SensorNeuronLink {
+	if len(sensorIDs) == 0 || len(toCandidates) == 0 {
 		return nil
 	}
 	targetSet := make(map[string]struct{}, len(toCandidates))
 	for _, id := range toCandidates {
 		targetSet[id] = struct{}{}
 	}
-	pairs := make([]model.SensorNeuronLink, 0, len(genome.SensorIDs)*len(toCandidates))
-	for _, sensorID := range uniqueStrings(genome.SensorIDs) {
+	pairs := make([]model.SensorNeuronLink, 0, len(sensorIDs)*len(toCandidates))
+	for _, sensorID := range uniqueStrings(sensorIDs) {
 		for _, neuronID := range toCandidates {
 			if _, ok := targetSet[neuronID]; !ok {
 				continue
@@ -2811,6 +2816,13 @@ func availableSensorToNeuronPairs(genome model.Genome, toCandidates []string) []
 		}
 	}
 	return pairs
+}
+
+func substrateCPPOrSensorIDs(genome model.Genome) []string {
+	if genome.Substrate != nil && len(genome.Substrate.CPPIDs) > 0 {
+		return uniqueStrings(genome.Substrate.CPPIDs)
+	}
+	return uniqueStrings(genome.SensorIDs)
 }
 
 func hasDirectedSynapse(g model.Genome, from, to string) bool {

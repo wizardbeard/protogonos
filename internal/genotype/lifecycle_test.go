@@ -221,6 +221,56 @@ func TestCloneAgentWithRemappedIDs(t *testing.T) {
 	}
 }
 
+func TestCloneAgentWithRemappedIDsRemapsSubstrateEndpointIDs(t *testing.T) {
+	in := model.Genome{
+		ID: "g1",
+		Neurons: []model.Neuron{
+			{ID: "i", Activation: "identity"},
+			{ID: "h", Activation: "tanh"},
+			{ID: "o", Activation: "identity"},
+		},
+		Synapses: []model.Synapse{
+			{ID: "s1", From: "i", To: "h", Weight: 0.5, Enabled: true},
+			{ID: "s2", From: "h", To: "o", Weight: 1.0, Enabled: true},
+		},
+		SensorNeuronLinks: []model.SensorNeuronLink{
+			{SensorID: "substrate:cpp:d3:0", NeuronID: "h"},
+		},
+		NeuronActuatorLinks: []model.NeuronActuatorLink{
+			{NeuronID: "h", ActuatorID: "substrate:cep:d3:0"},
+		},
+		Substrate: &model.SubstrateConfig{
+			CPPName: "none",
+			CEPName: "l2l_feedforward",
+			CPPIDs:  []string{"substrate:cpp:d3:0"},
+			CEPIDs:  []string{"substrate:cep:d3:0"},
+		},
+	}
+
+	clone := CloneAgentWithRemappedIDs(in, "g2", []string{"i", "o"})
+	if clone.Substrate == nil {
+		t.Fatal("expected substrate config on clone")
+	}
+	if clone.Substrate.CPPIDs[0] == in.Substrate.CPPIDs[0] {
+		t.Fatalf("expected substrate cpp id remap, original=%q clone=%q", in.Substrate.CPPIDs[0], clone.Substrate.CPPIDs[0])
+	}
+	if clone.Substrate.CEPIDs[0] == in.Substrate.CEPIDs[0] {
+		t.Fatalf("expected substrate cep id remap, original=%q clone=%q", in.Substrate.CEPIDs[0], clone.Substrate.CEPIDs[0])
+	}
+	if clone.SensorNeuronLinks[0].SensorID != clone.Substrate.CPPIDs[0] {
+		t.Fatalf("expected sensor link sensor id remap to cloned cpp id, link=%+v cpp=%v", clone.SensorNeuronLinks[0], clone.Substrate.CPPIDs)
+	}
+	if clone.NeuronActuatorLinks[0].ActuatorID != clone.Substrate.CEPIDs[0] {
+		t.Fatalf("expected actuator link endpoint remap to cloned cep id, link=%+v cep=%v", clone.NeuronActuatorLinks[0], clone.Substrate.CEPIDs)
+	}
+	if clone.NeuronActuatorLinks[0].NeuronID != clone.Neurons[1].ID {
+		t.Fatalf("expected actuator link neuron remap to hidden neuron id=%q, got=%q", clone.Neurons[1].ID, clone.NeuronActuatorLinks[0].NeuronID)
+	}
+	if in.SensorNeuronLinks[0].SensorID != "substrate:cpp:d3:0" || in.NeuronActuatorLinks[0].ActuatorID != "substrate:cep:d3:0" {
+		t.Fatal("expected original substrate endpoint links to remain unchanged")
+	}
+}
+
 func TestCloneAgentAutoID(t *testing.T) {
 	in := model.Genome{
 		ID: "g1",
