@@ -18,6 +18,110 @@ type InputSpec struct {
 	Width  int
 }
 
+// PatternLayer mirrors genotype:create_InitPattern/1 grouping by layer index.
+type PatternLayer struct {
+	Layer     float64
+	NeuronIDs []string
+}
+
+// SeedNetwork captures the initial topology scaffold produced by ConstructSeedNN.
+type SeedNetwork struct {
+	Neurons             []model.Neuron
+	Synapses            []model.Synapse
+	SensorNeuronLinks   []model.SensorNeuronLink
+	NeuronActuatorLinks []model.NeuronActuatorLink
+	InputNeuronIDs      []string
+	OutputNeuronIDs     []string
+	Pattern             []PatternLayer
+}
+
+// ConstructSeedNN is a Go analog of genotype:construct_SeedNN/6 for the
+// non-circuit baseline path: one input neuron per sensor and one output neuron
+// per actuator, fully connected input->output.
+func ConstructSeedNN(
+	generation int,
+	sensors []string,
+	actuators []string,
+	neuralAFs []string,
+	neuralPFs []string,
+	neuralAggrFs []string,
+	rng *rand.Rand,
+) (SeedNetwork, error) {
+	rng = ensureRNG(rng)
+	uniqSensors := uniqueNonEmpty(sensors)
+	uniqActuators := uniqueNonEmpty(actuators)
+	if len(uniqSensors) == 0 {
+		return SeedNetwork{}, fmt.Errorf("at least one sensor is required")
+	}
+	if len(uniqActuators) == 0 {
+		return SeedNetwork{}, fmt.Errorf("at least one actuator is required")
+	}
+
+	inputNeuronIDs := make([]string, 0, len(uniqSensors))
+	outputNeuronIDs := make([]string, 0, len(uniqActuators))
+	neurons := make([]model.Neuron, 0, len(uniqSensors)+len(uniqActuators))
+	synapses := make([]model.Synapse, 0, len(uniqSensors)*len(uniqActuators))
+	sensorLinks := make([]model.SensorNeuronLink, 0, len(uniqSensors))
+	actuatorLinks := make([]model.NeuronActuatorLink, 0, len(uniqActuators))
+
+	for i, sensorID := range uniqSensors {
+		neuronID := fmt.Sprintf("L0:in:%d", i)
+		inputNeuronIDs = append(inputNeuronIDs, neuronID)
+		neurons = append(neurons, model.Neuron{
+			ID:         neuronID,
+			Generation: generation,
+			Activation: "identity",
+			Aggregator: "none",
+		})
+		sensorLinks = append(sensorLinks, model.SensorNeuronLink{
+			SensorID: sensorID,
+			NeuronID: neuronID,
+		})
+	}
+
+	inputSpecs := make([]InputSpec, 0, len(inputNeuronIDs))
+	for _, inputID := range inputNeuronIDs {
+		inputSpecs = append(inputSpecs, InputSpec{FromID: inputID, Width: 1})
+	}
+
+	for i, actuatorID := range uniqActuators {
+		neuronID := fmt.Sprintf("L1:out:%d", i)
+		outputNeuronIDs = append(outputNeuronIDs, neuronID)
+		neuron, inboundSynapses, _, err := ConstructNeuron(
+			generation,
+			neuronID,
+			inputSpecs,
+			nil,
+			neuralAFs,
+			neuralPFs,
+			neuralAggrFs,
+			rng,
+		)
+		if err != nil {
+			return SeedNetwork{}, err
+		}
+		neurons = append(neurons, neuron)
+		synapses = append(synapses, inboundSynapses...)
+		actuatorLinks = append(actuatorLinks, model.NeuronActuatorLink{
+			NeuronID:   neuronID,
+			ActuatorID: actuatorID,
+		})
+	}
+
+	return SeedNetwork{
+		Neurons:             neurons,
+		Synapses:            synapses,
+		SensorNeuronLinks:   sensorLinks,
+		NeuronActuatorLinks: actuatorLinks,
+		InputNeuronIDs:      inputNeuronIDs,
+		OutputNeuronIDs:     outputNeuronIDs,
+		Pattern: []PatternLayer{
+			{Layer: 0, NeuronIDs: append([]string(nil), inputNeuronIDs...)},
+			{Layer: 1, NeuronIDs: append([]string(nil), outputNeuronIDs...)},
+		},
+	}, nil
+}
+
 // ConstructNeuron is a Go analog of genotype:construct_Neuron/6.
 // It returns the constructed neuron, generated inbound synapses, and
 // reference-style recurrent-output IDs derived from output layer ordering.
@@ -291,4 +395,24 @@ func sanitizeID(id string) string {
 	id = strings.TrimSpace(id)
 	replacer := strings.NewReplacer(":", "_", "|", "_", "/", "_", " ", "_")
 	return replacer.Replace(id)
+}
+
+func uniqueNonEmpty(values []string) []string {
+	if len(values) == 0 {
+		return nil
+	}
+	seen := make(map[string]struct{}, len(values))
+	out := make([]string, 0, len(values))
+	for _, value := range values {
+		value = strings.TrimSpace(value)
+		if value == "" {
+			continue
+		}
+		if _, ok := seen[value]; ok {
+			continue
+		}
+		seen[value] = struct{}{}
+		out = append(out, value)
+	}
+	return out
 }

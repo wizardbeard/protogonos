@@ -130,3 +130,54 @@ func TestConstructNeuronValidatesNeuronID(t *testing.T) {
 		t.Fatal("expected validation error for empty neuron id")
 	}
 }
+
+func TestConstructSeedNNBuildsLayeredScaffold(t *testing.T) {
+	seed, err := ConstructSeedNN(
+		2,
+		[]string{"s1", "s2", "s1"},
+		[]string{"a1"},
+		[]string{"sigmoid"},
+		[]string{"hebbian_w"},
+		[]string{"dot_product"},
+		rand.New(rand.NewSource(13)),
+	)
+	if err != nil {
+		t.Fatalf("construct seed nn: %v", err)
+	}
+	if len(seed.InputNeuronIDs) != 2 {
+		t.Fatalf("expected two deduplicated input neurons, got=%v", seed.InputNeuronIDs)
+	}
+	if len(seed.OutputNeuronIDs) != 1 {
+		t.Fatalf("expected one output neuron, got=%v", seed.OutputNeuronIDs)
+	}
+	if len(seed.Neurons) != 3 {
+		t.Fatalf("expected 3 total neurons (2 input + 1 output), got=%d", len(seed.Neurons))
+	}
+	if len(seed.Synapses) != 2 {
+		t.Fatalf("expected full input->output synapses, got=%d", len(seed.Synapses))
+	}
+	if len(seed.SensorNeuronLinks) != 2 {
+		t.Fatalf("expected one sensor link per sensor, got=%d", len(seed.SensorNeuronLinks))
+	}
+	if len(seed.NeuronActuatorLinks) != 1 {
+		t.Fatalf("expected one actuator link per actuator, got=%d", len(seed.NeuronActuatorLinks))
+	}
+	if len(seed.Pattern) != 2 {
+		t.Fatalf("expected 2-layer init pattern, got=%v", seed.Pattern)
+	}
+	if seed.Pattern[0].Layer != 0 || seed.Pattern[1].Layer != 1 {
+		t.Fatalf("unexpected layer pattern ordering: %v", seed.Pattern)
+	}
+	if len(seed.Pattern[0].NeuronIDs) != len(seed.InputNeuronIDs) || len(seed.Pattern[1].NeuronIDs) != len(seed.OutputNeuronIDs) {
+		t.Fatalf("pattern neuron cardinality mismatch: pattern=%v", seed.Pattern)
+	}
+}
+
+func TestConstructSeedNNValidatesRequiredSensorsAndActuators(t *testing.T) {
+	if _, err := ConstructSeedNN(0, nil, []string{"a1"}, nil, nil, nil, rand.New(rand.NewSource(1))); err == nil {
+		t.Fatal("expected validation error for missing sensors")
+	}
+	if _, err := ConstructSeedNN(0, []string{"s1"}, nil, nil, nil, nil, rand.New(rand.NewSource(1))); err == nil {
+		t.Fatal("expected validation error for missing actuators")
+	}
+}
