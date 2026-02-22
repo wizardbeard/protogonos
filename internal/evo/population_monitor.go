@@ -356,6 +356,7 @@ func (m *PopulationMonitor) Run(ctx context.Context, initial []model.Genome) (Ru
 	speciesHistory := make([]SpeciesGeneration, 0, m.cfg.Generations)
 	lineage := make([]LineageRecord, 0, len(initial)*(m.cfg.Generations+1))
 	prevSpeciesSet := map[string]struct{}{}
+	evoHistoryByGenomeID := initializeEvoHistoryByGenomeID(population)
 	for _, genome := range population {
 		sig := ComputeGenomeSignature(genome)
 		operation := "seed"
@@ -404,7 +405,7 @@ func (m *PopulationMonitor) Run(ctx context.Context, initial []model.Genome) (Ru
 		})
 		m.totalEvaluations += countTrue(countedEvaluations)
 		bestHistory = append(bestHistory, scored[0].Fitness)
-		speciesByGenomeID, speciationStats := m.assignSpecies(scored)
+		speciesByGenomeID, speciationStats := m.assignSpecies(scored, evoHistoryByGenomeID)
 		generationDiagnostics := summarizeGeneration(scored, logicalGeneration+1, speciationStats, tuningStats)
 		diagnostics = append(diagnostics, generationDiagnostics)
 		m.recordGenerationDiagnostics(generationDiagnostics)
@@ -441,6 +442,7 @@ func (m *PopulationMonitor) Run(ctx context.Context, initial []model.Genome) (Ru
 			return RunResult{}, err
 		}
 		lineage = append(lineage, generationLineage...)
+		evoHistoryByGenomeID = evolveHistoryByGenomeID(population, generationLineage, evoHistoryByGenomeID)
 	}
 
 	result := RunResult{
@@ -463,6 +465,7 @@ func (m *PopulationMonitor) runSteadyState(ctx context.Context, initial []model.
 	speciesHistory := make([]SpeciesGeneration, 0, m.cfg.Generations)
 	lineage := make([]LineageRecord, 0, len(initial)*(m.cfg.Generations+1))
 	prevSpeciesSet := map[string]struct{}{}
+	evoHistoryByGenomeID := initializeEvoHistoryByGenomeID(population)
 	for _, genome := range population {
 		sig := ComputeGenomeSignature(genome)
 		operation := "seed"
@@ -512,7 +515,7 @@ func (m *PopulationMonitor) runSteadyState(ctx context.Context, initial []model.
 		finalScored = ranked
 		m.totalEvaluations += countTrue(countedEvaluations)
 		bestHistory = append(bestHistory, ranked[0].Fitness)
-		speciesByGenomeID, speciationStats := m.assignSpecies(ranked)
+		speciesByGenomeID, speciationStats := m.assignSpecies(ranked, evoHistoryByGenomeID)
 		generationDiagnostics := summarizeGeneration(ranked, logicalGeneration+1, speciationStats, tuningStats)
 		diagnostics = append(diagnostics, generationDiagnostics)
 		m.recordGenerationDiagnostics(generationDiagnostics)
@@ -550,6 +553,7 @@ func (m *PopulationMonitor) runSteadyState(ctx context.Context, initial []model.
 		}
 		population = nextPopulation
 		lineage = append(lineage, generationLineage...)
+		evoHistoryByGenomeID = evolveHistoryByGenomeID(population, generationLineage, evoHistoryByGenomeID)
 	}
 
 	result := RunResult{
@@ -1020,7 +1024,7 @@ func countTrue(values []bool) int {
 	return total
 }
 
-func (m *PopulationMonitor) assignSpecies(scored []ScoredGenome) (map[string]string, SpeciationStats) {
+func (m *PopulationMonitor) assignSpecies(scored []ScoredGenome, evoHistoryByGenomeID map[string][]genotype.EvoHistoryEvent) (map[string]string, SpeciationStats) {
 	genomes := make([]model.Genome, 0, len(scored))
 	for _, item := range scored {
 		genomes = append(genomes, item.Genome)
@@ -1031,7 +1035,7 @@ func (m *PopulationMonitor) assignSpecies(scored []ScoredGenome) (map[string]str
 	)
 	switch m.cfg.SpeciationMode {
 	case SpeciationModeFingerprint:
-		bySpecies = genotype.SpeciateByFingerprint(genomes)
+		bySpecies = genotype.SpeciateByFingerprintWithHistory(genomes, evoHistoryByGenomeID)
 		stats = summarizeStaticSpeciation(bySpecies)
 	default:
 		if m.speciation == nil {
@@ -1046,6 +1050,86 @@ func (m *PopulationMonitor) assignSpecies(scored []ScoredGenome) (map[string]str
 		}
 	}
 	return speciesByGenomeID, stats
+}
+
+func initializeEvoHistoryByGenomeID(population []model.Genome) map[string][]genotype.EvoHistoryEvent {
+	out := make(map[string][]genotype.EvoHistoryEvent, len(population))
+	for _, genome := range population {
+		id := strings.TrimSpace(genome.ID)
+		if id == "" {
+			continue
+		}
+		out[id] = nil
+	}
+	return out
+}
+
+func evolveHistoryByGenomeID(
+	nextPopulation []model.Genome,
+	generationLineage []LineageRecord,
+	previous map[string][]genotype.EvoHistoryEvent,
+) map[string][]genotype.EvoHistoryEvent {
+	next := make(map[string][]genotype.EvoHistoryEvent, len(nextPopulation))
+	lineageByGenomeID := make(map[string]LineageRecord, len(generationLineage))
+	for _, record := range generationLineage {
+		genomeID := strings.TrimSpace(record.GenomeID)
+		if genomeID == "" {
+			continue
+		}
+		lineageByGenomeID[genomeID] = record
+	}
+
+	for _, genome := range nextPopulation {
+		genomeID := strings.TrimSpace(genome.ID)
+		if genomeID == "" {
+			continue
+		}
+		record, ok := lineageByGenomeID[genomeID]
+		if !ok {
+			next[genomeID] = cloneEvoHistory(previous[genomeID])
+			continue
+		}
+		parentID := strings.TrimSpace(record.ParentID)
+		history := cloneEvoHistory(previous[parentID])
+		history = append(history, operationHistoryEvents(record.Operation)...)
+		next[genomeID] = history
+	}
+	return next
+}
+
+func cloneEvoHistory(history []genotype.EvoHistoryEvent) []genotype.EvoHistoryEvent {
+	if len(history) == 0 {
+		return nil
+	}
+	out := make([]genotype.EvoHistoryEvent, 0, len(history))
+	for _, event := range history {
+		out = append(out, genotype.EvoHistoryEvent{
+			Mutation: event.Mutation,
+			IDs:      append([]string(nil), event.IDs...),
+		})
+	}
+	return out
+}
+
+func operationHistoryEvents(operation string) []genotype.EvoHistoryEvent {
+	operation = strings.TrimSpace(operation)
+	switch operation {
+	case "", "seed", "continue_seed", "elite_clone":
+		return nil
+	}
+	parts := strings.Split(operation, "+")
+	events := make([]genotype.EvoHistoryEvent, 0, len(parts))
+	for _, part := range parts {
+		part = strings.TrimSpace(part)
+		if part == "" {
+			continue
+		}
+		events = append(events, genotype.EvoHistoryEvent{Mutation: part})
+	}
+	if len(events) == 0 {
+		return nil
+	}
+	return events
 }
 
 func summarizeStaticSpeciation(bySpecies map[string][]model.Genome) SpeciationStats {

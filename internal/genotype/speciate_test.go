@@ -66,6 +66,37 @@ func TestSpeciateByFingerprintDifferentiatesDistinctIOSets(t *testing.T) {
 	}
 }
 
+func TestSpeciateByFingerprintWithHistoryDifferentiatesMutationTrajectories(t *testing.T) {
+	base := model.Genome{
+		ID:          "a",
+		SensorIDs:   []string{"sensor:left"},
+		ActuatorIDs: []string{"actuator:go"},
+		Neurons: []model.Neuron{
+			{ID: "L0:n0", Activation: "identity"},
+			{ID: "L1:n1", Activation: "identity"},
+		},
+		Synapses: []model.Synapse{
+			{ID: "s1", From: "L0:n0", To: "L1:n1", Weight: 0.25, Enabled: true},
+		},
+	}
+	peer := CloneGenome(base)
+	peer.ID = "b"
+
+	withoutHistory := SpeciateByFingerprint([]model.Genome{base, peer})
+	if len(withoutHistory) != 1 {
+		t.Fatalf("expected identical genomes to share one species without history, got=%d", len(withoutHistory))
+	}
+
+	historyByGenomeID := map[string][]EvoHistoryEvent{
+		"a": {{Mutation: "add_link"}},
+		"b": {{Mutation: "remove_link"}},
+	}
+	withHistory := SpeciateByFingerprintWithHistory([]model.Genome{base, peer}, historyByGenomeID)
+	if len(withHistory) != 2 {
+		t.Fatalf("expected divergent histories to split species, got=%d", len(withHistory))
+	}
+}
+
 func TestAssignToFingerprintSpeciesAppendsIncrementally(t *testing.T) {
 	base := model.Genome{
 		ID:          "base",
@@ -129,6 +160,38 @@ func TestComputeSpeciationFingerprintKeyUsesReferenceFingerprint(t *testing.T) {
 	got := ComputeSpeciationFingerprintKey(genome, history)
 	if got != want {
 		t.Fatalf("expected reference-based speciation fingerprint key, got=%q want=%q", got, want)
+	}
+}
+
+func TestSpeciateInPopulationWithHistoryUsesProvidedHistory(t *testing.T) {
+	genome := model.Genome{
+		ID:          "g1",
+		SensorIDs:   []string{"s1"},
+		ActuatorIDs: []string{"a1"},
+		Neurons: []model.Neuron{
+			{ID: "L0:n0", Activation: "identity"},
+			{ID: "L1:n1", Activation: "identity"},
+		},
+		Synapses: []model.Synapse{
+			{ID: "s1", From: "L0:n0", To: "L1:n1", Enabled: true},
+		},
+	}
+	population := map[string]FingerprintSpecies{}
+	historyA := []EvoHistoryEvent{{Mutation: "add_link"}}
+	keyA, population := SpeciateInPopulationWithHistory(genome, historyA, population, nil)
+	if keyA == "" {
+		t.Fatal("expected non-empty species id with history")
+	}
+
+	peer := CloneGenome(genome)
+	peer.ID = "g2"
+	historyB := []EvoHistoryEvent{{Mutation: "remove_link"}}
+	keyB, population := SpeciateInPopulationWithHistory(peer, historyB, population, nil)
+	if keyB == keyA {
+		t.Fatalf("expected distinct history to allocate a distinct species id, got keyA=%q keyB=%q", keyA, keyB)
+	}
+	if len(population) != 2 {
+		t.Fatalf("expected two species after divergent-history insertion, got=%d", len(population))
 	}
 }
 

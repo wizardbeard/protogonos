@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"protogonos/internal/genotype"
 	protoio "protogonos/internal/io"
 	"protogonos/internal/model"
 	"protogonos/internal/scape"
@@ -498,7 +499,7 @@ func TestPopulationMonitorAssignSpeciesFingerprintMode(t *testing.T) {
 		{Genome: newLinearGenome("b", 0.9), Fitness: 0.8},
 		{Genome: newComplexLinearGenome("c", 0.4), Fitness: 0.7},
 	}
-	byID, stats := monitor.assignSpecies(scored)
+	byID, stats := monitor.assignSpecies(scored, nil)
 	if stats.SpeciesCount != 2 {
 		t.Fatalf("expected 2 fingerprint species, got=%d", stats.SpeciesCount)
 	}
@@ -522,6 +523,78 @@ func TestPopulationMonitorAssignSpeciesFingerprintMode(t *testing.T) {
 	}
 	if !strings.HasPrefix(a, "fp:") || !strings.HasPrefix(c, "fp:") {
 		t.Fatalf("expected fingerprint species keys prefixed with fp:, got a=%q c=%q", a, c)
+	}
+}
+
+func TestPopulationMonitorAssignSpeciesFingerprintModeUsesEvoHistory(t *testing.T) {
+	monitor, err := NewPopulationMonitor(MonitorConfig{
+		Scape:           oneDimScape{},
+		OpMode:          OpModeValidation,
+		PopulationSize:  2,
+		EliteCount:      1,
+		Generations:     1,
+		SpeciationMode:  SpeciationModeFingerprint,
+		Workers:         1,
+		Seed:            1,
+		InputNeuronIDs:  []string{"i"},
+		OutputNeuronIDs: []string{"o"},
+	})
+	if err != nil {
+		t.Fatalf("new monitor: %v", err)
+	}
+
+	scored := []ScoredGenome{
+		{Genome: newLinearGenome("a", 0.1), Fitness: 1},
+		{Genome: newLinearGenome("b", 0.9), Fitness: 0.8},
+	}
+	withoutHistory, stats := monitor.assignSpecies(scored, nil)
+	if stats.SpeciesCount != 1 {
+		t.Fatalf("expected 1 species for identical topology with empty history, got=%d", stats.SpeciesCount)
+	}
+	if withoutHistory["a"] != withoutHistory["b"] {
+		t.Fatalf("expected identical topology genomes to share species without history, got a=%q b=%q", withoutHistory["a"], withoutHistory["b"])
+	}
+
+	historyByGenomeID := map[string][]genotype.EvoHistoryEvent{
+		"a": {{Mutation: "add_link"}},
+		"b": {{Mutation: "remove_link"}},
+	}
+	withHistory, stats := monitor.assignSpecies(scored, historyByGenomeID)
+	if stats.SpeciesCount != 2 {
+		t.Fatalf("expected 2 species for divergent histories, got=%d", stats.SpeciesCount)
+	}
+	if withHistory["a"] == withHistory["b"] {
+		t.Fatalf("expected divergent histories to split species, got a=%q b=%q", withHistory["a"], withHistory["b"])
+	}
+}
+
+func TestEvolveHistoryByGenomeIDTracksMutationsAndCarriesUnchangedMembers(t *testing.T) {
+	previous := map[string][]genotype.EvoHistoryEvent{
+		"parent": {{Mutation: "seed_parent"}},
+		"keep":   {{Mutation: "seed_keep"}},
+	}
+	nextPopulation := []model.Genome{
+		{ID: "keep"},
+		{ID: "child"},
+		{ID: "elite"},
+	}
+	lineage := []LineageRecord{
+		{GenomeID: "child", ParentID: "parent", Operation: "add_link+mutate_af"},
+		{GenomeID: "elite", ParentID: "parent", Operation: "elite_clone"},
+	}
+
+	got := evolveHistoryByGenomeID(nextPopulation, lineage, previous)
+	if len(got["keep"]) != 1 || got["keep"][0].Mutation != "seed_keep" {
+		t.Fatalf("expected unchanged member history carry-through, got=%v", got["keep"])
+	}
+	if len(got["child"]) != 3 {
+		t.Fatalf("expected child history to include parent + two mutation events, got=%v", got["child"])
+	}
+	if got["child"][0].Mutation != "seed_parent" || got["child"][1].Mutation != "add_link" || got["child"][2].Mutation != "mutate_af" {
+		t.Fatalf("unexpected child history sequence: %v", got["child"])
+	}
+	if len(got["elite"]) != 1 || got["elite"][0].Mutation != "seed_parent" {
+		t.Fatalf("expected elite clone to inherit parent history unchanged, got=%v", got["elite"])
 	}
 }
 
