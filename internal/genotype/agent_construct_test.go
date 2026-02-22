@@ -80,11 +80,29 @@ func TestConstructAgentMaterializesStrategyAndSubstrate(t *testing.T) {
 	if got := agent.Genome.Substrate.Parameters["cep_count"]; got != 1 {
 		t.Fatalf("expected cep_count=1 (xor actuators), got=%f", got)
 	}
+	if got := agent.Genome.Substrate.Parameters["seed_cpp_links"]; got != 2 {
+		t.Fatalf("expected seed_cpp_links=2 for xor substrate scaffold, got=%f", got)
+	}
+	if got := agent.Genome.Substrate.Parameters["seed_cep_links"]; got != 1 {
+		t.Fatalf("expected seed_cep_links=1 for xor substrate scaffold, got=%f", got)
+	}
 	if len(agent.SubstrateCPPIDs) != 2 || len(agent.SubstrateCEPIDs) != 1 {
 		t.Fatalf("expected substrate endpoint IDs in constructed agent, cpp=%v cep=%v", agent.SubstrateCPPIDs, agent.SubstrateCEPIDs)
 	}
 	if len(agent.SubstrateCPPIDs) > 0 && len(agent.SubstrateCPPIDs[0]) == 0 {
 		t.Fatalf("expected non-empty cpp id values: %v", agent.SubstrateCPPIDs)
+	}
+	if len(agent.Genome.SensorIDs) != 2 || len(agent.Genome.ActuatorIDs) != 1 {
+		t.Fatalf("expected external morphology io ids (2 sensors/1 actuator), got sensors=%v actuators=%v", agent.Genome.SensorIDs, agent.Genome.ActuatorIDs)
+	}
+	if len(agent.Genome.SensorNeuronLinks) != 0 || len(agent.Genome.NeuronActuatorLinks) != 0 {
+		t.Fatalf("expected no direct io endpoint links on substrate genome, got sensor_links=%v actuator_links=%v", agent.Genome.SensorNeuronLinks, agent.Genome.NeuronActuatorLinks)
+	}
+	if agent.Genome.SensorLinks != 0 || agent.Genome.ActuatorLinks != 0 {
+		t.Fatalf("expected zero direct io link counters for substrate genome, got sensor_links=%d actuator_links=%d", agent.Genome.SensorLinks, agent.Genome.ActuatorLinks)
+	}
+	if len(agent.SubstrateSensorNeuronLinks) != 2 || len(agent.SubstrateNeuronActuatorLinks) != 1 {
+		t.Fatalf("expected stored substrate seed links (2 sensor,1 actuator), got sensor=%v actuator=%v", agent.SubstrateSensorNeuronLinks, agent.SubstrateNeuronActuatorLinks)
 	}
 	if agent.Genome.Strategy == nil {
 		t.Fatal("expected strategy config to be materialized")

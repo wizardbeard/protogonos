@@ -36,32 +36,36 @@ type ConstructConstraint struct {
 
 // ConstructedCortex is the Go analog return payload for construct_Cortex/6.
 type ConstructedCortex struct {
-	Genome          model.Genome
-	InputNeuronIDs  []string
-	OutputNeuronIDs []string
-	Pattern         []PatternLayer
-	SubstrateCPPIDs []string
-	SubstrateCEPIDs []string
+	Genome                       model.Genome
+	InputNeuronIDs               []string
+	OutputNeuronIDs              []string
+	Pattern                      []PatternLayer
+	SubstrateCPPIDs              []string
+	SubstrateCEPIDs              []string
+	SubstrateSensorNeuronLinks   []model.SensorNeuronLink
+	SubstrateNeuronActuatorLinks []model.NeuronActuatorLink
 }
 
 // ConstructedAgent is the Go analog return payload for construct_Agent/3.
 type ConstructedAgent struct {
-	Genome              model.Genome
-	SpecieID            string
-	EncodingType        string
-	SubstratePlasticity string
-	SubstrateLinkform   string
-	TuningSelection     string
-	AnnealingParameter  float64
-	PerturbationRange   float64
-	TopologicalMode     string
-	TopologicalParam    float64
-	HeredityType        string
-	Pattern             []PatternLayer
-	InputNeuronIDs      []string
-	OutputNeuronIDs     []string
-	SubstrateCPPIDs     []string
-	SubstrateCEPIDs     []string
+	Genome                       model.Genome
+	SpecieID                     string
+	EncodingType                 string
+	SubstratePlasticity          string
+	SubstrateLinkform            string
+	TuningSelection              string
+	AnnealingParameter           float64
+	PerturbationRange            float64
+	TopologicalMode              string
+	TopologicalParam             float64
+	HeredityType                 string
+	Pattern                      []PatternLayer
+	InputNeuronIDs               []string
+	OutputNeuronIDs              []string
+	SubstrateCPPIDs              []string
+	SubstrateCEPIDs              []string
+	SubstrateSensorNeuronLinks   []model.SensorNeuronLink
+	SubstrateNeuronActuatorLinks []model.NeuronActuatorLink
 }
 
 // DefaultConstructConstraint mirrors the reference default constraint intent in
@@ -129,22 +133,24 @@ func ConstructAgent(specieID, agentID string, constraint ConstructConstraint, rn
 	}
 
 	return ConstructedAgent{
-		Genome:              genome,
-		SpecieID:            specieID,
-		EncodingType:        encodingType,
-		SubstratePlasticity: substratePlasticity,
-		SubstrateLinkform:   substrateLinkform,
-		TuningSelection:     tuningSelection,
-		AnnealingParameter:  annealing,
-		PerturbationRange:   perturbationRange,
-		TopologicalMode:     topologicalMode,
-		TopologicalParam:    topologicalParam,
-		HeredityType:        heredityType,
-		Pattern:             append([]PatternLayer(nil), cortex.Pattern...),
-		InputNeuronIDs:      append([]string(nil), cortex.InputNeuronIDs...),
-		OutputNeuronIDs:     append([]string(nil), cortex.OutputNeuronIDs...),
-		SubstrateCPPIDs:     append([]string(nil), cortex.SubstrateCPPIDs...),
-		SubstrateCEPIDs:     append([]string(nil), cortex.SubstrateCEPIDs...),
+		Genome:                       genome,
+		SpecieID:                     specieID,
+		EncodingType:                 encodingType,
+		SubstratePlasticity:          substratePlasticity,
+		SubstrateLinkform:            substrateLinkform,
+		TuningSelection:              tuningSelection,
+		AnnealingParameter:           annealing,
+		PerturbationRange:            perturbationRange,
+		TopologicalMode:              topologicalMode,
+		TopologicalParam:             topologicalParam,
+		HeredityType:                 heredityType,
+		Pattern:                      append([]PatternLayer(nil), cortex.Pattern...),
+		InputNeuronIDs:               append([]string(nil), cortex.InputNeuronIDs...),
+		OutputNeuronIDs:              append([]string(nil), cortex.OutputNeuronIDs...),
+		SubstrateCPPIDs:              append([]string(nil), cortex.SubstrateCPPIDs...),
+		SubstrateCEPIDs:              append([]string(nil), cortex.SubstrateCEPIDs...),
+		SubstrateSensorNeuronLinks:   append([]model.SensorNeuronLink(nil), cortex.SubstrateSensorNeuronLinks...),
+		SubstrateNeuronActuatorLinks: append([]model.NeuronActuatorLink(nil), cortex.SubstrateNeuronActuatorLinks...),
 	}, nil
 }
 
@@ -170,11 +176,37 @@ func ConstructCortex(
 
 	sensors := append([]string(nil), morph.Sensors()...)
 	actuators := append([]string(nil), morph.Actuators()...)
+
+	isSubstrateEncoding := strings.EqualFold(strings.TrimSpace(encodingType), "substrate")
+	seedSensors := append([]string(nil), sensors...)
+	seedActuators := append([]string(nil), actuators...)
+	seedActuatorVectorLengths := constraint.ActuatorVectorLengths
+	var substrateCPPIDs []string
+	var substrateCEPIDs []string
+	var substrateDensities []int
+	var substrateDimension int
+	if isSubstrateEncoding {
+		formatInputs := make([]any, 0, len(sensors))
+		for _, sensorID := range sensors {
+			formatInputs = append(formatInputs, sensorID)
+		}
+		formatOutputs := make([]any, 0, len(actuators))
+		for _, actuatorID := range actuators {
+			formatOutputs = append(formatOutputs, actuatorID)
+		}
+		substrateDimension = CalculateOptimalSubstrateDimension(formatInputs, formatOutputs)
+		substrateDensities = defaultSubstrateDensities(substrateDimension)
+		substrateCPPIDs, substrateCEPIDs = constructSubstrateEndpointIDs(substrateDimension, len(sensors), len(actuators))
+		seedSensors = append([]string(nil), substrateCPPIDs...)
+		seedActuators = append([]string(nil), substrateCEPIDs...)
+		seedActuatorVectorLengths = nil
+	}
+
 	seed, err := ConstructSeedNNWithActuatorVL(
 		generation,
-		sensors,
-		actuators,
-		constraint.ActuatorVectorLengths,
+		seedSensors,
+		seedActuators,
+		seedActuatorVectorLengths,
 		constraint.NeuralAFs,
 		constraint.NeuralPFNs,
 		constraint.NeuralAggrFs,
@@ -182,6 +214,23 @@ func ConstructCortex(
 	)
 	if err != nil {
 		return ConstructedCortex{}, err
+	}
+
+	genomeSensorLinks := append([]model.SensorNeuronLink(nil), seed.SensorNeuronLinks...)
+	genomeActuatorLinks := append([]model.NeuronActuatorLink(nil), seed.NeuronActuatorLinks...)
+	sensorLinksCount := len(genomeSensorLinks)
+	actuatorLinksCount := len(genomeActuatorLinks)
+	substrateSensorNeuronLinks := []model.SensorNeuronLink(nil)
+	substrateNeuronActuatorLinks := []model.NeuronActuatorLink(nil)
+	if isSubstrateEncoding {
+		substrateSensorNeuronLinks = append([]model.SensorNeuronLink(nil), seed.SensorNeuronLinks...)
+		substrateNeuronActuatorLinks = append([]model.NeuronActuatorLink(nil), seed.NeuronActuatorLinks...)
+		// External sensors/actuators connect through substrate endpoints, so
+		// keep direct IO endpoint links empty on the genome.
+		genomeSensorLinks = nil
+		genomeActuatorLinks = nil
+		sensorLinksCount = 0
+		actuatorLinksCount = 0
 	}
 
 	genome := model.Genome{
@@ -194,47 +243,37 @@ func ConstructCortex(
 		Synapses:            append([]model.Synapse(nil), seed.Synapses...),
 		SensorIDs:           sensors,
 		ActuatorIDs:         actuators,
-		SensorNeuronLinks:   append([]model.SensorNeuronLink(nil), seed.SensorNeuronLinks...),
-		NeuronActuatorLinks: append([]model.NeuronActuatorLink(nil), seed.NeuronActuatorLinks...),
-		SensorLinks:         len(seed.SensorNeuronLinks),
-		ActuatorLinks:       len(seed.NeuronActuatorLinks),
+		SensorNeuronLinks:   genomeSensorLinks,
+		NeuronActuatorLinks: genomeActuatorLinks,
+		SensorLinks:         sensorLinksCount,
+		ActuatorLinks:       actuatorLinksCount,
 	}
-	var substrateCPPIDs []string
-	var substrateCEPIDs []string
-
-	if strings.EqualFold(strings.TrimSpace(encodingType), "substrate") {
-		formatInputs := make([]any, 0, len(sensors))
-		for _, sensorID := range sensors {
-			formatInputs = append(formatInputs, sensorID)
-		}
-		formatOutputs := make([]any, 0, len(actuators))
-		for _, actuatorID := range actuators {
-			formatOutputs = append(formatOutputs, actuatorID)
-		}
-		optimalDimension := CalculateOptimalSubstrateDimension(formatInputs, formatOutputs)
-		densities := defaultSubstrateDensities(optimalDimension)
-		substrateCPPIDs, substrateCEPIDs = constructSubstrateEndpointIDs(optimalDimension, len(sensors), len(actuators))
+	if isSubstrateEncoding {
 		genome.Substrate = &model.SubstrateConfig{
 			CPPName:    strings.TrimSpace(substratePlasticity),
 			CEPName:    strings.TrimSpace(substrateLinkform),
-			Dimensions: densities,
+			Dimensions: substrateDensities,
 			Parameters: map[string]float64{
-				"depth":      1,
-				"density":    5,
-				"dimensions": float64(optimalDimension),
-				"cpp_count":  float64(len(substrateCPPIDs)),
-				"cep_count":  float64(len(substrateCEPIDs)),
+				"depth":          1,
+				"density":        5,
+				"dimensions":     float64(substrateDimension),
+				"cpp_count":      float64(len(substrateCPPIDs)),
+				"cep_count":      float64(len(substrateCEPIDs)),
+				"seed_cpp_links": float64(len(substrateSensorNeuronLinks)),
+				"seed_cep_links": float64(len(substrateNeuronActuatorLinks)),
 			},
 		}
 	}
 
 	return ConstructedCortex{
-		Genome:          genome,
-		InputNeuronIDs:  append([]string(nil), seed.InputNeuronIDs...),
-		OutputNeuronIDs: append([]string(nil), seed.OutputNeuronIDs...),
-		Pattern:         append([]PatternLayer(nil), seed.Pattern...),
-		SubstrateCPPIDs: substrateCPPIDs,
-		SubstrateCEPIDs: substrateCEPIDs,
+		Genome:                       genome,
+		InputNeuronIDs:               append([]string(nil), seed.InputNeuronIDs...),
+		OutputNeuronIDs:              append([]string(nil), seed.OutputNeuronIDs...),
+		Pattern:                      append([]PatternLayer(nil), seed.Pattern...),
+		SubstrateCPPIDs:              substrateCPPIDs,
+		SubstrateCEPIDs:              substrateCEPIDs,
+		SubstrateSensorNeuronLinks:   substrateSensorNeuronLinks,
+		SubstrateNeuronActuatorLinks: substrateNeuronActuatorLinks,
 	}, nil
 }
 
