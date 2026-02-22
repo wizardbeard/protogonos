@@ -42,6 +42,30 @@ func TestSpeciateByFingerprintGroupsExactMatches(t *testing.T) {
 	}
 }
 
+func TestSpeciateByFingerprintDifferentiatesDistinctIOSets(t *testing.T) {
+	a := model.Genome{
+		ID:          "a",
+		SensorIDs:   []string{"sensor:left"},
+		ActuatorIDs: []string{"actuator:go"},
+		Neurons: []model.Neuron{
+			{ID: "i", Activation: "identity"},
+			{ID: "o", Activation: "identity"},
+		},
+		Synapses: []model.Synapse{
+			{ID: "s1", From: "i", To: "o", Weight: 0.25, Enabled: true},
+		},
+	}
+	b := CloneGenome(a)
+	b.ID = "b"
+	b.SensorIDs = []string{"sensor:right"}
+	b.ActuatorIDs = []string{"actuator:turn"}
+
+	grouped := SpeciateByFingerprint([]model.Genome{a, b})
+	if len(grouped) != 2 {
+		t.Fatalf("expected 2 distinct species for different io identity, got=%d", len(grouped))
+	}
+}
+
 func TestAssignToFingerprintSpeciesAppendsIncrementally(t *testing.T) {
 	base := model.Genome{
 		ID:          "base",
@@ -81,6 +105,30 @@ func TestAssignToFingerprintSpeciesAppendsIncrementally(t *testing.T) {
 	}
 	if len(species) != 2 {
 		t.Fatalf("expected two species after distinct topology assign, got=%d", len(species))
+	}
+}
+
+func TestComputeSpeciationFingerprintKeyUsesReferenceFingerprint(t *testing.T) {
+	genome := model.Genome{
+		ID:          "g",
+		SensorIDs:   []string{"sensor:right", "sensor:left", "sensor:left"},
+		ActuatorIDs: []string{"actuator:out"},
+		Neurons: []model.Neuron{
+			{ID: "L0:n0", Activation: "identity", Aggregator: "dot_product"},
+			{ID: "L1:n1", Activation: "tanh", Aggregator: "dot_product"},
+		},
+		Synapses: []model.Synapse{
+			{ID: "s1", From: "L0:n0", To: "L1:n1", Enabled: true},
+		},
+	}
+	history := []EvoHistoryEvent{
+		{Mutation: "add_link", IDs: []string{"L0:n0", "L1:n1"}},
+	}
+
+	want := "fp:" + ComputeReferenceFingerprint(genome, history)
+	got := ComputeSpeciationFingerprintKey(genome, history)
+	if got != want {
+		t.Fatalf("expected reference-based speciation fingerprint key, got=%q want=%q", got, want)
 	}
 }
 

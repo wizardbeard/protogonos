@@ -15,7 +15,8 @@ type FingerprintSpecies struct {
 	GenomeIDs   []string
 }
 
-// SpeciateByFingerprint groups genomes by exact topology fingerprint.
+// SpeciateByFingerprint groups genomes by exact generalized reference
+// fingerprint (pattern/evo-history/io/topology summary analog).
 func SpeciateByFingerprint(genomes []model.Genome) map[string][]model.Genome {
 	species := make(map[string][]model.Genome, len(genomes))
 	for _, genome := range genomes {
@@ -25,8 +26,8 @@ func SpeciateByFingerprint(genomes []model.Genome) map[string][]model.Genome {
 	return species
 }
 
-// AssignToFingerprintSpecies appends one genome into its exact-fingerprint
-// species bucket and returns the selected species key.
+// AssignToFingerprintSpecies appends one genome into its exact generalized
+// reference-fingerprint species bucket and returns the selected species key.
 func AssignToFingerprintSpecies(genome model.Genome, species map[string][]model.Genome) (string, map[string][]model.Genome) {
 	if species == nil {
 		species = map[string][]model.Genome{}
@@ -89,8 +90,15 @@ func SpeciateInPopulation(
 	return speciesID, speciesByID
 }
 
+// ComputeSpeciationFingerprintKey returns the stable species-key fingerprint
+// used by Speciate* helpers. History is optional and defaults to empty in
+// callsites that do not track evo-history.
+func ComputeSpeciationFingerprintKey(genome model.Genome, history []EvoHistoryEvent) string {
+	return "fp:" + ComputeReferenceFingerprint(genome, history)
+}
+
 func fingerprintSpeciesKey(genome model.Genome) string {
-	return "fp:" + ComputeGenomeSignature(genome).Fingerprint
+	return ComputeSpeciationFingerprintKey(genome, nil)
 }
 
 func defaultSpeciesID(fingerprint string, speciesByID map[string]FingerprintSpecies) string {
