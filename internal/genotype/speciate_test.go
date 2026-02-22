@@ -83,3 +83,36 @@ func TestAssignToFingerprintSpeciesAppendsIncrementally(t *testing.T) {
 		t.Fatalf("expected two species after distinct topology assign, got=%d", len(species))
 	}
 }
+
+func TestSpeciateAssignsFingerprintSpeciesForNonTestGenome(t *testing.T) {
+	genome := model.Genome{
+		ID:          "agent-1",
+		SensorIDs:   []string{"s1"},
+		ActuatorIDs: []string{"a1"},
+		Neurons: []model.Neuron{
+			{ID: "i", Activation: "identity"},
+			{ID: "o", Activation: "identity"},
+		},
+		Synapses: []model.Synapse{
+			{ID: "s1", From: "i", To: "o", Enabled: true},
+		},
+	}
+	key, species := Speciate(genome, nil)
+	if key == "" {
+		t.Fatal("expected non-empty species key for regular genome")
+	}
+	if len(species[key]) != 1 {
+		t.Fatalf("expected one species member, got=%d", len(species[key]))
+	}
+}
+
+func TestSpeciateSkipsTestGenomeAssignment(t *testing.T) {
+	genome := model.Genome{ID: "test"}
+	key, species := Speciate(genome, nil)
+	if key != "" {
+		t.Fatalf("expected empty species key for test genome, got=%q", key)
+	}
+	if len(species) != 0 {
+		t.Fatalf("expected no species assignment for test genome, got=%v", species)
+	}
+}
