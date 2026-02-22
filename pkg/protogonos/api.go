@@ -54,6 +54,7 @@ type RunRequest struct {
 	SpecieSizeLimit       int
 	FitnessGoal           float64
 	EvaluationsLimit      int
+	TraceStepSize         int
 	StartPaused           bool
 	AutoContinueAfter     time.Duration
 	Seed                  int64
@@ -388,6 +389,7 @@ func (c *Client) Run(ctx context.Context, req RunRequest) (RunSummary, error) {
 			SpecieSizeLimit:      req.SpecieSizeLimit,
 			FitnessGoal:          req.FitnessGoal,
 			EvaluationsLimit:     req.EvaluationsLimit,
+			TraceStepSize:        req.TraceStepSize,
 			Control:              controlCh,
 			EliteCount:           eliteCount,
 			Workers:              req.Workers,
@@ -498,6 +500,7 @@ func (c *Client) Run(ctx context.Context, req RunRequest) (RunSummary, error) {
 			SpecieSizeLimit:       req.SpecieSizeLimit,
 			FitnessGoal:           req.FitnessGoal,
 			EvaluationsLimit:      req.EvaluationsLimit,
+			TraceStepSize:         req.TraceStepSize,
 			StartPaused:           req.StartPaused,
 			AutoContinueAfterMS:   req.AutoContinueAfter.Milliseconds(),
 			Seed:                  req.Seed,
@@ -1056,6 +1059,28 @@ func (c *Client) StopRun(ctx context.Context, req MonitorControlRequest) error {
 	return p.StopRun(req.RunID)
 }
 
+func (c *Client) GoalReachedRun(ctx context.Context, req MonitorControlRequest) error {
+	if req.RunID == "" {
+		return errors.New("run id is required")
+	}
+	p, err := c.ensurePolis(ctx)
+	if err != nil {
+		return err
+	}
+	return p.GoalReachedRun(req.RunID)
+}
+
+func (c *Client) PrintTraceRun(ctx context.Context, req MonitorControlRequest) error {
+	if req.RunID == "" {
+		return errors.New("run id is required")
+	}
+	p, err := c.ensurePolis(ctx)
+	if err != nil {
+		return err
+	}
+	return p.PrintTraceRun(req.RunID)
+}
+
 func (c *Client) DeletePopulation(ctx context.Context, req DeletePopulationRequest) error {
 	if req.PopulationID == "" {
 		return errors.New("population id is required")
@@ -1147,6 +1172,12 @@ func materializeRunConfigFromRequest(req RunRequest) (materializedRunConfig, err
 	}
 	if req.EvaluationsLimit < 0 {
 		return materializedRunConfig{}, errors.New("evaluations limit must be >= 0")
+	}
+	if req.TraceStepSize < 0 {
+		return materializedRunConfig{}, errors.New("trace step size must be >= 0")
+	}
+	if req.TraceStepSize == 0 {
+		req.TraceStepSize = 500
 	}
 	if req.AutoContinueAfter < 0 {
 		return materializedRunConfig{}, errors.New("auto continue after must be >= 0")

@@ -127,6 +127,7 @@ type EvolutionConfig struct {
 	SpecieSizeLimit      int
 	FitnessGoal          float64
 	EvaluationsLimit     int
+	TraceStepSize        int
 	EliteCount           int
 	Workers              int
 	Seed                 int64
@@ -766,6 +767,7 @@ func (p *Polis) RunEvolution(ctx context.Context, cfg EvolutionConfig) (Evolutio
 		GenerationOffset:     cfg.InitialGeneration,
 		FitnessGoal:          cfg.FitnessGoal,
 		EvaluationsLimit:     cfg.EvaluationsLimit,
+		TraceStepSize:        cfg.TraceStepSize,
 		Workers:              cfg.Workers,
 		Seed:                 cfg.Seed,
 		InputNeuronIDs:       cfg.InputNeuronIDs,
@@ -1093,6 +1095,14 @@ func (p *Polis) ContinueRun(runID string) error {
 
 func (p *Polis) StopRun(runID string) error {
 	return p.sendRunCommand(runID, evo.CommandStop)
+}
+
+func (p *Polis) GoalReachedRun(runID string) error {
+	return p.sendRunCommand(runID, evo.CommandGoalReached)
+}
+
+func (p *Polis) PrintTraceRun(runID string) error {
+	return p.sendRunCommand(runID, evo.CommandPrintTrace)
 }
 
 func (p *Polis) registerRunControl(runID string, control chan evo.MonitorCommand) error {

@@ -588,6 +588,17 @@ func TestClientRunRejectsNegativeNumericConfig(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected evaluations limit validation error")
 	}
+	_, err = client.Run(context.Background(), RunRequest{
+		Scape:         "xor",
+		Population:    6,
+		Generations:   2,
+		TraceStepSize: -1,
+		Selection:     "elite",
+		WeightPerturb: 1.0,
+	})
+	if err == nil {
+		t.Fatal("expected trace step size validation error")
+	}
 
 	_, err = client.Run(context.Background(), RunRequest{
 		Scape:           "xor",
@@ -820,8 +831,8 @@ func TestClientLiveRunControl(t *testing.T) {
 	if err := client.ContinueRun(context.Background(), MonitorControlRequest{RunID: runID}); err != nil {
 		t.Fatalf("continue run: %v", err)
 	}
-	if err := client.PauseRun(context.Background(), MonitorControlRequest{RunID: runID}); err != nil {
-		t.Fatalf("pause run: %v", err)
+	if err := client.PrintTraceRun(context.Background(), MonitorControlRequest{RunID: runID}); err != nil {
+		t.Fatalf("print trace run: %v", err)
 	}
 	if err := client.StopRun(context.Background(), MonitorControlRequest{RunID: runID}); err != nil {
 		t.Fatalf("stop run: %v", err)
@@ -840,6 +851,73 @@ func TestClientLiveRunControl(t *testing.T) {
 
 	if err := client.ContinueRun(context.Background(), MonitorControlRequest{RunID: runID}); err == nil {
 		t.Fatal("expected continue on inactive run to fail")
+	}
+	if err := client.PrintTraceRun(context.Background(), MonitorControlRequest{RunID: runID}); err == nil {
+		t.Fatal("expected print trace on inactive run to fail")
+	}
+	if err := client.GoalReachedRun(context.Background(), MonitorControlRequest{RunID: runID}); err == nil {
+		t.Fatal("expected goal reached on inactive run to fail")
+	}
+}
+
+func TestClientLiveRunGoalReachedControl(t *testing.T) {
+	base := t.TempDir()
+	client, err := New(Options{
+		StoreKind:     "memory",
+		BenchmarksDir: filepath.Join(base, "benchmarks"),
+		ExportsDir:    filepath.Join(base, "exports"),
+	})
+	if err != nil {
+		t.Fatalf("new client: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = client.Close()
+	})
+
+	runID := "api-goal-control"
+	done := make(chan RunSummary, 1)
+	errs := make(chan error, 1)
+	go func() {
+		summary, runErr := client.Run(context.Background(), RunRequest{
+			RunID:         runID,
+			Scape:         "xor",
+			Population:    8,
+			Generations:   5,
+			StartPaused:   true,
+			Selection:     "elite",
+			WeightPerturb: 1.0,
+		})
+		if runErr != nil {
+			errs <- runErr
+			return
+		}
+		done <- summary
+	}()
+
+	select {
+	case <-done:
+		t.Fatal("expected paused run not to complete before continue")
+	case err := <-errs:
+		t.Fatalf("run failed while paused: %v", err)
+	case <-time.After(30 * time.Millisecond):
+	}
+
+	if err := client.GoalReachedRun(context.Background(), MonitorControlRequest{RunID: runID}); err != nil {
+		t.Fatalf("goal reached run: %v", err)
+	}
+	if err := client.ContinueRun(context.Background(), MonitorControlRequest{RunID: runID}); err != nil {
+		t.Fatalf("continue run: %v", err)
+	}
+
+	select {
+	case err := <-errs:
+		t.Fatalf("run failed after goal reached: %v", err)
+	case summary := <-done:
+		if len(summary.BestByGeneration) == 0 || len(summary.BestByGeneration) >= 5 {
+			t.Fatalf("expected goal-reached run to stop early with partial progress, got %d generations", len(summary.BestByGeneration))
+		}
+	case <-time.After(time.Second):
+		t.Fatal("timeout waiting for goal-reached run completion")
 	}
 }
 

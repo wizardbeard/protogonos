@@ -21,6 +21,9 @@ func TestLoadRunRequestFromConfigUsesConstraintAndPMP(t *testing.T) {
 		"tune_perturbation_range": 1.8,
 		"tune_annealing_factor":   0.95,
 		"tune_min_improvement":    0.015,
+		"trace": map[string]any{
+			"step_size": 333,
+		},
 		"pmp": map[string]any{
 			"op_mode":             "validation",
 			"survival_percentage": 0.6,
@@ -103,6 +106,9 @@ func TestLoadRunRequestFromConfigUsesConstraintAndPMP(t *testing.T) {
 	if req.TuneMinImprovement != 0.015 {
 		t.Fatalf("unexpected tune min improvement mapping: %f", req.TuneMinImprovement)
 	}
+	if req.TraceStepSize != 333 {
+		t.Fatalf("expected trace step size from trace record, got %d", req.TraceStepSize)
+	}
 	if req.TopologicalPolicy != "ncount_exponential" || req.TopologicalParam != 0.8 {
 		t.Fatalf("unexpected topological policy mapping: policy=%s param=%f", req.TopologicalPolicy, req.TopologicalParam)
 	}
@@ -111,6 +117,31 @@ func TestLoadRunRequestFromConfigUsesConstraintAndPMP(t *testing.T) {
 	}
 	if req.WeightBias != 5 || req.WeightRemoveBias != 1 || req.WeightActivation != 6 || req.WeightAggregator != 7 || req.WeightAddSynapse != 4 || req.WeightAddNeuron != 3 || req.WeightPlasticityRule != 8 || req.WeightPlasticity != 2 {
 		t.Fatalf("unexpected mapped mutation weights: %+v", req)
+	}
+}
+
+func TestLoadRunRequestFromConfigUsesTopLevelTraceStepSizeOverride(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "run_config_trace_step.json")
+	payload := map[string]any{
+		"trace_step_size": 777,
+		"trace": map[string]any{
+			"step_size": 250,
+		},
+	}
+	data, err := json.Marshal(payload)
+	if err != nil {
+		t.Fatalf("marshal payload: %v", err)
+	}
+	if err := os.WriteFile(path, data, 0o644); err != nil {
+		t.Fatalf("write config: %v", err)
+	}
+
+	req, err := loadRunRequestFromConfig(path)
+	if err != nil {
+		t.Fatalf("load run request: %v", err)
+	}
+	if req.TraceStepSize != 777 {
+		t.Fatalf("expected top-level trace_step_size override, got %d", req.TraceStepSize)
 	}
 }
 

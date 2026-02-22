@@ -293,8 +293,8 @@ func TestPolisRunControlPauseContinueStop(t *testing.T) {
 	if err := p.ContinueRun(runID); err != nil {
 		t.Fatalf("continue run: %v", err)
 	}
-	if err := p.PauseRun(runID); err != nil {
-		t.Fatalf("pause run: %v", err)
+	if err := p.PrintTraceRun(runID); err != nil {
+		t.Fatalf("print trace run: %v", err)
 	}
 	if err := p.StopRun(runID); err != nil {
 		t.Fatalf("stop run: %v", err)
@@ -312,6 +312,83 @@ func TestPolisRunControlPauseContinueStop(t *testing.T) {
 	}
 	if err := p.ContinueRun(runID); err == nil {
 		t.Fatal("expected continue on inactive run to fail")
+	}
+	if err := p.PrintTraceRun(runID); err == nil {
+		t.Fatal("expected print trace on inactive run to fail")
+	}
+	if err := p.GoalReachedRun(runID); err == nil {
+		t.Fatal("expected goal reached on inactive run to fail")
+	}
+}
+
+func TestPolisRunControlGoalReached(t *testing.T) {
+	store := storage.NewMemoryStore()
+	p := NewPolis(Config{Store: store})
+	if err := p.Init(context.Background()); err != nil {
+		t.Fatalf("init: %v", err)
+	}
+	if err := p.RegisterScape(linearScape{}); err != nil {
+		t.Fatalf("register scape: %v", err)
+	}
+
+	initial := []model.Genome{
+		linearGenome("g0", -1.0),
+		linearGenome("g1", -0.8),
+		linearGenome("g2", -0.6),
+		linearGenome("g3", -0.4),
+	}
+	control := make(chan evo.MonitorCommand, 2)
+	control <- evo.CommandPause
+	runID := "goal-control-run"
+
+	resultCh := make(chan EvolutionResult, 1)
+	errCh := make(chan error, 1)
+	go func() {
+		result, err := p.RunEvolution(context.Background(), EvolutionConfig{
+			RunID:           runID,
+			ScapeName:       "linear",
+			PopulationSize:  len(initial),
+			Generations:     6,
+			EliteCount:      1,
+			Workers:         2,
+			Seed:            88,
+			InputNeuronIDs:  []string{"i"},
+			OutputNeuronIDs: []string{"o"},
+			Mutation:        &evo.PerturbRandomWeight{Rand: rand.New(rand.NewSource(91)), MaxDelta: 0.3},
+			Control:         control,
+			Initial:         initial,
+		})
+		if err != nil {
+			errCh <- err
+			return
+		}
+		resultCh <- result
+	}()
+
+	select {
+	case <-resultCh:
+		t.Fatal("expected paused run not to complete before continue")
+	case err := <-errCh:
+		t.Fatalf("unexpected run error: %v", err)
+	case <-time.After(30 * time.Millisecond):
+	}
+
+	if err := p.GoalReachedRun(runID); err != nil {
+		t.Fatalf("goal reached run: %v", err)
+	}
+	if err := p.ContinueRun(runID); err != nil {
+		t.Fatalf("continue run: %v", err)
+	}
+
+	select {
+	case err := <-errCh:
+		t.Fatalf("unexpected run error after goal reached: %v", err)
+	case result := <-resultCh:
+		if len(result.BestByGeneration) == 0 || len(result.BestByGeneration) >= 6 {
+			t.Fatalf("expected run to stop early with partial progress when goal reached is signaled, got generations=%d", len(result.BestByGeneration))
+		}
+	case <-time.After(time.Second):
+		t.Fatal("timeout waiting for goal-reached run completion")
 	}
 }
 

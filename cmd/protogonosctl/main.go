@@ -172,6 +172,7 @@ func runRun(ctx context.Context, args []string) error {
 	specieSizeLimit := fs.Int("specie-size-limit", 0, "maximum parent-pool size retained per species (0 disables)")
 	fitnessGoal := fs.Float64("fitness-goal", 0.0, "early-stop best fitness goal (0 disables)")
 	evaluationsLimit := fs.Int("evaluations-limit", 0, "early-stop total evaluation limit (0 disables)")
+	traceStepSize := fs.Int("trace-step-size", 500, "trace update cadence in total evaluations (0 uses runtime default)")
 	startPaused := fs.Bool("start-paused", false, "start monitor in paused state (requires continue)")
 	autoContinueMS := fs.Int("auto-continue-ms", 0, "auto-send continue after N milliseconds when start-paused is set (0 disables)")
 	seed := fs.Int64("seed", 1, "rng seed")
@@ -234,6 +235,7 @@ func runRun(ctx context.Context, args []string) error {
 			SpecieSizeLimit:       *specieSizeLimit,
 			FitnessGoal:           *fitnessGoal,
 			EvaluationsLimit:      *evaluationsLimit,
+			TraceStepSize:         *traceStepSize,
 			StartPaused:           *startPaused,
 			AutoContinueAfter:     time.Duration(*autoContinueMS) * time.Millisecond,
 			Seed:                  *seed,
@@ -282,6 +284,7 @@ func runRun(ctx context.Context, args []string) error {
 			"specie-size-limit":       *specieSizeLimit,
 			"fitness-goal":            *fitnessGoal,
 			"evaluations-limit":       *evaluationsLimit,
+			"trace-step-size":         *traceStepSize,
 			"start-paused":            *startPaused,
 			"auto-continue-ms":        *autoContinueMS,
 			"seed":                    *seed,
@@ -967,6 +970,7 @@ func runBenchmark(ctx context.Context, args []string) error {
 	specieSizeLimit := fs.Int("specie-size-limit", 0, "maximum parent-pool size retained per species (0 disables)")
 	fitnessGoal := fs.Float64("fitness-goal", 0.0, "early-stop best fitness goal (0 disables)")
 	evaluationsLimit := fs.Int("evaluations-limit", 0, "early-stop total evaluation limit (0 disables)")
+	traceStepSize := fs.Int("trace-step-size", 500, "trace update cadence in total evaluations (0 uses runtime default)")
 	startPaused := fs.Bool("start-paused", false, "start monitor in paused state (requires continue)")
 	autoContinueMS := fs.Int("auto-continue-ms", 0, "auto-send continue after N milliseconds when start-paused is set (0 disables)")
 	seed := fs.Int64("seed", 1, "rng seed")
@@ -1029,6 +1033,7 @@ func runBenchmark(ctx context.Context, args []string) error {
 			SpecieSizeLimit:       *specieSizeLimit,
 			FitnessGoal:           *fitnessGoal,
 			EvaluationsLimit:      *evaluationsLimit,
+			TraceStepSize:         *traceStepSize,
 			StartPaused:           *startPaused,
 			AutoContinueAfter:     time.Duration(*autoContinueMS) * time.Millisecond,
 			Seed:                  *seed,
@@ -1076,6 +1081,7 @@ func runBenchmark(ctx context.Context, args []string) error {
 			"specie-size-limit":       *specieSizeLimit,
 			"fitness-goal":            *fitnessGoal,
 			"evaluations-limit":       *evaluationsLimit,
+			"trace-step-size":         *traceStepSize,
 			"start-paused":            *startPaused,
 			"auto-continue-ms":        *autoContinueMS,
 			"seed":                    *seed,
@@ -1339,7 +1345,7 @@ func runExport(_ context.Context, args []string) error {
 
 func runMonitor(ctx context.Context, args []string) error {
 	if len(args) == 0 {
-		return errors.New("monitor requires an action: pause|continue|stop")
+		return errors.New("monitor requires an action: pause|continue|stop|goal-reached|print-trace")
 	}
 	action := args[0]
 	fs := flag.NewFlagSet("monitor", flag.ContinueOnError)
@@ -1374,6 +1380,10 @@ func runMonitor(ctx context.Context, args []string) error {
 		err = client.ContinueRun(ctx, req)
 	case "stop":
 		err = client.StopRun(ctx, req)
+	case "goal-reached":
+		err = client.GoalReachedRun(ctx, req)
+	case "print-trace":
+		err = client.PrintTraceRun(ctx, req)
 	default:
 		return fmt.Errorf("unknown monitor action: %s", action)
 	}

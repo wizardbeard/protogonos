@@ -58,6 +58,9 @@ func loadRunRequestFromConfig(path string) (protoapi.RunRequest, error) {
 	if v, ok := asInt(raw["evaluations_limit"]); ok {
 		req.EvaluationsLimit = v
 	}
+	if v, ok := asInt(raw["trace_step_size"]); ok {
+		req.TraceStepSize = v
+	}
 	if v, ok := asBool(raw["start_paused"]); ok {
 		req.StartPaused = v
 	}
@@ -208,6 +211,12 @@ func loadRunRequestFromConfig(path string) (protoapi.RunRequest, error) {
 			req.FitnessGoal = pmp.FitnessGoal
 		}
 	}
+	if traceMap, ok := raw["trace"].(map[string]any); ok {
+		trace := map2rec.ConvertTrace(traceMap)
+		if req.TraceStepSize == 0 {
+			req.TraceStepSize = trace.StepSize
+		}
+	}
 
 	return req, nil
 }
@@ -288,6 +297,8 @@ func overrideFromFlags(req *protoapi.RunRequest, set map[string]bool, flagValue 
 			req.FitnessGoal = v.(float64)
 		case "evaluations-limit":
 			req.EvaluationsLimit = v.(int)
+		case "trace-step-size":
+			req.TraceStepSize = v.(int)
 		case "start-paused":
 			req.StartPaused = v.(bool)
 		case "auto-continue-ms":

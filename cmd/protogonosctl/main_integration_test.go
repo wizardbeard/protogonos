@@ -172,6 +172,9 @@ func TestRunCommandSQLiteConfigLoadsMap2RecAndAllowsFlagOverrides(t *testing.T) 
 		"tune_perturbation_range": 1.6,
 		"tune_annealing_factor":   0.9,
 		"tune_min_improvement":    0.02,
+		"trace": map[string]any{
+			"step_size": 320,
+		},
 		"pmp": map[string]any{
 			"init_specie_size":    8,
 			"specie_size_limit":   2,
@@ -218,6 +221,7 @@ func TestRunCommandSQLiteConfigLoadsMap2RecAndAllowsFlagOverrides(t *testing.T) 
 		"--specie-size-limit", "4",
 		"--fitness-goal", "0.91",
 		"--evaluations-limit", "123",
+		"--trace-step-size", "444",
 		"--start-paused",
 		"--auto-continue-ms", "5",
 	}
@@ -266,6 +270,9 @@ func TestRunCommandSQLiteConfigLoadsMap2RecAndAllowsFlagOverrides(t *testing.T) 
 	}
 	if runCfg.EvaluationsLimit != 123 {
 		t.Fatalf("expected evaluations limit override 123, got %d", runCfg.EvaluationsLimit)
+	}
+	if runCfg.TraceStepSize != 444 {
+		t.Fatalf("expected trace step size override 444, got %d", runCfg.TraceStepSize)
 	}
 	if !runCfg.StartPaused || runCfg.AutoContinueAfterMS != 5 {
 		t.Fatalf("expected pause control override start=true auto_ms=5, got start=%t auto_ms=%d", runCfg.StartPaused, runCfg.AutoContinueAfterMS)
@@ -1382,6 +1389,22 @@ func TestMonitorCommandReturnsRunNotActiveForUnknownRun(t *testing.T) {
 		"--run-id", "monitor-live",
 	}); err == nil || !strings.Contains(err.Error(), "run not active") {
 		t.Fatalf("expected run not active error, got %v", err)
+	}
+	if err := run(context.Background(), []string{
+		"monitor", "print-trace",
+		"--store", "sqlite",
+		"--db-path", dbPath,
+		"--run-id", "monitor-live",
+	}); err == nil || !strings.Contains(err.Error(), "run not active") {
+		t.Fatalf("expected run not active error for print-trace, got %v", err)
+	}
+	if err := run(context.Background(), []string{
+		"monitor", "goal-reached",
+		"--store", "sqlite",
+		"--db-path", dbPath,
+		"--run-id", "monitor-live",
+	}); err == nil || !strings.Contains(err.Error(), "run not active") {
+		t.Fatalf("expected run not active error for goal-reached, got %v", err)
 	}
 }
 
