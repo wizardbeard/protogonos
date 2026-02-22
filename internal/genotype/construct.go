@@ -213,20 +213,17 @@ func ConstructNeuron(
 	}
 	applyPFNeuralParams(&neuron, pfRule, pfParams)
 
-	synapses := make([]model.Synapse, 0)
-	for _, spec := range inputSpecs {
-		fromID := strings.TrimSpace(spec.FromID)
-		if fromID == "" || spec.Width <= 0 {
-			continue
-		}
-		for i := 0; i < spec.Width; i++ {
+	inputIDPs := CreateInputIDPs(pfRule, inputSpecs, rng)
+	synapses := make([]model.Synapse, 0, len(inputIDPs))
+	for _, inputIDP := range inputIDPs {
+		for i, weight := range inputIDP.Weights {
 			synapse := model.Synapse{
-				ID:               fmt.Sprintf("%s:in:%s:%d", neuronID, sanitizeID(fromID), i),
-				From:             fromID,
+				ID:               fmt.Sprintf("%s:in:%s:%d", neuronID, sanitizeID(inputIDP.FromID), i),
+				From:             inputIDP.FromID,
 				To:               neuronID,
-				Weight:           randomCentered(rng),
+				Weight:           weight.Weight,
 				Enabled:          true,
-				PlasticityParams: defaultPFWeightParameters(pfRule, rng),
+				PlasticityParams: append([]float64(nil), weight.PlasticityParams...),
 			}
 			synapses = append(synapses, synapse)
 		}
