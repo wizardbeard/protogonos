@@ -116,3 +116,89 @@ func TestSpeciateSkipsTestGenomeAssignment(t *testing.T) {
 		t.Fatalf("expected no species assignment for test genome, got=%v", species)
 	}
 }
+
+func TestSpeciateInPopulationCreatesAndReusesFingerprintSpecies(t *testing.T) {
+	base := model.Genome{
+		ID:          "g1",
+		SensorIDs:   []string{"s1"},
+		ActuatorIDs: []string{"a1"},
+		Neurons: []model.Neuron{
+			{ID: "i", Activation: "identity"},
+			{ID: "o", Activation: "identity"},
+		},
+		Synapses: []model.Synapse{
+			{ID: "s1", From: "i", To: "o", Enabled: true},
+		},
+	}
+	peer := CloneGenome(base)
+	peer.ID = "g2"
+	peer.Synapses[0].Weight = -0.25 // same fingerprint topology.
+	other := CloneGenome(base)
+	other.ID = "g3"
+	other.Neurons = append(other.Neurons, model.Neuron{ID: "h", Activation: "tanh"})
+
+	nextCalls := 0
+	nextID := func(_ string) string {
+		nextCalls++
+		return ""
+	}
+
+	var population map[string]FingerprintSpecies
+	sp1, population := SpeciateInPopulation(base, population, nextID)
+	if sp1 == "" {
+		t.Fatal("expected species id for first genome")
+	}
+	if nextCalls != 1 {
+		t.Fatalf("expected one species-id generation call, got=%d", nextCalls)
+	}
+
+	sp2, population := SpeciateInPopulation(peer, population, nextID)
+	if sp2 != sp1 {
+		t.Fatalf("expected peer with same fingerprint to reuse species %q, got=%q", sp1, sp2)
+	}
+	if got := population[sp1].GenomeIDs; len(got) != 2 {
+		t.Fatalf("expected two members in reused species, got=%v", got)
+	}
+
+	sp3, population := SpeciateInPopulation(other, population, nextID)
+	if sp3 == sp1 {
+		t.Fatalf("expected topology-changed genome to create a new species, got=%q", sp3)
+	}
+	if len(population) != 2 {
+		t.Fatalf("expected 2 species after distinct topology, got=%d", len(population))
+	}
+	if nextCalls != 2 {
+		t.Fatalf("expected species-id generation call only on new species creation, got=%d", nextCalls)
+	}
+}
+
+func TestSpeciateInPopulationUsesProvidedSpeciesIDAndSkipsTestGenome(t *testing.T) {
+	genome := model.Genome{
+		ID:          "g1",
+		SensorIDs:   []string{"s1"},
+		ActuatorIDs: []string{"a1"},
+		Neurons: []model.Neuron{
+			{ID: "i", Activation: "identity"},
+			{ID: "o", Activation: "identity"},
+		},
+		Synapses: []model.Synapse{
+			{ID: "s1", From: "i", To: "o", Enabled: true},
+		},
+	}
+	population := map[string]FingerprintSpecies{}
+	key, population := SpeciateInPopulation(genome, population, func(_ string) string { return "species:custom" })
+	if key != "species:custom" {
+		t.Fatalf("expected explicit custom species id, got=%q", key)
+	}
+	if len(population[key].GenomeIDs) != 1 || population[key].GenomeIDs[0] != "g1" {
+		t.Fatalf("expected custom species member to include g1, got=%v", population[key].GenomeIDs)
+	}
+
+	key2, population := SpeciateInPopulation(model.Genome{ID: "test"}, population, func(_ string) string { return "ignored" })
+	if key2 != "" {
+		t.Fatalf("expected empty species id for test genome, got=%q", key2)
+	}
+	if len(population) != 1 {
+		t.Fatalf("expected population species unchanged for test genome, got=%d", len(population))
+	}
+}
