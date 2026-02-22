@@ -60,6 +60,14 @@ func (s *MemoryStore) GetGenome(_ context.Context, id string) (model.Genome, boo
 	return genome, ok, nil
 }
 
+func (s *MemoryStore) DeleteGenome(_ context.Context, id string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	delete(s.genomes, id)
+	return nil
+}
+
 func (s *MemoryStore) SavePopulation(_ context.Context, population model.Population) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()

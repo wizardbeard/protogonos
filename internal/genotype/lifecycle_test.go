@@ -174,6 +174,12 @@ func TestDeleteAgentFromPopulation(t *testing.T) {
 		t.Fatalf("init store: %v", err)
 	}
 
+	for _, id := range []string{"a1", "a2", "a3"} {
+		if err := store.SaveGenome(ctx, model.Genome{ID: id}); err != nil {
+			t.Fatalf("save genome %s: %v", id, err)
+		}
+	}
+
 	pop := model.Population{ID: "pop-1", AgentIDs: []string{"a1", "a2", "a3"}}
 	if err := store.SavePopulation(ctx, pop); err != nil {
 		t.Fatalf("save population: %v", err)
@@ -189,5 +195,15 @@ func TestDeleteAgentFromPopulation(t *testing.T) {
 	}
 	if len(updated.AgentIDs) != 2 || updated.AgentIDs[0] != "a1" || updated.AgentIDs[1] != "a3" {
 		t.Fatalf("unexpected agent ids after delete: %#v", updated.AgentIDs)
+	}
+	if _, ok, err := store.GetGenome(ctx, "a2"); err != nil {
+		t.Fatalf("get removed genome: %v", err)
+	} else if ok {
+		t.Fatal("expected removed agent genome to be deleted")
+	}
+	if _, ok, err := store.GetGenome(ctx, "a1"); err != nil {
+		t.Fatalf("get retained genome: %v", err)
+	} else if !ok {
+		t.Fatal("expected retained agent genome to remain")
 	}
 }

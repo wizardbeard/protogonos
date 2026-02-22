@@ -121,6 +121,15 @@ func (s *SQLiteStore) GetGenome(ctx context.Context, id string) (model.Genome, b
 	return genome, true, nil
 }
 
+func (s *SQLiteStore) DeleteGenome(ctx context.Context, id string) error {
+	db, err := s.getDB()
+	if err != nil {
+		return err
+	}
+	_, err = db.ExecContext(ctx, `DELETE FROM genomes WHERE id = ?`, id)
+	return err
+}
+
 func (s *SQLiteStore) SavePopulation(ctx context.Context, population model.Population) error {
 	db, err := s.getDB()
 	if err != nil {

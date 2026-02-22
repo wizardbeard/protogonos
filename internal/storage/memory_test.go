@@ -192,6 +192,29 @@ func TestMemoryStoreDeletePopulation(t *testing.T) {
 	}
 }
 
+func TestMemoryStoreDeleteGenome(t *testing.T) {
+	ctx := context.Background()
+	store := NewMemoryStore()
+	if err := store.Init(ctx); err != nil {
+		t.Fatalf("init: %v", err)
+	}
+
+	genome := model.Genome{ID: "g-del"}
+	if err := store.SaveGenome(ctx, genome); err != nil {
+		t.Fatalf("save genome: %v", err)
+	}
+	if err := store.DeleteGenome(ctx, genome.ID); err != nil {
+		t.Fatalf("delete genome: %v", err)
+	}
+	_, ok, err := store.GetGenome(ctx, genome.ID)
+	if err != nil {
+		t.Fatalf("get genome after delete: %v", err)
+	}
+	if ok {
+		t.Fatal("expected deleted genome to be missing")
+	}
+}
+
 func TestMemoryStoreResetClearsData(t *testing.T) {
 	ctx := context.Background()
 	store := NewMemoryStore()

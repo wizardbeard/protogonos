@@ -46,6 +46,19 @@ func TestSQLiteStoreGenomeAndPopulationRoundTrip(t *testing.T) {
 	if loadedGenome.ID != genome.ID || len(loadedGenome.Neurons) != len(genome.Neurons) {
 		t.Fatalf("unexpected genome loaded: %+v", loadedGenome)
 	}
+	if err := store.DeleteGenome(ctx, genome.ID); err != nil {
+		t.Fatalf("delete genome: %v", err)
+	}
+	_, ok, err = store.GetGenome(ctx, genome.ID)
+	if err != nil {
+		t.Fatalf("get genome after delete: %v", err)
+	}
+	if ok {
+		t.Fatalf("expected deleted genome %s to be absent", genome.ID)
+	}
+	if err := store.SaveGenome(ctx, genome); err != nil {
+		t.Fatalf("re-save genome: %v", err)
+	}
 
 	population := model.Population{
 		VersionedRecord: model.VersionedRecord{SchemaVersion: CurrentSchemaVersion, CodecVersion: CurrentCodecVersion},

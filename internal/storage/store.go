@@ -11,6 +11,7 @@ type Store interface {
 	Init(ctx context.Context) error
 	SaveGenome(ctx context.Context, genome model.Genome) error
 	GetGenome(ctx context.Context, id string) (model.Genome, bool, error)
+	DeleteGenome(ctx context.Context, id string) error
 	SavePopulation(ctx context.Context, population model.Population) error
 	GetPopulation(ctx context.Context, id string) (model.Population, bool, error)
 	DeletePopulation(ctx context.Context, id string) error

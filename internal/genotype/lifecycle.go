@@ -100,7 +100,10 @@ func DeleteAgentFromPopulation(ctx context.Context, store storage.Store, populat
 	}
 
 	pop.AgentIDs = filtered
-	return store.SavePopulation(ctx, pop)
+	if err := store.SavePopulation(ctx, pop); err != nil {
+		return err
+	}
+	return store.DeleteGenome(ctx, agentID)
 }
 
 func seedXORPopulation(size int, seed int64) []model.Genome {

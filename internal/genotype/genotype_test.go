@@ -102,6 +102,12 @@ func TestSavePopulationSnapshotReconcilesMembership(t *testing.T) {
 	if err := store.Init(ctx); err != nil {
 		t.Fatalf("init store: %v", err)
 	}
+	if err := store.SaveGenome(ctx, model.Genome{VersionedRecord: model.VersionedRecord{SchemaVersion: 1, CodecVersion: 1}, ID: "old-1"}); err != nil {
+		t.Fatalf("seed old genome: %v", err)
+	}
+	if err := store.SaveGenome(ctx, model.Genome{VersionedRecord: model.VersionedRecord{SchemaVersion: 1, CodecVersion: 1}, ID: "keep"}); err != nil {
+		t.Fatalf("seed keep genome: %v", err)
+	}
 	if err := store.SavePopulation(ctx, model.Population{
 		VersionedRecord: model.VersionedRecord{SchemaVersion: 1, CodecVersion: 1},
 		ID:              "pop1",
@@ -128,6 +134,21 @@ func TestSavePopulationSnapshotReconcilesMembership(t *testing.T) {
 	}
 	if len(pop.AgentIDs) != 2 || pop.AgentIDs[0] != "keep" || pop.AgentIDs[1] != "new-2" {
 		t.Fatalf("unexpected population agents: %+v", pop.AgentIDs)
+	}
+	if _, ok, err := store.GetGenome(ctx, "old-1"); err != nil {
+		t.Fatalf("get old genome: %v", err)
+	} else if ok {
+		t.Fatal("expected stale genome to be removed from store")
+	}
+	if _, ok, err := store.GetGenome(ctx, "keep"); err != nil {
+		t.Fatalf("get kept genome: %v", err)
+	} else if !ok {
+		t.Fatal("expected retained genome to remain in store")
+	}
+	if _, ok, err := store.GetGenome(ctx, "new-2"); err != nil {
+		t.Fatalf("get new genome: %v", err)
+	} else if !ok {
+		t.Fatal("expected new genome to be saved")
 	}
 }
 
