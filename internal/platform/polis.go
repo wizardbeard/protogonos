@@ -141,6 +141,8 @@ type EvolutionConfig struct {
 	Tuner                tuning.Tuner
 	TuneAttempts         int
 	TuneAttemptPolicy    tuning.AttemptPolicy
+	ValidationProbe      bool
+	TestProbe            bool
 	Control              chan evo.MonitorCommand
 	Initial              []model.Genome
 }
@@ -779,6 +781,8 @@ func (p *Polis) RunEvolution(ctx context.Context, cfg EvolutionConfig) (Evolutio
 		Tuner:                cfg.Tuner,
 		TuneAttempts:         cfg.TuneAttempts,
 		TuneAttemptPolicy:    cfg.TuneAttemptPolicy,
+		ValidationProbe:      cfg.ValidationProbe,
+		TestProbe:            cfg.TestProbe,
 		Control:              control,
 	})
 	if err != nil {

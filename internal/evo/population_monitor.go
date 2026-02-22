@@ -84,7 +84,19 @@ type TraceUpdate struct {
 	StepCycles         float64               `json:"step_cycles,omitempty"`
 	StepTime           float64               `json:"step_time,omitempty"`
 	SpeciesEvaluations map[string]int        `json:"species_evaluations,omitempty"`
+	Species            []TraceSpeciesMetrics `json:"species,omitempty"`
 	Diagnostics        GenerationDiagnostics `json:"diagnostics"`
+}
+
+type TraceSpeciesMetrics struct {
+	Key               string   `json:"key"`
+	Size              int      `json:"size"`
+	MeanFitness       float64  `json:"mean_fitness"`
+	BestFitness       float64  `json:"best_fitness"`
+	Evaluations       int      `json:"evaluations,omitempty"`
+	ChampionGenomeID  string   `json:"champion_genome_id,omitempty"`
+	ValidationFitness *float64 `json:"validation_fitness,omitempty"`
+	TestFitness       *float64 `json:"test_fitness,omitempty"`
 }
 
 type LineageRecord struct {
@@ -120,6 +132,8 @@ type MonitorConfig struct {
 	Tuner                tuning.Tuner
 	TuneAttempts         int
 	TuneAttemptPolicy    tuning.AttemptPolicy
+	ValidationProbe      bool
+	TestProbe            bool
 	Control              <-chan MonitorCommand
 	TraceStepSize        int
 	TraceUpdateHook      func(TraceUpdate)
@@ -137,6 +151,7 @@ type PopulationMonitor struct {
 	stepCycles             float64
 	stepTime               float64
 	stepSpeciesEvaluations map[string]int
+	lastTraceSpecies       []TraceSpeciesMetrics
 	lastDiagnostics        GenerationDiagnostics
 	hasDiagnostics         bool
 }
@@ -365,6 +380,9 @@ func (m *PopulationMonitor) Run(ctx context.Context, initial []model.Genome) (Ru
 		diagnostics = append(diagnostics, generationDiagnostics)
 		m.recordGenerationDiagnostics(generationDiagnostics)
 		m.accumulateStepWindow(scored, speciesByGenomeID)
+		if err := m.captureTraceSpecies(ctx, scored, speciesByGenomeID); err != nil {
+			return RunResult{}, err
+		}
 		m.emitStepTraceUpdates()
 		history, currentSet := summarizeSpeciesGeneration(scored, speciesByGenomeID, logicalGeneration+1, prevSpeciesSet)
 		speciesHistory = append(speciesHistory, history)
@@ -464,6 +482,9 @@ func (m *PopulationMonitor) runSteadyState(ctx context.Context, initial []model.
 		diagnostics = append(diagnostics, generationDiagnostics)
 		m.recordGenerationDiagnostics(generationDiagnostics)
 		m.accumulateStepWindow(ranked, speciesByGenomeID)
+		if err := m.captureTraceSpecies(ctx, ranked, speciesByGenomeID); err != nil {
+			return RunResult{}, err
+		}
 		m.emitStepTraceUpdates()
 		history, currentSet := summarizeSpeciesGeneration(ranked, speciesByGenomeID, logicalGeneration+1, prevSpeciesSet)
 		speciesHistory = append(speciesHistory, history)
@@ -625,6 +646,7 @@ func (m *PopulationMonitor) resetRunState() {
 	m.goalReached = false
 	m.totalEvaluations = 0
 	m.resetStepWindow()
+	m.lastTraceSpecies = nil
 	m.lastDiagnostics = GenerationDiagnostics{}
 	m.hasDiagnostics = false
 	m.nextTraceEvaluation = m.cfg.TraceStepSize
@@ -667,6 +689,76 @@ func (m *PopulationMonitor) accumulateStepWindow(scored []ScoredGenome, speciesB
 	}
 }
 
+func (m *PopulationMonitor) captureTraceSpecies(ctx context.Context, scored []ScoredGenome, speciesByGenomeID map[string]string) error {
+	type aggregate struct {
+		size     int
+		sum      float64
+		best     float64
+		champion model.Genome
+	}
+	bySpecies := make(map[string]*aggregate)
+	for _, item := range scored {
+		key := speciesByGenomeID[item.Genome.ID]
+		if key == "" {
+			key = "species:unknown"
+		}
+		bucket := bySpecies[key]
+		if bucket == nil {
+			bucket = &aggregate{
+				best:     item.Fitness,
+				champion: item.Genome,
+			}
+			bySpecies[key] = bucket
+		}
+		bucket.size++
+		bucket.sum += item.Fitness
+		if item.Fitness > bucket.best {
+			bucket.best = item.Fitness
+			bucket.champion = item.Genome
+		}
+	}
+
+	keys := make([]string, 0, len(bySpecies))
+	for key := range bySpecies {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+
+	out := make([]TraceSpeciesMetrics, 0, len(keys))
+	for _, key := range keys {
+		bucket := bySpecies[key]
+		entry := TraceSpeciesMetrics{
+			Key:              key,
+			Size:             bucket.size,
+			MeanFitness:      bucket.sum / float64(bucket.size),
+			BestFitness:      bucket.best,
+			Evaluations:      m.stepSpeciesEvaluations[key],
+			ChampionGenomeID: bucket.champion.ID,
+		}
+		if m.cfg.OpMode == OpModeGT && (m.cfg.ValidationProbe || m.cfg.TestProbe) {
+			if m.cfg.ValidationProbe {
+				fitness, _, err := m.evaluateGenome(ctx, bucket.champion)
+				if err != nil {
+					return fmt.Errorf("validation probe for species %s champion %s: %w", key, bucket.champion.ID, err)
+				}
+				val := fitness
+				entry.ValidationFitness = &val
+			}
+			if m.cfg.TestProbe {
+				fitness, _, err := m.evaluateGenome(ctx, bucket.champion)
+				if err != nil {
+					return fmt.Errorf("test probe for species %s champion %s: %w", key, bucket.champion.ID, err)
+				}
+				val := fitness
+				entry.TestFitness = &val
+			}
+		}
+		out = append(out, entry)
+	}
+	m.lastTraceSpecies = out
+	return nil
+}
+
 func (m *PopulationMonitor) emitTraceUpdate(reason TraceUpdateReason, totalEvaluations int) {
 	if m.cfg.TraceUpdateHook == nil {
 		return
@@ -682,6 +774,9 @@ func (m *PopulationMonitor) emitTraceUpdate(reason TraceUpdateReason, totalEvalu
 	if len(m.stepSpeciesEvaluations) > 0 {
 		update.SpeciesEvaluations = cloneSpeciesEvaluationCounts(m.stepSpeciesEvaluations)
 	}
+	if len(m.lastTraceSpecies) > 0 {
+		update.Species = cloneTraceSpeciesMetrics(m.lastTraceSpecies)
+	}
 	if m.hasDiagnostics {
 		update.Diagnostics = m.lastDiagnostics
 	}
@@ -692,6 +787,22 @@ func cloneSpeciesEvaluationCounts(in map[string]int) map[string]int {
 	out := make(map[string]int, len(in))
 	for key, value := range in {
 		out[key] = value
+	}
+	return out
+}
+
+func cloneTraceSpeciesMetrics(in []TraceSpeciesMetrics) []TraceSpeciesMetrics {
+	out := make([]TraceSpeciesMetrics, len(in))
+	for i, item := range in {
+		out[i] = item
+		if item.ValidationFitness != nil {
+			val := *item.ValidationFitness
+			out[i].ValidationFitness = &val
+		}
+		if item.TestFitness != nil {
+			val := *item.TestFitness
+			out[i].TestFitness = &val
+		}
 	}
 	return out
 }

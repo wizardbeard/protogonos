@@ -181,6 +181,8 @@ func runRun(ctx context.Context, args []string) error {
 	dbPath := fs.String("db-path", "protogonos.db", "sqlite database path")
 	enableTuning := fs.Bool("tuning", false, "enable exoself tuning")
 	compareTuning := fs.Bool("compare-tuning", false, "run with and without tuning and emit side-by-side metrics")
+	validationProbe := fs.Bool("validation-probe", false, "evaluate per-species champions in validation probe during gt runs")
+	testProbe := fs.Bool("test-probe", false, "evaluate per-species champions in test probe during gt runs")
 	profileName := fs.String("profile", "", "optional parity profile id (from testdata/fixtures/parity/ref_benchmarker_profiles.json)")
 	selectionName := fs.String("selection", "elite", "parent selection strategy: elite|tournament|species_tournament|species_shared_tournament|hof_competition|hof_rank|hof_top3|hof_efficiency|hof_random|competition|top3")
 	postprocessorName := fs.String("fitness-postprocessor", "none", "fitness postprocessor: none|size_proportional|nsize_proportional|novelty_proportional")
@@ -248,6 +250,8 @@ func runRun(ctx context.Context, args []string) error {
 			TopologicalMax:        *topoMax,
 			EnableTuning:          *enableTuning,
 			CompareTuning:         *compareTuning,
+			ValidationProbe:       *validationProbe,
+			TestProbe:             *testProbe,
 			TuneSelection:         *tuneSelection,
 			TuneDurationPolicy:    *tuneDurationPolicy,
 			TuneDurationParam:     *tuneDurationParam,
@@ -291,6 +295,8 @@ func runRun(ctx context.Context, args []string) error {
 			"workers":                 *workers,
 			"tuning":                  *enableTuning,
 			"compare-tuning":          *compareTuning,
+			"validation-probe":        *validationProbe,
+			"test-probe":              *testProbe,
 			"selection":               *selectionName,
 			"fitness-postprocessor":   *postprocessorName,
 			"topo-policy":             *topoPolicyName,
@@ -978,6 +984,8 @@ func runBenchmark(ctx context.Context, args []string) error {
 	storeKind := fs.String("store", storage.DefaultStoreKind(), "store backend: memory|sqlite")
 	dbPath := fs.String("db-path", "protogonos.db", "sqlite database path")
 	enableTuning := fs.Bool("tuning", false, "enable exoself tuning")
+	validationProbe := fs.Bool("validation-probe", false, "evaluate per-species champions in validation probe during gt runs")
+	testProbe := fs.Bool("test-probe", false, "evaluate per-species champions in test probe during gt runs")
 	profileName := fs.String("profile", "", "optional parity profile id (from testdata/fixtures/parity/ref_benchmarker_profiles.json)")
 	selectionName := fs.String("selection", "elite", "parent selection strategy: elite|tournament|species_tournament|species_shared_tournament|hof_competition|hof_rank|hof_top3|hof_efficiency|hof_random|competition|top3")
 	postprocessorName := fs.String("fitness-postprocessor", "none", "fitness postprocessor: none|size_proportional|nsize_proportional|novelty_proportional")
@@ -1045,6 +1053,8 @@ func runBenchmark(ctx context.Context, args []string) error {
 			TopologicalParam:      *topoParam,
 			TopologicalMax:        *topoMax,
 			EnableTuning:          *enableTuning,
+			ValidationProbe:       *validationProbe,
+			TestProbe:             *testProbe,
 			TuneSelection:         *tuneSelection,
 			TuneDurationPolicy:    *tuneDurationPolicy,
 			TuneDurationParam:     *tuneDurationParam,
@@ -1087,6 +1097,8 @@ func runBenchmark(ctx context.Context, args []string) error {
 			"seed":                    *seed,
 			"workers":                 *workers,
 			"tuning":                  *enableTuning,
+			"validation-probe":        *validationProbe,
+			"test-probe":              *testProbe,
 			"selection":               *selectionName,
 			"fitness-postprocessor":   *postprocessorName,
 			"topo-policy":             *topoPolicyName,

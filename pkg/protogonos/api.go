@@ -67,6 +67,8 @@ type RunRequest struct {
 	TopologicalMax        int
 	EnableTuning          bool
 	CompareTuning         bool
+	ValidationProbe       bool
+	TestProbe             bool
 	TuneSelection         string
 	TuneDurationPolicy    string
 	TuneDurationParam     float64
@@ -404,6 +406,8 @@ func (c *Client) Run(ctx context.Context, req RunRequest) (RunSummary, error) {
 			Tuner:                tuner,
 			TuneAttempts:         req.TuneAttempts,
 			TuneAttemptPolicy:    attemptPolicy,
+			ValidationProbe:      req.ValidationProbe,
+			TestProbe:            req.TestProbe,
 			Initial:              initialPopulation,
 		})
 	}
@@ -513,6 +517,8 @@ func (c *Client) Run(ctx context.Context, req RunRequest) (RunSummary, error) {
 			TopologicalParam:      req.TopologicalParam,
 			TopologicalMax:        req.TopologicalMax,
 			TuningEnabled:         req.EnableTuning,
+			ValidationProbe:       req.ValidationProbe,
+			TestProbe:             req.TestProbe,
 			TuneSelection:         req.TuneSelection,
 			TuneDurationPolicy:    req.TuneDurationPolicy,
 			TuneDurationParam:     req.TuneDurationParam,

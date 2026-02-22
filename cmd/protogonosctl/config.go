@@ -79,6 +79,12 @@ func loadRunRequestFromConfig(path string) (protoapi.RunRequest, error) {
 	if v, ok := asBool(raw["compare_tuning"]); ok {
 		req.CompareTuning = v
 	}
+	if v, ok := asBool(raw["validation_probe"]); ok {
+		req.ValidationProbe = v
+	}
+	if v, ok := asBool(raw["test_probe"]); ok {
+		req.TestProbe = v
+	}
 	if v, ok := asInt(raw["tune_attempts"]); ok {
 		req.TuneAttempts = v
 	}
@@ -311,6 +317,10 @@ func overrideFromFlags(req *protoapi.RunRequest, set map[string]bool, flagValue 
 			req.EnableTuning = v.(bool)
 		case "compare-tuning":
 			req.CompareTuning = v.(bool)
+		case "validation-probe":
+			req.ValidationProbe = v.(bool)
+		case "test-probe":
+			req.TestProbe = v.(bool)
 		case "selection":
 			req.Selection = v.(string)
 		case "fitness-postprocessor":

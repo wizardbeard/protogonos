@@ -21,6 +21,8 @@ func TestLoadRunRequestFromConfigUsesConstraintAndPMP(t *testing.T) {
 		"tune_perturbation_range": 1.8,
 		"tune_annealing_factor":   0.95,
 		"tune_min_improvement":    0.015,
+		"validation_probe":        true,
+		"test_probe":              true,
 		"trace": map[string]any{
 			"step_size": 333,
 		},
@@ -105,6 +107,9 @@ func TestLoadRunRequestFromConfigUsesConstraintAndPMP(t *testing.T) {
 	}
 	if req.TuneMinImprovement != 0.015 {
 		t.Fatalf("unexpected tune min improvement mapping: %f", req.TuneMinImprovement)
+	}
+	if !req.ValidationProbe || !req.TestProbe {
+		t.Fatalf("expected validation/test probes from config, got validation=%t test=%t", req.ValidationProbe, req.TestProbe)
 	}
 	if req.TraceStepSize != 333 {
 		t.Fatalf("expected trace step size from trace record, got %d", req.TraceStepSize)

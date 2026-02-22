@@ -40,6 +40,8 @@ type RunConfig struct {
 	TopologicalParam      float64 `json:"topological_param"`
 	TopologicalMax        int     `json:"topological_max"`
 	TuningEnabled         bool    `json:"tuning_enabled"`
+	ValidationProbe       bool    `json:"validation_probe"`
+	TestProbe             bool    `json:"test_probe"`
 	TuneSelection         string  `json:"tune_selection"`
 	TuneDurationPolicy    string  `json:"tune_duration_policy"`
 	TuneDurationParam     float64 `json:"tune_duration_param"`
