@@ -29,6 +29,17 @@ type GenomeSignature struct {
 	Summary     TopologySummary `json:"summary"`
 }
 
+// UpdateFingerprint is an explicit helper analog to genotype:update_fingerprint/1.
+func UpdateFingerprint(genome model.Genome) string {
+	return ComputeGenomeSignature(genome).Fingerprint
+}
+
+// UpdateNNTopologySummary is an explicit helper analog to
+// genotype:update_NNTopologySummary/1.
+func UpdateNNTopologySummary(genome model.Genome) TopologySummary {
+	return ComputeGenomeSignature(genome).Summary
+}
+
 func ComputeGenomeSignature(genome model.Genome) GenomeSignature {
 	actDist := make(map[string]int)
 	aggrDist := make(map[string]int)

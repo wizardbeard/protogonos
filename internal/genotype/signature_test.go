@@ -75,3 +75,32 @@ func TestComputeGenomeSignatureIncludesEncodingTypeInFingerprint(t *testing.T) {
 		t.Fatalf("expected different fingerprints when encoding type differs: %s", neural.Fingerprint)
 	}
 }
+
+func TestUpdateFingerprintAndTopologySummaryAliases(t *testing.T) {
+	genome := model.Genome{
+		ID:          "g-alias",
+		SensorIDs:   []string{"s1"},
+		ActuatorIDs: []string{"a1"},
+		Neurons: []model.Neuron{
+			{ID: "i", Activation: "identity"},
+			{ID: "o", Activation: "identity"},
+		},
+		Synapses: []model.Synapse{
+			{ID: "s1", From: "i", To: "o", Weight: 0.5, Enabled: true},
+		},
+	}
+
+	signature := ComputeGenomeSignature(genome)
+	if got := UpdateFingerprint(genome); got != signature.Fingerprint {
+		t.Fatalf("expected update fingerprint alias=%q, got=%q", signature.Fingerprint, got)
+	}
+	summary := UpdateNNTopologySummary(genome)
+	if summary.TotalNeurons != signature.Summary.TotalNeurons ||
+		summary.TotalSynapses != signature.Summary.TotalSynapses ||
+		summary.TotalNILs != signature.Summary.TotalNILs ||
+		summary.TotalNOLs != signature.Summary.TotalNOLs ||
+		summary.TotalNROs != signature.Summary.TotalNROs ||
+		summary.Type != signature.Summary.Type {
+		t.Fatalf("expected update topology summary alias=%+v, got=%+v", signature.Summary, summary)
+	}
+}
