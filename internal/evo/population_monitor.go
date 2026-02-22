@@ -77,10 +77,14 @@ const (
 )
 
 type TraceUpdate struct {
-	Reason           TraceUpdateReason     `json:"reason"`
-	TotalEvaluations int                   `json:"total_evaluations"`
-	GoalReached      bool                  `json:"goal_reached"`
-	Diagnostics      GenerationDiagnostics `json:"diagnostics"`
+	Reason             TraceUpdateReason     `json:"reason"`
+	TotalEvaluations   int                   `json:"total_evaluations"`
+	GoalReached        bool                  `json:"goal_reached"`
+	StepEvaluations    int                   `json:"step_evaluations,omitempty"`
+	StepCycles         float64               `json:"step_cycles,omitempty"`
+	StepTime           float64               `json:"step_time,omitempty"`
+	SpeciesEvaluations map[string]int        `json:"species_evaluations,omitempty"`
+	Diagnostics        GenerationDiagnostics `json:"diagnostics"`
 }
 
 type LineageRecord struct {
@@ -122,15 +126,19 @@ type MonitorConfig struct {
 }
 
 type PopulationMonitor struct {
-	cfg                 MonitorConfig
-	rng                 *rand.Rand
-	speciation          *AdaptiveSpeciation
-	paused              bool
-	goalReached         bool
-	totalEvaluations    int
-	nextTraceEvaluation int
-	lastDiagnostics     GenerationDiagnostics
-	hasDiagnostics      bool
+	cfg                    MonitorConfig
+	rng                    *rand.Rand
+	speciation             *AdaptiveSpeciation
+	paused                 bool
+	goalReached            bool
+	totalEvaluations       int
+	nextTraceEvaluation    int
+	stepEvaluations        int
+	stepCycles             float64
+	stepTime               float64
+	stepSpeciesEvaluations map[string]int
+	lastDiagnostics        GenerationDiagnostics
+	hasDiagnostics         bool
 }
 
 type goalAwareTuner interface {
@@ -356,6 +364,7 @@ func (m *PopulationMonitor) Run(ctx context.Context, initial []model.Genome) (Ru
 		generationDiagnostics := summarizeGeneration(scored, logicalGeneration+1, speciationStats, tuningStats)
 		diagnostics = append(diagnostics, generationDiagnostics)
 		m.recordGenerationDiagnostics(generationDiagnostics)
+		m.accumulateStepWindow(scored, speciesByGenomeID)
 		m.emitStepTraceUpdates()
 		history, currentSet := summarizeSpeciesGeneration(scored, speciesByGenomeID, logicalGeneration+1, prevSpeciesSet)
 		speciesHistory = append(speciesHistory, history)
@@ -454,6 +463,7 @@ func (m *PopulationMonitor) runSteadyState(ctx context.Context, initial []model.
 		generationDiagnostics := summarizeGeneration(ranked, logicalGeneration+1, speciationStats, tuningStats)
 		diagnostics = append(diagnostics, generationDiagnostics)
 		m.recordGenerationDiagnostics(generationDiagnostics)
+		m.accumulateStepWindow(ranked, speciesByGenomeID)
 		m.emitStepTraceUpdates()
 		history, currentSet := summarizeSpeciesGeneration(ranked, speciesByGenomeID, logicalGeneration+1, prevSpeciesSet)
 		speciesHistory = append(speciesHistory, history)
@@ -614,6 +624,7 @@ func (m *PopulationMonitor) resetRunState() {
 	m.paused = false
 	m.goalReached = false
 	m.totalEvaluations = 0
+	m.resetStepWindow()
 	m.lastDiagnostics = GenerationDiagnostics{}
 	m.hasDiagnostics = false
 	m.nextTraceEvaluation = m.cfg.TraceStepSize
@@ -628,9 +639,31 @@ func (m *PopulationMonitor) emitStepTraceUpdates() {
 	if m.cfg.TraceUpdateHook == nil || m.cfg.TraceStepSize <= 0 {
 		return
 	}
-	for m.totalEvaluations >= m.nextTraceEvaluation {
-		m.emitTraceUpdate(TraceUpdateReasonStep, m.nextTraceEvaluation)
-		m.nextTraceEvaluation += m.cfg.TraceStepSize
+	if m.totalEvaluations < m.nextTraceEvaluation {
+		return
+	}
+	m.emitTraceUpdate(TraceUpdateReasonStep, m.nextTraceEvaluation)
+	m.nextTraceEvaluation += m.cfg.TraceStepSize
+	m.resetStepWindow()
+}
+
+func (m *PopulationMonitor) resetStepWindow() {
+	m.stepEvaluations = 0
+	m.stepCycles = 0
+	m.stepTime = 0
+	m.stepSpeciesEvaluations = make(map[string]int)
+}
+
+func (m *PopulationMonitor) accumulateStepWindow(scored []ScoredGenome, speciesByGenomeID map[string]string) {
+	m.stepEvaluations += len(scored)
+	for _, item := range scored {
+		m.stepCycles += traceCycleMetric(item.Trace)
+		m.stepTime += traceTimeMetric(item.Trace)
+		speciesKey := speciesByGenomeID[item.Genome.ID]
+		if speciesKey == "" {
+			speciesKey = "species:unknown"
+		}
+		m.stepSpeciesEvaluations[speciesKey]++
 	}
 }
 
@@ -642,11 +675,78 @@ func (m *PopulationMonitor) emitTraceUpdate(reason TraceUpdateReason, totalEvalu
 		Reason:           reason,
 		TotalEvaluations: totalEvaluations,
 		GoalReached:      m.goalReached,
+		StepEvaluations:  m.stepEvaluations,
+		StepCycles:       m.stepCycles,
+		StepTime:         m.stepTime,
+	}
+	if len(m.stepSpeciesEvaluations) > 0 {
+		update.SpeciesEvaluations = cloneSpeciesEvaluationCounts(m.stepSpeciesEvaluations)
 	}
 	if m.hasDiagnostics {
 		update.Diagnostics = m.lastDiagnostics
 	}
 	m.cfg.TraceUpdateHook(update)
+}
+
+func cloneSpeciesEvaluationCounts(in map[string]int) map[string]int {
+	out := make(map[string]int, len(in))
+	for key, value := range in {
+		out[key] = value
+	}
+	return out
+}
+
+func traceCycleMetric(trace scape.Trace) float64 {
+	if v, ok := traceNumber(trace, "cycles", "cycle", "steps_survived", "steps"); ok {
+		return v
+	}
+	return 0
+}
+
+func traceTimeMetric(trace scape.Trace) float64 {
+	if v, ok := traceNumber(trace, "time", "duration", "elapsed", "time_ms", "duration_ms", "elapsed_ms"); ok {
+		return v
+	}
+	return 0
+}
+
+func traceNumber(trace scape.Trace, keys ...string) (float64, bool) {
+	if trace == nil {
+		return 0, false
+	}
+	for _, key := range keys {
+		raw, ok := trace[key]
+		if !ok {
+			continue
+		}
+		switch value := raw.(type) {
+		case int:
+			return float64(value), true
+		case int8:
+			return float64(value), true
+		case int16:
+			return float64(value), true
+		case int32:
+			return float64(value), true
+		case int64:
+			return float64(value), true
+		case uint:
+			return float64(value), true
+		case uint8:
+			return float64(value), true
+		case uint16:
+			return float64(value), true
+		case uint32:
+			return float64(value), true
+		case uint64:
+			return float64(value), true
+		case float32:
+			return float64(value), true
+		case float64:
+			return value, true
+		}
+	}
+	return 0, false
 }
 
 func summarizeGeneration(scored []ScoredGenome, generation int, speciationStats SpeciationStats, tuningStats tuningGenerationStats) GenerationDiagnostics {

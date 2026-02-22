@@ -3,6 +3,7 @@ package evo
 import (
 	"context"
 	"errors"
+	"math"
 	"math/rand"
 	"strings"
 	"testing"
@@ -610,6 +611,16 @@ func TestPopulationMonitorTraceStepAndPrintCallbacks(t *testing.T) {
 	if first.Reason != TraceUpdateReasonStep || first.TotalEvaluations != 3 {
 		t.Fatalf("unexpected first trace update: %+v", first)
 	}
+	if first.StepEvaluations != len(initial) {
+		t.Fatalf("expected first step evaluations=%d, got %d", len(initial), first.StepEvaluations)
+	}
+	speciesEvalTotal := 0
+	for _, count := range first.SpeciesEvaluations {
+		speciesEvalTotal += count
+	}
+	if speciesEvalTotal != len(initial) {
+		t.Fatalf("expected first step species evaluation total=%d, got %d", len(initial), speciesEvalTotal)
+	}
 
 	control <- CommandPrintTrace
 	control <- CommandContinue
@@ -655,6 +666,93 @@ drain:
 	}
 	if reasonCount[TraceUpdateReasonCompleted] == 0 {
 		t.Fatalf("expected completion trace callback, got %+v", updates)
+	}
+}
+
+type metricScape struct{}
+
+func (metricScape) Name() string { return "metric-scape" }
+
+func (metricScape) Evaluate(ctx context.Context, a scape.Agent) (scape.Fitness, scape.Trace, error) {
+	runner, ok := a.(scape.StepAgent)
+	if !ok {
+		return 0, nil, context.Canceled
+	}
+	out, err := runner.RunStep(ctx, []float64{1.0})
+	if err != nil {
+		return 0, nil, err
+	}
+	if len(out) != 1 {
+		return 0, nil, context.Canceled
+	}
+	return 1.0, scape.Trace{"steps_survived": 7, "time_ms": 1.5}, nil
+}
+
+func TestPopulationMonitorTraceStepAccumulatesCycleTimeAndSpeciesEvaluations(t *testing.T) {
+	initial := []model.Genome{
+		newLinearGenome("g0", -1.0),
+		newLinearGenome("g1", -0.8),
+		newLinearGenome("g2", -0.6),
+	}
+	updates := make(chan TraceUpdate, 8)
+
+	monitor, err := NewPopulationMonitor(MonitorConfig{
+		Scape:           metricScape{},
+		Mutation:        namedNoopMutation{name: "noop"},
+		PopulationSize:  len(initial),
+		EliteCount:      1,
+		Generations:     1,
+		TraceStepSize:   2,
+		Workers:         1,
+		Seed:            9,
+		InputNeuronIDs:  []string{"i"},
+		OutputNeuronIDs: []string{"o"},
+		TraceUpdateHook: func(update TraceUpdate) {
+			updates <- update
+		},
+	})
+	if err != nil {
+		t.Fatalf("new monitor: %v", err)
+	}
+
+	_, err = monitor.Run(context.Background(), initial)
+	if err != nil {
+		t.Fatalf("run: %v", err)
+	}
+
+	var stepUpdate *TraceUpdate
+drain:
+	for {
+		select {
+		case update := <-updates:
+			if update.Reason == TraceUpdateReasonStep {
+				copied := update
+				stepUpdate = &copied
+			}
+		default:
+			break drain
+		}
+	}
+	if stepUpdate == nil {
+		t.Fatal("expected step trace update")
+	}
+	if stepUpdate.StepEvaluations != len(initial) {
+		t.Fatalf("expected step evaluations=%d, got %d", len(initial), stepUpdate.StepEvaluations)
+	}
+	expectedCycles := float64(len(initial) * 7)
+	if math.Abs(stepUpdate.StepCycles-expectedCycles) > 1e-9 {
+		t.Fatalf("expected step cycles=%f, got %f", expectedCycles, stepUpdate.StepCycles)
+	}
+	expectedTime := float64(len(initial)) * 1.5
+	if math.Abs(stepUpdate.StepTime-expectedTime) > 1e-9 {
+		t.Fatalf("expected step time=%f, got %f", expectedTime, stepUpdate.StepTime)
+	}
+	totalSpeciesEvaluations := 0
+	for _, count := range stepUpdate.SpeciesEvaluations {
+		totalSpeciesEvaluations += count
+	}
+	if totalSpeciesEvaluations != len(initial) {
+		t.Fatalf("expected species evaluation sum=%d, got %d", len(initial), totalSpeciesEvaluations)
 	}
 }
 
