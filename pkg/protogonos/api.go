@@ -46,6 +46,7 @@ type RunRequest struct {
 	ContinuePopulationID  string
 	SpecieIdentifier      string
 	OpMode                string
+	EvolutionType         string
 	Scape                 string
 	Population            int
 	Generations           int
@@ -378,6 +379,7 @@ func (c *Client) Run(ctx context.Context, req RunRequest) (RunSummary, error) {
 		return p.RunEvolution(ctx, platform.EvolutionConfig{
 			RunID:                runID,
 			OpMode:               req.OpMode,
+			EvolutionType:        req.EvolutionType,
 			ScapeName:            req.Scape,
 			PopulationSize:       req.Population,
 			Generations:          req.Generations,
@@ -485,6 +487,7 @@ func (c *Client) Run(ctx context.Context, req RunRequest) (RunSummary, error) {
 		Config: stats.RunConfig{
 			RunID:                 runID,
 			OpMode:                req.OpMode,
+			EvolutionType:         req.EvolutionType,
 			Scape:                 req.Scape,
 			ContinuePopulationID:  req.ContinuePopulationID,
 			SpecieIdentifier:      req.SpecieIdentifier,
@@ -1109,6 +1112,14 @@ func materializeRunConfigFromRequest(req RunRequest) (materializedRunConfig, err
 	if req.OpMode != evo.OpModeGT {
 		req.EnableTuning = false
 		req.CompareTuning = false
+	}
+	if req.EvolutionType == "" {
+		req.EvolutionType = evo.EvolutionTypeGenerational
+	}
+	switch req.EvolutionType {
+	case evo.EvolutionTypeGenerational, evo.EvolutionTypeSteadyState:
+	default:
+		return materializedRunConfig{}, errors.New("evolution type must be one of generational|steady_state")
 	}
 	if req.Scape == "" {
 		req.Scape = "xor"

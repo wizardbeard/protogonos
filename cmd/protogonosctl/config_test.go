@@ -32,6 +32,7 @@ func TestLoadRunRequestFromConfigUsesConstraintAndPMP(t *testing.T) {
 			"population_id":       "pmp-pop",
 		},
 		"constraint": map[string]any{
+			"population_evo_alg_f":               "steady_state",
 			"population_selection_f":             "hof_competition",
 			"population_fitness_postprocessor_f": "nsize_proportional",
 			"tuning_selection_fs":                []any{"dynamic_random"},
@@ -75,6 +76,9 @@ func TestLoadRunRequestFromConfigUsesConstraintAndPMP(t *testing.T) {
 	if req.OpMode != "validation" {
 		t.Fatalf("expected pmp-derived op mode validation, got %s", req.OpMode)
 	}
+	if req.EvolutionType != "steady_state" {
+		t.Fatalf("expected constraint-derived evolution type steady_state, got %s", req.EvolutionType)
+	}
 	if req.SurvivalPercentage != 0.6 || req.EvaluationsLimit != 111 || req.FitnessGoal != 0.88 {
 		t.Fatalf("expected pmp-derived monitor controls, got survival=%f eval_limit=%d fitness_goal=%f", req.SurvivalPercentage, req.EvaluationsLimit, req.FitnessGoal)
 	}
@@ -107,6 +111,32 @@ func TestLoadRunRequestFromConfigUsesConstraintAndPMP(t *testing.T) {
 	}
 	if req.WeightBias != 5 || req.WeightRemoveBias != 1 || req.WeightActivation != 6 || req.WeightAggregator != 7 || req.WeightAddSynapse != 4 || req.WeightAddNeuron != 3 || req.WeightPlasticityRule != 8 || req.WeightPlasticity != 2 {
 		t.Fatalf("unexpected mapped mutation weights: %+v", req)
+	}
+}
+
+func TestLoadRunRequestFromConfigUsesPMPEvolutionTypeFallback(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "run_config_pmp_evolution.json")
+	payload := map[string]any{
+		"pmp": map[string]any{
+			"population_id":    "pmp-evo-pop",
+			"init_specie_size": 7,
+			"evolution_type":   "steady_state",
+		},
+	}
+	data, err := json.Marshal(payload)
+	if err != nil {
+		t.Fatalf("marshal payload: %v", err)
+	}
+	if err := os.WriteFile(path, data, 0o644); err != nil {
+		t.Fatalf("write config: %v", err)
+	}
+
+	req, err := loadRunRequestFromConfig(path)
+	if err != nil {
+		t.Fatalf("load run request: %v", err)
+	}
+	if req.EvolutionType != "steady_state" {
+		t.Fatalf("expected pmp evolution type fallback, got %s", req.EvolutionType)
 	}
 }
 

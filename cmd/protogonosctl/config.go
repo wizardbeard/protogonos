@@ -37,6 +37,9 @@ func loadRunRequestFromConfig(path string) (protoapi.RunRequest, error) {
 	if v, ok := asString(raw["op_mode"]); ok {
 		req.OpMode = v
 	}
+	if v, ok := asString(raw["evolution_type"]); ok {
+		req.EvolutionType = mapPopulationEvolutionType(v)
+	}
 	if v, ok := asInt(raw["population"]); ok {
 		req.Population = v
 	}
@@ -116,6 +119,7 @@ func loadRunRequestFromConfig(path string) (protoapi.RunRequest, error) {
 	if constraintMap, ok := raw["constraint"].(map[string]any); ok {
 		constraint := map2rec.ConvertConstraint(constraintMap)
 		req.Selection = mapPopulationSelection(constraint.PopulationSelectionF)
+		req.EvolutionType = mapPopulationEvolutionType(constraint.PopulationEvoAlgF)
 		if req.SpecieIdentifier == "" {
 			req.SpecieIdentifier = mapSpecieIdentifier(constraint.SpecieDistinguishers)
 		}
@@ -173,6 +177,9 @@ func loadRunRequestFromConfig(path string) (protoapi.RunRequest, error) {
 		pmp := map2rec.ConvertPMP(pmpMap)
 		if req.OpMode == "" && pmp.OpMode != "" {
 			req.OpMode = pmp.OpMode
+		}
+		if req.EvolutionType == "" && pmp.EvolutionType != "" {
+			req.EvolutionType = mapPopulationEvolutionType(pmp.EvolutionType)
 		}
 		if _, hasPopulationID := pmpMap["population_id"]; hasPopulationID {
 			if req.ContinuePopulationID == "" && pmp.PopulationID != "" {
@@ -267,6 +274,8 @@ func overrideFromFlags(req *protoapi.RunRequest, set map[string]bool, flagValue 
 			req.Scape = v.(string)
 		case "op-mode":
 			req.OpMode = v.(string)
+		case "evolution-type":
+			req.EvolutionType = mapPopulationEvolutionType(v.(string))
 		case "pop":
 			req.Population = v.(int)
 		case "gens":
@@ -350,6 +359,9 @@ func overrideFromFlags(req *protoapi.RunRequest, set map[string]bool, flagValue 
 	if req.Scape == "" {
 		req.Scape = "xor"
 	}
+	if req.EvolutionType != "" {
+		req.EvolutionType = mapPopulationEvolutionType(req.EvolutionType)
+	}
 	if req.TuneSelection != "" {
 		req.TuneSelection = normalizeTuneSelection(req.TuneSelection)
 	}
@@ -402,6 +414,15 @@ func mapSpecieIdentifier(distinguishers []string) string {
 		return "topology"
 	default:
 		return ""
+	}
+}
+
+func mapPopulationEvolutionType(name string) string {
+	switch name {
+	case "generational", "steady_state":
+		return name
+	default:
+		return name
 	}
 }
 

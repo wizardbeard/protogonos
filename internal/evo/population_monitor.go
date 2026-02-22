@@ -80,6 +80,7 @@ type LineageRecord struct {
 type MonitorConfig struct {
 	Scape                scape.Scape
 	OpMode               string
+	EvolutionType        string
 	Mutation             Operator
 	MutationPolicy       []WeightedMutation
 	Selector             Selector
@@ -137,6 +138,11 @@ const (
 	OpModeTest       = "test"
 )
 
+const (
+	EvolutionTypeGenerational = "generational"
+	EvolutionTypeSteadyState  = "steady_state"
+)
+
 type noOpMutation struct{}
 
 func (noOpMutation) Name() string { return "noop" }
@@ -156,6 +162,14 @@ func NewPopulationMonitor(cfg MonitorConfig) (*PopulationMonitor, error) {
 	case OpModeGT, OpModeValidation, OpModeTest:
 	default:
 		return nil, fmt.Errorf("unsupported op mode: %s", cfg.OpMode)
+	}
+	if cfg.EvolutionType == "" {
+		cfg.EvolutionType = EvolutionTypeGenerational
+	}
+	switch cfg.EvolutionType {
+	case EvolutionTypeGenerational, EvolutionTypeSteadyState:
+	default:
+		return nil, fmt.Errorf("unsupported evolution type: %s", cfg.EvolutionType)
 	}
 
 	if cfg.OpMode == OpModeGT && cfg.Mutation == nil && len(cfg.MutationPolicy) == 0 {
@@ -249,6 +263,9 @@ func (m *PopulationMonitor) Run(ctx context.Context, initial []model.Genome) (Ru
 	if len(initial) != m.cfg.PopulationSize {
 		return RunResult{}, fmt.Errorf("initial population mismatch: got=%d want=%d", len(initial), m.cfg.PopulationSize)
 	}
+	if m.cfg.EvolutionType == EvolutionTypeSteadyState {
+		return m.runSteadyState(ctx, initial)
+	}
 
 	population := make([]model.Genome, len(initial))
 	copy(population, initial)
@@ -338,6 +355,139 @@ func (m *PopulationMonitor) Run(ctx context.Context, initial []model.Genome) (Ru
 		FinalPopulation:       scored,
 		Lineage:               lineage,
 	}, nil
+}
+
+func (m *PopulationMonitor) runSteadyState(ctx context.Context, initial []model.Genome) (RunResult, error) {
+	population := make([]model.Genome, len(initial))
+	copy(population, initial)
+
+	bestHistory := make([]float64, 0, m.cfg.Generations)
+	diagnostics := make([]GenerationDiagnostics, 0, m.cfg.Generations)
+	speciesHistory := make([]SpeciesGeneration, 0, m.cfg.Generations)
+	lineage := make([]LineageRecord, 0, len(initial)*(m.cfg.Generations+1))
+	prevSpeciesSet := map[string]struct{}{}
+	for _, genome := range population {
+		sig := ComputeGenomeSignature(genome)
+		operation := "seed"
+		if m.cfg.GenerationOffset > 0 {
+			operation = "continue_seed"
+		}
+		lineage = append(lineage, LineageRecord{
+			GenomeID:    genome.ID,
+			ParentID:    "",
+			Generation:  m.cfg.GenerationOffset,
+			Operation:   operation,
+			Fingerprint: sig.Fingerprint,
+			Summary:     sig.Summary,
+		})
+	}
+
+	var finalScored []ScoredGenome
+	evaluations := 0
+
+	for gen := 0; gen < m.cfg.Generations; gen++ {
+		if err := ctx.Err(); err != nil {
+			return RunResult{}, err
+		}
+		stop, err := m.applyControl(ctx, false)
+		if err != nil {
+			return RunResult{}, err
+		}
+		if stop {
+			break
+		}
+
+		logicalGeneration := m.cfg.GenerationOffset + gen
+		scored, tuningStats, err := m.evaluatePopulation(ctx, population, logicalGeneration)
+		if err != nil {
+			return RunResult{}, err
+		}
+		if m.cfg.OpMode == OpModeGT {
+			scored = m.cfg.Postprocessor.Process(scored)
+		}
+
+		ranked := append([]ScoredGenome(nil), scored...)
+		sort.Slice(ranked, func(i, j int) bool {
+			return ranked[i].Fitness > ranked[j].Fitness
+		})
+		finalScored = ranked
+		evaluations += len(ranked)
+		bestHistory = append(bestHistory, ranked[0].Fitness)
+		speciesByGenomeID, speciationStats := m.assignSpecies(ranked)
+		diagnostics = append(diagnostics, summarizeGeneration(ranked, logicalGeneration+1, speciationStats, tuningStats))
+		history, currentSet := summarizeSpeciesGeneration(ranked, speciesByGenomeID, logicalGeneration+1, prevSpeciesSet)
+		speciesHistory = append(speciesHistory, history)
+		prevSpeciesSet = currentSet
+
+		if m.cfg.OpMode != OpModeGT {
+			break
+		}
+		if (m.cfg.FitnessGoal > 0 && ranked[0].Fitness >= m.cfg.FitnessGoal) ||
+			(m.cfg.EvaluationsLimit > 0 && evaluations >= m.cfg.EvaluationsLimit) {
+			break
+		}
+		stop, err = m.applyControl(ctx, true)
+		if err != nil {
+			return RunResult{}, err
+		}
+		if stop {
+			break
+		}
+
+		nextPopulation, generationLineage, err := m.nextSteadyStatePopulation(ctx, ranked, speciesByGenomeID, logicalGeneration)
+		if err != nil {
+			return RunResult{}, err
+		}
+		population = nextPopulation
+		lineage = append(lineage, generationLineage...)
+	}
+
+	return RunResult{
+		BestByGeneration:      bestHistory,
+		GenerationDiagnostics: diagnostics,
+		SpeciesHistory:        speciesHistory,
+		FinalPopulation:       finalScored,
+		Lineage:               lineage,
+	}, nil
+}
+
+func (m *PopulationMonitor) nextSteadyStatePopulation(
+	ctx context.Context,
+	ranked []ScoredGenome,
+	speciesByGenomeID map[string]string,
+	generation int,
+) ([]model.Genome, []LineageRecord, error) {
+	parentPool := ranked
+	if m.cfg.SpecieSizeLimit > 0 {
+		parentPool = limitSpeciesParentPool(ranked, speciesByGenomeID, m.cfg.SpecieSizeLimit)
+		if len(parentPool) == 0 {
+			parentPool = ranked
+		}
+	}
+
+	next := make([]model.Genome, 0, m.cfg.PopulationSize)
+	lineage := make([]LineageRecord, 0, m.cfg.PopulationSize)
+	for i, item := range ranked {
+		if err := ctx.Err(); err != nil {
+			return nil, nil, err
+		}
+		speciesKey := speciesByGenomeID[item.Genome.ID]
+		speciesRanked := filterRankedBySpecies(parentPool, speciesByGenomeID, speciesKey)
+		if len(speciesRanked) == 0 {
+			speciesRanked = parentPool
+		}
+		parent, err := m.pickParentForSpecies(parentPool, speciesRanked, speciesByGenomeID, generation)
+		if err != nil {
+			return nil, nil, err
+		}
+		child, record, err := m.mutateFromParent(ctx, parent, generation, i)
+		if err != nil {
+			return nil, nil, err
+		}
+		next = append(next, child)
+		lineage = append(lineage, record)
+	}
+	return next, lineage, nil
 }
 
 func (m *PopulationMonitor) applyControl(ctx context.Context, waitIfPaused bool) (bool, error) {

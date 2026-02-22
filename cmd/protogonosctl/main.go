@@ -164,6 +164,7 @@ func runRun(ctx context.Context, args []string) error {
 	continuePopID := fs.String("continue-pop-id", "", "continue from persisted population snapshot id")
 	specieIdentifier := fs.String("specie-identifier", "topology", "species identifier: topology|tot_n")
 	opMode := fs.String("op-mode", "gt", "operation mode: gt|validation|test")
+	evolutionType := fs.String("evolution-type", "generational", "evolution type: generational|steady_state")
 	scapeName := fs.String("scape", "xor", "scape name")
 	population := fs.Int("pop", 50, "population size")
 	generations := fs.Int("gens", 100, "generation count")
@@ -223,6 +224,7 @@ func runRun(ctx context.Context, args []string) error {
 		req = protoapi.RunRequest{
 			Scape:                 *scapeName,
 			OpMode:                *opMode,
+			EvolutionType:         *evolutionType,
 			RunID:                 *runID,
 			ContinuePopulationID:  *continuePopID,
 			SpecieIdentifier:      *specieIdentifier,
@@ -270,6 +272,7 @@ func runRun(ctx context.Context, args []string) error {
 		err := overrideFromFlags(&req, setFlags, map[string]any{
 			"scape":                   *scapeName,
 			"op-mode":                 *opMode,
+			"evolution-type":          *evolutionType,
 			"run-id":                  *runID,
 			"continue-pop-id":         *continuePopID,
 			"specie-identifier":       *specieIdentifier,
@@ -956,6 +959,7 @@ func runBenchmark(ctx context.Context, args []string) error {
 	continuePopID := fs.String("continue-pop-id", "", "continue from persisted population snapshot id")
 	specieIdentifier := fs.String("specie-identifier", "topology", "species identifier: topology|tot_n")
 	opMode := fs.String("op-mode", "gt", "operation mode: gt|validation|test")
+	evolutionType := fs.String("evolution-type", "generational", "evolution type: generational|steady_state")
 	scapeName := fs.String("scape", "xor", "scape name")
 	population := fs.Int("pop", 50, "population size")
 	generations := fs.Int("gens", 100, "generation count")
@@ -1015,6 +1019,7 @@ func runBenchmark(ctx context.Context, args []string) error {
 		req = protoapi.RunRequest{
 			Scape:                 *scapeName,
 			OpMode:                *opMode,
+			EvolutionType:         *evolutionType,
 			RunID:                 *runID,
 			ContinuePopulationID:  *continuePopID,
 			SpecieIdentifier:      *specieIdentifier,
@@ -1061,6 +1066,7 @@ func runBenchmark(ctx context.Context, args []string) error {
 		err := overrideFromFlags(&req, setFlags, map[string]any{
 			"scape":                   *scapeName,
 			"op-mode":                 *opMode,
+			"evolution-type":          *evolutionType,
 			"run-id":                  *runID,
 			"continue-pop-id":         *continuePopID,
 			"specie-identifier":       *specieIdentifier,

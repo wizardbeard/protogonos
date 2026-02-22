@@ -18,6 +18,7 @@ type RunConfig struct {
 	ContinuePopulationID  string  `json:"continue_population_id,omitempty"`
 	SpecieIdentifier      string  `json:"specie_identifier,omitempty"`
 	OpMode                string  `json:"op_mode,omitempty"`
+	EvolutionType         string  `json:"evolution_type,omitempty"`
 	InitialGeneration     int     `json:"initial_generation"`
 	Scape                 string  `json:"scape"`
 	PopulationSize        int     `json:"population_size"`

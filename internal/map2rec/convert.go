@@ -172,6 +172,10 @@ func ConvertPMP(in map[string]any) PMPRecord {
 			if s, ok := asString(val); ok {
 				out.OpMode = s
 			}
+		case "evolution_type":
+			if s, ok := asString(val); ok {
+				out.EvolutionType = s
+			}
 		case "population_id":
 			if s, ok := asString(val); ok {
 				out.PopulationID = s

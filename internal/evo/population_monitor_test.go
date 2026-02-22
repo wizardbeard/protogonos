@@ -1152,6 +1152,69 @@ func TestPopulationMonitorRejectsUnknownOpMode(t *testing.T) {
 	}
 }
 
+func TestPopulationMonitorRejectsUnknownEvolutionType(t *testing.T) {
+	_, err := NewPopulationMonitor(MonitorConfig{
+		Scape:           oneDimScape{},
+		OpMode:          OpModeGT,
+		EvolutionType:   "unknown_mode",
+		Mutation:        namedNoopMutation{name: "noop"},
+		PopulationSize:  2,
+		EliteCount:      1,
+		Generations:     1,
+		Workers:         1,
+		Seed:            1,
+		InputNeuronIDs:  []string{"i"},
+		OutputNeuronIDs: []string{"o"},
+	})
+	if err == nil {
+		t.Fatal("expected unsupported evolution type validation error")
+	}
+}
+
+func TestPopulationMonitorSteadyStateEvolutionMode(t *testing.T) {
+	initial := []model.Genome{
+		newLinearGenome("g0", -1.0),
+		newLinearGenome("g1", -0.6),
+		newLinearGenome("g2", -0.2),
+		newLinearGenome("g3", 0.2),
+	}
+	monitor, err := NewPopulationMonitor(MonitorConfig{
+		Scape:           oneDimScape{},
+		OpMode:          OpModeGT,
+		EvolutionType:   EvolutionTypeSteadyState,
+		Mutation:        PerturbWeightAt{Index: 0, Delta: 0.2},
+		PopulationSize:  len(initial),
+		EliteCount:      1,
+		Generations:     4,
+		Workers:         1,
+		Seed:            1,
+		InputNeuronIDs:  []string{"i"},
+		OutputNeuronIDs: []string{"o"},
+	})
+	if err != nil {
+		t.Fatalf("new monitor: %v", err)
+	}
+	result, err := monitor.Run(context.Background(), initial)
+	if err != nil {
+		t.Fatalf("run: %v", err)
+	}
+	if len(result.BestByGeneration) != 4 {
+		t.Fatalf("expected steady-state history across 4 cycles, got %d", len(result.BestByGeneration))
+	}
+	if len(result.GenerationDiagnostics) != 4 {
+		t.Fatalf("expected steady-state diagnostics across 4 cycles, got %d", len(result.GenerationDiagnostics))
+	}
+	if len(result.SpeciesHistory) != 4 {
+		t.Fatalf("expected steady-state species history across 4 cycles, got %d", len(result.SpeciesHistory))
+	}
+	if len(result.Lineage) <= len(initial) {
+		t.Fatalf("expected offspring lineage records in steady-state mode, got=%d initial=%d", len(result.Lineage), len(initial))
+	}
+	if len(result.FinalPopulation) != len(initial) {
+		t.Fatalf("unexpected steady-state final population size: got=%d want=%d", len(result.FinalPopulation), len(initial))
+	}
+}
+
 func TestEliteSelectorValidation(t *testing.T) {
 	_, err := (EliteSelector{}).PickParent(nil, []ScoredGenome{}, 1)
 	if err == nil {

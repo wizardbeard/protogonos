@@ -118,6 +118,7 @@ type polisCastEnvelope struct {
 type EvolutionConfig struct {
 	RunID                string
 	OpMode               string
+	EvolutionType        string
 	ScapeName            string
 	PopulationSize       int
 	Generations          int
@@ -755,6 +756,7 @@ func (p *Polis) RunEvolution(ctx context.Context, cfg EvolutionConfig) (Evolutio
 	monitor, err := evo.NewPopulationMonitor(evo.MonitorConfig{
 		Scape:                targetScape,
 		OpMode:               cfg.OpMode,
+		EvolutionType:        cfg.EvolutionType,
 		Mutation:             cfg.Mutation,
 		PopulationSize:       cfg.PopulationSize,
 		EliteCount:           cfg.EliteCount,

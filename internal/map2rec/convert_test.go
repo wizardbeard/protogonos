@@ -294,6 +294,7 @@ func TestConvertConstraintKeepsDefaultsOnInvalidFieldShape(t *testing.T) {
 func TestConvertPMPMapsFields(t *testing.T) {
 	in := map[string]any{
 		"op_mode":             "gt",
+		"evolution_type":      "steady_state",
 		"population_id":       "pop-1",
 		"survival_percentage": 0.75,
 		"specie_size_limit":   12,
@@ -306,7 +307,7 @@ func TestConvertPMPMapsFields(t *testing.T) {
 		"committee_pid":       "committee-1",
 	}
 	out := ConvertPMP(in)
-	if out.PopulationID != "pop-1" || out.GenerationLimit != 300 {
+	if out.PopulationID != "pop-1" || out.GenerationLimit != 300 || out.EvolutionType != "steady_state" {
 		t.Fatalf("unexpected pmp conversion: %+v", out)
 	}
 	if !math.IsInf(out.FitnessGoal, 1) {

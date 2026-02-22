@@ -43,6 +43,7 @@ type ConstraintRecord struct {
 
 type PMPRecord struct {
 	OpMode             string
+	EvolutionType      string
 	PopulationID       string
 	SurvivalPercentage float64
 	SpecieSizeLimit    int
@@ -524,6 +525,7 @@ func defaultConstraintRecord() ConstraintRecord {
 func defaultPMPRecord() PMPRecord {
 	return PMPRecord{
 		OpMode:             "gt",
+		EvolutionType:      "generational",
 		PopulationID:       "test",
 		SurvivalPercentage: 0.5,
 		SpecieSizeLimit:    10,

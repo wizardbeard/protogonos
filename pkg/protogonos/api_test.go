@@ -622,6 +622,16 @@ func TestClientRunRejectsNegativeNumericConfig(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected op mode validation error")
 	}
+
+	_, err = client.Run(context.Background(), RunRequest{
+		Scape:         "xor",
+		Population:    6,
+		Generations:   2,
+		EvolutionType: "unknown_mode",
+	})
+	if err == nil {
+		t.Fatal("expected evolution type validation error")
+	}
 }
 
 func TestClientRunValidationOpModeSkipsEvolutionAndTuning(t *testing.T) {
