@@ -532,6 +532,7 @@ func TestPopulationMonitorGoalReachedControlStopsAfterCurrentGeneration(t *testi
 	}
 	control := make(chan MonitorCommand, 1)
 	control <- CommandGoalReached
+	updates := make(chan TraceUpdate, 8)
 
 	monitor, err := NewPopulationMonitor(MonitorConfig{
 		Scape:           oneDimScape{},
@@ -544,6 +545,9 @@ func TestPopulationMonitorGoalReachedControlStopsAfterCurrentGeneration(t *testi
 		InputNeuronIDs:  []string{"i"},
 		OutputNeuronIDs: []string{"o"},
 		Control:         control,
+		TraceUpdateHook: func(update TraceUpdate) {
+			updates <- update
+		},
 	})
 	if err != nil {
 		t.Fatalf("new monitor: %v", err)
@@ -555,6 +559,22 @@ func TestPopulationMonitorGoalReachedControlStopsAfterCurrentGeneration(t *testi
 	}
 	if len(result.BestByGeneration) != 1 {
 		t.Fatalf("expected stop after one generation when goal_reached is signaled, got %d", len(result.BestByGeneration))
+	}
+
+	completedTotalEvaluations := -1
+drain:
+	for {
+		select {
+		case update := <-updates:
+			if update.Reason == TraceUpdateReasonCompleted {
+				completedTotalEvaluations = update.TotalEvaluations
+			}
+		default:
+			break drain
+		}
+	}
+	if completedTotalEvaluations != 0 {
+		t.Fatalf("expected goal_reached to suppress post-goal evaluation accounting, got completed total evaluations=%d", completedTotalEvaluations)
 	}
 }
 
