@@ -100,7 +100,6 @@ func CloneGenomeWithRemappedIDs(g model.Genome, newID string, preserveNeuronIDs 
 		}
 		newNeuronID := nextUniqueCloneID(base, "nclone", i, usedNeuronIDs)
 		neuronIDMap[oldID] = newNeuronID
-		out.Neurons[i].ID = newNeuronID
 	}
 
 	synapseIDMap := make(map[string]string, len(out.Synapses))
@@ -113,28 +112,10 @@ func CloneGenomeWithRemappedIDs(g model.Genome, newID string, preserveNeuronIDs 
 		newSynapseID := nextUniqueCloneID(base, "sclone", i, usedSynapseIDs)
 		synapseIDMap[oldSynapseID] = newSynapseID
 	}
-	for i := range out.Synapses {
-		if mappedID, ok := synapseIDMap[out.Synapses[i].ID]; ok {
-			out.Synapses[i].ID = mappedID
-		}
-		if mappedFrom, ok := neuronIDMap[out.Synapses[i].From]; ok {
-			out.Synapses[i].From = mappedFrom
-		}
-		if mappedTo, ok := neuronIDMap[out.Synapses[i].To]; ok {
-			out.Synapses[i].To = mappedTo
-		}
-	}
-
-	for i := range out.SensorNeuronLinks {
-		if mappedNeuronID, ok := neuronIDMap[out.SensorNeuronLinks[i].NeuronID]; ok {
-			out.SensorNeuronLinks[i].NeuronID = mappedNeuronID
-		}
-	}
-	for i := range out.NeuronActuatorLinks {
-		if mappedNeuronID, ok := neuronIDMap[out.NeuronActuatorLinks[i].NeuronID]; ok {
-			out.NeuronActuatorLinks[i].NeuronID = mappedNeuronID
-		}
-	}
+	out.Neurons = CloneNeuronsWithIDMap(out.Neurons, neuronIDMap)
+	out.Synapses = CloneSynapsesWithIDMap(out.Synapses, synapseIDMap, neuronIDMap)
+	out.SensorNeuronLinks = CloneSensorLinksWithIDMap(out.SensorNeuronLinks, nil, neuronIDMap)
+	out.NeuronActuatorLinks = CloneActuatorLinksWithIDMap(out.NeuronActuatorLinks, nil, neuronIDMap)
 
 	return out
 }
