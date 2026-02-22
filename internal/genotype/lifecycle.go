@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"math/rand"
+	"time"
 
 	protoio "protogonos/internal/io"
 	"protogonos/internal/model"
@@ -67,8 +68,39 @@ func CloneAgent(genome model.Genome, newID string) model.Genome {
 	return clone
 }
 
+// CloneAgentAutoID mirrors genotype:clone_Agent/1 behavior by generating a new
+// clone ID and remapping internal IDs.
+func CloneAgentAutoID(genome model.Genome, rng *rand.Rand) model.Genome {
+	if rng == nil {
+		rng = rand.New(rand.NewSource(time.Now().UnixNano()))
+	}
+	base := genome.ID
+	if base == "" {
+		base = "agent"
+	}
+	newID := fmt.Sprintf("%s-clone-%d", base, rng.Int63())
+	return CloneAgentWithRemappedIDs(genome, newID, nil)
+}
+
 func CloneAgentWithRemappedIDs(genome model.Genome, newID string, preserveNeuronIDs []string) model.Genome {
 	return CloneGenomeWithRemappedIDs(genome, newID, preserveNeuronIDs)
+}
+
+// DeleteAgent mirrors genotype:delete_Agent/1 semantics in the simplified model.
+func DeleteAgent(ctx context.Context, store storage.Store, agentID string) error {
+	if store == nil {
+		return fmt.Errorf("store is required")
+	}
+	if agentID == "" {
+		return fmt.Errorf("agent id is required")
+	}
+	return store.DeleteGenome(ctx, agentID)
+}
+
+// DeleteAgentSafe mirrors genotype:delete_Agent/2 safe semantics in the
+// simplified model by pruning population membership and deleting the genome.
+func DeleteAgentSafe(ctx context.Context, store storage.Store, populationID, agentID string) error {
+	return DeleteAgentFromPopulation(ctx, store, populationID, agentID)
 }
 
 func DeleteAgentFromPopulation(ctx context.Context, store storage.Store, populationID, agentID string) error {

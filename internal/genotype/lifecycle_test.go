@@ -2,6 +2,7 @@ package genotype
 
 import (
 	"context"
+	"math/rand"
 	"testing"
 
 	protoio "protogonos/internal/io"
@@ -220,6 +221,28 @@ func TestCloneAgentWithRemappedIDs(t *testing.T) {
 	}
 }
 
+func TestCloneAgentAutoID(t *testing.T) {
+	in := model.Genome{
+		ID: "g1",
+		Neurons: []model.Neuron{
+			{ID: "n1", Activation: "identity"},
+		},
+		Synapses: []model.Synapse{
+			{ID: "s1", From: "n1", To: "n1", Weight: 0.5, Enabled: true},
+		},
+	}
+	clone := CloneAgentAutoID(in, rand.New(rand.NewSource(7)))
+	if clone.ID == "" || clone.ID == in.ID {
+		t.Fatalf("expected generated clone id distinct from original, got=%q original=%q", clone.ID, in.ID)
+	}
+	if clone.Neurons[0].ID == in.Neurons[0].ID {
+		t.Fatalf("expected internal neuron id remap for auto clone, got=%q", clone.Neurons[0].ID)
+	}
+	if clone.Synapses[0].ID == in.Synapses[0].ID {
+		t.Fatalf("expected internal synapse id remap for auto clone, got=%q", clone.Synapses[0].ID)
+	}
+}
+
 func TestDeleteAgentFromPopulation(t *testing.T) {
 	ctx := context.Background()
 	store := storage.NewMemoryStore()
@@ -258,5 +281,55 @@ func TestDeleteAgentFromPopulation(t *testing.T) {
 		t.Fatalf("get retained genome: %v", err)
 	} else if !ok {
 		t.Fatal("expected retained agent genome to remain")
+	}
+}
+
+func TestDeleteAgent(t *testing.T) {
+	ctx := context.Background()
+	store := storage.NewMemoryStore()
+	if err := store.Init(ctx); err != nil {
+		t.Fatalf("init store: %v", err)
+	}
+	if err := store.SaveGenome(ctx, model.Genome{ID: "a1"}); err != nil {
+		t.Fatalf("save genome: %v", err)
+	}
+	if err := DeleteAgent(ctx, store, "a1"); err != nil {
+		t.Fatalf("delete agent: %v", err)
+	}
+	if _, ok, err := store.GetGenome(ctx, "a1"); err != nil {
+		t.Fatalf("get genome: %v", err)
+	} else if ok {
+		t.Fatal("expected genome to be deleted")
+	}
+}
+
+func TestDeleteAgentSafe(t *testing.T) {
+	ctx := context.Background()
+	store := storage.NewMemoryStore()
+	if err := store.Init(ctx); err != nil {
+		t.Fatalf("init store: %v", err)
+	}
+	for _, id := range []string{"a1", "a2"} {
+		if err := store.SaveGenome(ctx, model.Genome{ID: id}); err != nil {
+			t.Fatalf("save genome %s: %v", id, err)
+		}
+	}
+	if err := store.SavePopulation(ctx, model.Population{ID: "pop-safe", AgentIDs: []string{"a1", "a2"}}); err != nil {
+		t.Fatalf("save population: %v", err)
+	}
+	if err := DeleteAgentSafe(ctx, store, "pop-safe", "a2"); err != nil {
+		t.Fatalf("delete agent safe: %v", err)
+	}
+	pop, ok, err := store.GetPopulation(ctx, "pop-safe")
+	if err != nil || !ok {
+		t.Fatalf("get population err=%v ok=%t", err, ok)
+	}
+	if len(pop.AgentIDs) != 1 || pop.AgentIDs[0] != "a1" {
+		t.Fatalf("unexpected remaining population members: %+v", pop.AgentIDs)
+	}
+	if _, ok, err := store.GetGenome(ctx, "a2"); err != nil {
+		t.Fatalf("get removed genome: %v", err)
+	} else if ok {
+		t.Fatal("expected safe delete to remove genome")
 	}
 }
