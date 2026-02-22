@@ -6,6 +6,7 @@ import (
 	"math"
 	"math/rand"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -104,6 +105,35 @@ func (oneDimScape) Evaluate(ctx context.Context, a scape.Agent) (scape.Fitness, 
 	mse := delta * delta
 	fitness := 1.0 - mse
 	return scape.Fitness(fitness), scape.Trace{"mse": mse, "prediction": out[0]}, nil
+}
+
+type modeAwareScape struct {
+	mu    sync.Mutex
+	modes []string
+}
+
+func (*modeAwareScape) Name() string { return "mode-aware" }
+
+func (s *modeAwareScape) Evaluate(ctx context.Context, a scape.Agent) (scape.Fitness, scape.Trace, error) {
+	s.mu.Lock()
+	s.modes = append(s.modes, "evaluate")
+	s.mu.Unlock()
+	return oneDimScape{}.Evaluate(ctx, a)
+}
+
+func (s *modeAwareScape) EvaluateMode(ctx context.Context, a scape.Agent, mode string) (scape.Fitness, scape.Trace, error) {
+	s.mu.Lock()
+	s.modes = append(s.modes, mode)
+	s.mu.Unlock()
+	return oneDimScape{}.Evaluate(ctx, a)
+}
+
+func (s *modeAwareScape) snapshotModes() []string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	out := make([]string, len(s.modes))
+	copy(out, s.modes)
+	return out
 }
 
 func TestPopulationMonitorImprovesFitness(t *testing.T) {
@@ -847,6 +877,97 @@ drain:
 	}
 	if evalsBySpecies != len(initial) {
 		t.Fatalf("expected species evaluation totals to match step evaluations=%d, got %d", len(initial), evalsBySpecies)
+	}
+}
+
+func TestPopulationMonitorValidationRunUsesModeAwareScapeValidationMode(t *testing.T) {
+	initial := []model.Genome{
+		newLinearGenome("g0", -1.0),
+		newLinearGenome("g1", -0.8),
+		newLinearGenome("g2", -0.6),
+	}
+	modeScape := &modeAwareScape{}
+	monitor, err := NewPopulationMonitor(MonitorConfig{
+		Scape:           modeScape,
+		OpMode:          OpModeValidation,
+		PopulationSize:  len(initial),
+		EliteCount:      1,
+		Generations:     2,
+		Workers:         1,
+		Seed:            13,
+		InputNeuronIDs:  []string{"i"},
+		OutputNeuronIDs: []string{"o"},
+	})
+	if err != nil {
+		t.Fatalf("new monitor: %v", err)
+	}
+
+	result, err := monitor.Run(context.Background(), initial)
+	if err != nil {
+		t.Fatalf("run: %v", err)
+	}
+	if len(result.BestByGeneration) != 1 {
+		t.Fatalf("expected single-generation validation run, got %d generations", len(result.BestByGeneration))
+	}
+
+	modes := modeScape.snapshotModes()
+	if len(modes) != len(initial) {
+		t.Fatalf("expected %d validation evaluations, got modes=%v", len(initial), modes)
+	}
+	for _, mode := range modes {
+		if mode != OpModeValidation {
+			t.Fatalf("expected validation mode evaluations only, got modes=%v", modes)
+		}
+	}
+}
+
+func TestPopulationMonitorGTProbesUseModeAwareScapeValidationAndTestModes(t *testing.T) {
+	initial := []model.Genome{
+		newLinearGenome("g0", -1.0),
+		newLinearGenome("g1", -0.8),
+		newLinearGenome("g2", -0.6),
+		newLinearGenome("g3", -0.4),
+	}
+	modeScape := &modeAwareScape{}
+	monitor, err := NewPopulationMonitor(MonitorConfig{
+		Scape:           modeScape,
+		OpMode:          OpModeGT,
+		Mutation:        namedNoopMutation{name: "noop"},
+		PopulationSize:  len(initial),
+		EliteCount:      1,
+		Generations:     1,
+		Workers:         1,
+		Seed:            17,
+		InputNeuronIDs:  []string{"i"},
+		OutputNeuronIDs: []string{"o"},
+		ValidationProbe: true,
+		TestProbe:       true,
+	})
+	if err != nil {
+		t.Fatalf("new monitor: %v", err)
+	}
+
+	_, err = monitor.Run(context.Background(), initial)
+	if err != nil {
+		t.Fatalf("run: %v", err)
+	}
+
+	modes := modeScape.snapshotModes()
+	counts := map[string]int{}
+	for _, mode := range modes {
+		counts[mode]++
+	}
+	if counts[OpModeGT] != len(initial) {
+		t.Fatalf("expected %d gt evaluations, got modes=%v", len(initial), modes)
+	}
+	if counts[OpModeValidation] == 0 {
+		t.Fatalf("expected validation probe evaluations, got modes=%v", modes)
+	}
+	if counts[OpModeTest] == 0 {
+		t.Fatalf("expected test probe evaluations, got modes=%v", modes)
+	}
+	if counts["evaluate"] != 0 {
+		t.Fatalf("expected mode-aware evaluation path without fallback Evaluate calls, got modes=%v", modes)
 	}
 }
 

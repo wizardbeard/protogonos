@@ -761,7 +761,7 @@ func (m *PopulationMonitor) captureTraceSpecies(ctx context.Context, scored []Sc
 		}
 		if m.cfg.OpMode == OpModeGT && (m.cfg.ValidationProbe || m.cfg.TestProbe) {
 			if m.cfg.ValidationProbe {
-				fitness, _, err := m.evaluateGenome(ctx, bucket.champion)
+				fitness, _, err := m.evaluateGenome(ctx, bucket.champion, OpModeValidation)
 				if err != nil {
 					return fmt.Errorf("validation probe for species %s champion %s: %w", key, bucket.champion.ID, err)
 				}
@@ -769,7 +769,7 @@ func (m *PopulationMonitor) captureTraceSpecies(ctx context.Context, scored []Sc
 				entry.ValidationFitness = &val
 			}
 			if m.cfg.TestProbe {
-				fitness, _, err := m.evaluateGenome(ctx, bucket.champion)
+				fitness, _, err := m.evaluateGenome(ctx, bucket.champion, OpModeTest)
 				if err != nil {
 					return fmt.Errorf("test probe for species %s champion %s: %w", key, bucket.champion.ID, err)
 				}
@@ -1012,7 +1012,7 @@ func (m *PopulationMonitor) evaluatePopulation(ctx context.Context, population [
 				if m.cfg.OpMode == OpModeGT && m.cfg.Tuner != nil && attempts > 0 {
 					if reporting, ok := m.cfg.Tuner.(tuning.ReportingTuner); ok {
 						tuned, report, err := reporting.TuneWithReport(ctx, j.genome, attempts, func(ctx context.Context, g model.Genome) (float64, error) {
-							fitness, _, err := m.evaluateGenome(ctx, g)
+							fitness, _, err := m.evaluateGenome(ctx, g, OpModeGT)
 							if err != nil {
 								return 0, err
 							}
@@ -1026,7 +1026,7 @@ func (m *PopulationMonitor) evaluatePopulation(ctx context.Context, population [
 						candidate = tuned
 					} else {
 						tuned, err := m.cfg.Tuner.Tune(ctx, j.genome, attempts, func(ctx context.Context, g model.Genome) (float64, error) {
-							fitness, _, err := m.evaluateGenome(ctx, g)
+							fitness, _, err := m.evaluateGenome(ctx, g, OpModeGT)
 							if err != nil {
 								return 0, err
 							}
@@ -1042,7 +1042,7 @@ func (m *PopulationMonitor) evaluatePopulation(ctx context.Context, population [
 					}
 				}
 
-				fitness, trace, err := m.evaluateGenome(ctx, candidate)
+				fitness, trace, err := m.evaluateGenome(ctx, candidate, m.cfg.OpMode)
 				if err != nil {
 					results <- result{idx: j.idx, err: err}
 					continue
@@ -1114,7 +1114,7 @@ func (m *PopulationMonitor) applyQueuedControl(ctx context.Context) error {
 	}
 }
 
-func (m *PopulationMonitor) evaluateGenome(ctx context.Context, genome model.Genome) (float64, scape.Trace, error) {
+func (m *PopulationMonitor) evaluateGenome(ctx context.Context, genome model.Genome, mode string) (float64, scape.Trace, error) {
 	sensors, actuators, err := m.buildIO(genome)
 	if err != nil {
 		return 0, nil, err
@@ -1136,7 +1136,15 @@ func (m *PopulationMonitor) evaluateGenome(ctx context.Context, genome model.Gen
 	if err != nil {
 		return 0, nil, err
 	}
-	fitness, trace, err := m.cfg.Scape.Evaluate(ctx, cortex)
+	var (
+		fitness scape.Fitness
+		trace   scape.Trace
+	)
+	if modeAware, ok := m.cfg.Scape.(scape.ModeAwareScape); ok {
+		fitness, trace, err = modeAware.EvaluateMode(ctx, cortex, mode)
+	} else {
+		fitness, trace, err = m.cfg.Scape.Evaluate(ctx, cortex)
+	}
 	if err != nil {
 		return 0, nil, err
 	}
