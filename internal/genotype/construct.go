@@ -3,6 +3,7 @@ package genotype
 import (
 	"fmt"
 	"math/rand"
+	"sort"
 	"strconv"
 	"strings"
 	"sync/atomic"
@@ -140,11 +141,7 @@ func ConstructSeedNN(
 			NeuronActuatorLinks: actuatorLinks,
 			InputNeuronIDs:      inputNeuronIDs,
 			OutputNeuronIDs:     outputNeuronIDs,
-			Pattern: []PatternLayer{
-				{Layer: 0, NeuronIDs: append([]string(nil), inputNeuronIDs...)},
-				{Layer: 0.5, NeuronIDs: relayNeuronIDs},
-				{Layer: 0.99, NeuronIDs: append([]string(nil), outputNeuronIDs...)},
-			},
+			Pattern:             CreateInitPattern(append(append(append([]string(nil), inputNeuronIDs...), relayNeuronIDs...), outputNeuronIDs...)),
 		}, nil
 	}
 
@@ -179,10 +176,7 @@ func ConstructSeedNN(
 		NeuronActuatorLinks: actuatorLinks,
 		InputNeuronIDs:      inputNeuronIDs,
 		OutputNeuronIDs:     outputNeuronIDs,
-		Pattern: []PatternLayer{
-			{Layer: 0, NeuronIDs: append([]string(nil), inputNeuronIDs...)},
-			{Layer: 1, NeuronIDs: append([]string(nil), outputNeuronIDs...)},
-		},
+		Pattern:             CreateInitPattern(append(append([]string(nil), inputNeuronIDs...), outputNeuronIDs...)),
 	}, nil
 }
 
@@ -540,6 +534,40 @@ func uniqueNonEmpty(values []string) []string {
 		out = append(out, value)
 	}
 	return out
+}
+
+// CreateInitPattern mirrors genotype:create_InitPattern/1 by grouping neuron
+// IDs by parsed layer index and returning ascending layer-order buckets.
+func CreateInitPattern(neuronIDs []string) []PatternLayer {
+	if len(neuronIDs) == 0 {
+		return nil
+	}
+	ordered := make([]float64, 0, len(neuronIDs))
+	byLayer := make(map[float64][]string)
+	seenLayer := make(map[float64]struct{})
+	for _, neuronID := range neuronIDs {
+		layer, ok := parseLayerIndex(neuronID)
+		if !ok {
+			continue
+		}
+		if _, seen := seenLayer[layer]; !seen {
+			ordered = append(ordered, layer)
+			seenLayer[layer] = struct{}{}
+		}
+		byLayer[layer] = append(byLayer[layer], neuronID)
+	}
+	if len(ordered) == 0 {
+		return nil
+	}
+	sort.Float64s(ordered)
+	pattern := make([]PatternLayer, 0, len(ordered))
+	for _, layer := range ordered {
+		pattern = append(pattern, PatternLayer{
+			Layer:     layer,
+			NeuronIDs: append([]string(nil), byLayer[layer]...),
+		})
+	}
+	return pattern
 }
 
 func circuitActivationTag(values []string) (bool, string) {

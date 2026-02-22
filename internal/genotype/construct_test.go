@@ -215,6 +215,25 @@ func TestConstructSeedNNCircuitModeBuildsRelayAndCircuitLayers(t *testing.T) {
 	}
 }
 
+func TestCreateInitPatternGroupsAndSortsLayers(t *testing.T) {
+	pattern := CreateInitPattern([]string{
+		"L2:n3",
+		"L0:n1",
+		"L1:n2",
+		"L1:n4",
+		"invalid",
+	})
+	if len(pattern) != 3 {
+		t.Fatalf("expected 3 layer groups, got=%v", pattern)
+	}
+	if pattern[0].Layer != 0 || pattern[1].Layer != 1 || pattern[2].Layer != 2 {
+		t.Fatalf("expected sorted layers [0,1,2], got=%v", pattern)
+	}
+	if len(pattern[1].NeuronIDs) != 2 {
+		t.Fatalf("expected two neurons in layer 1 bucket, got=%v", pattern[1].NeuronIDs)
+	}
+}
+
 func TestConstructSeedNNCircuitModeStripsCircuitTagFromRelayAFPool(t *testing.T) {
 	seed, err := ConstructSeedNN(
 		0,
