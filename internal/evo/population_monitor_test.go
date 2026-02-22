@@ -953,6 +953,18 @@ drain:
 		if species.TestFitness == nil {
 			t.Fatalf("expected test fitness probe for species %s", species.Key)
 		}
+		if species.Diversity < 1 {
+			t.Fatalf("expected diversity>=1 for species %s, got %d", species.Key, species.Diversity)
+		}
+		if species.AvgNeurons <= 0 {
+			t.Fatalf("expected avg neurons > 0 for species %s, got %f", species.Key, species.AvgNeurons)
+		}
+		if species.MinFitness > species.BestFitness {
+			t.Fatalf("expected min fitness <= best fitness for species %s, got min=%f best=%f", species.Key, species.MinFitness, species.BestFitness)
+		}
+		if species.StdFitness < 0 || species.StdNeurons < 0 {
+			t.Fatalf("expected non-negative std values for species %s, got std_fitness=%f std_neurons=%f", species.Key, species.StdFitness, species.StdNeurons)
+		}
 	}
 	if evalsBySpecies != len(initial) {
 		t.Fatalf("expected species evaluation totals to match step evaluations=%d, got %d", len(initial), evalsBySpecies)

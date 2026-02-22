@@ -92,7 +92,12 @@ type TraceSpeciesMetrics struct {
 	Key               string   `json:"key"`
 	Size              int      `json:"size"`
 	MeanFitness       float64  `json:"mean_fitness"`
+	StdFitness        float64  `json:"std_fitness,omitempty"`
 	BestFitness       float64  `json:"best_fitness"`
+	MinFitness        float64  `json:"min_fitness,omitempty"`
+	AvgNeurons        float64  `json:"avg_neurons,omitempty"`
+	StdNeurons        float64  `json:"std_neurons,omitempty"`
+	Diversity         int      `json:"diversity,omitempty"`
 	Evaluations       int      `json:"evaluations,omitempty"`
 	ChampionGenomeID  string   `json:"champion_genome_id,omitempty"`
 	ValidationFitness *float64 `json:"validation_fitness,omitempty"`
@@ -715,10 +720,15 @@ func (m *PopulationMonitor) accumulateStepWindow(scored []ScoredGenome, speciesB
 
 func (m *PopulationMonitor) captureTraceSpecies(ctx context.Context, scored []ScoredGenome, speciesByGenomeID map[string]string) error {
 	type aggregate struct {
-		size     int
-		sum      float64
-		best     float64
-		champion model.Genome
+		size             int
+		sum              float64
+		sumSquares       float64
+		best             float64
+		min              float64
+		neuronSum        float64
+		neuronSumSquares float64
+		fingerprints     map[string]struct{}
+		champion         model.Genome
 	}
 	bySpecies := make(map[string]*aggregate)
 	for _, item := range scored {
@@ -729,16 +739,27 @@ func (m *PopulationMonitor) captureTraceSpecies(ctx context.Context, scored []Sc
 		bucket := bySpecies[key]
 		if bucket == nil {
 			bucket = &aggregate{
-				best:     item.Fitness,
-				champion: item.Genome,
+				best:         item.Fitness,
+				min:          item.Fitness,
+				fingerprints: map[string]struct{}{},
+				champion:     item.Genome,
 			}
 			bySpecies[key] = bucket
 		}
 		bucket.size++
 		bucket.sum += item.Fitness
+		bucket.sumSquares += item.Fitness * item.Fitness
+		neurons := float64(len(item.Genome.Neurons))
+		bucket.neuronSum += neurons
+		bucket.neuronSumSquares += neurons * neurons
+		fingerprint := ComputeGenomeSignature(item.Genome).Fingerprint
+		bucket.fingerprints[fingerprint] = struct{}{}
 		if item.Fitness > bucket.best {
 			bucket.best = item.Fitness
 			bucket.champion = item.Genome
+		}
+		if item.Fitness < bucket.min {
+			bucket.min = item.Fitness
 		}
 	}
 
@@ -751,11 +772,17 @@ func (m *PopulationMonitor) captureTraceSpecies(ctx context.Context, scored []Sc
 	out := make([]TraceSpeciesMetrics, 0, len(keys))
 	for _, key := range keys {
 		bucket := bySpecies[key]
+		meanFitness := bucket.sum / float64(bucket.size)
 		entry := TraceSpeciesMetrics{
 			Key:              key,
 			Size:             bucket.size,
-			MeanFitness:      bucket.sum / float64(bucket.size),
+			MeanFitness:      meanFitness,
+			StdFitness:       stdFromSums(bucket.sum, bucket.sumSquares, bucket.size),
 			BestFitness:      bucket.best,
+			MinFitness:       bucket.min,
+			AvgNeurons:       bucket.neuronSum / float64(bucket.size),
+			StdNeurons:       stdFromSums(bucket.neuronSum, bucket.neuronSumSquares, bucket.size),
+			Diversity:        len(bucket.fingerprints),
 			Evaluations:      m.stepSpeciesEvaluations[key],
 			ChampionGenomeID: bucket.champion.ID,
 		}
@@ -945,6 +972,18 @@ func tuningRatios(stats tuningGenerationStats) (float64, float64) {
 		evalsPerAttempt = float64(stats.Evaluations) / float64(stats.Attempts)
 	}
 	return acceptRate, evalsPerAttempt
+}
+
+func stdFromSums(sum, sumSquares float64, count int) float64 {
+	if count <= 1 {
+		return 0
+	}
+	mean := sum / float64(count)
+	variance := (sumSquares / float64(count)) - mean*mean
+	if variance < 0 {
+		variance = 0
+	}
+	return math.Sqrt(variance)
 }
 
 func countTrue(values []bool) int {
