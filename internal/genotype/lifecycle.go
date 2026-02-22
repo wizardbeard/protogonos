@@ -67,6 +67,10 @@ func CloneAgent(genome model.Genome, newID string) model.Genome {
 	return clone
 }
 
+func CloneAgentWithRemappedIDs(genome model.Genome, newID string, preserveNeuronIDs []string) model.Genome {
+	return CloneGenomeWithRemappedIDs(genome, newID, preserveNeuronIDs)
+}
+
 func DeleteAgentFromPopulation(ctx context.Context, store storage.Store, populationID, agentID string) error {
 	if store == nil {
 		return fmt.Errorf("store is required")

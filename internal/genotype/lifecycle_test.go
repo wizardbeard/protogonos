@@ -167,6 +167,59 @@ func TestCloneAgent(t *testing.T) {
 	}
 }
 
+func TestCloneAgentWithRemappedIDs(t *testing.T) {
+	in := model.Genome{
+		ID: "g1",
+		Neurons: []model.Neuron{
+			{ID: "i", Activation: "identity"},
+			{ID: "h", Activation: "tanh"},
+			{ID: "o", Activation: "identity"},
+		},
+		Synapses: []model.Synapse{
+			{ID: "s1", From: "i", To: "h", Weight: 0.5, Enabled: true},
+			{ID: "s2", From: "h", To: "o", Weight: 1.0, Enabled: true},
+		},
+		SensorNeuronLinks: []model.SensorNeuronLink{
+			{SensorID: protoio.ScalarInputSensorName, NeuronID: "i"},
+		},
+		NeuronActuatorLinks: []model.NeuronActuatorLink{
+			{NeuronID: "h", ActuatorID: protoio.ScalarOutputActuatorName},
+		},
+		SensorIDs:   []string{protoio.ScalarInputSensorName},
+		ActuatorIDs: []string{protoio.ScalarOutputActuatorName},
+	}
+
+	clone := CloneAgentWithRemappedIDs(in, "g2", []string{"i", "o"})
+	if clone.ID != "g2" {
+		t.Fatalf("expected clone id g2, got %q", clone.ID)
+	}
+	if clone.Neurons[0].ID != "i" || clone.Neurons[2].ID != "o" {
+		t.Fatalf("expected preserved io neuron ids, got=%v", []string{clone.Neurons[0].ID, clone.Neurons[2].ID})
+	}
+	if clone.Neurons[1].ID == "h" {
+		t.Fatalf("expected hidden neuron id remap, got=%q", clone.Neurons[1].ID)
+	}
+	if clone.Synapses[0].ID == "s1" || clone.Synapses[1].ID == "s2" {
+		t.Fatalf("expected synapse id remap, got=%v", []string{clone.Synapses[0].ID, clone.Synapses[1].ID})
+	}
+	hiddenID := clone.Neurons[1].ID
+	if clone.Synapses[0].From != "i" || clone.Synapses[0].To != hiddenID {
+		t.Fatalf("unexpected remapped first synapse endpoints: %+v hidden=%s", clone.Synapses[0], hiddenID)
+	}
+	if clone.Synapses[1].From != hiddenID || clone.Synapses[1].To != "o" {
+		t.Fatalf("unexpected remapped second synapse endpoints: %+v hidden=%s", clone.Synapses[1], hiddenID)
+	}
+	if clone.SensorNeuronLinks[0].NeuronID != "i" {
+		t.Fatalf("expected preserved sensor link target neuron id, got=%s", clone.SensorNeuronLinks[0].NeuronID)
+	}
+	if clone.NeuronActuatorLinks[0].NeuronID != hiddenID {
+		t.Fatalf("expected remapped actuator link neuron id=%s, got=%s", hiddenID, clone.NeuronActuatorLinks[0].NeuronID)
+	}
+	if in.Neurons[1].ID != "h" || in.Synapses[0].ID != "s1" {
+		t.Fatal("expected original genome to remain unchanged")
+	}
+}
+
 func TestDeleteAgentFromPopulation(t *testing.T) {
 	ctx := context.Background()
 	store := storage.NewMemoryStore()
