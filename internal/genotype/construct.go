@@ -5,6 +5,7 @@ import (
 	"math/rand"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"protogonos/internal/model"
@@ -34,6 +35,8 @@ type SeedNetwork struct {
 	OutputNeuronIDs     []string
 	Pattern             []PatternLayer
 }
+
+var uniqueIDSequence uint64
 
 // ConstructSeedNN is a Go analog of genotype:construct_SeedNN/6 for the
 // non-circuit baseline path: one input neuron per sensor and one output neuron
@@ -243,6 +246,70 @@ func CalculateROIDs(selfID string, outputIDs []string) []string {
 		}
 	}
 	return roIDs
+}
+
+// LinkNeuron mirrors genotype:link_Neuron/4 by scaffolding inbound and outbound
+// synapse records around a neuron ID.
+func LinkNeuron(fromIDs []string, neuronID string, toIDs []string, rng *rand.Rand) ([]model.Synapse, error) {
+	if strings.TrimSpace(neuronID) == "" {
+		return nil, fmt.Errorf("neuron id is required")
+	}
+	rng = ensureRNG(rng)
+	uniqFrom := uniqueNonEmpty(fromIDs)
+	uniqTo := uniqueNonEmpty(toIDs)
+	synapses := make([]model.Synapse, 0, len(uniqFrom)+len(uniqTo))
+
+	for i, fromID := range uniqFrom {
+		synapses = append(synapses, model.Synapse{
+			ID:      fmt.Sprintf("%s:link:in:%s:%d", neuronID, sanitizeID(fromID), i),
+			From:    fromID,
+			To:      neuronID,
+			Weight:  randomCentered(rng),
+			Enabled: true,
+		})
+	}
+
+	roIDSet := make(map[string]struct{})
+	for _, roID := range CalculateROIDs(neuronID, uniqTo) {
+		roIDSet[roID] = struct{}{}
+	}
+	for i, toID := range uniqTo {
+		_, recurrent := roIDSet[toID]
+		synapses = append(synapses, model.Synapse{
+			ID:        fmt.Sprintf("%s:link:out:%s:%d", neuronID, sanitizeID(toID), i),
+			From:      neuronID,
+			To:        toID,
+			Weight:    randomCentered(rng),
+			Enabled:   true,
+			Recurrent: recurrent,
+		})
+	}
+	return synapses, nil
+}
+
+// GenerateUniqueID mirrors genotype:generate_UniqueId/0 intent.
+func GenerateUniqueID(rng *rand.Rand) float64 {
+	seq := atomic.AddUint64(&uniqueIDSequence, 1)
+	if rng != nil {
+		return float64(seq) + rng.Float64()
+	}
+	seconds := float64(time.Now().UnixNano()) / float64(time.Second)
+	if seconds <= 0 {
+		seconds = float64(seq)
+	}
+	return 1 / (seconds + float64(seq)/1e9)
+}
+
+// GenerateIDs mirrors genotype:generate_ids/2.
+func GenerateIDs(count int, rng *rand.Rand) []float64 {
+	if count <= 0 {
+		return nil
+	}
+	ids := make([]float64, 0, count)
+	for i := 0; i < count; i++ {
+		ids = append(ids, GenerateUniqueID(rng))
+	}
+	return ids
 }
 
 func ensureRNG(rng *rand.Rand) *rand.Rand {

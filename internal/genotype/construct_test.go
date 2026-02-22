@@ -181,3 +181,64 @@ func TestConstructSeedNNValidatesRequiredSensorsAndActuators(t *testing.T) {
 		t.Fatal("expected validation error for missing actuators")
 	}
 }
+
+func TestGenerateIDsReturnsCountAndUniqueValues(t *testing.T) {
+	ids := GenerateIDs(4, rand.New(rand.NewSource(1)))
+	if len(ids) != 4 {
+		t.Fatalf("expected 4 generated ids, got=%d", len(ids))
+	}
+	seen := map[float64]struct{}{}
+	for _, id := range ids {
+		if id == 0 {
+			t.Fatalf("expected non-zero id, got=%f", id)
+		}
+		if _, ok := seen[id]; ok {
+			t.Fatalf("expected unique ids, duplicate=%f", id)
+		}
+		seen[id] = struct{}{}
+	}
+}
+
+func TestLinkNeuronCreatesInboundAndOutboundSynapses(t *testing.T) {
+	synapses, err := LinkNeuron(
+		[]string{"L0:n0", "L0:n1"},
+		"L1:n2",
+		[]string{"L2:n3", "L0:n4"},
+		rand.New(rand.NewSource(5)),
+	)
+	if err != nil {
+		t.Fatalf("link neuron: %v", err)
+	}
+	if len(synapses) != 4 {
+		t.Fatalf("expected 4 synapses, got=%d", len(synapses))
+	}
+	inbound := 0
+	outbound := 0
+	recurrentOutbound := 0
+	for _, synapse := range synapses {
+		if synapse.To == "L1:n2" {
+			inbound++
+		}
+		if synapse.From == "L1:n2" {
+			outbound++
+			if synapse.Recurrent {
+				recurrentOutbound++
+			}
+		}
+		if !synapse.Enabled {
+			t.Fatalf("expected enabled synapse, got=%+v", synapse)
+		}
+	}
+	if inbound != 2 || outbound != 2 {
+		t.Fatalf("expected 2 inbound and 2 outbound links, got inbound=%d outbound=%d", inbound, outbound)
+	}
+	if recurrentOutbound != 1 {
+		t.Fatalf("expected one recurrent outbound link, got=%d", recurrentOutbound)
+	}
+}
+
+func TestLinkNeuronValidatesNeuronID(t *testing.T) {
+	if _, err := LinkNeuron([]string{"n0"}, "", []string{"n1"}, rand.New(rand.NewSource(1))); err == nil {
+		t.Fatal("expected validation error for empty neuron id")
+	}
+}
