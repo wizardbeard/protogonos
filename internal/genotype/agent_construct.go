@@ -201,11 +201,17 @@ func ConstructCortex(
 		for _, actuatorID := range actuators {
 			formatOutputs = append(formatOutputs, actuatorID)
 		}
+		optimalDimension := CalculateOptimalSubstrateDimension(formatInputs, formatOutputs)
+		densities := defaultSubstrateDensities(optimalDimension)
 		genome.Substrate = &model.SubstrateConfig{
 			CPPName:    strings.TrimSpace(substratePlasticity),
 			CEPName:    strings.TrimSpace(substrateLinkform),
-			Dimensions: []int{CalculateOptimalSubstrateDimension(formatInputs, formatOutputs)},
-			Parameters: map[string]float64{},
+			Dimensions: densities,
+			Parameters: map[string]float64{
+				"depth":      1,
+				"density":    5,
+				"dimensions": float64(optimalDimension),
+			},
 		}
 	}
 
@@ -264,4 +270,16 @@ func pickTopologicalMutationMode(rng *rand.Rand, values []TopologicalMutationOpt
 		return "ncount_exponential", 0.5
 	}
 	return strings.TrimSpace(value.Name), value.Param
+}
+
+func defaultSubstrateDensities(dimension int) []int {
+	if dimension < 2 {
+		dimension = 2
+	}
+	densities := make([]int, 0, dimension)
+	densities = append(densities, 1, 1)
+	for i := 2; i < dimension; i++ {
+		densities = append(densities, 5)
+	}
+	return densities
 }

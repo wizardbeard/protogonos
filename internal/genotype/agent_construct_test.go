@@ -65,8 +65,14 @@ func TestConstructAgentMaterializesStrategyAndSubstrate(t *testing.T) {
 	if agent.Genome.Substrate.CPPName != "none" || agent.Genome.Substrate.CEPName != "l2l_feedforward" {
 		t.Fatalf("unexpected substrate metadata: %+v", agent.Genome.Substrate)
 	}
-	if len(agent.Genome.Substrate.Dimensions) != 1 || agent.Genome.Substrate.Dimensions[0] <= 0 {
-		t.Fatalf("expected positive substrate dimension, got=%v", agent.Genome.Substrate.Dimensions)
+	if len(agent.Genome.Substrate.Dimensions) < 3 {
+		t.Fatalf("expected substrate density vector length >= 3, got=%v", agent.Genome.Substrate.Dimensions)
+	}
+	if agent.Genome.Substrate.Dimensions[0] != 1 || agent.Genome.Substrate.Dimensions[1] != 1 {
+		t.Fatalf("expected substrate density prefix [1,1], got=%v", agent.Genome.Substrate.Dimensions)
+	}
+	if got := agent.Genome.Substrate.Parameters["dimensions"]; got < 3 {
+		t.Fatalf("expected stored optimal substrate dimension >= 3, got=%f", got)
 	}
 	if agent.Genome.Strategy == nil {
 		t.Fatal("expected strategy config to be materialized")
@@ -99,5 +105,18 @@ func TestConstructCortexRejectsUnknownMorphology(t *testing.T) {
 	constraint.Morphology = "unknown-scope"
 	if _, err := ConstructCortex("agent", 0, constraint, "neural", "none", "l2l_feedforward", rand.New(rand.NewSource(1))); err == nil {
 		t.Fatal("expected error for unknown morphology")
+	}
+}
+
+func TestDefaultSubstrateDensities(t *testing.T) {
+	got := defaultSubstrateDensities(5)
+	want := []int{1, 1, 5, 5, 5}
+	if len(got) != len(want) {
+		t.Fatalf("expected len=%d, got=%d (%v)", len(want), len(got), got)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Fatalf("unexpected densities at index %d: got=%v want=%v", i, got, want)
+		}
 	}
 }
