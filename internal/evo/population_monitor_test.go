@@ -971,6 +971,69 @@ drain:
 	}
 }
 
+func TestPopulationMonitorValidationProbeAlsoEmitsTestFitness(t *testing.T) {
+	initial := []model.Genome{
+		newLinearGenome("g0", -1.0),
+		newLinearGenome("g1", -0.8),
+		newLinearGenome("g2", -0.6),
+		newLinearGenome("g3", -0.4),
+	}
+	updates := make(chan TraceUpdate, 8)
+	monitor, err := NewPopulationMonitor(MonitorConfig{
+		Scape:           oneDimScape{},
+		Mutation:        namedNoopMutation{name: "noop"},
+		PopulationSize:  len(initial),
+		EliteCount:      1,
+		Generations:     1,
+		TraceStepSize:   1,
+		Workers:         1,
+		Seed:            21,
+		InputNeuronIDs:  []string{"i"},
+		OutputNeuronIDs: []string{"o"},
+		ValidationProbe: true,
+		TestProbe:       false,
+		TraceUpdateHook: func(update TraceUpdate) {
+			updates <- update
+		},
+	})
+	if err != nil {
+		t.Fatalf("new monitor: %v", err)
+	}
+
+	_, err = monitor.Run(context.Background(), initial)
+	if err != nil {
+		t.Fatalf("run: %v", err)
+	}
+
+	var stepUpdate *TraceUpdate
+drain:
+	for {
+		select {
+		case update := <-updates:
+			if update.Reason == TraceUpdateReasonStep {
+				copied := update
+				stepUpdate = &copied
+			}
+		default:
+			break drain
+		}
+	}
+	if stepUpdate == nil {
+		t.Fatal("expected step trace update with probe metrics")
+	}
+	if len(stepUpdate.Species) == 0 {
+		t.Fatalf("expected species metrics in trace update, got %+v", stepUpdate)
+	}
+	for _, species := range stepUpdate.Species {
+		if species.ValidationFitness == nil {
+			t.Fatalf("expected validation fitness probe for species %s", species.Key)
+		}
+		if species.TestFitness == nil {
+			t.Fatalf("expected validation-triggered test fitness probe for species %s", species.Key)
+		}
+	}
+}
+
 func TestPopulationMonitorValidationRunUsesModeAwareScapeValidationMode(t *testing.T) {
 	initial := []model.Genome{
 		newLinearGenome("g0", -1.0),

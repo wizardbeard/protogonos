@@ -787,6 +787,8 @@ func (m *PopulationMonitor) captureTraceSpecies(ctx context.Context, scored []Sc
 			ChampionGenomeID: bucket.champion.ID,
 		}
 		if m.cfg.OpMode == OpModeGT && (m.cfg.ValidationProbe || m.cfg.TestProbe) {
+			runValidation := m.cfg.ValidationProbe
+			runTest := m.cfg.TestProbe || runValidation
 			if m.cfg.ValidationProbe {
 				fitness, _, err := m.evaluateGenome(ctx, bucket.champion, OpModeValidation)
 				if err != nil {
@@ -795,13 +797,16 @@ func (m *PopulationMonitor) captureTraceSpecies(ctx context.Context, scored []Sc
 				val := fitness
 				entry.ValidationFitness = &val
 			}
-			if m.cfg.TestProbe {
+			if runTest {
 				fitness, _, err := m.evaluateGenome(ctx, bucket.champion, OpModeTest)
 				if err != nil {
 					return fmt.Errorf("test probe for species %s champion %s: %w", key, bucket.champion.ID, err)
 				}
 				val := fitness
 				entry.TestFitness = &val
+			}
+			if !runValidation {
+				entry.ValidationFitness = nil
 			}
 		}
 		out = append(out, entry)
