@@ -91,8 +91,9 @@ type Supervisor struct {
 	policy SupervisorPolicy
 	hooks  SupervisorHooks
 
-	mu    sync.Mutex
-	tasks map[string]*supervisorTask
+	mu       sync.Mutex
+	tasks    map[string]*supervisorTask
+	finished map[string]SupervisorChildStatus
 }
 
 type supervisorTask struct {
@@ -112,9 +113,10 @@ func NewSupervisor(policy SupervisorPolicy) *Supervisor {
 
 func NewSupervisorWithHooks(policy SupervisorPolicy, hooks SupervisorHooks) *Supervisor {
 	return &Supervisor{
-		policy: normalizeSupervisorPolicy(policy),
-		hooks:  hooks,
-		tasks:  make(map[string]*supervisorTask),
+		policy:   normalizeSupervisorPolicy(policy),
+		hooks:    hooks,
+		tasks:    make(map[string]*supervisorTask),
+		finished: make(map[string]SupervisorChildStatus),
 	}
 }
 
@@ -147,6 +149,7 @@ func (s *Supervisor) StartSpec(spec SupervisorChildSpec, run func(ctx context.Co
 		s.mu.Unlock()
 		return fmt.Errorf("task already running: %s", spec.Name)
 	}
+	delete(s.finished, spec.Name)
 	ctx, cancel := context.WithCancel(context.Background())
 	task := &supervisorTask{
 		cancel: cancel,
@@ -165,6 +168,16 @@ func (s *Supervisor) runTask(name string, task *supervisorTask, ctx context.Cont
 	defer func() {
 		s.mu.Lock()
 		if current, ok := s.tasks[name]; ok && current == task {
+			if shouldRetainFinishedStatus(task) {
+				s.finished[name] = SupervisorChildStatus{
+					Name:            task.spec.Name,
+					Group:           task.spec.Group,
+					RestartPolicy:   task.spec.Restart,
+					RestartCount:    task.restartCount,
+					LastError:       errString(task.lastErr),
+					PermanentFailed: task.permanentFailed,
+				}
+			}
 			delete(s.tasks, name)
 		}
 		s.mu.Unlock()
@@ -333,6 +346,7 @@ func (s *Supervisor) stopAllExcept(excludedName string) {
 func (s *Supervisor) Stop(name string) {
 	s.mu.Lock()
 	task, ok := s.tasks[name]
+	delete(s.finished, name)
 	s.mu.Unlock()
 	if !ok {
 		return
@@ -347,6 +361,7 @@ func (s *Supervisor) StopAll() {
 	for _, task := range s.tasks {
 		tasks = append(tasks, task)
 	}
+	s.finished = make(map[string]SupervisorChildStatus)
 	s.mu.Unlock()
 
 	for _, task := range tasks {
@@ -373,23 +388,41 @@ func (s *Supervisor) Children() []SupervisorChildStatus {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	names := make([]string, 0, len(s.tasks))
+	names := make([]string, 0, len(s.tasks)+len(s.finished))
 	for name := range s.tasks {
+		names = append(names, name)
+	}
+	for name := range s.finished {
+		if _, active := s.tasks[name]; active {
+			continue
+		}
 		names = append(names, name)
 	}
 	sort.Strings(names)
 
 	out := make([]SupervisorChildStatus, 0, len(names))
 	for _, name := range names {
-		task := s.tasks[name]
-		out = append(out, SupervisorChildStatus{
-			Name:            task.spec.Name,
-			Group:           task.spec.Group,
-			RestartPolicy:   task.spec.Restart,
-			RestartCount:    task.restartCount,
-			LastError:       errString(task.lastErr),
-			PermanentFailed: task.permanentFailed,
-		})
+		if task, ok := s.tasks[name]; ok {
+			out = append(out, SupervisorChildStatus{
+				Name:            task.spec.Name,
+				Group:           task.spec.Group,
+				RestartPolicy:   task.spec.Restart,
+				RestartCount:    task.restartCount,
+				LastError:       errString(task.lastErr),
+				PermanentFailed: task.permanentFailed,
+			})
+			continue
+		}
+		if finished, ok := s.finished[name]; ok {
+			out = append(out, finished)
+		}
 	}
 	return out
+}
+
+func shouldRetainFinishedStatus(task *supervisorTask) bool {
+	if task == nil {
+		return false
+	}
+	return task.permanentFailed || task.restartCount > 0 || task.lastErr != nil
 }
