@@ -41,39 +41,26 @@ func UpdateNNTopologySummary(genome model.Genome) TopologySummary {
 }
 
 func ComputeGenomeSignature(genome model.Genome) GenomeSignature {
-	actDist := make(map[string]int)
+	nodeSummary := GetNodeSummary(genome)
+	actDist := make(map[string]int, len(nodeSummary.ActivationDistribution))
+	for key, count := range nodeSummary.ActivationDistribution {
+		actDist[key] = count
+	}
 	aggrDist := make(map[string]int)
 	recurrent := 0
-	totalNILs := 0
-	totalNOLs := 0
-	totalNROs := 0
-	neuronIDs := make(map[string]struct{}, len(genome.Neurons))
 
 	for _, n := range genome.Neurons {
-		neuronIDs[n.ID] = struct{}{}
-		actDist[n.Activation]++
 		aggr := n.Aggregator
 		if aggr == "" {
 			aggr = "dot_product"
 		}
 		aggrDist[aggr]++
 	}
-	for _, s := range genome.Synapses {
-		if s.Recurrent {
+	for _, synapse := range genome.Synapses {
+		if synapse.Recurrent {
 			recurrent++
 		}
-		if _, ok := neuronIDs[s.To]; ok {
-			totalNILs++
-		}
-		if _, ok := neuronIDs[s.From]; ok {
-			totalNOLs++
-			if s.Recurrent {
-				totalNROs++
-			}
-		}
 	}
-	totalNILs += len(genome.SensorNeuronLinks)
-	totalNOLs += len(genome.NeuronActuatorLinks)
 
 	encodingType := "neural"
 	if genome.Substrate != nil {
@@ -85,9 +72,9 @@ func ComputeGenomeSignature(genome model.Genome) GenomeSignature {
 		TotalNeurons:           len(genome.Neurons),
 		TotalSynapses:          len(genome.Synapses),
 		TotalRecurrentSynapses: recurrent,
-		TotalNILs:              totalNILs,
-		TotalNOLs:              totalNOLs,
-		TotalNROs:              totalNROs,
+		TotalNILs:              nodeSummary.TotalNILs,
+		TotalNOLs:              nodeSummary.TotalNOLs,
+		TotalNROs:              nodeSummary.TotalNROs,
 		TotalSensors:           len(genome.SensorIDs),
 		TotalActuators:         len(genome.ActuatorIDs),
 		ActivationDistribution: actDist,
