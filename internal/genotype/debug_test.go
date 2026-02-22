@@ -1,6 +1,7 @@
 package genotype
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"strings"
@@ -8,6 +9,7 @@ import (
 
 	protoio "protogonos/internal/io"
 	"protogonos/internal/model"
+	"protogonos/internal/storage"
 )
 
 func TestFormatGenomeIncludesCoreSections(t *testing.T) {
@@ -100,5 +102,89 @@ func TestWriteGenomeListForm(t *testing.T) {
 	want := FormatGenomeListForm(genome)
 	if string(data) != want {
 		t.Fatalf("unexpected file contents:\nwant:\n%s\ngot:\n%s", want, string(data))
+	}
+}
+
+func TestWriteGenomeListFormDefault(t *testing.T) {
+	genome := model.Genome{
+		ID:          "g-default",
+		SensorIDs:   []string{"s1"},
+		ActuatorIDs: []string{"a1"},
+	}
+	path, err := WriteGenomeListFormDefault(genome, t.TempDir())
+	if err != nil {
+		t.Fatalf("write default list form: %v", err)
+	}
+	if filepath.Base(path) != "g-default.agent" {
+		t.Fatalf("expected default file name g-default.agent, got %q", filepath.Base(path))
+	}
+}
+
+func TestPrintAndPrintListFormFromStore(t *testing.T) {
+	ctx := context.Background()
+	store := storage.NewMemoryStore()
+	if err := store.Init(ctx); err != nil {
+		t.Fatalf("init store: %v", err)
+	}
+
+	genome := model.Genome{
+		ID:          "g-store-print",
+		SensorIDs:   []string{"s1"},
+		ActuatorIDs: []string{"a1"},
+		Neurons: []model.Neuron{
+			{ID: "n1", Activation: "identity"},
+		},
+	}
+	if err := store.SaveGenome(ctx, genome); err != nil {
+		t.Fatalf("save genome: %v", err)
+	}
+
+	verbose, err := Print(ctx, store, genome.ID)
+	if err != nil {
+		t.Fatalf("print: %v", err)
+	}
+	if !strings.Contains(verbose, "genome: g-store-print") {
+		t.Fatalf("unexpected print output:\n%s", verbose)
+	}
+
+	listForm, err := PrintListForm(ctx, store, genome.ID)
+	if err != nil {
+		t.Fatalf("print list form: %v", err)
+	}
+	if !strings.Contains(listForm, "n1:") {
+		t.Fatalf("unexpected list form output:\n%s", listForm)
+	}
+}
+
+func TestWriteListFormForGenomeID(t *testing.T) {
+	ctx := context.Background()
+	store := storage.NewMemoryStore()
+	if err := store.Init(ctx); err != nil {
+		t.Fatalf("init store: %v", err)
+	}
+
+	genome := model.Genome{
+		ID:          "g-store-file",
+		SensorIDs:   []string{"s1"},
+		ActuatorIDs: []string{"a1"},
+	}
+	if err := store.SaveGenome(ctx, genome); err != nil {
+		t.Fatalf("save genome: %v", err)
+	}
+
+	dir := t.TempDir()
+	path, err := WriteListFormForGenomeID(ctx, store, genome.ID, dir)
+	if err != nil {
+		t.Fatalf("write list form for id: %v", err)
+	}
+	if filepath.Base(path) != "g-store-file.agent" {
+		t.Fatalf("unexpected output filename: %s", filepath.Base(path))
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read written file: %v", err)
+	}
+	if string(data) != FormatGenomeListForm(genome) {
+		t.Fatalf("unexpected output file contents:\nwant:\n%s\ngot:\n%s", FormatGenomeListForm(genome), string(data))
 	}
 }

@@ -1,12 +1,15 @@
 package genotype
 
 import (
+	"context"
 	"fmt"
 	"os"
+	"path/filepath"
 	"sort"
 	"strings"
 
 	"protogonos/internal/model"
+	"protogonos/internal/storage"
 )
 
 // FormatGenome returns a human-readable multiline dump of the genome.
@@ -89,6 +92,72 @@ func FormatGenomeListForm(genome model.Genome) string {
 // WriteGenomeListForm writes FormatGenomeListForm output to path.
 func WriteGenomeListForm(path string, genome model.Genome) error {
 	return os.WriteFile(path, []byte(FormatGenomeListForm(genome)), 0o644)
+}
+
+// WriteGenomeListFormDefault writes list-form output to "<genome_id>.agent" in
+// dir (or current working directory when dir is empty) and returns the path.
+func WriteGenomeListFormDefault(genome model.Genome, dir string) (string, error) {
+	if genome.ID == "" {
+		return "", fmt.Errorf("genome id is required")
+	}
+	fileName := genome.ID + ".agent"
+	path := fileName
+	if dir != "" {
+		path = filepath.Join(dir, fileName)
+	}
+	return path, WriteGenomeListForm(path, genome)
+}
+
+// Print loads a genome by id and returns a verbose formatted dump analogous to
+// genotype:print/1.
+func Print(ctx context.Context, store storage.Store, genomeID string) (string, error) {
+	genome, err := loadGenomeByID(ctx, store, genomeID)
+	if err != nil {
+		return "", err
+	}
+	return FormatGenome(genome), nil
+}
+
+// PrintListForm loads a genome by id and returns compact list-form output
+// analogous to genotype:print_ListForm/1.
+func PrintListForm(ctx context.Context, store storage.Store, genomeID string) (string, error) {
+	genome, err := loadGenomeByID(ctx, store, genomeID)
+	if err != nil {
+		return "", err
+	}
+	return FormatGenomeListForm(genome), nil
+}
+
+// WriteListFormForGenomeID loads a genome by id and writes list-form output to
+// "<id>.agent" in dir (or current working directory when dir is empty).
+func WriteListFormForGenomeID(ctx context.Context, store storage.Store, genomeID, dir string) (string, error) {
+	genome, err := loadGenomeByID(ctx, store, genomeID)
+	if err != nil {
+		return "", err
+	}
+	return WriteGenomeListFormDefault(genome, dir)
+}
+
+func loadGenomeByID(ctx context.Context, store storage.Store, genomeID string) (model.Genome, error) {
+	if store == nil {
+		return model.Genome{}, fmt.Errorf("store is required")
+	}
+	if genomeID == "" {
+		return model.Genome{}, fmt.Errorf("genome id is required")
+	}
+
+	record, ok, err := Read(ctx, store, RecordKey{Table: RecordTableGenome, ID: genomeID})
+	if err != nil {
+		return model.Genome{}, err
+	}
+	if !ok {
+		return model.Genome{}, fmt.Errorf("genome not found: %s", genomeID)
+	}
+	genome, ok := record.(model.Genome)
+	if !ok {
+		return model.Genome{}, fmt.Errorf("unexpected genome record type: %T", record)
+	}
+	return genome, nil
 }
 
 func uniqueSortedStrings(values []string) []string {
