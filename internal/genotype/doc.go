@@ -1,3 +1,3 @@
 // Package genotype provides utilities for cloning, topology signatures,
-// debug formatting, and persistence-oriented snapshots of evolved genomes.
+// debug formatting, typed storage wrappers, and persistence snapshots.
 package genotype
