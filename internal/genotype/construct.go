@@ -38,9 +38,10 @@ type SeedNetwork struct {
 
 var uniqueIDSequence uint64
 
-// ConstructSeedNN is a Go analog of genotype:construct_SeedNN/6 for the
-// non-circuit baseline path: one input neuron per sensor and one output neuron
-// per actuator, fully connected input->output.
+// ConstructSeedNN is a Go analog of genotype:construct_SeedNN/6.
+// If neural activation choices include a "circuit" tag, this builds a
+// relay+output two-stage scaffold per actuator; otherwise it builds the
+// baseline one-output-neuron-per-actuator scaffold.
 func ConstructSeedNN(
 	generation int,
 	sensors []string,
@@ -85,6 +86,66 @@ func ConstructSeedNN(
 	inputSpecs := make([]InputSpec, 0, len(inputNeuronIDs))
 	for _, inputID := range inputNeuronIDs {
 		inputSpecs = append(inputSpecs, InputSpec{FromID: inputID, Width: 1})
+	}
+
+	circuitMode, circuitActivation := circuitActivationTag(neuralAFs)
+	if circuitMode {
+		relayNeuronIDs := make([]string, 0, len(uniqActuators))
+		relayAFs := stripCircuitActivations(neuralAFs)
+		for i, actuatorID := range uniqActuators {
+			relayID := fmt.Sprintf("L0.5:relay:%d", i)
+			circuitID := fmt.Sprintf("L0.99:circuit:%d", i)
+			relayNeuronIDs = append(relayNeuronIDs, relayID)
+			outputNeuronIDs = append(outputNeuronIDs, circuitID)
+
+			relay, relayInboundSynapses, _, err := ConstructNeuron(
+				generation,
+				relayID,
+				inputSpecs,
+				[]string{circuitID},
+				relayAFs,
+				neuralPFs,
+				neuralAggrFs,
+				rng,
+			)
+			if err != nil {
+				return SeedNetwork{}, err
+			}
+			circuit, circuitInboundSynapses, _, err := ConstructNeuron(
+				generation,
+				circuitID,
+				[]InputSpec{{FromID: relayID, Width: 1}},
+				nil,
+				[]string{circuitActivation},
+				neuralPFs,
+				neuralAggrFs,
+				rng,
+			)
+			if err != nil {
+				return SeedNetwork{}, err
+			}
+			neurons = append(neurons, relay, circuit)
+			synapses = append(synapses, relayInboundSynapses...)
+			synapses = append(synapses, circuitInboundSynapses...)
+			actuatorLinks = append(actuatorLinks, model.NeuronActuatorLink{
+				NeuronID:   circuitID,
+				ActuatorID: actuatorID,
+			})
+		}
+
+		return SeedNetwork{
+			Neurons:             neurons,
+			Synapses:            synapses,
+			SensorNeuronLinks:   sensorLinks,
+			NeuronActuatorLinks: actuatorLinks,
+			InputNeuronIDs:      inputNeuronIDs,
+			OutputNeuronIDs:     outputNeuronIDs,
+			Pattern: []PatternLayer{
+				{Layer: 0, NeuronIDs: append([]string(nil), inputNeuronIDs...)},
+				{Layer: 0.5, NeuronIDs: relayNeuronIDs},
+				{Layer: 0.99, NeuronIDs: append([]string(nil), outputNeuronIDs...)},
+			},
+		}, nil
 	}
 
 	for i, actuatorID := range uniqActuators {
@@ -482,4 +543,41 @@ func uniqueNonEmpty(values []string) []string {
 		out = append(out, value)
 	}
 	return out
+}
+
+func circuitActivationTag(values []string) (bool, string) {
+	for _, value := range values {
+		candidate := strings.TrimSpace(value)
+		if candidate == "" {
+			continue
+		}
+		lower := strings.ToLower(candidate)
+		if lower == "circuit" {
+			return true, "tanh"
+		}
+		if strings.HasPrefix(lower, "circuit:") {
+			_, raw, _ := strings.Cut(candidate, ":")
+			raw = strings.TrimSpace(raw)
+			if raw == "" {
+				return true, "tanh"
+			}
+			return true, raw
+		}
+	}
+	return false, ""
+}
+
+func stripCircuitActivations(values []string) []string {
+	filtered := make([]string, 0, len(values))
+	for _, value := range values {
+		candidate := strings.TrimSpace(value)
+		if candidate == "" {
+			continue
+		}
+		if ok, _ := circuitActivationTag([]string{candidate}); ok {
+			continue
+		}
+		filtered = append(filtered, candidate)
+	}
+	return filtered
 }

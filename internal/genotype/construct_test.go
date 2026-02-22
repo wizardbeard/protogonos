@@ -182,6 +182,64 @@ func TestConstructSeedNNValidatesRequiredSensorsAndActuators(t *testing.T) {
 	}
 }
 
+func TestConstructSeedNNCircuitModeBuildsRelayAndCircuitLayers(t *testing.T) {
+	seed, err := ConstructSeedNN(
+		0,
+		[]string{"s1", "s2"},
+		[]string{"a1"},
+		[]string{"circuit:tanh"},
+		[]string{"none"},
+		[]string{"dot_product"},
+		rand.New(rand.NewSource(17)),
+	)
+	if err != nil {
+		t.Fatalf("construct seed nn circuit mode: %v", err)
+	}
+	if len(seed.Neurons) != 4 {
+		t.Fatalf("expected 4 neurons in circuit mode (2 input + 1 relay + 1 circuit), got=%d", len(seed.Neurons))
+	}
+	if len(seed.Synapses) != 3 {
+		t.Fatalf("expected 3 synapses in circuit mode, got=%d", len(seed.Synapses))
+	}
+	if len(seed.OutputNeuronIDs) != 1 || seed.OutputNeuronIDs[0] != "L0.99:circuit:0" {
+		t.Fatalf("unexpected circuit output neuron ids: %v", seed.OutputNeuronIDs)
+	}
+	if len(seed.NeuronActuatorLinks) != 1 || seed.NeuronActuatorLinks[0].NeuronID != "L0.99:circuit:0" {
+		t.Fatalf("expected actuator to link from circuit neuron, got=%v", seed.NeuronActuatorLinks)
+	}
+	if len(seed.Pattern) != 3 {
+		t.Fatalf("expected 3-layer pattern in circuit mode, got=%v", seed.Pattern)
+	}
+	if seed.Pattern[0].Layer != 0 || seed.Pattern[1].Layer != 0.5 || seed.Pattern[2].Layer != 0.99 {
+		t.Fatalf("unexpected circuit pattern layers: %v", seed.Pattern)
+	}
+}
+
+func TestConstructSeedNNCircuitModeStripsCircuitTagFromRelayAFPool(t *testing.T) {
+	seed, err := ConstructSeedNN(
+		0,
+		[]string{"s1"},
+		[]string{"a1"},
+		[]string{"circuit:tanh", "sigmoid"},
+		[]string{"none"},
+		[]string{"dot_product"},
+		rand.New(rand.NewSource(19)),
+	)
+	if err != nil {
+		t.Fatalf("construct seed nn mixed afs: %v", err)
+	}
+	byID := map[string]string{}
+	for _, n := range seed.Neurons {
+		byID[n.ID] = n.Activation
+	}
+	if byID["L0.99:circuit:0"] != "tanh" {
+		t.Fatalf("expected explicit circuit activation tanh, got=%q", byID["L0.99:circuit:0"])
+	}
+	if byID["L0.5:relay:0"] == "circuit:tanh" {
+		t.Fatalf("expected relay activation pool to exclude circuit tags, got=%q", byID["L0.5:relay:0"])
+	}
+}
+
 func TestGenerateIDsReturnsCountAndUniqueValues(t *testing.T) {
 	ids := GenerateIDs(4, rand.New(rand.NewSource(1)))
 	if len(ids) != 4 {
