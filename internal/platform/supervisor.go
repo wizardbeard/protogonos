@@ -99,6 +99,7 @@ type supervisorTask struct {
 	cancel context.CancelFunc
 	done   chan struct{}
 	spec   SupervisorChildSpec
+	run    func(ctx context.Context) error
 
 	restartCount    int
 	lastErr         error
@@ -151,6 +152,7 @@ func (s *Supervisor) StartSpec(spec SupervisorChildSpec, run func(ctx context.Co
 		cancel: cancel,
 		done:   make(chan struct{}),
 		spec:   spec,
+		run:    run,
 	}
 	s.tasks[spec.Name] = task
 	s.mu.Unlock()
@@ -170,7 +172,6 @@ func (s *Supervisor) runTask(name string, task *supervisorTask, ctx context.Cont
 	}()
 
 	backoff := s.policy.InitialBackoff
-	restarts := 0
 
 	for {
 		err := run(ctx)
@@ -183,6 +184,7 @@ func (s *Supervisor) runTask(name string, task *supervisorTask, ctx context.Cont
 		}
 		s.mu.Lock()
 		task.lastErr = err
+		restarts := task.restartCount
 		s.mu.Unlock()
 		if s.policy.MaxRestarts > 0 && restarts >= s.policy.MaxRestarts {
 			s.mu.Lock()
@@ -201,6 +203,9 @@ func (s *Supervisor) runTask(name string, task *supervisorTask, ctx context.Cont
 		s.mu.Lock()
 		task.restartCount = restarts
 		s.mu.Unlock()
+		if s.policy.Strategy == SupervisorStrategyOneForAll {
+			s.restartSiblingsOneForAll(name, err)
+		}
 		if s.hooks.OnTaskRestart != nil {
 			s.hooks.OnTaskRestart(name, err, restarts)
 		}
@@ -216,6 +221,70 @@ func (s *Supervisor) runTask(name string, task *supervisorTask, ctx context.Cont
 			next = s.policy.MaxBackoff
 		}
 		backoff = next
+	}
+}
+
+type oneForAllSiblingRestart struct {
+	name         string
+	previousTask *supervisorTask
+	spec         SupervisorChildSpec
+	run          func(ctx context.Context) error
+	restarts     int
+}
+
+func (s *Supervisor) restartSiblingsOneForAll(excludedName string, triggeringErr error) {
+	s.mu.Lock()
+	restarts := make([]oneForAllSiblingRestart, 0, len(s.tasks))
+	for name, task := range s.tasks {
+		if name == excludedName {
+			continue
+		}
+		restarts = append(restarts, oneForAllSiblingRestart{
+			name:         name,
+			previousTask: task,
+			spec:         task.spec,
+			run:          task.run,
+			restarts:     task.restartCount,
+		})
+		task.cancel()
+	}
+	s.mu.Unlock()
+
+	for _, sibling := range restarts {
+		<-sibling.previousTask.done
+	}
+
+	restartErr := triggeringErr
+	if restartErr == nil {
+		restartErr = errors.New("one_for_all restart")
+	}
+
+	for _, sibling := range restarts {
+		if !shouldRestart(sibling.spec.Restart, restartErr) {
+			continue
+		}
+		ctx, cancel := context.WithCancel(context.Background())
+		nextTask := &supervisorTask{
+			cancel:       cancel,
+			done:         make(chan struct{}),
+			spec:         sibling.spec,
+			run:          sibling.run,
+			restartCount: sibling.restarts + 1,
+			lastErr:      restartErr,
+		}
+		s.mu.Lock()
+		current, exists := s.tasks[sibling.name]
+		if exists && current != sibling.previousTask {
+			s.mu.Unlock()
+			cancel()
+			continue
+		}
+		s.tasks[sibling.name] = nextTask
+		s.mu.Unlock()
+		if s.hooks.OnTaskRestart != nil {
+			s.hooks.OnTaskRestart(sibling.name, restartErr, nextTask.restartCount)
+		}
+		go s.runTask(sibling.name, nextTask, ctx, sibling.run)
 	}
 }
 

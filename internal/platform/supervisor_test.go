@@ -196,6 +196,113 @@ func TestSupervisorOneForAllStopsSiblingTasksOnPermanentFailure(t *testing.T) {
 	t.Fatalf("expected no running tasks after one_for_all failure, got=%v", supervisor.Tasks())
 }
 
+func TestSupervisorOneForAllRestartsSiblingTasksOnRecoverableFailure(t *testing.T) {
+	supervisor := NewSupervisor(SupervisorPolicy{
+		InitialBackoff: time.Millisecond,
+		MaxBackoff:     time.Millisecond,
+		BackoffFactor:  1,
+		MaxRestarts:    2,
+		Strategy:       SupervisorStrategyOneForAll,
+	})
+	var stableRuns atomic.Int32
+	var failingRuns atomic.Int32
+
+	if err := supervisor.StartSpec(SupervisorChildSpec{
+		Name:    "stable",
+		Restart: SupervisorRestartPermanent,
+	}, func(ctx context.Context) error {
+		stableRuns.Add(1)
+		<-ctx.Done()
+		return ctx.Err()
+	}); err != nil {
+		t.Fatalf("start stable task: %v", err)
+	}
+	if err := supervisor.StartSpec(SupervisorChildSpec{
+		Name:    "failing-once",
+		Restart: SupervisorRestartPermanent,
+	}, func(ctx context.Context) error {
+		run := failingRuns.Add(1)
+		if run == 1 {
+			return errors.New("boom")
+		}
+		<-ctx.Done()
+		return ctx.Err()
+	}); err != nil {
+		t.Fatalf("start failing task: %v", err)
+	}
+	defer supervisor.StopAll()
+
+	deadline := time.Now().Add(300 * time.Millisecond)
+	for time.Now().Before(deadline) {
+		if stableRuns.Load() >= 2 && failingRuns.Load() >= 2 {
+			return
+		}
+		time.Sleep(2 * time.Millisecond)
+	}
+	t.Fatalf(
+		"expected one_for_all sibling restart for recoverable failure, stable_runs=%d failing_runs=%d tasks=%v",
+		stableRuns.Load(),
+		failingRuns.Load(),
+		supervisor.Tasks(),
+	)
+}
+
+func TestSupervisorOneForAllDoesNotRestartTemporarySibling(t *testing.T) {
+	supervisor := NewSupervisor(SupervisorPolicy{
+		InitialBackoff: time.Millisecond,
+		MaxBackoff:     time.Millisecond,
+		BackoffFactor:  1,
+		MaxRestarts:    2,
+		Strategy:       SupervisorStrategyOneForAll,
+	})
+	var temporaryRuns atomic.Int32
+	var failingRuns atomic.Int32
+
+	if err := supervisor.StartSpec(SupervisorChildSpec{
+		Name:    "temporary",
+		Restart: SupervisorRestartTemporary,
+	}, func(ctx context.Context) error {
+		temporaryRuns.Add(1)
+		<-ctx.Done()
+		return ctx.Err()
+	}); err != nil {
+		t.Fatalf("start temporary task: %v", err)
+	}
+	if err := supervisor.StartSpec(SupervisorChildSpec{
+		Name:    "failing-once",
+		Restart: SupervisorRestartPermanent,
+	}, func(ctx context.Context) error {
+		run := failingRuns.Add(1)
+		if run == 1 {
+			return errors.New("boom")
+		}
+		<-ctx.Done()
+		return ctx.Err()
+	}); err != nil {
+		t.Fatalf("start failing task: %v", err)
+	}
+	defer supervisor.StopAll()
+
+	deadline := time.Now().Add(300 * time.Millisecond)
+	for time.Now().Before(deadline) {
+		if failingRuns.Load() >= 2 {
+			break
+		}
+		time.Sleep(2 * time.Millisecond)
+	}
+	if failingRuns.Load() < 2 {
+		t.Fatalf("expected failing task to restart under one_for_all, runs=%d", failingRuns.Load())
+	}
+	time.Sleep(20 * time.Millisecond)
+	if temporaryRuns.Load() != 1 {
+		t.Fatalf("expected temporary sibling to avoid restart, runs=%d", temporaryRuns.Load())
+	}
+	tasks := supervisor.Tasks()
+	if len(tasks) != 1 || tasks[0] != "failing-once" {
+		t.Fatalf("expected only failing task to remain supervised, tasks=%v", tasks)
+	}
+}
+
 func TestSupervisorChildrenExposeSpecAndStatus(t *testing.T) {
 	supervisor := NewSupervisor(SupervisorPolicy{
 		InitialBackoff: time.Millisecond,

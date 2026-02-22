@@ -891,6 +891,49 @@ func TestPolisOneForAllSupervisorStrategyStopsSiblingTasks(t *testing.T) {
 	}
 }
 
+func TestPolisOneForAllSupervisorStrategyRestartsSiblingTasks(t *testing.T) {
+	stable := &supervisedTestSupportModule{
+		testSupportModule: testSupportModule{name: "stable-module"},
+	}
+	failing := &supervisedTestSupportModule{
+		testSupportModule: testSupportModule{name: "failing-once-module"},
+		failRuns:          1,
+	}
+	p := NewPolis(Config{
+		Store:          storage.NewMemoryStore(),
+		SupportModules: []SupportModule{stable, failing},
+		SupervisorPolicy: SupervisorPolicy{
+			InitialBackoff: time.Millisecond,
+			MaxBackoff:     time.Millisecond,
+			BackoffFactor:  1,
+			MaxRestarts:    2,
+			Strategy:       SupervisorStrategyOneForAll,
+		},
+	})
+	if err := p.Init(context.Background()); err != nil {
+		t.Fatalf("init failed: %v", err)
+	}
+	defer p.Stop()
+
+	waitForAtLeastRuns(t, &stable.superviseRuns, 2, 300*time.Millisecond)
+	waitForAtLeastRuns(t, &failing.superviseRuns, 2, 300*time.Millisecond)
+
+	active := p.ActiveSupervisedTasks()
+	if len(active) != 2 {
+		t.Fatalf("expected both modules supervised after one_for_all restart, got=%v", active)
+	}
+	expected := map[string]struct{}{
+		supervisedSupportTaskName("stable-module"):       {},
+		supervisedSupportTaskName("failing-once-module"): {},
+	}
+	for _, name := range active {
+		delete(expected, name)
+	}
+	if len(expected) != 0 {
+		t.Fatalf("expected supervised task names missing after restart: missing=%v active=%v", expected, active)
+	}
+}
+
 func TestPolisSupportModuleTemporaryPolicyNoRestartOnError(t *testing.T) {
 	module := &scriptedSupervisedSupportModule{
 		testSupportModule: testSupportModule{name: "temporary-module"},
