@@ -99,9 +99,13 @@ type Population struct {
 }
 
 type LineageSummary struct {
+	Type                   string         `json:"type,omitempty"`
 	TotalNeurons           int            `json:"total_neurons"`
 	TotalSynapses          int            `json:"total_synapses"`
 	TotalRecurrentSynapses int            `json:"total_recurrent_synapses"`
+	TotalNILs              int            `json:"total_n_ils,omitempty"`
+	TotalNOLs              int            `json:"total_n_ols,omitempty"`
+	TotalNROs              int            `json:"total_n_ros,omitempty"`
 	TotalSensors           int            `json:"total_sensors"`
 	TotalActuators         int            `json:"total_actuators"`
 	ActivationDistribution map[string]int `json:"activation_distribution"`
