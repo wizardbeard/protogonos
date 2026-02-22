@@ -85,6 +85,28 @@ func (m *testSupportModule) StopWithReason(ctx context.Context, reason StopReaso
 	return m.Stop(ctx)
 }
 
+type syncableTestSupportModule struct {
+	testSupportModule
+	syncCalls int
+	syncErr   error
+}
+
+func (m *syncableTestSupportModule) Sync(context.Context) error {
+	m.syncCalls++
+	return m.syncErr
+}
+
+type syncableManagedTestScape struct {
+	managedTestScape
+	syncCalls int
+	syncErr   error
+}
+
+func (s *syncableManagedTestScape) Sync(context.Context) error {
+	s.syncCalls++
+	return s.syncErr
+}
+
 type supervisedTestSupportModule struct {
 	testSupportModule
 	failRuns      int32
@@ -681,6 +703,78 @@ func TestPolisCallAndCastStopReason(t *testing.T) {
 	waitForMailboxState(t, p, false, 100*time.Millisecond)
 }
 
+func TestPolisCastInitWithStateReplacesRuntime(t *testing.T) {
+	ctx := context.Background()
+	oldModule := &testSupportModule{name: "old-module"}
+	oldScape := &managedTestScape{testScape: testScape{name: "old-scape"}}
+	newModule := &testSupportModule{name: "new-module"}
+	newScape := &managedTestScape{testScape: testScape{name: "new-scape"}}
+	p := NewPolis(Config{
+		Store:          storage.NewMemoryStore(),
+		SupportModules: []SupportModule{oldModule},
+		PublicScapes:   []PublicScapeSpec{{Scape: oldScape, Type: "old-type"}},
+	})
+	if err := p.Init(ctx); err != nil {
+		t.Fatalf("init failed: %v", err)
+	}
+	if err := p.Cast(ctx, InitCast{
+		State: &PolisInitState{
+			SupportModules: []SupportModule{newModule},
+			PublicScapes:   []PublicScapeSpec{{Scape: newScape, Type: "new-type"}},
+		},
+	}); err != nil {
+		t.Fatalf("cast init with state: %v", err)
+	}
+	if oldModule.stopCalls != 1 || oldScape.stopCalls != 1 {
+		t.Fatalf("expected old runtime stop during init-with-state, module_stop=%d scape_stop=%d", oldModule.stopCalls, oldScape.stopCalls)
+	}
+	if newModule.startCalls != 1 || newScape.startCalls != 1 {
+		t.Fatalf("expected new runtime start during init-with-state, module_start=%d scape_start=%d", newModule.startCalls, newScape.startCalls)
+	}
+	mods := p.ActiveSupportModules()
+	if len(mods) != 1 || mods[0] != "new-module" {
+		t.Fatalf("expected only new support module active, got=%v", mods)
+	}
+	if _, ok := p.GetScape("old-scape"); ok {
+		t.Fatal("expected old public scape to be removed after init-with-state")
+	}
+	if _, ok := p.GetScapeByType("old-type"); ok {
+		t.Fatal("expected old public scape type lookup to be removed after init-with-state")
+	}
+	got, ok := p.GetScapeByType("new-type")
+	if !ok || got != newScape {
+		t.Fatalf("expected new public scape type lookup after init-with-state, got=%v found=%t", got, ok)
+	}
+	if !p.MailboxActive() {
+		t.Fatal("expected mailbox to remain active after init-with-state cast")
+	}
+}
+
+func TestPolisCastInitWithStateBootstrapsWhenStopped(t *testing.T) {
+	ctx := context.Background()
+	module := &testSupportModule{name: "boot-module"}
+	public := &managedTestScape{testScape: testScape{name: "boot-scape"}}
+	p := NewPolis(Config{Store: storage.NewMemoryStore()})
+
+	if err := p.Cast(ctx, InitCast{
+		State: &PolisInitState{
+			SupportModules: []SupportModule{module},
+			PublicScapes:   []PublicScapeSpec{{Scape: public, Type: "boot-type"}},
+		},
+	}); err != nil {
+		t.Fatalf("cast init-with-state before init: %v", err)
+	}
+	if !p.Started() {
+		t.Fatal("expected polis started by init-with-state cast")
+	}
+	if module.startCalls != 1 || public.startCalls != 1 {
+		t.Fatalf("expected init-with-state to start provided runtime, module_start=%d scape_start=%d", module.startCalls, public.startCalls)
+	}
+	if _, ok := p.GetScapeByType("boot-type"); !ok {
+		t.Fatal("expected public scape lookup by cast-provided type")
+	}
+}
+
 func TestPolisCallCastRejectUnsupportedMessage(t *testing.T) {
 	p := NewPolis(Config{Store: storage.NewMemoryStore()})
 	if _, err := p.Call(context.Background(), nil); err == nil {
@@ -997,6 +1091,54 @@ func TestPolisPublicScapeTransientPolicyNoRestartOnNormalExit(t *testing.T) {
 	}
 	if len(p.SupervisionFailures()) != 0 {
 		t.Fatalf("expected no supervision failures for transient normal exit, got=%+v", p.SupervisionFailures())
+	}
+}
+
+func TestPolisSyncInvokesSyncableRuntime(t *testing.T) {
+	module := &syncableTestSupportModule{
+		testSupportModule: testSupportModule{name: "sync-module"},
+	}
+	public := &syncableManagedTestScape{
+		managedTestScape: managedTestScape{testScape: testScape{name: "sync-scape"}},
+	}
+	p := NewPolis(Config{
+		Store:          storage.NewMemoryStore(),
+		SupportModules: []SupportModule{module},
+		PublicScapes:   []PublicScapeSpec{{Scape: public, Type: "sync-type"}},
+	})
+	if err := p.Init(context.Background()); err != nil {
+		t.Fatalf("init failed: %v", err)
+	}
+	if err := p.Sync(context.Background()); err != nil {
+		t.Fatalf("sync failed: %v", err)
+	}
+	if module.syncCalls != 1 {
+		t.Fatalf("expected one sync call for support module, got=%d", module.syncCalls)
+	}
+	if public.syncCalls != 1 {
+		t.Fatalf("expected one sync call for public scape, got=%d", public.syncCalls)
+	}
+}
+
+func TestPolisSyncRejectsUninitialized(t *testing.T) {
+	p := NewPolis(Config{Store: storage.NewMemoryStore()})
+	if err := p.Sync(context.Background()); err == nil {
+		t.Fatal("expected sync before init to fail")
+	}
+}
+
+func TestSyncDefaultRequiresRunningPolis(t *testing.T) {
+	resetDefaultPolisForTest()
+	t.Cleanup(resetDefaultPolisForTest)
+
+	if err := SyncDefault(context.Background()); err == nil {
+		t.Fatal("expected sync default without running polis to fail")
+	}
+	if _, err := StartDefault(context.Background(), Config{Store: storage.NewMemoryStore()}); err != nil {
+		t.Fatalf("start default: %v", err)
+	}
+	if err := SyncDefault(context.Background()); err != nil {
+		t.Fatalf("sync default: %v", err)
 	}
 }
 

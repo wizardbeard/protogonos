@@ -87,7 +87,14 @@ type StopCast struct {
 
 func (StopCast) isPolisCastMessage() {}
 
-type InitCast struct{}
+type PolisInitState struct {
+	SupportModules []SupportModule
+	PublicScapes   []PublicScapeSpec
+}
+
+type InitCast struct {
+	State *PolisInitState
+}
 
 func (InitCast) isPolisCastMessage() {}
 
@@ -249,6 +256,16 @@ func StopDefault(reason StopReason) error {
 	return nil
 }
 
+func SyncDefault(ctx context.Context) error {
+	defaultPolisMu.Lock()
+	p := defaultPolis
+	defaultPolisMu.Unlock()
+	if p == nil || !p.Started() {
+		return fmt.Errorf("default polis is not initialized")
+	}
+	return p.Sync(ctx)
+}
+
 func (p *Polis) Init(ctx context.Context) error {
 	if p.store == nil {
 		return fmt.Errorf("store is required")
@@ -258,6 +275,31 @@ func (p *Polis) Init(ctx context.Context) error {
 	if p.started {
 		return nil
 	}
+	return p.initLocked(ctx, p.config.SupportModules, p.config.PublicScapes)
+}
+
+func (p *Polis) InitWithState(ctx context.Context, state PolisInitState) error {
+	if p.store == nil {
+		return fmt.Errorf("store is required")
+	}
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	if p.started {
+		p.stopRuntimeLocked(StopReasonNormal)
+	}
+	supportModules := append([]SupportModule(nil), state.SupportModules...)
+	publicScapes := append([]PublicScapeSpec(nil), state.PublicScapes...)
+	p.config.SupportModules = supportModules
+	p.config.PublicScapes = publicScapes
+	return p.initLocked(ctx, supportModules, publicScapes)
+}
+
+func (p *Polis) initLocked(
+	ctx context.Context,
+	supportModules []SupportModule,
+	publicScapes []PublicScapeSpec,
+) error {
 	if err := p.store.Init(ctx); err != nil {
 		return err
 	}
@@ -265,8 +307,8 @@ func (p *Polis) Init(ctx context.Context) error {
 		p.supervisor = p.newSupervisor()
 	}
 
-	startedModules := make([]SupportModule, 0, len(p.config.SupportModules))
-	for i, module := range p.config.SupportModules {
+	startedModules := make([]SupportModule, 0, len(supportModules))
+	for i, module := range supportModules {
 		if module == nil {
 			stopSupportModules(ctx, startedModules)
 			p.resetRuntimeStateLocked()
@@ -292,8 +334,8 @@ func (p *Polis) Init(ctx context.Context) error {
 		startedModules = append(startedModules, module)
 	}
 
-	startedScapes := make([]managedScape, 0, len(p.config.PublicScapes))
-	for i, spec := range p.config.PublicScapes {
+	startedScapes := make([]managedScape, 0, len(publicScapes))
+	for i, spec := range publicScapes {
 		if spec.Scape == nil {
 			stopManagedScapes(ctx, startedScapes)
 			stopSupportModules(ctx, startedModules)
@@ -640,6 +682,15 @@ func (p *Polis) stopWithReason(reason StopReason, fromMailbox bool) error {
 	if !fromMailbox {
 		mailboxDone = p.stopMailboxLocked()
 	}
+	p.stopRuntimeLocked(reason)
+	p.mu.Unlock()
+	if mailboxDone != nil {
+		<-mailboxDone
+	}
+	return nil
+}
+
+func (p *Polis) stopRuntimeLocked(reason StopReason) {
 	if p.supervisor != nil {
 		p.supervisor.StopAll()
 	}
@@ -655,14 +706,8 @@ func (p *Polis) stopWithReason(reason StopReason, fromMailbox bool) error {
 	for _, module := range p.supportModules {
 		_ = stopSupportModuleWithReason(context.Background(), module, reason)
 	}
-
 	p.lastStopReason = reason
 	p.resetRuntimeStateLocked()
-	p.mu.Unlock()
-	if mailboxDone != nil {
-		<-mailboxDone
-	}
-	return nil
 }
 
 func (p *Polis) RunEvolution(ctx context.Context, cfg EvolutionConfig) (EvolutionResult, error) {
@@ -1151,6 +1196,52 @@ func (p *Polis) MailboxActive() bool {
 	return p.mailboxActive
 }
 
+func (p *Polis) Sync(ctx context.Context) error {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	p.mu.RLock()
+	started := p.started
+	store := p.store
+	modules := make([]SupportModule, 0, len(p.supportModules))
+	for _, module := range p.supportModules {
+		modules = append(modules, module)
+	}
+	scapes := make([]scape.Scape, 0, len(p.scapes))
+	for _, activeScape := range p.scapes {
+		scapes = append(scapes, activeScape)
+	}
+	p.mu.RUnlock()
+
+	if !started {
+		return fmt.Errorf("polis is not initialized")
+	}
+	if store != nil {
+		if err := store.Init(ctx); err != nil {
+			return err
+		}
+	}
+	for _, module := range modules {
+		syncable, ok := module.(syncableRuntime)
+		if !ok {
+			continue
+		}
+		if err := syncable.Sync(ctx); err != nil {
+			return fmt.Errorf("sync support module %s: %w", module.Name(), err)
+		}
+	}
+	for _, activeScape := range scapes {
+		syncable, ok := activeScape.(syncableRuntime)
+		if !ok {
+			continue
+		}
+		if err := syncable.Sync(ctx); err != nil {
+			return fmt.Errorf("sync scape %s: %w", activeScape.Name(), err)
+		}
+	}
+	return nil
+}
+
 func (p *Polis) ActiveSupervisedTasks() []string {
 	p.mu.RLock()
 	supervisor := p.supervisor
@@ -1201,6 +1292,10 @@ type reasonAwareSupportModule interface {
 
 type supervisedRuntime interface {
 	Supervise(ctx context.Context) error
+}
+
+type syncableRuntime interface {
+	Sync(ctx context.Context) error
 }
 
 func isValidStopReason(reason StopReason) bool {
@@ -1320,6 +1415,9 @@ func (p *Polis) handleCastMessage(ctx context.Context, msg CastMessage, fromMail
 	case StopCast:
 		return p.stopWithReason(req.Reason, fromMailbox), fromMailbox
 	case InitCast:
+		if req.State != nil {
+			return p.InitWithState(ctx, *req.State), false
+		}
 		return p.Init(ctx), false
 	default:
 		return fmt.Errorf("unsupported cast message: %T", msg), false
