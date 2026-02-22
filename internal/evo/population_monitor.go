@@ -68,6 +68,21 @@ type GenerationDiagnostics struct {
 	TuningEvalsPerAttempt float64 `json:"tuning_evals_per_attempt"`
 }
 
+type TraceUpdateReason string
+
+const (
+	TraceUpdateReasonStep      TraceUpdateReason = "step"
+	TraceUpdateReasonPrint     TraceUpdateReason = "print_trace"
+	TraceUpdateReasonCompleted TraceUpdateReason = "completed"
+)
+
+type TraceUpdate struct {
+	Reason           TraceUpdateReason     `json:"reason"`
+	TotalEvaluations int                   `json:"total_evaluations"`
+	GoalReached      bool                  `json:"goal_reached"`
+	Diagnostics      GenerationDiagnostics `json:"diagnostics"`
+}
+
 type LineageRecord struct {
 	GenomeID    string          `json:"genome_id"`
 	ParentID    string          `json:"parent_id"`
@@ -102,13 +117,20 @@ type MonitorConfig struct {
 	TuneAttempts         int
 	TuneAttemptPolicy    tuning.AttemptPolicy
 	Control              <-chan MonitorCommand
+	TraceStepSize        int
+	TraceUpdateHook      func(TraceUpdate)
 }
 
 type PopulationMonitor struct {
-	cfg        MonitorConfig
-	rng        *rand.Rand
-	speciation *AdaptiveSpeciation
-	paused     bool
+	cfg                 MonitorConfig
+	rng                 *rand.Rand
+	speciation          *AdaptiveSpeciation
+	paused              bool
+	goalReached         bool
+	totalEvaluations    int
+	nextTraceEvaluation int
+	lastDiagnostics     GenerationDiagnostics
+	hasDiagnostics      bool
 }
 
 type goalAwareTuner interface {
@@ -127,9 +149,11 @@ type tuningGenerationStats struct {
 type MonitorCommand string
 
 const (
-	CommandPause    MonitorCommand = "pause"
-	CommandContinue MonitorCommand = "continue"
-	CommandStop     MonitorCommand = "stop"
+	CommandPause       MonitorCommand = "pause"
+	CommandContinue    MonitorCommand = "continue"
+	CommandStop        MonitorCommand = "stop"
+	CommandGoalReached MonitorCommand = "goal_reached"
+	CommandPrintTrace  MonitorCommand = "print_trace"
 )
 
 const (
@@ -142,6 +166,8 @@ const (
 	EvolutionTypeGenerational = "generational"
 	EvolutionTypeSteadyState  = "steady_state"
 )
+
+const defaultTraceStepSize = 500
 
 type noOpMutation struct{}
 
@@ -222,6 +248,12 @@ func NewPopulationMonitor(cfg MonitorConfig) (*PopulationMonitor, error) {
 	if cfg.EvaluationsLimit < 0 {
 		return nil, fmt.Errorf("evaluations limit must be >= 0")
 	}
+	if cfg.TraceStepSize < 0 {
+		return nil, fmt.Errorf("trace step size must be >= 0")
+	}
+	if cfg.TraceStepSize == 0 {
+		cfg.TraceStepSize = defaultTraceStepSize
+	}
 	if cfg.Workers <= 0 {
 		cfg.Workers = 1
 	}
@@ -263,6 +295,7 @@ func (m *PopulationMonitor) Run(ctx context.Context, initial []model.Genome) (Ru
 	if len(initial) != m.cfg.PopulationSize {
 		return RunResult{}, fmt.Errorf("initial population mismatch: got=%d want=%d", len(initial), m.cfg.PopulationSize)
 	}
+	m.resetRunState()
 	if m.cfg.EvolutionType == EvolutionTypeSteadyState {
 		return m.runSteadyState(ctx, initial)
 	}
@@ -291,7 +324,6 @@ func (m *PopulationMonitor) Run(ctx context.Context, initial []model.Genome) (Ru
 		})
 	}
 	var scored []ScoredGenome
-	evaluations := 0
 
 	for gen := 0; gen < m.cfg.Generations; gen++ {
 		if err := ctx.Err(); err != nil {
@@ -318,10 +350,13 @@ func (m *PopulationMonitor) Run(ctx context.Context, initial []model.Genome) (Ru
 		sort.Slice(scored, func(i, j int) bool {
 			return scored[i].Fitness > scored[j].Fitness
 		})
-		evaluations += len(scored)
+		m.totalEvaluations += len(scored)
 		bestHistory = append(bestHistory, scored[0].Fitness)
 		speciesByGenomeID, speciationStats := m.assignSpecies(scored)
-		diagnostics = append(diagnostics, summarizeGeneration(scored, logicalGeneration+1, speciationStats, tuningStats))
+		generationDiagnostics := summarizeGeneration(scored, logicalGeneration+1, speciationStats, tuningStats)
+		diagnostics = append(diagnostics, generationDiagnostics)
+		m.recordGenerationDiagnostics(generationDiagnostics)
+		m.emitStepTraceUpdates()
 		history, currentSet := summarizeSpeciesGeneration(scored, speciesByGenomeID, logicalGeneration+1, prevSpeciesSet)
 		speciesHistory = append(speciesHistory, history)
 		prevSpeciesSet = currentSet
@@ -329,7 +364,8 @@ func (m *PopulationMonitor) Run(ctx context.Context, initial []model.Genome) (Ru
 			break
 		}
 		if (m.cfg.FitnessGoal > 0 && scored[0].Fitness >= m.cfg.FitnessGoal) ||
-			(m.cfg.EvaluationsLimit > 0 && evaluations >= m.cfg.EvaluationsLimit) {
+			(m.cfg.EvaluationsLimit > 0 && m.totalEvaluations >= m.cfg.EvaluationsLimit) ||
+			m.goalReached {
 			break
 		}
 		stop, err = m.applyControl(ctx, true)
@@ -348,13 +384,15 @@ func (m *PopulationMonitor) Run(ctx context.Context, initial []model.Genome) (Ru
 		lineage = append(lineage, generationLineage...)
 	}
 
-	return RunResult{
+	result := RunResult{
 		BestByGeneration:      bestHistory,
 		GenerationDiagnostics: diagnostics,
 		SpeciesHistory:        speciesHistory,
 		FinalPopulation:       scored,
 		Lineage:               lineage,
-	}, nil
+	}
+	m.emitTraceUpdate(TraceUpdateReasonCompleted, m.totalEvaluations)
+	return result, nil
 }
 
 func (m *PopulationMonitor) runSteadyState(ctx context.Context, initial []model.Genome) (RunResult, error) {
@@ -383,7 +421,6 @@ func (m *PopulationMonitor) runSteadyState(ctx context.Context, initial []model.
 	}
 
 	var finalScored []ScoredGenome
-	evaluations := 0
 
 	for gen := 0; gen < m.cfg.Generations; gen++ {
 		if err := ctx.Err(); err != nil {
@@ -411,10 +448,13 @@ func (m *PopulationMonitor) runSteadyState(ctx context.Context, initial []model.
 			return ranked[i].Fitness > ranked[j].Fitness
 		})
 		finalScored = ranked
-		evaluations += len(ranked)
+		m.totalEvaluations += len(ranked)
 		bestHistory = append(bestHistory, ranked[0].Fitness)
 		speciesByGenomeID, speciationStats := m.assignSpecies(ranked)
-		diagnostics = append(diagnostics, summarizeGeneration(ranked, logicalGeneration+1, speciationStats, tuningStats))
+		generationDiagnostics := summarizeGeneration(ranked, logicalGeneration+1, speciationStats, tuningStats)
+		diagnostics = append(diagnostics, generationDiagnostics)
+		m.recordGenerationDiagnostics(generationDiagnostics)
+		m.emitStepTraceUpdates()
 		history, currentSet := summarizeSpeciesGeneration(ranked, speciesByGenomeID, logicalGeneration+1, prevSpeciesSet)
 		speciesHistory = append(speciesHistory, history)
 		prevSpeciesSet = currentSet
@@ -423,7 +463,8 @@ func (m *PopulationMonitor) runSteadyState(ctx context.Context, initial []model.
 			break
 		}
 		if (m.cfg.FitnessGoal > 0 && ranked[0].Fitness >= m.cfg.FitnessGoal) ||
-			(m.cfg.EvaluationsLimit > 0 && evaluations >= m.cfg.EvaluationsLimit) {
+			(m.cfg.EvaluationsLimit > 0 && m.totalEvaluations >= m.cfg.EvaluationsLimit) ||
+			m.goalReached {
 			break
 		}
 		stop, err = m.applyControl(ctx, true)
@@ -442,13 +483,15 @@ func (m *PopulationMonitor) runSteadyState(ctx context.Context, initial []model.
 		lineage = append(lineage, generationLineage...)
 	}
 
-	return RunResult{
+	result := RunResult{
 		BestByGeneration:      bestHistory,
 		GenerationDiagnostics: diagnostics,
 		SpeciesHistory:        speciesHistory,
 		FinalPopulation:       finalScored,
 		Lineage:               lineage,
-	}, nil
+	}
+	m.emitTraceUpdate(TraceUpdateReasonCompleted, m.totalEvaluations)
+	return result, nil
 }
 
 func (m *PopulationMonitor) nextSteadyStatePopulation(
@@ -502,7 +545,11 @@ func (m *PopulationMonitor) applyControl(ctx context.Context, waitIfPaused bool)
 			if !ok {
 				return false, nil
 			}
-			if m.handleCommand(cmd) {
+			action := m.handleCommand(cmd)
+			if action.printTrace {
+				m.emitTraceUpdate(TraceUpdateReasonPrint, m.totalEvaluations)
+			}
+			if action.stop {
 				return true, nil
 			}
 		default:
@@ -516,7 +563,11 @@ func (m *PopulationMonitor) applyControl(ctx context.Context, waitIfPaused bool)
 				if !ok {
 					return false, nil
 				}
-				if m.handleCommand(cmd) {
+				action := m.handleCommand(cmd)
+				if action.printTrace {
+					m.emitTraceUpdate(TraceUpdateReasonPrint, m.totalEvaluations)
+				}
+				if action.stop {
 					return true, nil
 				}
 				if !m.paused {
@@ -527,16 +578,66 @@ func (m *PopulationMonitor) applyControl(ctx context.Context, waitIfPaused bool)
 	}
 }
 
-func (m *PopulationMonitor) handleCommand(cmd MonitorCommand) bool {
+type monitorCommandAction struct {
+	stop       bool
+	printTrace bool
+}
+
+func (m *PopulationMonitor) handleCommand(cmd MonitorCommand) monitorCommandAction {
 	switch cmd {
 	case CommandPause:
 		m.paused = true
 	case CommandContinue:
 		m.paused = false
 	case CommandStop:
-		return true
+		return monitorCommandAction{stop: true}
+	case CommandGoalReached:
+		m.goalReached = true
+		// Avoid deadlock when goal is reached while the monitor is paused.
+		m.paused = false
+	case CommandPrintTrace:
+		return monitorCommandAction{printTrace: true}
 	}
-	return false
+	return monitorCommandAction{}
+}
+
+func (m *PopulationMonitor) resetRunState() {
+	m.paused = false
+	m.goalReached = false
+	m.totalEvaluations = 0
+	m.lastDiagnostics = GenerationDiagnostics{}
+	m.hasDiagnostics = false
+	m.nextTraceEvaluation = m.cfg.TraceStepSize
+}
+
+func (m *PopulationMonitor) recordGenerationDiagnostics(diag GenerationDiagnostics) {
+	m.lastDiagnostics = diag
+	m.hasDiagnostics = true
+}
+
+func (m *PopulationMonitor) emitStepTraceUpdates() {
+	if m.cfg.TraceUpdateHook == nil || m.cfg.TraceStepSize <= 0 {
+		return
+	}
+	for m.totalEvaluations >= m.nextTraceEvaluation {
+		m.emitTraceUpdate(TraceUpdateReasonStep, m.nextTraceEvaluation)
+		m.nextTraceEvaluation += m.cfg.TraceStepSize
+	}
+}
+
+func (m *PopulationMonitor) emitTraceUpdate(reason TraceUpdateReason, totalEvaluations int) {
+	if m.cfg.TraceUpdateHook == nil {
+		return
+	}
+	update := TraceUpdate{
+		Reason:           reason,
+		TotalEvaluations: totalEvaluations,
+		GoalReached:      m.goalReached,
+	}
+	if m.hasDiagnostics {
+		update.Diagnostics = m.lastDiagnostics
+	}
+	m.cfg.TraceUpdateHook(update)
 }
 
 func summarizeGeneration(scored []ScoredGenome, generation int, speciationStats SpeciationStats, tuningStats tuningGenerationStats) GenerationDiagnostics {

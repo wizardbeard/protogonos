@@ -381,6 +381,22 @@ func TestPopulationMonitorMutationPolicyValidation(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected specie size limit validation error")
 	}
+
+	_, err = NewPopulationMonitor(MonitorConfig{
+		Scape:           oneDimScape{},
+		Mutation:        namedNoopMutation{name: "noop"},
+		PopulationSize:  4,
+		EliteCount:      1,
+		Generations:     1,
+		TraceStepSize:   -1,
+		Workers:         1,
+		Seed:            1,
+		InputNeuronIDs:  []string{"i"},
+		OutputNeuronIDs: []string{"o"},
+	})
+	if err == nil {
+		t.Fatal("expected trace step size validation error")
+	}
 }
 
 func TestLimitSpeciesParentPool(t *testing.T) {
@@ -503,6 +519,142 @@ func TestPopulationMonitorStopControl(t *testing.T) {
 	}
 	if len(result.BestByGeneration) != 0 {
 		t.Fatalf("expected immediate stop before evaluation, got %d generations", len(result.BestByGeneration))
+	}
+}
+
+func TestPopulationMonitorGoalReachedControlStopsAfterCurrentGeneration(t *testing.T) {
+	initial := []model.Genome{
+		newLinearGenome("g0", -1.0),
+		newLinearGenome("g1", -0.8),
+		newLinearGenome("g2", -0.6),
+		newLinearGenome("g3", -0.4),
+	}
+	control := make(chan MonitorCommand, 1)
+	control <- CommandGoalReached
+
+	monitor, err := NewPopulationMonitor(MonitorConfig{
+		Scape:           oneDimScape{},
+		Mutation:        namedNoopMutation{name: "noop"},
+		PopulationSize:  len(initial),
+		EliteCount:      1,
+		Generations:     4,
+		Workers:         2,
+		Seed:            1,
+		InputNeuronIDs:  []string{"i"},
+		OutputNeuronIDs: []string{"o"},
+		Control:         control,
+	})
+	if err != nil {
+		t.Fatalf("new monitor: %v", err)
+	}
+
+	result, err := monitor.Run(context.Background(), initial)
+	if err != nil {
+		t.Fatalf("run: %v", err)
+	}
+	if len(result.BestByGeneration) != 1 {
+		t.Fatalf("expected stop after one generation when goal_reached is signaled, got %d", len(result.BestByGeneration))
+	}
+}
+
+func TestPopulationMonitorTraceStepAndPrintCallbacks(t *testing.T) {
+	initial := []model.Genome{
+		newLinearGenome("g0", -1.0),
+		newLinearGenome("g1", -0.8),
+		newLinearGenome("g2", -0.6),
+		newLinearGenome("g3", -0.4),
+	}
+	control := make(chan MonitorCommand, 8)
+	control <- CommandPause
+	traceUpdates := make(chan TraceUpdate, 32)
+
+	monitor, err := NewPopulationMonitor(MonitorConfig{
+		Scape:           oneDimScape{},
+		Mutation:        namedNoopMutation{name: "noop"},
+		PopulationSize:  len(initial),
+		EliteCount:      1,
+		Generations:     2,
+		TraceStepSize:   3,
+		Workers:         2,
+		Seed:            1,
+		InputNeuronIDs:  []string{"i"},
+		OutputNeuronIDs: []string{"o"},
+		Control:         control,
+		TraceUpdateHook: func(update TraceUpdate) {
+			traceUpdates <- update
+		},
+	})
+	if err != nil {
+		t.Fatalf("new monitor: %v", err)
+	}
+
+	done := make(chan RunResult, 1)
+	errs := make(chan error, 1)
+	go func() {
+		result, runErr := monitor.Run(context.Background(), initial)
+		if runErr != nil {
+			errs <- runErr
+			return
+		}
+		done <- result
+	}()
+
+	var first TraceUpdate
+	select {
+	case runErr := <-errs:
+		t.Fatalf("run failed before first trace update: %v", runErr)
+	case first = <-traceUpdates:
+	case <-time.After(time.Second):
+		t.Fatal("timeout waiting for first trace update")
+	}
+	if first.Reason != TraceUpdateReasonStep || first.TotalEvaluations != 3 {
+		t.Fatalf("unexpected first trace update: %+v", first)
+	}
+
+	control <- CommandPrintTrace
+	control <- CommandContinue
+
+	select {
+	case runErr := <-errs:
+		t.Fatalf("run failed after continue: %v", runErr)
+	case result := <-done:
+		if len(result.BestByGeneration) != 2 {
+			t.Fatalf("expected two generations, got %d", len(result.BestByGeneration))
+		}
+	case <-time.After(time.Second):
+		t.Fatal("timeout waiting for run completion")
+	}
+
+	updates := []TraceUpdate{first}
+drain:
+	for {
+		select {
+		case update := <-traceUpdates:
+			updates = append(updates, update)
+		default:
+			break drain
+		}
+	}
+
+	reasonCount := map[TraceUpdateReason]int{}
+	stepTotals := map[int]struct{}{}
+	for _, update := range updates {
+		reasonCount[update.Reason]++
+		if update.Reason == TraceUpdateReasonStep {
+			stepTotals[update.TotalEvaluations] = struct{}{}
+		}
+	}
+	if _, ok := stepTotals[3]; !ok {
+		t.Fatalf("expected step trace at total evaluations 3, got %+v", updates)
+	}
+	if _, ok := stepTotals[6]; !ok {
+		t.Fatalf("expected step trace at total evaluations 6, got %+v", updates)
+	}
+	if reasonCount[TraceUpdateReasonPrint] == 0 {
+		t.Fatalf("expected print trace callback, got %+v", updates)
+	}
+	if reasonCount[TraceUpdateReasonCompleted] == 0 {
+		t.Fatalf("expected completion trace callback, got %+v", updates)
 	}
 }
 
