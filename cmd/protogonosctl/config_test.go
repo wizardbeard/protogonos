@@ -198,6 +198,15 @@ func TestLoadRunRequestFromConfigUsesPMPEvolutionTypeFallback(t *testing.T) {
 	}
 }
 
+func TestMapSpecieIdentifierFingerprint(t *testing.T) {
+	if got := mapSpecieIdentifier([]string{"fingerprint"}); got != "fingerprint" {
+		t.Fatalf("unexpected fingerprint mapping: %q", got)
+	}
+	if got := mapSpecieIdentifier([]string{"exact_fingerprint"}); got != "fingerprint" {
+		t.Fatalf("unexpected exact_fingerprint mapping: %q", got)
+	}
+}
+
 func TestLoadRunRequestFromConfigUsesPMPPopulationIDForContinuationDefaults(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "run_config_pmp_pop.json")
 	payload := map[string]any{

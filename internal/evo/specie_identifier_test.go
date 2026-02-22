@@ -25,12 +25,18 @@ func TestSpecieIdentifierFromName(t *testing.T) {
 	if _, err := SpecieIdentifierFromName("tot_n"); err != nil {
 		t.Fatalf("tot_n identifier should resolve: %v", err)
 	}
+	if _, err := SpecieIdentifierFromName("fingerprint"); err != nil {
+		t.Fatalf("fingerprint identifier should resolve: %v", err)
+	}
 	if _, err := SpecieIdentifierFromName("unknown"); err == nil {
 		t.Fatal("expected unknown identifier error")
 	}
 }
 
 func TestSpecieIdentifierNameFromDistinguishers(t *testing.T) {
+	if got := SpecieIdentifierNameFromDistinguishers([]string{"fingerprint"}); got != "fingerprint" {
+		t.Fatalf("unexpected identifier from fingerprint: %s", got)
+	}
 	if got := SpecieIdentifierNameFromDistinguishers([]string{"tot_n"}); got != "tot_n" {
 		t.Fatalf("unexpected identifier from tot_n: %s", got)
 	}

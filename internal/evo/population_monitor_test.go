@@ -428,6 +428,22 @@ func TestPopulationMonitorMutationPolicyValidation(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected trace step size validation error")
 	}
+
+	_, err = NewPopulationMonitor(MonitorConfig{
+		Scape:           oneDimScape{},
+		Mutation:        namedNoopMutation{name: "noop"},
+		PopulationSize:  4,
+		EliteCount:      1,
+		Generations:     1,
+		SpeciationMode:  "unknown",
+		Workers:         1,
+		Seed:            1,
+		InputNeuronIDs:  []string{"i"},
+		OutputNeuronIDs: []string{"o"},
+	})
+	if err == nil {
+		t.Fatal("expected speciation mode validation error")
+	}
 }
 
 func TestLimitSpeciesParentPool(t *testing.T) {
@@ -457,6 +473,55 @@ func TestLimitSpeciesParentPool(t *testing.T) {
 	unlimited := limitSpeciesParentPool(ranked, speciesByGenomeID, 0)
 	if len(unlimited) != len(ranked) {
 		t.Fatalf("expected unlimited parent pool size %d, got %d", len(ranked), len(unlimited))
+	}
+}
+
+func TestPopulationMonitorAssignSpeciesFingerprintMode(t *testing.T) {
+	monitor, err := NewPopulationMonitor(MonitorConfig{
+		Scape:           oneDimScape{},
+		OpMode:          OpModeValidation,
+		PopulationSize:  3,
+		EliteCount:      1,
+		Generations:     1,
+		SpeciationMode:  SpeciationModeFingerprint,
+		Workers:         1,
+		Seed:            1,
+		InputNeuronIDs:  []string{"i"},
+		OutputNeuronIDs: []string{"o"},
+	})
+	if err != nil {
+		t.Fatalf("new monitor: %v", err)
+	}
+
+	scored := []ScoredGenome{
+		{Genome: newLinearGenome("a", 0.1), Fitness: 1},
+		{Genome: newLinearGenome("b", 0.9), Fitness: 0.8},
+		{Genome: newComplexLinearGenome("c", 0.4), Fitness: 0.7},
+	}
+	byID, stats := monitor.assignSpecies(scored)
+	if stats.SpeciesCount != 2 {
+		t.Fatalf("expected 2 fingerprint species, got=%d", stats.SpeciesCount)
+	}
+	if stats.TargetSpeciesCount != 2 {
+		t.Fatalf("expected static target species count=2, got=%d", stats.TargetSpeciesCount)
+	}
+	if stats.Threshold != 0 {
+		t.Fatalf("expected threshold=0 for static fingerprint speciation, got=%f", stats.Threshold)
+	}
+	a := byID["a"]
+	b := byID["b"]
+	c := byID["c"]
+	if a == "" || b == "" || c == "" {
+		t.Fatalf("expected species keys for all genomes, got=%+v", byID)
+	}
+	if a != b {
+		t.Fatalf("expected identical topology genomes grouped together, got a=%q b=%q", a, b)
+	}
+	if a == c {
+		t.Fatalf("expected topology-different genome in distinct fingerprint species, got a=%q c=%q", a, c)
+	}
+	if !strings.HasPrefix(a, "fp:") || !strings.HasPrefix(c, "fp:") {
+		t.Fatalf("expected fingerprint species keys prefixed with fp:, got a=%q c=%q", a, c)
 	}
 }
 

@@ -462,6 +462,8 @@ func mapFitnessPostprocessor(name string) string {
 func mapSpecieIdentifier(distinguishers []string) string {
 	name := map2recFirstNonEmpty(distinguishers)
 	switch name {
+	case "fingerprint", "exact_fingerprint":
+		return "fingerprint"
 	case "tot_n":
 		return "tot_n"
 	case "pattern", "topology":

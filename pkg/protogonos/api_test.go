@@ -242,6 +242,18 @@ func TestClientRunValidatesSpecieIdentifier(t *testing.T) {
 	if err != nil {
 		t.Fatalf("run with tot_n specie identifier: %v", err)
 	}
+
+	_, err = client.Run(context.Background(), RunRequest{
+		Scape:            "xor",
+		Population:       8,
+		Generations:      2,
+		Selection:        "species_tournament",
+		SpecieIdentifier: "fingerprint",
+		WeightPerturb:    1,
+	})
+	if err != nil {
+		t.Fatalf("run with fingerprint specie identifier: %v", err)
+	}
 }
 
 func TestClientRunAcceptsReferencePostprocessorAlias(t *testing.T) {

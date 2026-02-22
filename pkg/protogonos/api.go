@@ -113,6 +113,7 @@ type materializedRunConfig struct {
 	Postprocessor     evo.FitnessPostprocessor
 	TopologicalPolicy evo.TopologicalMutationPolicy
 	TuneAttemptPolicy tuning.AttemptPolicy
+	SpeciationMode    string
 }
 
 type RunsRequest struct {
@@ -384,6 +385,7 @@ func (c *Client) Run(ctx context.Context, req RunRequest) (RunSummary, error) {
 			RunID:                runID,
 			OpMode:               req.OpMode,
 			EvolutionType:        req.EvolutionType,
+			SpeciationMode:       cfg.SpeciationMode,
 			ScapeName:            req.Scape,
 			PopulationSize:       req.Population,
 			Generations:          req.Generations,
@@ -1326,7 +1328,17 @@ func materializeRunConfigFromRequest(req RunRequest) (materializedRunConfig, err
 		Postprocessor:     postprocessor,
 		TopologicalPolicy: topologicalPolicy,
 		TuneAttemptPolicy: attemptPolicy,
+		SpeciationMode:    speciationModeFromIdentifier(req.SpecieIdentifier),
 	}, nil
+}
+
+func speciationModeFromIdentifier(name string) string {
+	switch strings.TrimSpace(strings.ToLower(name)) {
+	case "fingerprint", "exact_fingerprint":
+		return evo.SpeciationModeFingerprint
+	default:
+		return evo.SpeciationModeAdaptive
+	}
 }
 
 func parseOpMode(raw string) (string, bool, bool, error) {

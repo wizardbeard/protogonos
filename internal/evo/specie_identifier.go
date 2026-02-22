@@ -41,12 +41,25 @@ func (TotNSpecieIdentifier) Identify(genome model.Genome) string {
 	return fmt.Sprintf("tot_n:%d", len(genome.Neurons))
 }
 
+// FingerprintSpecieIdentifier groups genomes by exact topology fingerprint.
+type FingerprintSpecieIdentifier struct{}
+
+func (FingerprintSpecieIdentifier) Name() string {
+	return "fingerprint"
+}
+
+func (FingerprintSpecieIdentifier) Identify(genome model.Genome) string {
+	return "fp:" + ComputeGenomeSignature(genome).Fingerprint
+}
+
 func SpecieIdentifierFromName(name string) (SpecieIdentifier, error) {
 	switch strings.TrimSpace(strings.ToLower(name)) {
 	case "", "topology", "pattern":
 		return TopologySpecieIdentifier{}, nil
 	case "tot_n":
 		return TotNSpecieIdentifier{}, nil
+	case "fingerprint", "exact_fingerprint":
+		return FingerprintSpecieIdentifier{}, nil
 	default:
 		return nil, fmt.Errorf("unsupported specie identifier: %s", name)
 	}
@@ -56,6 +69,8 @@ func SpecieIdentifierNameFromDistinguishers(distinguishers []string) string {
 	for _, raw := range distinguishers {
 		name := strings.TrimSpace(strings.ToLower(raw))
 		switch name {
+		case "fingerprint", "exact_fingerprint":
+			return "fingerprint"
 		case "tot_n":
 			return "tot_n"
 		case "pattern", "topology":

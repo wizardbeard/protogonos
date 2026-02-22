@@ -117,6 +117,7 @@ type MonitorConfig struct {
 	Scape                scape.Scape
 	OpMode               string
 	EvolutionType        string
+	SpeciationMode       string
 	Mutation             Operator
 	MutationPolicy       []WeightedMutation
 	Selector             Selector
@@ -194,6 +195,11 @@ const (
 const (
 	EvolutionTypeGenerational = "generational"
 	EvolutionTypeSteadyState  = "steady_state"
+)
+
+const (
+	SpeciationModeAdaptive    = "adaptive"
+	SpeciationModeFingerprint = "fingerprint"
 )
 
 const defaultTraceStepSize = 500
@@ -283,6 +289,14 @@ func NewPopulationMonitor(cfg MonitorConfig) (*PopulationMonitor, error) {
 	if cfg.TraceStepSize == 0 {
 		cfg.TraceStepSize = defaultTraceStepSize
 	}
+	if cfg.SpeciationMode == "" {
+		cfg.SpeciationMode = SpeciationModeAdaptive
+	}
+	switch cfg.SpeciationMode {
+	case SpeciationModeAdaptive, SpeciationModeFingerprint:
+	default:
+		return nil, fmt.Errorf("unsupported speciation mode: %s", cfg.SpeciationMode)
+	}
 	if cfg.Workers <= 0 {
 		cfg.Workers = 1
 	}
@@ -313,10 +327,15 @@ func NewPopulationMonitor(cfg MonitorConfig) (*PopulationMonitor, error) {
 		cfg.TopologicalMutations = ConstTopologicalMutations{Count: 1}
 	}
 
+	var adaptiveSpeciation *AdaptiveSpeciation
+	if cfg.SpeciationMode == SpeciationModeAdaptive {
+		adaptiveSpeciation = NewAdaptiveSpeciation(cfg.PopulationSize)
+	}
+
 	return &PopulationMonitor{
 		cfg:        cfg,
 		rng:        rand.New(rand.NewSource(cfg.Seed)),
-		speciation: NewAdaptiveSpeciation(cfg.PopulationSize),
+		speciation: adaptiveSpeciation,
 	}, nil
 }
 
@@ -1006,7 +1025,20 @@ func (m *PopulationMonitor) assignSpecies(scored []ScoredGenome) (map[string]str
 	for _, item := range scored {
 		genomes = append(genomes, item.Genome)
 	}
-	bySpecies, stats := m.speciation.Assign(genomes)
+	var (
+		bySpecies map[string][]model.Genome
+		stats     SpeciationStats
+	)
+	switch m.cfg.SpeciationMode {
+	case SpeciationModeFingerprint:
+		bySpecies = genotype.SpeciateByFingerprint(genomes)
+		stats = summarizeStaticSpeciation(bySpecies)
+	default:
+		if m.speciation == nil {
+			m.speciation = NewAdaptiveSpeciation(m.cfg.PopulationSize)
+		}
+		bySpecies, stats = m.speciation.Assign(genomes)
+	}
 	speciesByGenomeID := make(map[string]string, len(scored))
 	for key, members := range bySpecies {
 		for _, genome := range members {
@@ -1014,6 +1046,29 @@ func (m *PopulationMonitor) assignSpecies(scored []ScoredGenome) (map[string]str
 		}
 	}
 	return speciesByGenomeID, stats
+}
+
+func summarizeStaticSpeciation(bySpecies map[string][]model.Genome) SpeciationStats {
+	if len(bySpecies) == 0 {
+		return SpeciationStats{}
+	}
+	totalMembers := 0
+	largest := 0
+	for _, members := range bySpecies {
+		size := len(members)
+		totalMembers += size
+		if size > largest {
+			largest = size
+		}
+	}
+	speciesCount := len(bySpecies)
+	return SpeciationStats{
+		SpeciesCount:       speciesCount,
+		TargetSpeciesCount: speciesCount,
+		Threshold:          0,
+		MeanSpeciesSize:    float64(totalMembers) / float64(speciesCount),
+		LargestSpeciesSize: largest,
+	}
 }
 
 func (m *PopulationMonitor) evaluatePopulation(ctx context.Context, population []model.Genome, generation int) ([]ScoredGenome, tuningGenerationStats, []bool, error) {
