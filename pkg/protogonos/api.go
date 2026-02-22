@@ -7,6 +7,7 @@ import (
 	"math/rand"
 	"path/filepath"
 	"sort"
+	"strings"
 	"time"
 
 	"protogonos/internal/evo"
@@ -1135,14 +1136,18 @@ func materializeRunConfigFromRequest(req RunRequest) (materializedRunConfig, err
 	if req.OpMode == "" {
 		req.OpMode = evo.OpModeGT
 	}
-	switch req.OpMode {
-	case evo.OpModeGT, evo.OpModeValidation, evo.OpModeTest:
-	default:
-		return materializedRunConfig{}, errors.New("op mode must be one of gt|validation|test")
+	parsedOpMode, impliedValidationProbe, impliedTestProbe, err := parseOpMode(req.OpMode)
+	if err != nil {
+		return materializedRunConfig{}, err
 	}
+	req.OpMode = parsedOpMode
+	req.ValidationProbe = req.ValidationProbe || impliedValidationProbe
+	req.TestProbe = req.TestProbe || impliedTestProbe
 	if req.OpMode != evo.OpModeGT {
 		req.EnableTuning = false
 		req.CompareTuning = false
+		req.ValidationProbe = false
+		req.TestProbe = false
 	}
 	if req.EvolutionType == "" {
 		req.EvolutionType = evo.EvolutionTypeGenerational
@@ -1322,6 +1327,61 @@ func materializeRunConfigFromRequest(req RunRequest) (materializedRunConfig, err
 		TopologicalPolicy: topologicalPolicy,
 		TuneAttemptPolicy: attemptPolicy,
 	}, nil
+}
+
+func parseOpMode(raw string) (string, bool, bool, error) {
+	normalized := strings.ToLower(strings.TrimSpace(raw))
+	if normalized == "" {
+		return evo.OpModeGT, false, false, nil
+	}
+	switch normalized {
+	case evo.OpModeGT:
+		return evo.OpModeGT, false, false, nil
+	case evo.OpModeValidation:
+		return evo.OpModeValidation, false, false, nil
+	case evo.OpModeTest:
+		return evo.OpModeTest, false, false, nil
+	}
+
+	clean := strings.TrimPrefix(normalized, "[")
+	clean = strings.TrimSuffix(clean, "]")
+	if clean == "" {
+		return "", false, false, errors.New("op mode must be one of gt|validation|test or include gt with validation/test probes")
+	}
+	replacer := strings.NewReplacer("|", ",", "+", ",", ";", ",", " ", ",")
+	clean = replacer.Replace(clean)
+	parts := strings.Split(clean, ",")
+
+	modes := map[string]struct{}{}
+	for _, part := range parts {
+		mode := strings.TrimSpace(part)
+		if mode == "" {
+			continue
+		}
+		switch mode {
+		case evo.OpModeGT, evo.OpModeValidation, evo.OpModeTest:
+			modes[mode] = struct{}{}
+		default:
+			return "", false, false, fmt.Errorf("unsupported op mode component: %s", mode)
+		}
+	}
+	if len(modes) == 0 {
+		return "", false, false, errors.New("op mode must be one of gt|validation|test or include gt with validation/test probes")
+	}
+	if _, ok := modes[evo.OpModeGT]; ok {
+		_, validationProbe := modes[evo.OpModeValidation]
+		_, testProbe := modes[evo.OpModeTest]
+		return evo.OpModeGT, validationProbe, testProbe, nil
+	}
+	if len(modes) == 1 {
+		if _, ok := modes[evo.OpModeValidation]; ok {
+			return evo.OpModeValidation, false, false, nil
+		}
+		if _, ok := modes[evo.OpModeTest]; ok {
+			return evo.OpModeTest, false, false, nil
+		}
+	}
+	return "", false, false, errors.New("composite non-gt op mode is unsupported; include gt for probe combinations")
 }
 
 func defaultMutationPolicy(seed int64, scapeName string, inputNeuronIDs, outputNeuronIDs []string, req RunRequest) []evo.WeightedMutation {

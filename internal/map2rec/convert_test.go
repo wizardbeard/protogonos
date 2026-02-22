@@ -315,6 +315,16 @@ func TestConvertPMPMapsFields(t *testing.T) {
 	}
 }
 
+func TestConvertPMPMapsOpModeList(t *testing.T) {
+	in := map[string]any{
+		"op_mode": []any{"gt", "validation", "test"},
+	}
+	out := ConvertPMP(in)
+	if out.OpMode != "gt,validation,test" {
+		t.Fatalf("expected joined op_mode list, got %q", out.OpMode)
+	}
+}
+
 func TestConvertExperimentMapsFields(t *testing.T) {
 	in := map[string]any{
 		"id":               "exp-1",

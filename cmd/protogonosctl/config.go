@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math"
 	"os"
+	"strings"
 	"time"
 
 	"protogonos/internal/map2rec"
@@ -36,6 +37,11 @@ func loadRunRequestFromConfig(path string) (protoapi.RunRequest, error) {
 	}
 	if v, ok := asString(raw["op_mode"]); ok {
 		req.OpMode = v
+	}
+	if xs, ok := asAnySlice(raw["op_mode"]); ok {
+		if joined, ok := joinStringSlice(xs); ok {
+			req.OpMode = joined
+		}
 	}
 	if v, ok := asString(raw["evolution_type"]); ok {
 		req.EvolutionType = mapPopulationEvolutionType(v)
@@ -270,6 +276,33 @@ func asFloat64(v any) (float64, bool) {
 	default:
 		return 0, false
 	}
+}
+
+func asAnySlice(v any) ([]any, bool) {
+	switch xs := v.(type) {
+	case []any:
+		return append([]any(nil), xs...), true
+	case []string:
+		out := make([]any, len(xs))
+		for i, item := range xs {
+			out[i] = item
+		}
+		return out, true
+	default:
+		return nil, false
+	}
+}
+
+func joinStringSlice(values []any) (string, bool) {
+	parts := make([]string, 0, len(values))
+	for _, item := range values {
+		s, ok := asString(item)
+		if !ok {
+			return "", false
+		}
+		parts = append(parts, s)
+	}
+	return strings.Join(parts, ","), true
 }
 
 func overrideFromFlags(req *protoapi.RunRequest, set map[string]bool, flagValue map[string]any) error {

@@ -150,6 +150,28 @@ func TestLoadRunRequestFromConfigUsesTopLevelTraceStepSizeOverride(t *testing.T)
 	}
 }
 
+func TestLoadRunRequestFromConfigMapsOpModeList(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "run_config_op_mode_list.json")
+	payload := map[string]any{
+		"op_mode": []any{"gt", "validation"},
+	}
+	data, err := json.Marshal(payload)
+	if err != nil {
+		t.Fatalf("marshal payload: %v", err)
+	}
+	if err := os.WriteFile(path, data, 0o644); err != nil {
+		t.Fatalf("write config: %v", err)
+	}
+
+	req, err := loadRunRequestFromConfig(path)
+	if err != nil {
+		t.Fatalf("load run request: %v", err)
+	}
+	if req.OpMode != "gt,validation" {
+		t.Fatalf("expected op_mode list to map as joined string, got %q", req.OpMode)
+	}
+}
+
 func TestLoadRunRequestFromConfigUsesPMPEvolutionTypeFallback(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "run_config_pmp_evolution.json")
 	payload := map[string]any{

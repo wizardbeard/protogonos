@@ -633,6 +633,15 @@ func TestClientRunRejectsNegativeNumericConfig(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected op mode validation error")
 	}
+	_, err = client.Run(context.Background(), RunRequest{
+		Scape:       "xor",
+		Population:  6,
+		Generations: 2,
+		OpMode:      "validation,test",
+	})
+	if err == nil {
+		t.Fatal("expected composite non-gt op mode validation error")
+	}
 
 	_, err = client.Run(context.Background(), RunRequest{
 		Scape:         "xor",
@@ -642,6 +651,24 @@ func TestClientRunRejectsNegativeNumericConfig(t *testing.T) {
 	})
 	if err == nil {
 		t.Fatal("expected evolution type validation error")
+	}
+}
+
+func TestMaterializeRunConfigFromRequestParsesCompositeOpModeForGTProbes(t *testing.T) {
+	cfg, err := materializeRunConfigFromRequest(RunRequest{
+		Scape:       "xor",
+		Population:  6,
+		Generations: 1,
+		OpMode:      "[gt,validation,test]",
+	})
+	if err != nil {
+		t.Fatalf("materialize run config: %v", err)
+	}
+	if cfg.Request.OpMode != "gt" {
+		t.Fatalf("expected normalized op mode gt, got %s", cfg.Request.OpMode)
+	}
+	if !cfg.Request.ValidationProbe || !cfg.Request.TestProbe {
+		t.Fatalf("expected validation/test probes implied by composite op mode, got validation=%t test=%t", cfg.Request.ValidationProbe, cfg.Request.TestProbe)
 	}
 }
 

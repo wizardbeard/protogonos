@@ -1,6 +1,9 @@
 package map2rec
 
-import "math"
+import (
+	"math"
+	"strings"
+)
 
 func Convert(kind string, in map[string]any) (any, error) {
 	switch kind {
@@ -171,6 +174,9 @@ func ConvertPMP(in map[string]any) PMPRecord {
 		case "op_mode":
 			if s, ok := asString(val); ok {
 				out.OpMode = s
+			}
+			if xs, ok := asStrings(val); ok {
+				out.OpMode = strings.Join(xs, ",")
 			}
 		case "evolution_type":
 			if s, ok := asString(val); ok {
