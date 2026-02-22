@@ -579,7 +579,15 @@ func TestEvolveHistoryByGenomeIDTracksMutationsAndCarriesUnchangedMembers(t *tes
 		{ID: "elite"},
 	}
 	lineage := []LineageRecord{
-		{GenomeID: "child", ParentID: "parent", Operation: "add_link+mutate_af"},
+		{
+			GenomeID:  "child",
+			ParentID:  "parent",
+			Operation: "add_link+mutate_af",
+			Events: []genotype.EvoHistoryEvent{
+				{Mutation: "add_link", IDs: []string{"L0:n0", "L1:n1"}},
+				{Mutation: "mutate_af", IDs: []string{"L1:n1"}},
+			},
+		},
 		{GenomeID: "elite", ParentID: "parent", Operation: "elite_clone"},
 	}
 
@@ -592,6 +600,12 @@ func TestEvolveHistoryByGenomeIDTracksMutationsAndCarriesUnchangedMembers(t *tes
 	}
 	if got["child"][0].Mutation != "seed_parent" || got["child"][1].Mutation != "add_link" || got["child"][2].Mutation != "mutate_af" {
 		t.Fatalf("unexpected child history sequence: %v", got["child"])
+	}
+	if len(got["child"][1].IDs) != 2 || got["child"][1].IDs[0] != "L0:n0" || got["child"][1].IDs[1] != "L1:n1" {
+		t.Fatalf("expected child add_link event IDs to be preserved, got=%v", got["child"][1].IDs)
+	}
+	if len(got["child"][2].IDs) != 1 || got["child"][2].IDs[0] != "L1:n1" {
+		t.Fatalf("expected child mutate_af event IDs to be preserved, got=%v", got["child"][2].IDs)
 	}
 	if len(got["elite"]) != 1 || got["elite"][0].Mutation != "seed_parent" {
 		t.Fatalf("expected elite clone to inherit parent history unchanged, got=%v", got["elite"])
@@ -1413,10 +1427,41 @@ func TestPopulationMonitorMutationRetriesUntilSuccessCount(t *testing.T) {
 	if record.Operation != "flaky+flaky+flaky" {
 		t.Fatalf("expected 3 successful flaky mutations, got operation=%s", record.Operation)
 	}
+	if len(record.Events) != 3 {
+		t.Fatalf("expected 3 mutation events for flaky retries, got=%v", record.Events)
+	}
+	for i, event := range record.Events {
+		if event.Mutation != "flaky" {
+			t.Fatalf("expected flaky event mutation name at index %d, got=%+v", i, event)
+		}
+		if len(event.IDs) != 1 || event.IDs[0] != "s" {
+			t.Fatalf("expected flaky event IDs to include changed synapse id 's' at index %d, got=%v", i, event.IDs)
+		}
+	}
 	// Parent g3 has initial weight -0.4. With 3 successful mutations (+1 each),
 	// the child should reach 2.6.
 	if got := child.Synapses[0].Weight; got != 2.6 {
 		t.Fatalf("expected 3 successful mutation applications, got weight=%f want=2.6", got)
+	}
+}
+
+func TestDeriveMutationEventCapturesChangedElementIDs(t *testing.T) {
+	before := newLinearGenome("g0", 0.25)
+	after := before
+	after.Neurons = append(append([]model.Neuron(nil), before.Neurons...), model.Neuron{ID: "h", Activation: "tanh"})
+	after.Synapses = append(append([]model.Synapse(nil), before.Synapses...), model.Synapse{
+		ID: "s2", From: "i", To: "h", Weight: 0.1, Enabled: true,
+	})
+	event := deriveMutationEvent(before, after, "add_neuron")
+	if event.Mutation != "add_neuron" {
+		t.Fatalf("expected mutation name add_neuron, got=%q", event.Mutation)
+	}
+	seen := map[string]bool{}
+	for _, id := range event.IDs {
+		seen[id] = true
+	}
+	if !seen["h"] || !seen["s2"] {
+		t.Fatalf("expected added neuron/synapse ids in mutation event, got=%v", event.IDs)
 	}
 }
 

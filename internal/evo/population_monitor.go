@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"math"
 	"math/rand"
+	"reflect"
 	"sort"
 	"strings"
 	"sync"
@@ -105,12 +106,13 @@ type TraceSpeciesMetrics struct {
 }
 
 type LineageRecord struct {
-	GenomeID    string          `json:"genome_id"`
-	ParentID    string          `json:"parent_id"`
-	Generation  int             `json:"generation"`
-	Operation   string          `json:"operation"`
-	Fingerprint string          `json:"fingerprint,omitempty"`
-	Summary     TopologySummary `json:"summary,omitempty"`
+	GenomeID    string                     `json:"genome_id"`
+	ParentID    string                     `json:"parent_id"`
+	Generation  int                        `json:"generation"`
+	Operation   string                     `json:"operation"`
+	Events      []genotype.EvoHistoryEvent `json:"events,omitempty"`
+	Fingerprint string                     `json:"fingerprint,omitempty"`
+	Summary     TopologySummary            `json:"summary,omitempty"`
 }
 
 type MonitorConfig struct {
@@ -1091,7 +1093,11 @@ func evolveHistoryByGenomeID(
 		}
 		parentID := strings.TrimSpace(record.ParentID)
 		history := cloneEvoHistory(previous[parentID])
-		history = append(history, operationHistoryEvents(record.Operation)...)
+		events := cloneEvoHistory(record.Events)
+		if len(events) == 0 {
+			events = operationHistoryEvents(record.Operation)
+		}
+		history = append(history, events...)
 		next[genomeID] = history
 	}
 	return next
@@ -1130,6 +1136,316 @@ func operationHistoryEvents(operation string) []genotype.EvoHistoryEvent {
 		return nil
 	}
 	return events
+}
+
+func deriveMutationEvent(before, after model.Genome, mutation string) genotype.EvoHistoryEvent {
+	return genotype.EvoHistoryEvent{
+		Mutation: strings.TrimSpace(mutation),
+		IDs:      mutationChangedIDs(before, after),
+	}
+}
+
+func mutationChangedIDs(before, after model.Genome) []string {
+	ids := make([]string, 0, 8)
+	seen := make(map[string]struct{})
+	appendID := func(id string) {
+		id = strings.TrimSpace(id)
+		if id == "" {
+			return
+		}
+		if _, exists := seen[id]; exists {
+			return
+		}
+		seen[id] = struct{}{}
+		ids = append(ids, id)
+	}
+
+	beforeNeurons := mapNeuronsByID(before.Neurons)
+	afterNeurons := mapNeuronsByID(after.Neurons)
+	for _, id := range sortedSetDiff(keysFromNeuronMap(afterNeurons), keysFromNeuronMap(beforeNeurons)) {
+		appendID(id)
+	}
+	for _, id := range sortedSetDiff(keysFromNeuronMap(beforeNeurons), keysFromNeuronMap(afterNeurons)) {
+		appendID(id)
+	}
+	for _, id := range sortedIntersection(keysFromNeuronMap(beforeNeurons), keysFromNeuronMap(afterNeurons)) {
+		if !reflect.DeepEqual(beforeNeurons[id], afterNeurons[id]) {
+			appendID(id)
+		}
+	}
+
+	beforeSynapses := mapSynapsesByID(before.Synapses)
+	afterSynapses := mapSynapsesByID(after.Synapses)
+	for _, id := range sortedSetDiff(keysFromSynapseMap(afterSynapses), keysFromSynapseMap(beforeSynapses)) {
+		appendID(id)
+	}
+	for _, id := range sortedSetDiff(keysFromSynapseMap(beforeSynapses), keysFromSynapseMap(afterSynapses)) {
+		appendID(id)
+	}
+	for _, id := range sortedIntersection(keysFromSynapseMap(beforeSynapses), keysFromSynapseMap(afterSynapses)) {
+		if !reflect.DeepEqual(beforeSynapses[id], afterSynapses[id]) {
+			appendID(id)
+		}
+	}
+
+	beforeSensors := setFromStrings(before.SensorIDs)
+	afterSensors := setFromStrings(after.SensorIDs)
+	for _, id := range sortedSetDiff(afterSensors, beforeSensors) {
+		appendID(id)
+	}
+	for _, id := range sortedSetDiff(beforeSensors, afterSensors) {
+		appendID(id)
+	}
+
+	beforeActuators := setFromStrings(before.ActuatorIDs)
+	afterActuators := setFromStrings(after.ActuatorIDs)
+	for _, id := range sortedSetDiff(afterActuators, beforeActuators) {
+		appendID(id)
+	}
+	for _, id := range sortedSetDiff(beforeActuators, afterActuators) {
+		appendID(id)
+	}
+
+	beforeSensorLinks := mapSensorLinks(before.SensorNeuronLinks)
+	afterSensorLinks := mapSensorLinks(after.SensorNeuronLinks)
+	for _, key := range sortedSetDiff(keysFromSensorLinkMap(afterSensorLinks), keysFromSensorLinkMap(beforeSensorLinks)) {
+		link := afterSensorLinks[key]
+		appendID(link.SensorID)
+		appendID(link.NeuronID)
+	}
+	for _, key := range sortedSetDiff(keysFromSensorLinkMap(beforeSensorLinks), keysFromSensorLinkMap(afterSensorLinks)) {
+		link := beforeSensorLinks[key]
+		appendID(link.SensorID)
+		appendID(link.NeuronID)
+	}
+
+	beforeActuatorLinks := mapActuatorLinks(before.NeuronActuatorLinks)
+	afterActuatorLinks := mapActuatorLinks(after.NeuronActuatorLinks)
+	for _, key := range sortedSetDiff(keysFromActuatorLinkMap(afterActuatorLinks), keysFromActuatorLinkMap(beforeActuatorLinks)) {
+		link := afterActuatorLinks[key]
+		appendID(link.NeuronID)
+		appendID(link.ActuatorID)
+	}
+	for _, key := range sortedSetDiff(keysFromActuatorLinkMap(beforeActuatorLinks), keysFromActuatorLinkMap(afterActuatorLinks)) {
+		link := beforeActuatorLinks[key]
+		appendID(link.NeuronID)
+		appendID(link.ActuatorID)
+	}
+
+	appendSubstrateDifferences(before.Substrate, after.Substrate, appendID)
+	appendStrategyDifferences(before.Strategy, after.Strategy, appendID)
+	appendPlasticityDifferences(before.Plasticity, after.Plasticity, appendID)
+
+	return ids
+}
+
+func appendSubstrateDifferences(
+	before, after *model.SubstrateConfig,
+	appendID func(id string),
+) {
+	if before == nil && after == nil {
+		return
+	}
+	if before == nil || after == nil {
+		appendID("substrate")
+		if after != nil {
+			for _, id := range after.CPPIDs {
+				appendID(id)
+			}
+			for _, id := range after.CEPIDs {
+				appendID(id)
+			}
+		}
+		return
+	}
+
+	beforeCPPs := setFromStrings(before.CPPIDs)
+	afterCPPs := setFromStrings(after.CPPIDs)
+	for _, id := range sortedSetDiff(afterCPPs, beforeCPPs) {
+		appendID(id)
+	}
+	for _, id := range sortedSetDiff(beforeCPPs, afterCPPs) {
+		appendID(id)
+	}
+
+	beforeCEPs := setFromStrings(before.CEPIDs)
+	afterCEPs := setFromStrings(after.CEPIDs)
+	for _, id := range sortedSetDiff(afterCEPs, beforeCEPs) {
+		appendID(id)
+	}
+	for _, id := range sortedSetDiff(beforeCEPs, afterCEPs) {
+		appendID(id)
+	}
+
+	if before.CPPName != after.CPPName {
+		appendID("substrate:cpp")
+	}
+	if before.CEPName != after.CEPName {
+		appendID("substrate:cep")
+	}
+	if before.WeightCount != after.WeightCount ||
+		!reflect.DeepEqual(before.Dimensions, after.Dimensions) ||
+		!reflect.DeepEqual(before.Parameters, after.Parameters) {
+		appendID("substrate")
+	}
+}
+
+func appendStrategyDifferences(
+	before, after *model.StrategyConfig,
+	appendID func(id string),
+) {
+	if reflect.DeepEqual(before, after) {
+		return
+	}
+	appendID("strategy")
+}
+
+func appendPlasticityDifferences(
+	before, after *model.PlasticityConfig,
+	appendID func(id string),
+) {
+	if reflect.DeepEqual(before, after) {
+		return
+	}
+	appendID("plasticity")
+}
+
+func setFromStrings(values []string) map[string]struct{} {
+	out := make(map[string]struct{}, len(values))
+	for _, value := range values {
+		value = strings.TrimSpace(value)
+		if value == "" {
+			continue
+		}
+		out[value] = struct{}{}
+	}
+	return out
+}
+
+func sortedSetDiff(left, right map[string]struct{}) []string {
+	if len(left) == 0 {
+		return nil
+	}
+	out := make([]string, 0, len(left))
+	for value := range left {
+		if _, ok := right[value]; ok {
+			continue
+		}
+		out = append(out, value)
+	}
+	sort.Strings(out)
+	return out
+}
+
+func sortedIntersection(left, right map[string]struct{}) []string {
+	if len(left) == 0 || len(right) == 0 {
+		return nil
+	}
+	out := make([]string, 0, len(left))
+	for value := range left {
+		if _, ok := right[value]; !ok {
+			continue
+		}
+		out = append(out, value)
+	}
+	sort.Strings(out)
+	return out
+}
+
+func mapNeuronsByID(neurons []model.Neuron) map[string]model.Neuron {
+	out := make(map[string]model.Neuron, len(neurons))
+	for _, neuron := range neurons {
+		if strings.TrimSpace(neuron.ID) == "" {
+			continue
+		}
+		out[neuron.ID] = neuron
+	}
+	return out
+}
+
+func keysFromNeuronMap(values map[string]model.Neuron) map[string]struct{} {
+	out := make(map[string]struct{}, len(values))
+	for id := range values {
+		out[id] = struct{}{}
+	}
+	return out
+}
+
+func mapSynapsesByID(synapses []model.Synapse) map[string]model.Synapse {
+	out := make(map[string]model.Synapse, len(synapses))
+	for _, synapse := range synapses {
+		if strings.TrimSpace(synapse.ID) == "" {
+			continue
+		}
+		out[synapse.ID] = synapse
+	}
+	return out
+}
+
+func keysFromSynapseMap(values map[string]model.Synapse) map[string]struct{} {
+	out := make(map[string]struct{}, len(values))
+	for id := range values {
+		out[id] = struct{}{}
+	}
+	return out
+}
+
+func mapSensorLinks(links []model.SensorNeuronLink) map[string]model.SensorNeuronLink {
+	out := make(map[string]model.SensorNeuronLink, len(links))
+	for _, link := range links {
+		key := sensorLinkKey(link)
+		if key == "" {
+			continue
+		}
+		out[key] = link
+	}
+	return out
+}
+
+func keysFromSensorLinkMap(values map[string]model.SensorNeuronLink) map[string]struct{} {
+	out := make(map[string]struct{}, len(values))
+	for key := range values {
+		out[key] = struct{}{}
+	}
+	return out
+}
+
+func mapActuatorLinks(links []model.NeuronActuatorLink) map[string]model.NeuronActuatorLink {
+	out := make(map[string]model.NeuronActuatorLink, len(links))
+	for _, link := range links {
+		key := actuatorLinkKey(link)
+		if key == "" {
+			continue
+		}
+		out[key] = link
+	}
+	return out
+}
+
+func keysFromActuatorLinkMap(values map[string]model.NeuronActuatorLink) map[string]struct{} {
+	out := make(map[string]struct{}, len(values))
+	for key := range values {
+		out[key] = struct{}{}
+	}
+	return out
+}
+
+func sensorLinkKey(link model.SensorNeuronLink) string {
+	sensorID := strings.TrimSpace(link.SensorID)
+	neuronID := strings.TrimSpace(link.NeuronID)
+	if sensorID == "" || neuronID == "" {
+		return ""
+	}
+	return sensorID + "->" + neuronID
+}
+
+func actuatorLinkKey(link model.NeuronActuatorLink) string {
+	neuronID := strings.TrimSpace(link.NeuronID)
+	actuatorID := strings.TrimSpace(link.ActuatorID)
+	if neuronID == "" || actuatorID == "" {
+		return ""
+	}
+	return neuronID + "->" + actuatorID
 }
 
 func summarizeStaticSpeciation(bySpecies map[string][]model.Genome) SpeciationStats {
@@ -1532,6 +1848,7 @@ func (m *PopulationMonitor) mutateFromParent(ctx context.Context, parent model.G
 
 	mutated := child
 	operationNames := make([]string, 0, mutationCount)
+	operationEvents := make([]genotype.EvoHistoryEvent, 0, mutationCount)
 	successes := 0
 	attempts := 0
 	maxAttempts := mutationCount * m.maxMutationAttemptsPerStep()
@@ -1543,6 +1860,7 @@ func (m *PopulationMonitor) mutateFromParent(ctx context.Context, parent model.G
 		if attempts > maxAttempts {
 			return model.Genome{}, LineageRecord{}, fmt.Errorf("failed to apply %d successful mutations after %d attempts", mutationCount, attempts-1)
 		}
+		beforeMutation := mutated
 		operator := m.chooseMutation(mutated)
 		next, opErr := operator.Apply(ctx, mutated)
 		operationName := operator.Name()
@@ -1560,6 +1878,7 @@ func (m *PopulationMonitor) mutateFromParent(ctx context.Context, parent model.G
 		}
 		mutated = next
 		operationNames = append(operationNames, operationName)
+		operationEvents = append(operationEvents, deriveMutationEvent(beforeMutation, next, operationName))
 		successes++
 	}
 
@@ -1569,6 +1888,7 @@ func (m *PopulationMonitor) mutateFromParent(ctx context.Context, parent model.G
 		ParentID:    parent.ID,
 		Generation:  generation + 1,
 		Operation:   strings.Join(operationNames, "+"),
+		Events:      operationEvents,
 		Fingerprint: sig.Fingerprint,
 		Summary:     sig.Summary,
 	}, nil
