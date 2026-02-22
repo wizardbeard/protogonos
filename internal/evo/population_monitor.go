@@ -1061,14 +1061,31 @@ func (m *PopulationMonitor) evaluatePopulation(ctx context.Context, population [
 	countedEvaluations := make([]bool, len(population))
 	shouldCountEvaluations := !m.goalReached
 	tuningStats := tuningGenerationStats{}
+	control := m.cfg.Control
 	for received := 0; received < len(population); received++ {
-		if err := m.applyQueuedControl(ctx); err != nil {
-			return nil, tuningGenerationStats{}, nil, err
-		}
 		if m.goalReached {
 			shouldCountEvaluations = false
 		}
-		res := <-results
+
+		var res result
+	waitResult:
+		for {
+			select {
+			case <-ctx.Done():
+				return nil, tuningGenerationStats{}, nil, ctx.Err()
+			case res = <-results:
+				break waitResult
+			case cmd, ok := <-control:
+				if !ok {
+					control = nil
+					continue
+				}
+				action := m.handleCommand(cmd)
+				if action.printTrace {
+					m.emitTraceUpdate(TraceUpdateReasonPrint, m.totalEvaluations)
+				}
+			}
+		}
 		if res.err != nil {
 			return nil, tuningGenerationStats{}, nil, res.err
 		}

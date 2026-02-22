@@ -738,6 +738,85 @@ func (metricScape) Evaluate(ctx context.Context, a scape.Agent) (scape.Fitness, 
 	return 1.0, scape.Trace{"steps_survived": 7, "time_ms": 1.5}, nil
 }
 
+type delayedScape struct {
+	delay time.Duration
+}
+
+func (s delayedScape) Name() string { return "delayed-scape" }
+
+func (s delayedScape) Evaluate(ctx context.Context, a scape.Agent) (scape.Fitness, scape.Trace, error) {
+	select {
+	case <-ctx.Done():
+		return 0, nil, ctx.Err()
+	case <-time.After(s.delay):
+	}
+	runner, ok := a.(scape.StepAgent)
+	if !ok {
+		return 0, nil, context.Canceled
+	}
+	out, err := runner.RunStep(ctx, []float64{1.0})
+	if err != nil {
+		return 0, nil, err
+	}
+	if len(out) != 1 {
+		return 0, nil, context.Canceled
+	}
+	return 1.0, scape.Trace{"steps_survived": 1}, nil
+}
+
+func TestPopulationMonitorHandlesPrintTraceWhileEvaluationInFlight(t *testing.T) {
+	initial := []model.Genome{
+		newLinearGenome("g0", -1.0),
+	}
+	control := make(chan MonitorCommand, 2)
+	traceUpdates := make(chan TraceUpdate, 8)
+	monitor, err := NewPopulationMonitor(MonitorConfig{
+		Scape:           delayedScape{delay: 200 * time.Millisecond},
+		Mutation:        namedNoopMutation{name: "noop"},
+		PopulationSize:  len(initial),
+		EliteCount:      1,
+		Generations:     1,
+		Workers:         1,
+		Seed:            19,
+		InputNeuronIDs:  []string{"i"},
+		OutputNeuronIDs: []string{"o"},
+		Control:         control,
+		TraceUpdateHook: func(update TraceUpdate) {
+			traceUpdates <- update
+		},
+	})
+	if err != nil {
+		t.Fatalf("new monitor: %v", err)
+	}
+
+	done := make(chan error, 1)
+	go func() {
+		_, runErr := monitor.Run(context.Background(), initial)
+		done <- runErr
+	}()
+
+	time.Sleep(10 * time.Millisecond)
+	control <- CommandPrintTrace
+
+	select {
+	case update := <-traceUpdates:
+		if update.Reason != TraceUpdateReasonPrint {
+			t.Fatalf("expected print trace update while evaluation in flight, got reason=%s", update.Reason)
+		}
+	case <-time.After(120 * time.Millisecond):
+		t.Fatal("expected print trace update before delayed evaluation completes")
+	}
+
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatalf("run: %v", err)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("timeout waiting for delayed run completion")
+	}
+}
+
 func TestPopulationMonitorTraceStepAccumulatesCycleTimeAndSpeciesEvaluations(t *testing.T) {
 	initial := []model.Genome{
 		newLinearGenome("g0", -1.0),
