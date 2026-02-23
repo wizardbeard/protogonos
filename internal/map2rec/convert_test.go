@@ -725,18 +725,42 @@ func TestConvertAgentMapsFields(t *testing.T) {
 	if out.EncodingType != "neural" || out.Generation != 4 || out.TuningSelectionF != "dynamic_random" {
 		t.Fatalf("unexpected agent conversion: %+v", out)
 	}
+	if out.TuningDurationF.Name != "const" || out.TuningDurationF.Param != 10 {
+		t.Fatalf("unexpected agent tuning duration conversion: %+v", out.TuningDurationF)
+	}
+	if out.TotTopologicalMutF.Name != "ncount_exponential" || out.TotTopologicalMutF.Param != 0.5 {
+		t.Fatalf("unexpected agent topological conversion: %+v", out.TotTopologicalMutF)
+	}
+	if len(out.MutationOperators) != 1 || out.MutationOperators[0].Name != "add_neuron" || out.MutationOperators[0].Weight != 10 {
+		t.Fatalf("unexpected agent mutation operator conversion: %+v", out.MutationOperators)
+	}
 	if len(out.OffspringIDs) != 1 || len(out.ParentIDs) != 1 || out.MainFitness != 0.8 {
 		t.Fatalf("unexpected agent lineage conversion: %+v", out)
 	}
 }
 
 func TestConvertAgentMalformedKnownFieldKeepsDefault(t *testing.T) {
-	out := ConvertAgent(map[string]any{"offspring_ids": "bad", "fs": "bad"})
+	out := ConvertAgent(map[string]any{
+		"offspring_ids":               "bad",
+		"fs":                          "bad",
+		"tuning_duration_f":           []any{"const"},
+		"mutation_operators":          []any{"bad"},
+		"tot_topological_mutations_f": []any{"const"},
+	})
 	if len(out.OffspringIDs) != 0 {
 		t.Fatalf("expected default offspring IDs, got %+v", out.OffspringIDs)
 	}
 	if out.FS != 1 {
 		t.Fatalf("expected default fs=1, got %f", out.FS)
+	}
+	if out.TuningDurationF != (DurationSpec{}) {
+		t.Fatalf("expected default tuning duration, got %+v", out.TuningDurationF)
+	}
+	if len(out.MutationOperators) != 0 {
+		t.Fatalf("expected default mutation operators, got %+v", out.MutationOperators)
+	}
+	if out.TotTopologicalMutF != (MutationCountPolicy{}) {
+		t.Fatalf("expected default topological mutation policy, got %+v", out.TotTopologicalMutF)
 	}
 }
 
@@ -1077,8 +1101,21 @@ func TestConvertSpecieMapsFields(t *testing.T) {
 	if out.ID != "sp-1" || out.PopulationID != "pop-1" {
 		t.Fatalf("unexpected specie conversion: %+v", out)
 	}
+	if len(out.HOFDistinguishers) != 1 || out.HOFDistinguishers[0] != "tot_n" {
+		t.Fatalf("unexpected specie hof distinguishers: %+v", out.HOFDistinguishers)
+	}
+	if len(out.SpecieDistinguish) != 1 || out.SpecieDistinguish[0] != "pattern" {
+		t.Fatalf("unexpected specie distinguishers: %+v", out.SpecieDistinguish)
+	}
 	if len(out.AllAgentIDs) != 2 || len(out.HallOfFame) != 1 {
 		t.Fatalf("unexpected specie collections: %+v", out)
+	}
+}
+
+func TestConvertSpecieMalformedKnownFieldKeepsDefault(t *testing.T) {
+	out := ConvertSpecie(map[string]any{"specie_distinguishers": []any{1}})
+	if len(out.SpecieDistinguish) != 1 || out.SpecieDistinguish[0] != "tot_n" {
+		t.Fatalf("expected default specie distinguishers, got %+v", out.SpecieDistinguish)
 	}
 }
 
@@ -1103,8 +1140,18 @@ func TestConvertPopulationMapsFields(t *testing.T) {
 	if out.EvoAlgF != "generational" || out.SelectionF != "hof_competition" {
 		t.Fatalf("unexpected population policies: %+v", out)
 	}
+	if len(out.Morphologies) != 1 || out.Morphologies[0] != "xor" {
+		t.Fatalf("unexpected population morphologies: %+v", out.Morphologies)
+	}
 	if len(out.SeedAgentIDs) != 1 || len(out.SeedSpecieIDs) != 1 {
 		t.Fatalf("unexpected population seeds: %+v", out)
+	}
+}
+
+func TestConvertPopulationMalformedKnownFieldKeepsDefault(t *testing.T) {
+	out := ConvertPopulation(map[string]any{"morphologies": []any{1}})
+	if len(out.Morphologies) != 0 {
+		t.Fatalf("expected default morphologies, got %+v", out.Morphologies)
 	}
 }
 

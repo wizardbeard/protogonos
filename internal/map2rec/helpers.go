@@ -216,3 +216,27 @@ func asMutationCountPolicies(v any) ([]MutationCountPolicy, bool) {
 	}
 	return out, true
 }
+
+func asMutationCountPolicy(v any) (MutationCountPolicy, bool) {
+	switch x := v.(type) {
+	case map[string]any:
+		name, ok1 := asString(x["name"])
+		param, ok2 := asFloat64(x["param"])
+		if !ok1 || !ok2 {
+			return MutationCountPolicy{}, false
+		}
+		return MutationCountPolicy{Name: name, Param: param}, true
+	case []any:
+		if len(x) != 2 {
+			return MutationCountPolicy{}, false
+		}
+		name, ok1 := asString(x[0])
+		param, ok2 := asFloat64(x[1])
+		if !ok1 || !ok2 {
+			return MutationCountPolicy{}, false
+		}
+		return MutationCountPolicy{Name: name, Param: param}, true
+	default:
+		return MutationCountPolicy{}, false
+	}
+}

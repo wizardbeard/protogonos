@@ -738,15 +738,19 @@ func ConvertAgent(in map[string]any) AgentRecord {
 		case "annealing_parameter":
 			out.AnnealingParameter = val
 		case "tuning_duration_f":
-			out.TuningDurationF = val
+			if spec, ok := asDurationSpec(val); ok {
+				out.TuningDurationF = spec
+			}
 		case "perturbation_range":
 			out.PerturbationRange = val
 		case "mutation_operators":
-			if xs, ok := asAnySlice(val); ok {
+			if xs, ok := asWeightedOperators(val); ok {
 				out.MutationOperators = xs
 			}
 		case "tot_topological_mutations_f":
-			out.TotTopologicalMutF = val
+			if policy, ok := asMutationCountPolicy(val); ok {
+				out.TotTopologicalMutF = policy
+			}
 		case "heredity_type":
 			if s, ok := asString(val); ok {
 				out.HeredityType = s
@@ -1251,11 +1255,11 @@ func ConvertSpecie(in map[string]any) SpecieRecord {
 				out.SeedAgentIDs = xs
 			}
 		case "hof_distinguishers":
-			if xs, ok := asAnySlice(val); ok {
+			if xs, ok := asStrings(val); ok {
 				out.HOFDistinguishers = xs
 			}
 		case "specie_distinguishers":
-			if xs, ok := asAnySlice(val); ok {
+			if xs, ok := asStrings(val); ok {
 				out.SpecieDistinguish = xs
 			}
 		case "hall_of_fame":
@@ -1280,7 +1284,7 @@ func ConvertPopulation(in map[string]any) PopulationRecord {
 				out.SpecieIDs = xs
 			}
 		case "morphologies":
-			if xs, ok := asAnySlice(val); ok {
+			if xs, ok := asStrings(val); ok {
 				out.Morphologies = xs
 			}
 		case "innovation_factor":

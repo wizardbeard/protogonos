@@ -158,34 +158,7 @@ func loadRunRequestFromConfig(path string) (protoapi.RunRequest, error) {
 				}
 			}
 		}
-		for _, op := range constraint.MutationOperators {
-			switch mutationWeightBucket(op.Name) {
-			case "perturb":
-				req.WeightPerturb += op.Weight
-			case "bias":
-				req.WeightBias += op.Weight
-			case "remove_bias":
-				req.WeightRemoveBias += op.Weight
-			case "activation":
-				req.WeightActivation += op.Weight
-			case "aggregator":
-				req.WeightAggregator += op.Weight
-			case "add_synapse":
-				req.WeightAddSynapse += op.Weight
-			case "remove_synapse":
-				req.WeightRemoveSynapse += op.Weight
-			case "add_neuron":
-				req.WeightAddNeuron += op.Weight
-			case "remove_neuron":
-				req.WeightRemoveNeuron += op.Weight
-			case "plasticity":
-				req.WeightPlasticity += op.Weight
-			case "plasticity_rule":
-				req.WeightPlasticityRule += op.Weight
-			case "substrate":
-				req.WeightSubstrate += op.Weight
-			}
-		}
+		applyMutationOperatorWeights(&req, constraint.MutationOperators)
 	}
 
 	if pmpMap, ok := raw["pmp"].(map[string]any); ok {
@@ -221,6 +194,56 @@ func loadRunRequestFromConfig(path string) (protoapi.RunRequest, error) {
 		}
 		if req.FitnessGoal == 0 && !math.IsInf(pmp.FitnessGoal, 1) {
 			req.FitnessGoal = pmp.FitnessGoal
+		}
+	}
+	if populationMap, ok := raw["population"].(map[string]any); ok {
+		population := map2rec.ConvertPopulation(populationMap)
+		if req.EvolutionType == "" && population.EvoAlgF != "" {
+			req.EvolutionType = mapPopulationEvolutionType(population.EvoAlgF)
+		}
+		if req.Selection == "" && population.SelectionF != "" {
+			req.Selection = mapPopulationSelection(population.SelectionF)
+		}
+		if req.FitnessPostprocessor == "" && population.FitnessPostprocF != "" {
+			req.FitnessPostprocessor = mapFitnessPostprocessor(population.FitnessPostprocF)
+		}
+		if req.TraceStepSize == 0 {
+			if traceMap, ok := population.Trace.(map[string]any); ok {
+				trace := map2rec.ConvertTrace(traceMap)
+				req.TraceStepSize = trace.StepSize
+			}
+		}
+	}
+	if specieMap, ok := raw["specie"].(map[string]any); ok {
+		specie := map2rec.ConvertSpecie(specieMap)
+		if req.SpecieIdentifier == "" {
+			req.SpecieIdentifier = mapSpecieIdentifier(specie.SpecieDistinguish)
+		}
+	}
+	if agentMap, ok := raw["agent"].(map[string]any); ok {
+		agent := map2rec.ConvertAgent(agentMap)
+		if req.TuneSelection == "" && agent.TuningSelectionF != "" {
+			req.TuneSelection = mapTuningSelection(agent.TuningSelectionF)
+		}
+		if req.TuneDurationPolicy == "" && agent.TuningDurationF.Name != "" {
+			req.TuneDurationPolicy = agent.TuningDurationF.Name
+			req.TuneDurationParam = agent.TuningDurationF.Param
+		}
+		if req.TopologicalPolicy == "" && agent.TotTopologicalMutF.Name != "" {
+			req.TopologicalPolicy = agent.TotTopologicalMutF.Name
+			switch agent.TotTopologicalMutF.Name {
+			case "const":
+				if req.TopologicalCount == 0 {
+					req.TopologicalCount = int(agent.TotTopologicalMutF.Param)
+				}
+			default:
+				if req.TopologicalParam == 0 {
+					req.TopologicalParam = agent.TotTopologicalMutF.Param
+				}
+			}
+		}
+		if !hasAnyMutationWeightValue(req) {
+			applyMutationOperatorWeights(&req, agent.MutationOperators)
 		}
 	}
 	if traceMap, ok := raw["trace"].(map[string]any); ok {
@@ -489,4 +512,50 @@ func map2recFirstNonEmpty(xs []string) string {
 		}
 	}
 	return ""
+}
+
+func applyMutationOperatorWeights(req *protoapi.RunRequest, operators []map2rec.WeightedOperator) {
+	for _, op := range operators {
+		switch mutationWeightBucket(op.Name) {
+		case "perturb":
+			req.WeightPerturb += op.Weight
+		case "bias":
+			req.WeightBias += op.Weight
+		case "remove_bias":
+			req.WeightRemoveBias += op.Weight
+		case "activation":
+			req.WeightActivation += op.Weight
+		case "aggregator":
+			req.WeightAggregator += op.Weight
+		case "add_synapse":
+			req.WeightAddSynapse += op.Weight
+		case "remove_synapse":
+			req.WeightRemoveSynapse += op.Weight
+		case "add_neuron":
+			req.WeightAddNeuron += op.Weight
+		case "remove_neuron":
+			req.WeightRemoveNeuron += op.Weight
+		case "plasticity":
+			req.WeightPlasticity += op.Weight
+		case "plasticity_rule":
+			req.WeightPlasticityRule += op.Weight
+		case "substrate":
+			req.WeightSubstrate += op.Weight
+		}
+	}
+}
+
+func hasAnyMutationWeightValue(req protoapi.RunRequest) bool {
+	return req.WeightPerturb > 0 ||
+		req.WeightBias > 0 ||
+		req.WeightRemoveBias > 0 ||
+		req.WeightActivation > 0 ||
+		req.WeightAggregator > 0 ||
+		req.WeightAddSynapse > 0 ||
+		req.WeightRemoveSynapse > 0 ||
+		req.WeightAddNeuron > 0 ||
+		req.WeightRemoveNeuron > 0 ||
+		req.WeightPlasticityRule > 0 ||
+		req.WeightPlasticity > 0 ||
+		req.WeightSubstrate > 0
 }

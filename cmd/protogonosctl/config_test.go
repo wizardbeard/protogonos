@@ -236,6 +236,62 @@ func TestLoadRunRequestFromConfigUsesPMPPopulationIDForContinuationDefaults(t *t
 	}
 }
 
+func TestLoadRunRequestFromConfigUsesPopulationSpecieAndAgentRecords(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "run_config_population_specie_agent.json")
+	payload := map[string]any{
+		"population": map[string]any{
+			"evo_alg_f":               "steady_state",
+			"fitness_postprocessor_f": "size_proportional",
+			"selection_f":             "competition",
+			"trace": map[string]any{
+				"step_size": 444,
+			},
+		},
+		"specie": map[string]any{
+			"specie_distinguishers": []any{"exact_fingerprint"},
+		},
+		"agent": map[string]any{
+			"tuning_selection_f":          "active_random",
+			"tuning_duration_f":           []any{"nsize_proportional", 0.25},
+			"tot_topological_mutations_f": []any{"const", 3},
+			"mutation_operators": []any{
+				[]any{"add_inlink", 2.5},
+				[]any{"mutate_pf", 1.5},
+			},
+		},
+	}
+	data, err := json.Marshal(payload)
+	if err != nil {
+		t.Fatalf("marshal payload: %v", err)
+	}
+	if err := os.WriteFile(path, data, 0o644); err != nil {
+		t.Fatalf("write config: %v", err)
+	}
+
+	req, err := loadRunRequestFromConfig(path)
+	if err != nil {
+		t.Fatalf("load run request: %v", err)
+	}
+	if req.EvolutionType != "steady_state" || req.Selection != "competition" || req.FitnessPostprocessor != "size_proportional" {
+		t.Fatalf("unexpected population record mapping: %+v", req)
+	}
+	if req.TraceStepSize != 444 {
+		t.Fatalf("expected trace step size from population.trace, got %d", req.TraceStepSize)
+	}
+	if req.SpecieIdentifier != "fingerprint" {
+		t.Fatalf("expected specie distinguisher mapping to fingerprint, got %s", req.SpecieIdentifier)
+	}
+	if req.TuneSelection != "active_random" || req.TuneDurationPolicy != "nsize_proportional" || req.TuneDurationParam != 0.25 {
+		t.Fatalf("unexpected agent tuning mapping: %+v", req)
+	}
+	if req.TopologicalPolicy != "const" || req.TopologicalCount != 3 {
+		t.Fatalf("unexpected agent topological mapping: policy=%s count=%d", req.TopologicalPolicy, req.TopologicalCount)
+	}
+	if req.WeightAddSynapse != 2.5 || req.WeightPlasticityRule != 1.5 {
+		t.Fatalf("unexpected agent mutation weight mapping: add_synapse=%f plasticity_rule=%f", req.WeightAddSynapse, req.WeightPlasticityRule)
+	}
+}
+
 func TestHasAnyWeightOverrideFlag(t *testing.T) {
 	if hasAnyWeightOverrideFlag(map[string]bool{}) {
 		t.Fatal("expected false for empty set")

@@ -230,10 +230,10 @@ type AgentRecord struct {
 	Pattern            []any
 	TuningSelectionF   string
 	AnnealingParameter any
-	TuningDurationF    any
+	TuningDurationF    DurationSpec
 	PerturbationRange  any
-	MutationOperators  []any
-	TotTopologicalMutF any
+	MutationOperators  []WeightedOperator
+	TotTopologicalMutF MutationCountPolicy
 	HeredityType       string
 	SubstrateID        any
 	OffspringIDs       []any
@@ -411,8 +411,8 @@ type SpecieRecord struct {
 	InnovationFactor  any
 	Stats             []any
 	SeedAgentIDs      []any
-	HOFDistinguishers []any
-	SpecieDistinguish []any
+	HOFDistinguishers []string
+	SpecieDistinguish []string
 	HallOfFame        []any
 }
 
@@ -420,7 +420,7 @@ type PopulationRecord struct {
 	ID               any
 	PolisID          any
 	SpecieIDs        []any
-	Morphologies     []any
+	Morphologies     []string
 	InnovationFactor any
 	EvoAlgF          string
 	FitnessPostprocF string
@@ -630,13 +630,14 @@ func defaultNeuronRecord() NeuronRecord {
 
 func defaultAgentRecord() AgentRecord {
 	return AgentRecord{
-		EvoHist:           []any{},
-		Pattern:           []any{},
-		MutationOperators: []any{},
-		OffspringIDs:      []any{},
-		ParentIDs:         []any{},
-		ChampionFlag:      []any{false},
-		FS:                1,
+		EvoHist:            []any{},
+		Pattern:            []any{},
+		MutationOperators:  []WeightedOperator{},
+		TotTopologicalMutF: MutationCountPolicy{},
+		OffspringIDs:       []any{},
+		ParentIDs:          []any{},
+		ChampionFlag:       []any{false},
+		FS:                 1,
 	}
 }
 
@@ -743,8 +744,8 @@ func defaultSpecieRecord() SpecieRecord {
 		ChampionIDs:       []any{},
 		Stats:             []any{},
 		SeedAgentIDs:      []any{},
-		HOFDistinguishers: []any{"tot_n"},
-		SpecieDistinguish: []any{"tot_n"},
+		HOFDistinguishers: []string{"tot_n"},
+		SpecieDistinguish: []string{"tot_n"},
 		HallOfFame:        []any{},
 	}
 }
@@ -752,7 +753,7 @@ func defaultSpecieRecord() SpecieRecord {
 func defaultPopulationRecord() PopulationRecord {
 	return PopulationRecord{
 		SpecieIDs:     []any{},
-		Morphologies:  []any{},
+		Morphologies:  []string{},
 		SeedAgentIDs:  []any{},
 		SeedSpecieIDs: []any{},
 	}
