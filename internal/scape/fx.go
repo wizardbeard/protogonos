@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"math"
 	"strings"
+
+	protoio "protogonos/internal/io"
 )
 
 type FXScape struct{}
@@ -18,16 +20,67 @@ func (FXScape) Evaluate(ctx context.Context, agent Agent) (Fitness, Trace, error
 }
 
 func (FXScape) EvaluateMode(ctx context.Context, agent Agent, mode string) (Fitness, Trace, error) {
-	runner, ok := agent.(StepAgent)
-	if !ok {
-		return 0, nil, fmt.Errorf("agent %s does not implement step runner", agent.ID())
-	}
-
 	cfg, err := fxConfigForMode(mode)
 	if err != nil {
 		return 0, nil, err
 	}
 
+	if ticker, ok := agent.(TickAgent); ok {
+		fitness, trace, err := evaluateFXWithTick(ctx, ticker, cfg)
+		if err == nil {
+			return fitness, trace, nil
+		}
+	}
+
+	runner, ok := agent.(StepAgent)
+	if !ok {
+		return 0, nil, fmt.Errorf("agent %s does not implement step runner", agent.ID())
+	}
+	return evaluateFXWithStep(ctx, runner, cfg)
+}
+
+func evaluateFXWithStep(ctx context.Context, runner StepAgent, cfg fxModeConfig) (Fitness, Trace, error) {
+	return evaluateFX(ctx, cfg, func(ctx context.Context, price, signal float64) (float64, error) {
+		out, err := runner.RunStep(ctx, []float64{price, signal})
+		if err != nil {
+			return 0, err
+		}
+		if len(out) != 1 {
+			return 0, fmt.Errorf("fx requires one output, got %d", len(out))
+		}
+		return out[0], nil
+	})
+}
+
+func evaluateFXWithTick(ctx context.Context, ticker TickAgent, cfg fxModeConfig) (Fitness, Trace, error) {
+	priceSetter, signalSetter, tradeOutput, err := fxIO(ticker)
+	if err != nil {
+		return 0, nil, err
+	}
+
+	return evaluateFX(ctx, cfg, func(ctx context.Context, price, signal float64) (float64, error) {
+		priceSetter.Set(price)
+		signalSetter.Set(signal)
+		out, err := ticker.Tick(ctx)
+		if err != nil {
+			return 0, err
+		}
+		lastOutput := tradeOutput.Last()
+		if len(lastOutput) > 0 {
+			return lastOutput[0], nil
+		}
+		if len(out) > 0 {
+			return out[0], nil
+		}
+		return 0, nil
+	})
+}
+
+func evaluateFX(
+	ctx context.Context,
+	cfg fxModeConfig,
+	chooseTrade func(context.Context, float64, float64) (float64, error),
+) (Fitness, Trace, error) {
 	price := fxPrice(cfg.startStep)
 	prevPrice := price
 	equity := 1.0
@@ -35,18 +88,18 @@ func (FXScape) EvaluateMode(ctx context.Context, agent Agent, mode string) (Fitn
 	turnover := 0.0
 
 	for i := 0; i < cfg.steps; i++ {
+		if err := ctx.Err(); err != nil {
+			return 0, nil, err
+		}
 		step := cfg.startStep + i
 		price = fxPrice(step)
 		signal := fxSignal(step)
-		out, err := runner.RunStep(ctx, []float64{price, signal})
+		targetPosition, err := chooseTrade(ctx, price, signal)
 		if err != nil {
 			return 0, nil, err
 		}
-		if len(out) != 1 {
-			return 0, nil, fmt.Errorf("fx requires one output, got %d", len(out))
-		}
 
-		targetPosition := clampFX(out[0], -1, 1)
+		targetPosition = clampFX(targetPosition, -1, 1)
 		turnover += math.Abs(targetPosition - position)
 		position = targetPosition
 
@@ -66,6 +119,49 @@ func (FXScape) EvaluateMode(ctx context.Context, agent Agent, mode string) (Fitn
 		"steps":      cfg.steps,
 		"start_step": cfg.startStep,
 	}, nil
+}
+
+func fxIO(agent TickAgent) (
+	protoio.ScalarSensorSetter,
+	protoio.ScalarSensorSetter,
+	protoio.SnapshotActuator,
+	error,
+) {
+	typed, ok := agent.(interface {
+		RegisteredSensor(id string) (protoio.Sensor, bool)
+		RegisteredActuator(id string) (protoio.Actuator, bool)
+	})
+	if !ok {
+		return nil, nil, nil, fmt.Errorf("agent %s does not expose IO registry access", agent.ID())
+	}
+
+	price, ok := typed.RegisteredSensor(protoio.FXPriceSensorName)
+	if !ok {
+		return nil, nil, nil, fmt.Errorf("agent %s missing sensor %s", agent.ID(), protoio.FXPriceSensorName)
+	}
+	priceSetter, ok := price.(protoio.ScalarSensorSetter)
+	if !ok {
+		return nil, nil, nil, fmt.Errorf("sensor %s does not support scalar set", protoio.FXPriceSensorName)
+	}
+
+	signal, ok := typed.RegisteredSensor(protoio.FXSignalSensorName)
+	if !ok {
+		return nil, nil, nil, fmt.Errorf("agent %s missing sensor %s", agent.ID(), protoio.FXSignalSensorName)
+	}
+	signalSetter, ok := signal.(protoio.ScalarSensorSetter)
+	if !ok {
+		return nil, nil, nil, fmt.Errorf("sensor %s does not support scalar set", protoio.FXSignalSensorName)
+	}
+
+	actuator, ok := typed.RegisteredActuator(protoio.FXTradeActuatorName)
+	if !ok {
+		return nil, nil, nil, fmt.Errorf("agent %s missing actuator %s", agent.ID(), protoio.FXTradeActuatorName)
+	}
+	tradeOutput, ok := actuator.(protoio.SnapshotActuator)
+	if !ok {
+		return nil, nil, nil, fmt.Errorf("actuator %s does not support output snapshot", protoio.FXTradeActuatorName)
+	}
+	return priceSetter, signalSetter, tradeOutput, nil
 }
 
 type fxModeConfig struct {

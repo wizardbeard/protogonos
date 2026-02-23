@@ -3,6 +3,10 @@ package scape
 import (
 	"context"
 	"testing"
+
+	"protogonos/internal/agent"
+	protoio "protogonos/internal/io"
+	"protogonos/internal/model"
 )
 
 func TestGTSAScapeScoresBetterForSignalAwarePolicy(t *testing.T) {
@@ -56,5 +60,51 @@ func TestGTSAScapeEvaluateModeUsesConfiguredWindow(t *testing.T) {
 	}
 	if gtFitness == validationFitness {
 		t.Fatalf("expected mode windows to produce distinct fitness values, got gt=%f validation=%f", gtFitness, validationFitness)
+	}
+}
+
+func TestGTSAScapeEvaluateWithIOComponents(t *testing.T) {
+	genome := model.Genome{
+		SensorIDs:   []string{protoio.GTSAInputSensorName},
+		ActuatorIDs: []string{protoio.GTSAPredictActuatorName},
+		Neurons: []model.Neuron{
+			{ID: "input", Activation: "identity"},
+			{ID: "predict", Activation: "identity"},
+		},
+		Synapses: []model.Synapse{
+			{From: "input", To: "predict", Weight: 1, Enabled: true},
+		},
+	}
+
+	sensors := map[string]protoio.Sensor{
+		protoio.GTSAInputSensorName: protoio.NewScalarInputSensor(0),
+	}
+	actuators := map[string]protoio.Actuator{
+		protoio.GTSAPredictActuatorName: protoio.NewScalarOutputActuator(),
+	}
+
+	cortex, err := agent.NewCortex(
+		"gtsa-agent-io",
+		genome,
+		sensors,
+		actuators,
+		[]string{"input"},
+		[]string{"predict"},
+		nil,
+	)
+	if err != nil {
+		t.Fatalf("new cortex: %v", err)
+	}
+
+	scape := GTSAScape{}
+	fitness, trace, err := scape.Evaluate(context.Background(), cortex)
+	if err != nil {
+		t.Fatalf("evaluate: %v", err)
+	}
+	if fitness <= 0 {
+		t.Fatalf("expected positive fitness, got %f", fitness)
+	}
+	if _, ok := trace["mse"].(float64); !ok {
+		t.Fatalf("trace missing mse: %+v", trace)
 	}
 }
