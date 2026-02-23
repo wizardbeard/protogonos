@@ -44,7 +44,7 @@ Status legend:
 | `fitness_postprocessor.erl` | post-fitness adjustment (size/novelty) | `internal/evo/fitness_postprocessor.go` + monitor integration + CLI/API alias mapping (`nsize_proportional`) + map2rec config materialization (`constraint.population_fitness_postprocessor_f`) + reference `size_proportional` exponent parity (`EFF=0.05`) + reference `novelty_proportional` placeholder parity (no-op) | `implemented` | `internal/evo/fitness_postprocessor.go`, `internal/evo/fitness_postprocessor_test.go`, `internal/evo/population_monitor.go`, `cmd/protogonosctl/main.go`, `cmd/protogonosctl/config.go`, `pkg/protogonos/api.go`, `.ref/src/fitness_postprocessor.erl` |
 | `benchmarker.erl` | experiment orchestration/reporting/graphs | `benchmark` command + artifacts + profile resolution views, including persisted best-series summary stats (`best_mean`/`best_std`/`best_min`/`best_max`) in benchmark artifacts | `partial` | `cmd/protogonosctl/main.go`, `cmd/protogonosctl/profiles.go`, `internal/stats/artifacts.go`, `.ref/src/benchmarker.erl` |
 | `map2rec.erl` | map->record conversion helpers | `internal/map2rec` with broad record-materialization parity (`constraint`/`pmp`/`experiment`/`circuit`/`layer`/`layer2`/`layer_spec`/`neurode`/`sensor`/`actuator`/`neuron`/`agent`/`cortex`/`substrate`/`polis`/`scape`/`sector`/`avatar`/`object`/`circle`/`square`/`line`/`e`/`a`/`specie`/`population`/`trace`/`stat`/`topology_summary`/`signature`/`champion`), including list-valued `pmp.op_mode` materialization, plus runtime use in profile/config ingestion (`run`/`benchmark --config`) | `implemented` | `internal/map2rec/convert.go`, `internal/map2rec/convert_test.go`, `cmd/protogonosctl/profiles.go`, `cmd/protogonosctl/config.go`, `cmd/protogonosctl/main.go`, `cmd/protogonosctl/main_integration_test.go`, `.ref/src/map2rec.erl` |
-| `records.hrl` | central schema/extensibility surface | `internal/model/types.go`, registries | `partial` | `internal/model/types.go`, `internal/io/registry.go`, `internal/evo/registry.go`, `internal/nn/registry.go`, `.ref/src/records.hrl` |
+| `records.hrl` | central schema/extensibility surface | full record-equivalent schema materialization (`internal/map2rec/types.go`) + defaults/fallback conversion coverage (`internal/map2rec/convert.go`) + versioned record-envelope codec support across all record kinds (`internal/map2rec/codec.go`) + extension registries (`internal/io/registry.go`, `internal/evo/registry.go`, `internal/nn/registry.go`) | `implemented` | `internal/map2rec/types.go`, `internal/map2rec/convert.go`, `internal/map2rec/convert_test.go`, `internal/map2rec/codec.go`, `internal/map2rec/codec_test.go`, `internal/io/registry.go`, `internal/evo/registry.go`, `internal/nn/registry.go`, `.ref/src/records.hrl` |
 | `dxnn2_app.erl` | OTP application entrypoint | `cmd/protogonosctl/main.go` | `out-of-scope-now` | `cmd/protogonosctl/main.go`, `.ref/src/dxnn2_app.erl` |
 | `flatland.erl` | interactive multi-agent world/scape server | `internal/scape/flatland.go` | `partial` | `internal/scape/flatland.go`, `.ref/src/flatland.erl` |
 | `fx.erl` | financial simulation/evaluation tooling | `internal/scape/fx.go` | `partial` | `internal/scape/fx.go`, `.ref/src/fx.erl` |
@@ -58,8 +58,8 @@ Status legend:
 
 ## Summary
 
-- `implemented`: 16
-- `partial`: 14
+- `implemented`: 17
+- `partial`: 13
 - `missing`: 0
 - `out-of-scope-now`: 4
 
@@ -68,7 +68,6 @@ Most core AGENTS responsibilities are present, with remaining `partial` modules 
 1. Platform/runtime orchestration depth in `exoself.erl`.
 2. Full scape catalog and environment-specific sensor/actuator/morphology breadth.
 3. Substrate encoding family behavior depth (`substrate.erl`, `substrate_cpp.erl`, `substrate_cep.erl`).
-4. Rich schema breadth in `records.hrl` and broader genotype lifecycle utilities.
 
 ## Recommended next parity increments
 
