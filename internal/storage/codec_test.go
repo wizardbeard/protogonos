@@ -257,7 +257,11 @@ func TestLineageCodecRoundTrip(t *testing.T) {
 			ParentID:        "",
 			Generation:      0,
 			Operation:       "seed",
-			Fingerprint:     "fp1",
+			Events: []model.EvoHistoryEvent{
+				{Mutation: "seed"},
+				{Mutation: "add_link", IDs: []string{"L0:n0", "L1:n1"}},
+			},
+			Fingerprint: "fp1",
 			Summary: model.LineageSummary{
 				TotalNeurons:           3,
 				TotalSynapses:          2,

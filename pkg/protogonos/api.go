@@ -155,6 +155,7 @@ type LineageItem struct {
 	ParentID    string
 	Generation  int
 	Operation   string
+	Events      []model.EvoHistoryEvent
 	Fingerprint string
 	Summary     model.LineageSummary
 }
@@ -479,6 +480,7 @@ func (c *Client) Run(ctx context.Context, req RunRequest) (RunSummary, error) {
 			ParentID:    record.ParentID,
 			Generation:  record.Generation,
 			Operation:   record.Operation,
+			Events:      toModelEvoHistoryEvents(record.Events),
 			Fingerprint: record.Fingerprint,
 			Summary: map[string]any{
 				"total_neurons":            record.Summary.TotalNeurons,
@@ -706,11 +708,40 @@ func (c *Client) Lineage(ctx context.Context, req LineageRequest) ([]LineageItem
 			ParentID:    rec.ParentID,
 			Generation:  rec.Generation,
 			Operation:   rec.Operation,
+			Events:      cloneModelEvoHistoryEvents(rec.Events),
 			Fingerprint: rec.Fingerprint,
 			Summary:     rec.Summary,
 		})
 	}
 	return out, nil
+}
+
+func toModelEvoHistoryEvents(events []genotype.EvoHistoryEvent) []model.EvoHistoryEvent {
+	if len(events) == 0 {
+		return nil
+	}
+	out := make([]model.EvoHistoryEvent, 0, len(events))
+	for _, event := range events {
+		out = append(out, model.EvoHistoryEvent{
+			Mutation: event.Mutation,
+			IDs:      append([]string{}, event.IDs...),
+		})
+	}
+	return out
+}
+
+func cloneModelEvoHistoryEvents(events []model.EvoHistoryEvent) []model.EvoHistoryEvent {
+	if len(events) == 0 {
+		return nil
+	}
+	out := make([]model.EvoHistoryEvent, 0, len(events))
+	for _, event := range events {
+		out = append(out, model.EvoHistoryEvent{
+			Mutation: event.Mutation,
+			IDs:      append([]string{}, event.IDs...),
+		})
+	}
+	return out
 }
 
 func (c *Client) FitnessHistory(ctx context.Context, req FitnessHistoryRequest) ([]float64, error) {

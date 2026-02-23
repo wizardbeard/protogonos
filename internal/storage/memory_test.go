@@ -19,6 +19,9 @@ func TestMemoryStoreLineageRoundTrip(t *testing.T) {
 		GenomeID:        "g1",
 		Generation:      1,
 		Operation:       "mutate",
+		Events: []model.EvoHistoryEvent{
+			{Mutation: "add_link", IDs: []string{"L0:n0", "L1:n1"}},
+		},
 	}}
 	if err := store.SaveLineage(ctx, "run-1", input); err != nil {
 		t.Fatalf("save lineage: %v", err)
@@ -33,6 +36,9 @@ func TestMemoryStoreLineageRoundTrip(t *testing.T) {
 	}
 	if len(output) != 1 || output[0].GenomeID != "g1" {
 		t.Fatalf("unexpected lineage: %+v", output)
+	}
+	if len(output[0].Events) != 1 || output[0].Events[0].Mutation != "add_link" {
+		t.Fatalf("expected lineage events round-trip, got=%+v", output[0].Events)
 	}
 }
 

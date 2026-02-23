@@ -189,7 +189,10 @@ func TestSQLiteStoreGenomeAndPopulationRoundTrip(t *testing.T) {
 			ParentID:        "",
 			Generation:      0,
 			Operation:       "seed",
-			Fingerprint:     "abc",
+			Events: []model.EvoHistoryEvent{
+				{Mutation: "seed"},
+			},
+			Fingerprint: "abc",
 			Summary: model.LineageSummary{
 				TotalNeurons:           2,
 				TotalSynapses:          1,
@@ -213,6 +216,9 @@ func TestSQLiteStoreGenomeAndPopulationRoundTrip(t *testing.T) {
 	}
 	if len(loadedLineage) != 1 || loadedLineage[0].GenomeID != "g1" {
 		t.Fatalf("unexpected lineage loaded: %+v", loadedLineage)
+	}
+	if len(loadedLineage[0].Events) != 1 || loadedLineage[0].Events[0].Mutation != "seed" {
+		t.Fatalf("expected lineage events loaded: %+v", loadedLineage[0].Events)
 	}
 }
 

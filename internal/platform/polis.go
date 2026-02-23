@@ -936,6 +936,7 @@ func (p *Polis) mergeExistingRunHistory(ctx context.Context, runID string, curre
 				ParentID:    rec.ParentID,
 				Generation:  rec.Generation,
 				Operation:   rec.Operation,
+				Events:      toGenotypeEvoHistory(rec.Events),
 				Fingerprint: rec.Fingerprint,
 				Summary: evo.TopologySummary{
 					Type:                   rec.Summary.Type,
@@ -998,6 +999,7 @@ func toModelLineage(lineage []evo.LineageRecord) []model.LineageRecord {
 			ParentID:    rec.ParentID,
 			Generation:  rec.Generation,
 			Operation:   rec.Operation,
+			Events:      toModelEvoHistory(rec.Events),
 			Fingerprint: rec.Fingerprint,
 			Summary: model.LineageSummary{
 				Type:                   rec.Summary.Type,
@@ -1012,6 +1014,34 @@ func toModelLineage(lineage []evo.LineageRecord) []model.LineageRecord {
 				ActivationDistribution: rec.Summary.ActivationDistribution,
 				AggregatorDistribution: rec.Summary.AggregatorDistribution,
 			},
+		})
+	}
+	return out
+}
+
+func toModelEvoHistory(events []genotype.EvoHistoryEvent) []model.EvoHistoryEvent {
+	if len(events) == 0 {
+		return nil
+	}
+	out := make([]model.EvoHistoryEvent, 0, len(events))
+	for _, event := range events {
+		out = append(out, model.EvoHistoryEvent{
+			Mutation: event.Mutation,
+			IDs:      append([]string{}, event.IDs...),
+		})
+	}
+	return out
+}
+
+func toGenotypeEvoHistory(events []model.EvoHistoryEvent) []genotype.EvoHistoryEvent {
+	if len(events) == 0 {
+		return nil
+	}
+	out := make([]genotype.EvoHistoryEvent, 0, len(events))
+	for _, event := range events {
+		out = append(out, genotype.EvoHistoryEvent{
+			Mutation: event.Mutation,
+			IDs:      append([]string{}, event.IDs...),
 		})
 	}
 	return out

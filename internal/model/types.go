@@ -114,14 +114,20 @@ type LineageSummary struct {
 	AggregatorDistribution map[string]int `json:"aggregator_distribution"`
 }
 
+type EvoHistoryEvent struct {
+	Mutation string   `json:"mutation"`
+	IDs      []string `json:"ids,omitempty"`
+}
+
 type LineageRecord struct {
 	VersionedRecord
-	GenomeID    string         `json:"genome_id"`
-	ParentID    string         `json:"parent_id"`
-	Generation  int            `json:"generation"`
-	Operation   string         `json:"operation"`
-	Fingerprint string         `json:"fingerprint,omitempty"`
-	Summary     LineageSummary `json:"summary,omitempty"`
+	GenomeID    string            `json:"genome_id"`
+	ParentID    string            `json:"parent_id"`
+	Generation  int               `json:"generation"`
+	Operation   string            `json:"operation"`
+	Events      []EvoHistoryEvent `json:"events,omitempty"`
+	Fingerprint string            `json:"fingerprint,omitempty"`
+	Summary     LineageSummary    `json:"summary,omitempty"`
 }
 
 type GenerationDiagnostics struct {

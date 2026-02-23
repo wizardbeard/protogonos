@@ -99,6 +99,23 @@ func TestPolisRunEvolution(t *testing.T) {
 	if len(lineage) != len(result.Lineage) {
 		t.Fatalf("lineage count mismatch: persisted=%d result=%d", len(lineage), len(result.Lineage))
 	}
+	foundMutationRecord := false
+	for i, rec := range result.Lineage {
+		if len(rec.Events) == 0 {
+			continue
+		}
+		foundMutationRecord = true
+		if len(lineage[i].Events) == 0 {
+			t.Fatalf("expected persisted lineage events for record %d (%s)", i, lineage[i].GenomeID)
+		}
+		if lineage[i].Events[0].Mutation == "" {
+			t.Fatalf("expected persisted lineage event mutation name for record %d (%s)", i, lineage[i].GenomeID)
+		}
+		break
+	}
+	if !foundMutationRecord {
+		t.Fatal("expected at least one non-seed lineage record")
+	}
 	history, ok, err := store.GetFitnessHistory(context.Background(), "evo:linear:1")
 	if err != nil {
 		t.Fatalf("load persisted history: %v", err)
@@ -539,6 +556,16 @@ func TestPolisRunEvolutionAppendsHistoryForSameRunIDContinuation(t *testing.T) {
 	}
 	if len(second.Lineage) <= len(first.Lineage) {
 		t.Fatalf("expected lineage to grow after continuation, first=%d second=%d", len(first.Lineage), len(second.Lineage))
+	}
+	for i := 0; i < len(first.Lineage); i++ {
+		firstRec := first.Lineage[i]
+		secondRec := second.Lineage[i]
+		if firstRec.GenomeID != secondRec.GenomeID || firstRec.Operation != secondRec.Operation {
+			t.Fatalf("expected continued lineage prefix to preserve persisted record %d, first=%+v second=%+v", i, firstRec, secondRec)
+		}
+		if len(firstRec.Events) != len(secondRec.Events) {
+			t.Fatalf("expected continued lineage events to persist for record %d, first=%+v second=%+v", i, firstRec.Events, secondRec.Events)
+		}
 	}
 }
 
