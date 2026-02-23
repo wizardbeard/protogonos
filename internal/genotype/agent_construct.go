@@ -289,12 +289,20 @@ func resolveConstructMorphology(raw string) (morphology.Morphology, error) {
 		return morphology.RegressionMimicMorphology{}, nil
 	case "cart-pole-lite", "cart-pole-lite-v1":
 		return morphology.CartPoleLiteMorphology{}, nil
+	case "pole2-balancing", "pole2-balancing-v1":
+		return morphology.Pole2BalancingMorphology{}, nil
 	case "flatland", "flatland-v1":
 		return morphology.FlatlandMorphology{}, nil
+	case "dtm", "dtm-v1":
+		return morphology.DTMMorphology{}, nil
 	case "gtsa", "gtsa-v1":
 		return morphology.GTSAMorphology{}, nil
 	case "fx", "fx-v1":
 		return morphology.FXMorphology{}, nil
+	case "epitopes", "epitopes-v1":
+		return morphology.EpitopesMorphology{}, nil
+	case "llvm-phase-ordering", "llvm-phase-ordering-v1", "llvmphaseordering", "scape-llvmphaseordering":
+		return morphology.LLVMPhaseOrderingMorphology{}, nil
 	default:
 		return nil, fmt.Errorf("unsupported morphology: %s", raw)
 	}

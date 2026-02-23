@@ -7,22 +7,40 @@ import (
 )
 
 const (
-	ScalarInputSensorName      = "scalar_input"
-	ScalarOutputActuatorName   = "scalar_output"
-	XORInputLeftSensorName     = "xor_input_left"
-	XORInputRightSensorName    = "xor_input_right"
-	XOROutputActuatorName      = "xor_output"
-	CartPolePositionSensorName = "cart_pole_position"
-	CartPoleVelocitySensorName = "cart_pole_velocity"
-	CartPoleForceActuatorName  = "cart_pole_force"
-	FlatlandDistanceSensorName = "flatland_distance"
-	FlatlandEnergySensorName   = "flatland_energy"
-	FlatlandMoveActuatorName   = "flatland_move"
-	GTSAInputSensorName        = "gtsa_input"
-	GTSAPredictActuatorName    = "gtsa_predict"
-	FXPriceSensorName          = "fx_price"
-	FXSignalSensorName         = "fx_signal"
-	FXTradeActuatorName        = "fx_trade"
+	ScalarInputSensorName        = "scalar_input"
+	ScalarOutputActuatorName     = "scalar_output"
+	XORInputLeftSensorName       = "xor_input_left"
+	XORInputRightSensorName      = "xor_input_right"
+	XOROutputActuatorName        = "xor_output"
+	CartPolePositionSensorName   = "cart_pole_position"
+	CartPoleVelocitySensorName   = "cart_pole_velocity"
+	CartPoleForceActuatorName    = "cart_pole_force"
+	Pole2CartPositionSensorName  = "pole2_cart_position"
+	Pole2CartVelocitySensorName  = "pole2_cart_velocity"
+	Pole2Angle1SensorName        = "pole2_angle_1"
+	Pole2Velocity1SensorName     = "pole2_velocity_1"
+	Pole2Angle2SensorName        = "pole2_angle_2"
+	Pole2Velocity2SensorName     = "pole2_velocity_2"
+	Pole2PushActuatorName        = "pole2_push"
+	FlatlandDistanceSensorName   = "flatland_distance"
+	FlatlandEnergySensorName     = "flatland_energy"
+	FlatlandMoveActuatorName     = "flatland_move"
+	DTMRangeLeftSensorName       = "dtm_range_left"
+	DTMRangeFrontSensorName      = "dtm_range_front"
+	DTMRangeRightSensorName      = "dtm_range_right"
+	DTMRewardSensorName          = "dtm_reward"
+	DTMMoveActuatorName          = "dtm_move"
+	GTSAInputSensorName          = "gtsa_input"
+	GTSAPredictActuatorName      = "gtsa_predict"
+	FXPriceSensorName            = "fx_price"
+	FXSignalSensorName           = "fx_signal"
+	FXTradeActuatorName          = "fx_trade"
+	EpitopesSignalSensorName     = "epitopes_signal"
+	EpitopesMemorySensorName     = "epitopes_memory"
+	EpitopesResponseActuatorName = "epitopes_response"
+	LLVMComplexitySensorName     = "llvm_complexity"
+	LLVMPassIndexSensorName      = "llvm_pass_index"
+	LLVMPhaseActuatorName        = "llvm_phase"
 )
 
 type ScalarInputSensor struct {
@@ -127,6 +145,96 @@ func initializeDefaultComponents() {
 		panic(err)
 	}
 	err = RegisterSensorWithSpec(SensorSpec{
+		Name:          Pole2CartPositionSensorName,
+		Factory:       func() Sensor { return NewScalarInputSensor(0) },
+		SchemaVersion: SupportedSchemaVersion,
+		CodecVersion:  SupportedCodecVersion,
+		Compatible: func(scape string) error {
+			if scape != "pole2-balancing" {
+				return fmt.Errorf("unsupported scape: %s", scape)
+			}
+			return nil
+		},
+	})
+	if err != nil {
+		panic(err)
+	}
+	err = RegisterSensorWithSpec(SensorSpec{
+		Name:          Pole2CartVelocitySensorName,
+		Factory:       func() Sensor { return NewScalarInputSensor(0) },
+		SchemaVersion: SupportedSchemaVersion,
+		CodecVersion:  SupportedCodecVersion,
+		Compatible: func(scape string) error {
+			if scape != "pole2-balancing" {
+				return fmt.Errorf("unsupported scape: %s", scape)
+			}
+			return nil
+		},
+	})
+	if err != nil {
+		panic(err)
+	}
+	err = RegisterSensorWithSpec(SensorSpec{
+		Name:          Pole2Angle1SensorName,
+		Factory:       func() Sensor { return NewScalarInputSensor(0) },
+		SchemaVersion: SupportedSchemaVersion,
+		CodecVersion:  SupportedCodecVersion,
+		Compatible: func(scape string) error {
+			if scape != "pole2-balancing" {
+				return fmt.Errorf("unsupported scape: %s", scape)
+			}
+			return nil
+		},
+	})
+	if err != nil {
+		panic(err)
+	}
+	err = RegisterSensorWithSpec(SensorSpec{
+		Name:          Pole2Velocity1SensorName,
+		Factory:       func() Sensor { return NewScalarInputSensor(0) },
+		SchemaVersion: SupportedSchemaVersion,
+		CodecVersion:  SupportedCodecVersion,
+		Compatible: func(scape string) error {
+			if scape != "pole2-balancing" {
+				return fmt.Errorf("unsupported scape: %s", scape)
+			}
+			return nil
+		},
+	})
+	if err != nil {
+		panic(err)
+	}
+	err = RegisterSensorWithSpec(SensorSpec{
+		Name:          Pole2Angle2SensorName,
+		Factory:       func() Sensor { return NewScalarInputSensor(0) },
+		SchemaVersion: SupportedSchemaVersion,
+		CodecVersion:  SupportedCodecVersion,
+		Compatible: func(scape string) error {
+			if scape != "pole2-balancing" {
+				return fmt.Errorf("unsupported scape: %s", scape)
+			}
+			return nil
+		},
+	})
+	if err != nil {
+		panic(err)
+	}
+	err = RegisterSensorWithSpec(SensorSpec{
+		Name:          Pole2Velocity2SensorName,
+		Factory:       func() Sensor { return NewScalarInputSensor(0) },
+		SchemaVersion: SupportedSchemaVersion,
+		CodecVersion:  SupportedCodecVersion,
+		Compatible: func(scape string) error {
+			if scape != "pole2-balancing" {
+				return fmt.Errorf("unsupported scape: %s", scape)
+			}
+			return nil
+		},
+	})
+	if err != nil {
+		panic(err)
+	}
+	err = RegisterSensorWithSpec(SensorSpec{
 		Name:          XORInputLeftSensorName,
 		Factory:       func() Sensor { return NewScalarInputSensor(0) },
 		SchemaVersion: SupportedSchemaVersion,
@@ -163,6 +271,66 @@ func initializeDefaultComponents() {
 		CodecVersion:  SupportedCodecVersion,
 		Compatible: func(scape string) error {
 			if scape != "flatland" {
+				return fmt.Errorf("unsupported scape: %s", scape)
+			}
+			return nil
+		},
+	})
+	if err != nil {
+		panic(err)
+	}
+	err = RegisterSensorWithSpec(SensorSpec{
+		Name:          DTMRangeLeftSensorName,
+		Factory:       func() Sensor { return NewScalarInputSensor(0) },
+		SchemaVersion: SupportedSchemaVersion,
+		CodecVersion:  SupportedCodecVersion,
+		Compatible: func(scape string) error {
+			if scape != "dtm" {
+				return fmt.Errorf("unsupported scape: %s", scape)
+			}
+			return nil
+		},
+	})
+	if err != nil {
+		panic(err)
+	}
+	err = RegisterSensorWithSpec(SensorSpec{
+		Name:          DTMRangeFrontSensorName,
+		Factory:       func() Sensor { return NewScalarInputSensor(0) },
+		SchemaVersion: SupportedSchemaVersion,
+		CodecVersion:  SupportedCodecVersion,
+		Compatible: func(scape string) error {
+			if scape != "dtm" {
+				return fmt.Errorf("unsupported scape: %s", scape)
+			}
+			return nil
+		},
+	})
+	if err != nil {
+		panic(err)
+	}
+	err = RegisterSensorWithSpec(SensorSpec{
+		Name:          DTMRangeRightSensorName,
+		Factory:       func() Sensor { return NewScalarInputSensor(0) },
+		SchemaVersion: SupportedSchemaVersion,
+		CodecVersion:  SupportedCodecVersion,
+		Compatible: func(scape string) error {
+			if scape != "dtm" {
+				return fmt.Errorf("unsupported scape: %s", scape)
+			}
+			return nil
+		},
+	})
+	if err != nil {
+		panic(err)
+	}
+	err = RegisterSensorWithSpec(SensorSpec{
+		Name:          DTMRewardSensorName,
+		Factory:       func() Sensor { return NewScalarInputSensor(0) },
+		SchemaVersion: SupportedSchemaVersion,
+		CodecVersion:  SupportedCodecVersion,
+		Compatible: func(scape string) error {
+			if scape != "dtm" {
 				return fmt.Errorf("unsupported scape: %s", scape)
 			}
 			return nil
@@ -231,6 +399,66 @@ func initializeDefaultComponents() {
 	if err != nil {
 		panic(err)
 	}
+	err = RegisterSensorWithSpec(SensorSpec{
+		Name:          EpitopesSignalSensorName,
+		Factory:       func() Sensor { return NewScalarInputSensor(0) },
+		SchemaVersion: SupportedSchemaVersion,
+		CodecVersion:  SupportedCodecVersion,
+		Compatible: func(scape string) error {
+			if scape != "epitopes" {
+				return fmt.Errorf("unsupported scape: %s", scape)
+			}
+			return nil
+		},
+	})
+	if err != nil {
+		panic(err)
+	}
+	err = RegisterSensorWithSpec(SensorSpec{
+		Name:          EpitopesMemorySensorName,
+		Factory:       func() Sensor { return NewScalarInputSensor(0) },
+		SchemaVersion: SupportedSchemaVersion,
+		CodecVersion:  SupportedCodecVersion,
+		Compatible: func(scape string) error {
+			if scape != "epitopes" {
+				return fmt.Errorf("unsupported scape: %s", scape)
+			}
+			return nil
+		},
+	})
+	if err != nil {
+		panic(err)
+	}
+	err = RegisterSensorWithSpec(SensorSpec{
+		Name:          LLVMComplexitySensorName,
+		Factory:       func() Sensor { return NewScalarInputSensor(0) },
+		SchemaVersion: SupportedSchemaVersion,
+		CodecVersion:  SupportedCodecVersion,
+		Compatible: func(scape string) error {
+			if scape != "llvm-phase-ordering" {
+				return fmt.Errorf("unsupported scape: %s", scape)
+			}
+			return nil
+		},
+	})
+	if err != nil {
+		panic(err)
+	}
+	err = RegisterSensorWithSpec(SensorSpec{
+		Name:          LLVMPassIndexSensorName,
+		Factory:       func() Sensor { return NewScalarInputSensor(0) },
+		SchemaVersion: SupportedSchemaVersion,
+		CodecVersion:  SupportedCodecVersion,
+		Compatible: func(scape string) error {
+			if scape != "llvm-phase-ordering" {
+				return fmt.Errorf("unsupported scape: %s", scape)
+			}
+			return nil
+		},
+	})
+	if err != nil {
+		panic(err)
+	}
 
 	err = RegisterActuatorWithSpec(ActuatorSpec{
 		Name:          ScalarOutputActuatorName,
@@ -278,12 +506,42 @@ func initializeDefaultComponents() {
 		panic(err)
 	}
 	err = RegisterActuatorWithSpec(ActuatorSpec{
+		Name:          Pole2PushActuatorName,
+		Factory:       func() Actuator { return NewScalarOutputActuator() },
+		SchemaVersion: SupportedSchemaVersion,
+		CodecVersion:  SupportedCodecVersion,
+		Compatible: func(scape string) error {
+			if scape != "pole2-balancing" {
+				return fmt.Errorf("unsupported scape: %s", scape)
+			}
+			return nil
+		},
+	})
+	if err != nil {
+		panic(err)
+	}
+	err = RegisterActuatorWithSpec(ActuatorSpec{
 		Name:          FlatlandMoveActuatorName,
 		Factory:       func() Actuator { return NewScalarOutputActuator() },
 		SchemaVersion: SupportedSchemaVersion,
 		CodecVersion:  SupportedCodecVersion,
 		Compatible: func(scape string) error {
 			if scape != "flatland" {
+				return fmt.Errorf("unsupported scape: %s", scape)
+			}
+			return nil
+		},
+	})
+	if err != nil {
+		panic(err)
+	}
+	err = RegisterActuatorWithSpec(ActuatorSpec{
+		Name:          DTMMoveActuatorName,
+		Factory:       func() Actuator { return NewScalarOutputActuator() },
+		SchemaVersion: SupportedSchemaVersion,
+		CodecVersion:  SupportedCodecVersion,
+		Compatible: func(scape string) error {
+			if scape != "dtm" {
 				return fmt.Errorf("unsupported scape: %s", scape)
 			}
 			return nil
@@ -314,6 +572,36 @@ func initializeDefaultComponents() {
 		CodecVersion:  SupportedCodecVersion,
 		Compatible: func(scape string) error {
 			if scape != "fx" {
+				return fmt.Errorf("unsupported scape: %s", scape)
+			}
+			return nil
+		},
+	})
+	if err != nil {
+		panic(err)
+	}
+	err = RegisterActuatorWithSpec(ActuatorSpec{
+		Name:          EpitopesResponseActuatorName,
+		Factory:       func() Actuator { return NewScalarOutputActuator() },
+		SchemaVersion: SupportedSchemaVersion,
+		CodecVersion:  SupportedCodecVersion,
+		Compatible: func(scape string) error {
+			if scape != "epitopes" {
+				return fmt.Errorf("unsupported scape: %s", scape)
+			}
+			return nil
+		},
+	})
+	if err != nil {
+		panic(err)
+	}
+	err = RegisterActuatorWithSpec(ActuatorSpec{
+		Name:          LLVMPhaseActuatorName,
+		Factory:       func() Actuator { return NewScalarOutputActuator() },
+		SchemaVersion: SupportedSchemaVersion,
+		CodecVersion:  SupportedCodecVersion,
+		Compatible: func(scape string) error {
+			if scape != "llvm-phase-ordering" {
 				return fmt.Errorf("unsupported scape: %s", scape)
 			}
 			return nil

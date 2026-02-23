@@ -1457,13 +1457,25 @@ func registerDefaultScapes(p *platform.Polis) error {
 	if err := p.RegisterScape(scape.CartPoleLiteScape{}); err != nil {
 		return err
 	}
+	if err := p.RegisterScape(scape.Pole2BalancingScape{}); err != nil {
+		return err
+	}
 	if err := p.RegisterScape(scape.FlatlandScape{}); err != nil {
+		return err
+	}
+	if err := p.RegisterScape(scape.DTMScape{}); err != nil {
 		return err
 	}
 	if err := p.RegisterScape(scape.GTSAScape{}); err != nil {
 		return err
 	}
 	if err := p.RegisterScape(scape.FXScape{}); err != nil {
+		return err
+	}
+	if err := p.RegisterScape(scape.EpitopesScape{}); err != nil {
+		return err
+	}
+	if err := p.RegisterScape(scape.LLVMPhaseOrderingScape{}); err != nil {
 		return err
 	}
 	return nil

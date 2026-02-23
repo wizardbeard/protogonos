@@ -31,7 +31,7 @@ Status keys:
 | `plasticity.erl` | `done` | Runtime plasticity integration + mutation hooks implemented with Hebbian/Oja updates, saturation bounds, and explicit reference PF coverage (`hebbian`, `hebbian_w`, `oja`/`ojas`, `ojas_w`, `self_modulationV1..V6`, `neuromodulation`); `hebbian_w`/`ojas_w` use per-synapse learning parameters (`synapse.plasticity_params`) with fallback to rate when absent, self-modulation rules apply per-target-neuron override precedence plus generalized Hebbian coefficients (`A/B/C/D`) and neuromodulation dead-zone scaling, and `mutate_plasticity_parameters` now follows reference-closer rule-family choreography (rule-width vector mutation across synapse+bias pools with `1/sqrt(total_parameters)`, V2/V3/V5 coefficient schedules, neuromodulation `[rate,A,B,C,D]` probabilistic updates, signed `hebbian`/`oja` neural-parameter perturbation, and input-before-bias traversal ordering); `mutate_pf` reseeds rule-specific neural defaults and rule-family vector widths, and `none` correctly cancels mutation attempts with genome-level fallback semantics for empty per-neuron rule fields. |
 | `signal_aggregator.erl` | `done` | Aggregator support present (`dot_product`, `mult_product`, `diff_product`) with reference-style multiplicative `mult_product` semantics and stateful `diff_product` previous-input differencing parity across cortex steps. |
 | `exoself.erl` | `done` | Bounded exoself tuning loop integrated with attempts/policies, minimum-improvement acceptance threshold (`MIN_PIMPROVEMENT`-style gating) using relative dominance semantics (`candidate > incumbent + incumbent * tune_min_improvement`) with monotonic-improvement guards, reference-style consecutive non-improvement attempt budgeting (counter reset on accepted improvement), goal-aware early stop (`fitness_goal`), perturbation controls (`perturbation_range`, `annealing_factor`), vector-helper parity (`transpose`/`vector_avg`/`vector_basic_stats`), per-generation tuning telemetry in diagnostics/artifacts, and explicit `op_mode` handling (`gt`/`validation`/`test`) including composite/list parsing and non-`gt` evaluation-only flow semantics; actor-level orchestration parity is now covered by a runtime exoself path (`TuneRuntimeWithReport`) that executes backup/restore/reactivate/apply sequencing on a persistent cortex session and is wired through monitor workers in `gt` mode with runtime-path regression coverage. |
-| `scape.erl` | `partial` | XOR/regression/cart-pole-lite/flatland/gtsa scapes implemented; full reference scape family breadth pending. |
+| `scape.erl` | `partial` | XOR/regression/cart-pole-lite/pole2-balancing/dtm/flatland/gtsa/fx/epitopes/llvm-phase-ordering scapes implemented with morphology/IO/seed/registration wiring; full reference runtime-depth parity for complex environment families is still pending. |
 | `flatland.erl` | `partial` | Baseline Go flatland scape added; not full behavioral parity with reference world simulation yet. |
 | `scape_GTSA.erl` | `partial` | Baseline GTSA scape added; not full ETS/time-series workflow parity yet. |
 | `fx.erl` | `partial` | Baseline FX scape/morphology/IO implemented; full market/workflow parity pending. |
@@ -43,7 +43,7 @@ Status keys:
 | `substrate_cep.erl` | `partial` | CEP registry/runtime hooks implemented in baseline form. |
 | `benchmarker.erl` | `partial` | CLI benchmark workflow + run artifacts + parity profile loader implemented, with benchmark summary series stats (`best_mean`/`best_std`/`best_min`/`best_max`) persisted alongside initial/final improvement checks; full report/stat format parity pending. |
 | `data_extractor.erl` | `todo` | No dedicated ingestion utility module yet. |
-| `epitopes.erl` | `todo` | No equivalent utility module yet. |
+| `epitopes.erl` | `partial` | Deterministic epitopes scape surrogate implemented and wired through morphology/IO/seed/registration; full reference ETS/data-driven utility workflow parity remains pending. |
 | `dxnn2_app.erl` | `n/a` | OTP app boot parity intentionally replaced by CLI/API runtime model. |
 | `visor.erl` | `n/a` | Visualization loop currently out of scope. |
 
@@ -116,7 +116,7 @@ Status keys:
 - Tightened generic element-link helper parity so `link_FromElementToElement` and `cutlink_FromElementToElement` now operate across synapse and endpoint-link pools with cancellation on full exhaustion.
 - Tightened neuron-only link helper parity so `link_FromNeuronToNeuron` and `cutlink_FromNeuronToNeuron` now use candidate-aware applicability and cancellation on exhausted pools.
 - Mutation operator gating by genome/scape compatibility added.
-- New parity scapes added: `flatland`, `gtsa` with morphology/IO/seed wiring.
+- New parity scapes added: `pole2-balancing`, `dtm`, `epitopes`, and `llvm-phase-ordering` with morphology/IO/seed/registration wiring.
 - Parity profile loader added for `.ref` benchmark profiles (`--profile`).
 - Reference strategy aliases added: `hof_competition`, `dynamic_random`.
 - `done_check` tightened to require `species_history.json` and speciation diagnostics fields.
@@ -279,7 +279,7 @@ Status keys:
 
 ## Highest-priority remaining gaps to reach strict parity
 
-1. Full scape behavior parity for `flatland`, `gtsa`, and `fx`.
+1. Full scape behavior depth parity for complex environment families (`flatland`, `gtsa`, `fx`, `pole2-balancing`, `dtm`, `epitopes`, `llvm` workflows).
 2. Residual operator/policy breadth around substrate-runtime interaction helpers.
 3. Full substrate CPP/CEP behavioral parity beyond baseline scaffolding.
-4. Utility ecosystem parity (`data_extractor`, `epitopes`) if required by target workflows.
+4. Utility ecosystem parity (`data_extractor`, full `epitopes` dataset/ETS workflow) if required by target workflows.

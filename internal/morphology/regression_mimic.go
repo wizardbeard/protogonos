@@ -82,12 +82,20 @@ func defaultMorphologyForScape(scapeName string) (Morphology, bool) {
 		return RegressionMimicMorphology{}, true
 	case "cart-pole-lite":
 		return CartPoleLiteMorphology{}, true
+	case "pole2-balancing":
+		return Pole2BalancingMorphology{}, true
 	case "flatland":
 		return FlatlandMorphology{}, true
+	case "dtm":
+		return DTMMorphology{}, true
 	case "gtsa":
 		return GTSAMorphology{}, true
 	case "fx":
 		return FXMorphology{}, true
+	case "epitopes":
+		return EpitopesMorphology{}, true
+	case "llvm-phase-ordering":
+		return LLVMPhaseOrderingMorphology{}, true
 	default:
 		return nil, false
 	}

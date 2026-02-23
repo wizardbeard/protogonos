@@ -100,6 +100,56 @@ func TestScalarComponentsRegistered(t *testing.T) {
 	if cartForce.Name() != ScalarOutputActuatorName {
 		t.Fatalf("unexpected cart-pole force actuator name: %s", cartForce.Name())
 	}
+	pole2CPos, err := ResolveSensor(Pole2CartPositionSensorName, "pole2-balancing")
+	if err != nil {
+		t.Fatalf("resolve pole2 cart position sensor: %v", err)
+	}
+	if pole2CPos.Name() != ScalarInputSensorName {
+		t.Fatalf("unexpected pole2 cart position sensor name: %s", pole2CPos.Name())
+	}
+	pole2CVel, err := ResolveSensor(Pole2CartVelocitySensorName, "pole2-balancing")
+	if err != nil {
+		t.Fatalf("resolve pole2 cart velocity sensor: %v", err)
+	}
+	if pole2CVel.Name() != ScalarInputSensorName {
+		t.Fatalf("unexpected pole2 cart velocity sensor name: %s", pole2CVel.Name())
+	}
+	pole2Angle1, err := ResolveSensor(Pole2Angle1SensorName, "pole2-balancing")
+	if err != nil {
+		t.Fatalf("resolve pole2 angle1 sensor: %v", err)
+	}
+	if pole2Angle1.Name() != ScalarInputSensorName {
+		t.Fatalf("unexpected pole2 angle1 sensor name: %s", pole2Angle1.Name())
+	}
+	pole2Velocity1, err := ResolveSensor(Pole2Velocity1SensorName, "pole2-balancing")
+	if err != nil {
+		t.Fatalf("resolve pole2 velocity1 sensor: %v", err)
+	}
+	if pole2Velocity1.Name() != ScalarInputSensorName {
+		t.Fatalf("unexpected pole2 velocity1 sensor name: %s", pole2Velocity1.Name())
+	}
+	pole2Angle2, err := ResolveSensor(Pole2Angle2SensorName, "pole2-balancing")
+	if err != nil {
+		t.Fatalf("resolve pole2 angle2 sensor: %v", err)
+	}
+	if pole2Angle2.Name() != ScalarInputSensorName {
+		t.Fatalf("unexpected pole2 angle2 sensor name: %s", pole2Angle2.Name())
+	}
+	pole2Velocity2, err := ResolveSensor(Pole2Velocity2SensorName, "pole2-balancing")
+	if err != nil {
+		t.Fatalf("resolve pole2 velocity2 sensor: %v", err)
+	}
+	if pole2Velocity2.Name() != ScalarInputSensorName {
+		t.Fatalf("unexpected pole2 velocity2 sensor name: %s", pole2Velocity2.Name())
+	}
+
+	pole2Push, err := ResolveActuator(Pole2PushActuatorName, "pole2-balancing")
+	if err != nil {
+		t.Fatalf("resolve pole2 push actuator: %v", err)
+	}
+	if pole2Push.Name() != ScalarOutputActuatorName {
+		t.Fatalf("unexpected pole2 push actuator name: %s", pole2Push.Name())
+	}
 
 	flatDistance, err := ResolveSensor(FlatlandDistanceSensorName, "flatland")
 	if err != nil {
@@ -123,6 +173,42 @@ func TestScalarComponentsRegistered(t *testing.T) {
 	}
 	if flatMove.Name() != ScalarOutputActuatorName {
 		t.Fatalf("unexpected flatland move actuator name: %s", flatMove.Name())
+	}
+	dtmRangeLeft, err := ResolveSensor(DTMRangeLeftSensorName, "dtm")
+	if err != nil {
+		t.Fatalf("resolve dtm range-left sensor: %v", err)
+	}
+	if dtmRangeLeft.Name() != ScalarInputSensorName {
+		t.Fatalf("unexpected dtm range-left sensor name: %s", dtmRangeLeft.Name())
+	}
+	dtmRangeFront, err := ResolveSensor(DTMRangeFrontSensorName, "dtm")
+	if err != nil {
+		t.Fatalf("resolve dtm range-front sensor: %v", err)
+	}
+	if dtmRangeFront.Name() != ScalarInputSensorName {
+		t.Fatalf("unexpected dtm range-front sensor name: %s", dtmRangeFront.Name())
+	}
+	dtmRangeRight, err := ResolveSensor(DTMRangeRightSensorName, "dtm")
+	if err != nil {
+		t.Fatalf("resolve dtm range-right sensor: %v", err)
+	}
+	if dtmRangeRight.Name() != ScalarInputSensorName {
+		t.Fatalf("unexpected dtm range-right sensor name: %s", dtmRangeRight.Name())
+	}
+	dtmReward, err := ResolveSensor(DTMRewardSensorName, "dtm")
+	if err != nil {
+		t.Fatalf("resolve dtm reward sensor: %v", err)
+	}
+	if dtmReward.Name() != ScalarInputSensorName {
+		t.Fatalf("unexpected dtm reward sensor name: %s", dtmReward.Name())
+	}
+
+	dtmMove, err := ResolveActuator(DTMMoveActuatorName, "dtm")
+	if err != nil {
+		t.Fatalf("resolve dtm move actuator: %v", err)
+	}
+	if dtmMove.Name() != ScalarOutputActuatorName {
+		t.Fatalf("unexpected dtm move actuator name: %s", dtmMove.Name())
 	}
 
 	gtsaInput, err := ResolveSensor(GTSAInputSensorName, "gtsa")
@@ -163,5 +249,51 @@ func TestScalarComponentsRegistered(t *testing.T) {
 	}
 	if fxTrade.Name() != ScalarOutputActuatorName {
 		t.Fatalf("unexpected fx trade actuator name: %s", fxTrade.Name())
+	}
+
+	epitopesSignal, err := ResolveSensor(EpitopesSignalSensorName, "epitopes")
+	if err != nil {
+		t.Fatalf("resolve epitopes signal sensor: %v", err)
+	}
+	if epitopesSignal.Name() != ScalarInputSensorName {
+		t.Fatalf("unexpected epitopes signal sensor name: %s", epitopesSignal.Name())
+	}
+	epitopesMemory, err := ResolveSensor(EpitopesMemorySensorName, "epitopes")
+	if err != nil {
+		t.Fatalf("resolve epitopes memory sensor: %v", err)
+	}
+	if epitopesMemory.Name() != ScalarInputSensorName {
+		t.Fatalf("unexpected epitopes memory sensor name: %s", epitopesMemory.Name())
+	}
+
+	epitopesResponse, err := ResolveActuator(EpitopesResponseActuatorName, "epitopes")
+	if err != nil {
+		t.Fatalf("resolve epitopes response actuator: %v", err)
+	}
+	if epitopesResponse.Name() != ScalarOutputActuatorName {
+		t.Fatalf("unexpected epitopes response actuator name: %s", epitopesResponse.Name())
+	}
+
+	llvmComplexity, err := ResolveSensor(LLVMComplexitySensorName, "llvm-phase-ordering")
+	if err != nil {
+		t.Fatalf("resolve llvm complexity sensor: %v", err)
+	}
+	if llvmComplexity.Name() != ScalarInputSensorName {
+		t.Fatalf("unexpected llvm complexity sensor name: %s", llvmComplexity.Name())
+	}
+	llvmPassIndex, err := ResolveSensor(LLVMPassIndexSensorName, "llvm-phase-ordering")
+	if err != nil {
+		t.Fatalf("resolve llvm pass-index sensor: %v", err)
+	}
+	if llvmPassIndex.Name() != ScalarInputSensorName {
+		t.Fatalf("unexpected llvm pass-index sensor name: %s", llvmPassIndex.Name())
+	}
+
+	llvmPhase, err := ResolveActuator(LLVMPhaseActuatorName, "llvm-phase-ordering")
+	if err != nil {
+		t.Fatalf("resolve llvm phase actuator: %v", err)
+	}
+	if llvmPhase.Name() != ScalarOutputActuatorName {
+		t.Fatalf("unexpected llvm phase actuator name: %s", llvmPhase.Name())
 	}
 }

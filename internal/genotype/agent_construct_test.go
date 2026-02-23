@@ -35,6 +35,30 @@ func TestConstructCortexSupportsXORMimicAlias(t *testing.T) {
 	}
 }
 
+func TestConstructCortexSupportsPole2MorphologyAlias(t *testing.T) {
+	constraint := DefaultConstructConstraint()
+	constraint.Morphology = "pole2_balancing_v1"
+
+	out, err := ConstructCortex(
+		"agent-pole2",
+		0,
+		constraint,
+		"neural",
+		"none",
+		"l2l_feedforward",
+		rand.New(rand.NewSource(17)),
+	)
+	if err != nil {
+		t.Fatalf("construct cortex: %v", err)
+	}
+	if len(out.Genome.SensorIDs) != 6 || len(out.Genome.ActuatorIDs) != 1 {
+		t.Fatalf("unexpected pole2 io scaffold: sensors=%v actuators=%v", out.Genome.SensorIDs, out.Genome.ActuatorIDs)
+	}
+	if len(out.InputNeuronIDs) != 6 || len(out.OutputNeuronIDs) != 1 {
+		t.Fatalf("unexpected pole2 input/output ids: in=%v out=%v", out.InputNeuronIDs, out.OutputNeuronIDs)
+	}
+}
+
 func TestConstructAgentMaterializesStrategyAndSubstrate(t *testing.T) {
 	constraint := DefaultConstructConstraint()
 	constraint.Morphology = "xor"

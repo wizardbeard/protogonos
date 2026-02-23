@@ -37,10 +37,22 @@ func ConstructSeedPopulation(scapeName string, size int, seed int64) (SeedPopula
 			InputNeuronIDs:  []string{"x", "v"},
 			OutputNeuronIDs: []string{"f"},
 		}, nil
+	case "pole2-balancing":
+		return SeedPopulation{
+			Genomes:         seedPole2BalancingPopulation(size, seed),
+			InputNeuronIDs:  []string{"x", "v", "a1", "w1", "a2", "w2"},
+			OutputNeuronIDs: []string{"f"},
+		}, nil
 	case "flatland":
 		return SeedPopulation{
 			Genomes:         seedFlatlandPopulation(size, seed),
 			InputNeuronIDs:  []string{"d", "e"},
+			OutputNeuronIDs: []string{"m"},
+		}, nil
+	case "dtm":
+		return SeedPopulation{
+			Genomes:         seedDTMPopulation(size, seed),
+			InputNeuronIDs:  []string{"rl", "rf", "rr", "r"},
 			OutputNeuronIDs: []string{"m"},
 		}, nil
 	case "gtsa":
@@ -54,6 +66,18 @@ func ConstructSeedPopulation(scapeName string, size int, seed int64) (SeedPopula
 			Genomes:         seedFXPopulation(size, seed),
 			InputNeuronIDs:  []string{"p", "s"},
 			OutputNeuronIDs: []string{"t"},
+		}, nil
+	case "epitopes":
+		return SeedPopulation{
+			Genomes:         seedEpitopesPopulation(size, seed),
+			InputNeuronIDs:  []string{"s", "m"},
+			OutputNeuronIDs: []string{"r"},
+		}, nil
+	case "llvm-phase-ordering":
+		return SeedPopulation{
+			Genomes:         seedLLVMPhaseOrderingPopulation(size, seed),
+			InputNeuronIDs:  []string{"c", "p"},
+			OutputNeuronIDs: []string{"o"},
 		}, nil
 	default:
 		return SeedPopulation{}, fmt.Errorf("unsupported scape: %s", scapeName)
@@ -215,6 +239,44 @@ func seedCartPoleLitePopulation(size int, seed int64) []model.Genome {
 	return population
 }
 
+func seedPole2BalancingPopulation(size int, seed int64) []model.Genome {
+	rng := rand.New(rand.NewSource(seed))
+	population := make([]model.Genome, 0, size)
+	for i := 0; i < size; i++ {
+		population = append(population, model.Genome{
+			VersionedRecord: model.VersionedRecord{SchemaVersion: storage.CurrentSchemaVersion, CodecVersion: storage.CurrentCodecVersion},
+			ID:              fmt.Sprintf("pole2-g0-%d", i),
+			SensorIDs: []string{
+				protoio.Pole2CartPositionSensorName,
+				protoio.Pole2CartVelocitySensorName,
+				protoio.Pole2Angle1SensorName,
+				protoio.Pole2Velocity1SensorName,
+				protoio.Pole2Angle2SensorName,
+				protoio.Pole2Velocity2SensorName,
+			},
+			ActuatorIDs: []string{protoio.Pole2PushActuatorName},
+			Neurons: []model.Neuron{
+				{ID: "x", Activation: "identity", Bias: 0},
+				{ID: "v", Activation: "identity", Bias: 0},
+				{ID: "a1", Activation: "identity", Bias: 0},
+				{ID: "w1", Activation: "identity", Bias: 0},
+				{ID: "a2", Activation: "identity", Bias: 0},
+				{ID: "w2", Activation: "identity", Bias: 0},
+				{ID: "f", Activation: "tanh", Bias: jitter(rng, 0.2)},
+			},
+			Synapses: []model.Synapse{
+				{ID: "s1", From: "x", To: "f", Weight: -0.9 + jitter(rng, 0.2), Enabled: true},
+				{ID: "s2", From: "v", To: "f", Weight: -0.5 + jitter(rng, 0.2), Enabled: true},
+				{ID: "s3", From: "a1", To: "f", Weight: -4.0 + jitter(rng, 0.3), Enabled: true},
+				{ID: "s4", From: "w1", To: "f", Weight: -0.8 + jitter(rng, 0.2), Enabled: true},
+				{ID: "s5", From: "a2", To: "f", Weight: -5.0 + jitter(rng, 0.3), Enabled: true},
+				{ID: "s6", From: "w2", To: "f", Weight: -1.0 + jitter(rng, 0.2), Enabled: true},
+			},
+		})
+	}
+	return population
+}
+
 func seedFlatlandPopulation(size int, seed int64) []model.Genome {
 	rng := rand.New(rand.NewSource(seed))
 	population := make([]model.Genome, 0, size)
@@ -232,6 +294,38 @@ func seedFlatlandPopulation(size int, seed int64) []model.Genome {
 			Synapses: []model.Synapse{
 				{ID: "s1", From: "d", To: "m", Weight: jitter(rng, 1.2), Enabled: true},
 				{ID: "s2", From: "e", To: "m", Weight: jitter(rng, 1.2), Enabled: true},
+			},
+		})
+	}
+	return population
+}
+
+func seedDTMPopulation(size int, seed int64) []model.Genome {
+	rng := rand.New(rand.NewSource(seed))
+	population := make([]model.Genome, 0, size)
+	for i := 0; i < size; i++ {
+		population = append(population, model.Genome{
+			VersionedRecord: model.VersionedRecord{SchemaVersion: storage.CurrentSchemaVersion, CodecVersion: storage.CurrentCodecVersion},
+			ID:              fmt.Sprintf("dtm-g0-%d", i),
+			SensorIDs: []string{
+				protoio.DTMRangeLeftSensorName,
+				protoio.DTMRangeFrontSensorName,
+				protoio.DTMRangeRightSensorName,
+				protoio.DTMRewardSensorName,
+			},
+			ActuatorIDs: []string{protoio.DTMMoveActuatorName},
+			Neurons: []model.Neuron{
+				{ID: "rl", Activation: "identity", Bias: 0},
+				{ID: "rf", Activation: "identity", Bias: 0},
+				{ID: "rr", Activation: "identity", Bias: 0},
+				{ID: "r", Activation: "identity", Bias: 0},
+				{ID: "m", Activation: "tanh", Bias: jitter(rng, 0.35)},
+			},
+			Synapses: []model.Synapse{
+				{ID: "s1", From: "rl", To: "m", Weight: 0.9 + jitter(rng, 0.25), Enabled: true},
+				{ID: "s2", From: "rf", To: "m", Weight: -0.4 + jitter(rng, 0.25), Enabled: true},
+				{ID: "s3", From: "rr", To: "m", Weight: 0.9 + jitter(rng, 0.25), Enabled: true},
+				{ID: "s4", From: "r", To: "m", Weight: 0.2 + jitter(rng, 0.15), Enabled: true},
 			},
 		})
 	}
@@ -276,6 +370,52 @@ func seedFXPopulation(size int, seed int64) []model.Genome {
 			Synapses: []model.Synapse{
 				{ID: "s1", From: "p", To: "t", Weight: jitter(rng, 1.1), Enabled: true},
 				{ID: "s2", From: "s", To: "t", Weight: jitter(rng, 1.1), Enabled: true},
+			},
+		})
+	}
+	return population
+}
+
+func seedEpitopesPopulation(size int, seed int64) []model.Genome {
+	rng := rand.New(rand.NewSource(seed))
+	population := make([]model.Genome, 0, size)
+	for i := 0; i < size; i++ {
+		population = append(population, model.Genome{
+			VersionedRecord: model.VersionedRecord{SchemaVersion: storage.CurrentSchemaVersion, CodecVersion: storage.CurrentCodecVersion},
+			ID:              fmt.Sprintf("epitopes-g0-%d", i),
+			SensorIDs:       []string{protoio.EpitopesSignalSensorName, protoio.EpitopesMemorySensorName},
+			ActuatorIDs:     []string{protoio.EpitopesResponseActuatorName},
+			Neurons: []model.Neuron{
+				{ID: "s", Activation: "identity", Bias: 0},
+				{ID: "m", Activation: "identity", Bias: 0},
+				{ID: "r", Activation: "tanh", Bias: jitter(rng, 0.25)},
+			},
+			Synapses: []model.Synapse{
+				{ID: "s1", From: "s", To: "r", Weight: 0.9 + jitter(rng, 0.2), Enabled: true},
+				{ID: "s2", From: "m", To: "r", Weight: 0.7 + jitter(rng, 0.2), Enabled: true},
+			},
+		})
+	}
+	return population
+}
+
+func seedLLVMPhaseOrderingPopulation(size int, seed int64) []model.Genome {
+	rng := rand.New(rand.NewSource(seed))
+	population := make([]model.Genome, 0, size)
+	for i := 0; i < size; i++ {
+		population = append(population, model.Genome{
+			VersionedRecord: model.VersionedRecord{SchemaVersion: storage.CurrentSchemaVersion, CodecVersion: storage.CurrentCodecVersion},
+			ID:              fmt.Sprintf("llvm-g0-%d", i),
+			SensorIDs:       []string{protoio.LLVMComplexitySensorName, protoio.LLVMPassIndexSensorName},
+			ActuatorIDs:     []string{protoio.LLVMPhaseActuatorName},
+			Neurons: []model.Neuron{
+				{ID: "c", Activation: "identity", Bias: 0},
+				{ID: "p", Activation: "identity", Bias: 0},
+				{ID: "o", Activation: "identity", Bias: 1 + jitter(rng, 0.1)},
+			},
+			Synapses: []model.Synapse{
+				{ID: "s1", From: "p", To: "o", Weight: -2 + jitter(rng, 0.2), Enabled: true},
+				{ID: "s2", From: "c", To: "o", Weight: -0.2 + jitter(rng, 0.15), Enabled: true},
 			},
 		})
 	}

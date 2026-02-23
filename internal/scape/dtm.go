@@ -1,0 +1,380 @@
+package scape
+
+import (
+	"context"
+	"fmt"
+	"hash/fnv"
+
+	protoio "protogonos/internal/io"
+)
+
+// DTMScape mirrors the delayed T-maze benchmark behavior from scape.erl.
+type DTMScape struct{}
+
+func (DTMScape) Name() string {
+	return "dtm"
+}
+
+func (DTMScape) Evaluate(ctx context.Context, agent Agent) (Fitness, Trace, error) {
+	if ticker, ok := agent.(TickAgent); ok {
+		fitness, trace, err := evaluateDTMWithTick(ctx, ticker)
+		if err == nil {
+			return fitness, trace, nil
+		}
+	}
+
+	runner, ok := agent.(StepAgent)
+	if !ok {
+		return 0, nil, fmt.Errorf("agent %s does not implement step runner", agent.ID())
+	}
+	return evaluateDTMWithStep(ctx, runner)
+}
+
+type dtmCoord struct {
+	x int
+	y int
+}
+
+type dtmView struct {
+	next       dtmCoord
+	hasNext    bool
+	rangeLeft  float64
+	rangeFwd   float64
+	rangeRight float64
+}
+
+type dtmSector struct {
+	reward float64
+	views  map[int]dtmView
+}
+
+type dtmEpisode struct {
+	sectors     map[dtmCoord]dtmSector
+	position    dtmCoord
+	direction   int
+	totalRuns   int
+	runIndex    int
+	switchEvent int
+	switched    bool
+	fitnessAcc  float64
+}
+
+func evaluateDTMWithStep(ctx context.Context, runner StepAgent) (Fitness, Trace, error) {
+	return evaluateDTM(
+		ctx,
+		runner.ID(),
+		func(ctx context.Context, sense []float64) (float64, error) {
+			out, err := runner.RunStep(ctx, sense)
+			if err != nil {
+				return 0, err
+			}
+			if len(out) != 1 {
+				return 0, fmt.Errorf("dtm requires one output, got %d", len(out))
+			}
+			return out[0], nil
+		},
+	)
+}
+
+func evaluateDTMWithTick(ctx context.Context, ticker TickAgent) (Fitness, Trace, error) {
+	leftSetter, frontSetter, rightSetter, rewardSetter, moveOutput, err := dtmIO(ticker)
+	if err != nil {
+		return 0, nil, err
+	}
+
+	return evaluateDTM(
+		ctx,
+		ticker.ID(),
+		func(ctx context.Context, sense []float64) (float64, error) {
+			leftSetter.Set(sense[0])
+			frontSetter.Set(sense[1])
+			rightSetter.Set(sense[2])
+			rewardSetter.Set(sense[3])
+
+			out, err := ticker.Tick(ctx)
+			if err != nil {
+				return 0, err
+			}
+
+			move := 0.0
+			last := moveOutput.Last()
+			if len(last) > 0 {
+				move = last[0]
+			} else if len(out) > 0 {
+				move = out[0]
+			}
+			return move, nil
+		},
+	)
+}
+
+func evaluateDTM(ctx context.Context, agentID string, chooseMove func(context.Context, []float64) (float64, error)) (Fitness, Trace, error) {
+	episode := newDTMEpisode(agentID)
+
+	const maxStepsPerRun = 16
+	terminalRuns := 0
+	crashRuns := 0
+	steps := 0
+
+	for episode.runIndex < episode.totalRuns {
+		if err := ctx.Err(); err != nil {
+			return 0, nil, err
+		}
+
+		if episode.runIndex == episode.switchEvent && !episode.switched {
+			episode.swapRewardSectors()
+			episode.switched = true
+		}
+
+		runDone := false
+		for runStep := 0; runStep < maxStepsPerRun; runStep++ {
+			if err := ctx.Err(); err != nil {
+				return 0, nil, err
+			}
+
+			sense, err := episode.sense()
+			if err != nil {
+				return 0, nil, err
+			}
+
+			move, err := chooseMove(ctx, sense)
+			if err != nil {
+				return 0, nil, err
+			}
+
+			done, crashed, reachedTerminal, err := episode.applyMove(move)
+			if err != nil {
+				return 0, nil, err
+			}
+
+			steps++
+			if done {
+				runDone = true
+				if crashed {
+					crashRuns++
+				}
+				if reachedTerminal {
+					terminalRuns++
+				}
+				break
+			}
+		}
+
+		if !runDone {
+			episode.fitnessAcc -= 0.4
+			episode.resetRun()
+			episode.runIndex++
+			crashRuns++
+		}
+	}
+
+	return Fitness(episode.fitnessAcc), Trace{
+		"fitness_acc":    episode.fitnessAcc,
+		"total_runs":     episode.totalRuns,
+		"switch_event":   episode.switchEvent,
+		"switched":       episode.switched,
+		"terminal_runs":  terminalRuns,
+		"crash_runs":     crashRuns,
+		"steps_executed": steps,
+	}, nil
+}
+
+func newDTMEpisode(agentID string) dtmEpisode {
+	return dtmEpisode{
+		sectors:     buildTMazeSectors(),
+		position:    dtmCoord{x: 0, y: 0},
+		direction:   90,
+		totalRuns:   100,
+		runIndex:    0,
+		switchEvent: deterministicDTMSwitch(agentID),
+		fitnessAcc:  50,
+	}
+}
+
+func deterministicDTMSwitch(agentID string) int {
+	h := fnv.New32a()
+	_, _ = h.Write([]byte(agentID))
+	// 35 + uniform(30) in reference, where uniform is 1..30.
+	return 35 + int(h.Sum32()%30) + 1
+}
+
+func buildTMazeSectors() map[dtmCoord]dtmSector {
+	return map[dtmCoord]dtmSector{
+		{x: 0, y: 0}: {
+			reward: 0,
+			views: map[int]dtmView{
+				0:   {hasNext: false, rangeLeft: 1, rangeFwd: 0, rangeRight: 0},
+				90:  {hasNext: true, next: dtmCoord{x: 0, y: 1}, rangeLeft: 0, rangeFwd: 1, rangeRight: 0},
+				180: {hasNext: false, rangeLeft: 0, rangeFwd: 0, rangeRight: 1},
+				270: {hasNext: false, rangeLeft: 0, rangeFwd: 0, rangeRight: 0},
+			},
+		},
+		{x: 0, y: 1}: {
+			reward: 0,
+			views: map[int]dtmView{
+				0:   {hasNext: true, next: dtmCoord{x: 1, y: 1}, rangeLeft: 0, rangeFwd: 1, rangeRight: 1},
+				90:  {hasNext: false, rangeLeft: 1, rangeFwd: 0, rangeRight: 1},
+				180: {hasNext: true, next: dtmCoord{x: -1, y: 1}, rangeLeft: 1, rangeFwd: 1, rangeRight: 0},
+				270: {hasNext: true, next: dtmCoord{x: 0, y: 0}, rangeLeft: 1, rangeFwd: 1, rangeRight: 1},
+			},
+		},
+		{x: 1, y: 1}: {
+			reward: 1,
+			views: map[int]dtmView{
+				0:   {hasNext: false, rangeLeft: 0, rangeFwd: 0, rangeRight: 0},
+				90:  {hasNext: false, rangeLeft: 2, rangeFwd: 0, rangeRight: 0},
+				180: {hasNext: true, next: dtmCoord{x: 0, y: 1}, rangeLeft: 0, rangeFwd: 2, rangeRight: 0},
+				270: {hasNext: false, rangeLeft: 0, rangeFwd: 0, rangeRight: 2},
+			},
+		},
+		{x: -1, y: 1}: {
+			reward: 0.2,
+			views: map[int]dtmView{
+				0:   {hasNext: true, next: dtmCoord{x: 0, y: 1}, rangeLeft: 0, rangeFwd: 2, rangeRight: 0},
+				90:  {hasNext: false, rangeLeft: 0, rangeFwd: 0, rangeRight: 2},
+				180: {hasNext: false, rangeLeft: 0, rangeFwd: 0, rangeRight: 0},
+				270: {hasNext: false, rangeLeft: 2, rangeFwd: 0, rangeRight: 0},
+			},
+		},
+	}
+}
+
+func (e *dtmEpisode) swapRewardSectors() {
+	left := dtmCoord{x: 1, y: 1}
+	right := dtmCoord{x: -1, y: 1}
+	ls := e.sectors[left]
+	rs := e.sectors[right]
+	ls.reward, rs.reward = rs.reward, ls.reward
+	e.sectors[left] = ls
+	e.sectors[right] = rs
+}
+
+func (e *dtmEpisode) sense() ([]float64, error) {
+	sector, ok := e.sectors[e.position]
+	if !ok {
+		return nil, fmt.Errorf("dtm missing sector at position=%+v", e.position)
+	}
+	view, ok := sector.views[e.direction]
+	if !ok {
+		return nil, fmt.Errorf("dtm missing view for direction=%d at position=%+v", e.direction, e.position)
+	}
+	return []float64{view.rangeLeft, view.rangeFwd, view.rangeRight, sector.reward}, nil
+}
+
+func (e *dtmEpisode) applyMove(move float64) (done bool, crashed bool, reachedTerminal bool, err error) {
+	if e.position == (dtmCoord{x: 1, y: 1}) || e.position == (dtmCoord{x: -1, y: 1}) {
+		sector := e.sectors[e.position]
+		e.fitnessAcc += sector.reward
+		e.resetRun()
+		e.runIndex++
+		return true, false, true, nil
+	}
+
+	sector, ok := e.sectors[e.position]
+	if !ok {
+		return false, false, false, fmt.Errorf("dtm missing sector at position=%+v", e.position)
+	}
+
+	if move > 0.33 {
+		e.direction = (e.direction + 270) % 360
+		view, ok := sector.views[e.direction]
+		if !ok {
+			return false, false, false, fmt.Errorf("dtm missing clockwise view for direction=%d at position=%+v", e.direction, e.position)
+		}
+		return e.applyTransition(view)
+	}
+	if move < -0.33 {
+		e.direction = (e.direction + 90) % 360
+		view, ok := sector.views[e.direction]
+		if !ok {
+			return false, false, false, fmt.Errorf("dtm missing counterclockwise view for direction=%d at position=%+v", e.direction, e.position)
+		}
+		return e.applyTransition(view)
+	}
+
+	view, ok := sector.views[e.direction]
+	if !ok {
+		return false, false, false, fmt.Errorf("dtm missing forward view for direction=%d at position=%+v", e.direction, e.position)
+	}
+	return e.applyTransition(view)
+}
+
+func (e *dtmEpisode) applyTransition(view dtmView) (done bool, crashed bool, reachedTerminal bool, err error) {
+	if !view.hasNext {
+		e.fitnessAcc -= 0.4
+		e.resetRun()
+		e.runIndex++
+		return true, true, false, nil
+	}
+	e.position = view.next
+	return false, false, false, nil
+}
+
+func (e *dtmEpisode) resetRun() {
+	e.position = dtmCoord{x: 0, y: 0}
+	e.direction = 90
+}
+
+func dtmIO(agent TickAgent) (
+	protoio.ScalarSensorSetter,
+	protoio.ScalarSensorSetter,
+	protoio.ScalarSensorSetter,
+	protoio.ScalarSensorSetter,
+	protoio.SnapshotActuator,
+	error,
+) {
+	typed, ok := agent.(interface {
+		RegisteredSensor(id string) (protoio.Sensor, bool)
+		RegisteredActuator(id string) (protoio.Actuator, bool)
+	})
+	if !ok {
+		return nil, nil, nil, nil, nil, fmt.Errorf("agent %s does not expose IO registry access", agent.ID())
+	}
+
+	left, ok := typed.RegisteredSensor(protoio.DTMRangeLeftSensorName)
+	if !ok {
+		return nil, nil, nil, nil, nil, fmt.Errorf("agent %s missing sensor %s", agent.ID(), protoio.DTMRangeLeftSensorName)
+	}
+	leftSetter, ok := left.(protoio.ScalarSensorSetter)
+	if !ok {
+		return nil, nil, nil, nil, nil, fmt.Errorf("sensor %s does not support scalar set", protoio.DTMRangeLeftSensorName)
+	}
+
+	front, ok := typed.RegisteredSensor(protoio.DTMRangeFrontSensorName)
+	if !ok {
+		return nil, nil, nil, nil, nil, fmt.Errorf("agent %s missing sensor %s", agent.ID(), protoio.DTMRangeFrontSensorName)
+	}
+	frontSetter, ok := front.(protoio.ScalarSensorSetter)
+	if !ok {
+		return nil, nil, nil, nil, nil, fmt.Errorf("sensor %s does not support scalar set", protoio.DTMRangeFrontSensorName)
+	}
+
+	right, ok := typed.RegisteredSensor(protoio.DTMRangeRightSensorName)
+	if !ok {
+		return nil, nil, nil, nil, nil, fmt.Errorf("agent %s missing sensor %s", agent.ID(), protoio.DTMRangeRightSensorName)
+	}
+	rightSetter, ok := right.(protoio.ScalarSensorSetter)
+	if !ok {
+		return nil, nil, nil, nil, nil, fmt.Errorf("sensor %s does not support scalar set", protoio.DTMRangeRightSensorName)
+	}
+
+	reward, ok := typed.RegisteredSensor(protoio.DTMRewardSensorName)
+	if !ok {
+		return nil, nil, nil, nil, nil, fmt.Errorf("agent %s missing sensor %s", agent.ID(), protoio.DTMRewardSensorName)
+	}
+	rewardSetter, ok := reward.(protoio.ScalarSensorSetter)
+	if !ok {
+		return nil, nil, nil, nil, nil, fmt.Errorf("sensor %s does not support scalar set", protoio.DTMRewardSensorName)
+	}
+
+	actuator, ok := typed.RegisteredActuator(protoio.DTMMoveActuatorName)
+	if !ok {
+		return nil, nil, nil, nil, nil, fmt.Errorf("agent %s missing actuator %s", agent.ID(), protoio.DTMMoveActuatorName)
+	}
+	output, ok := actuator.(protoio.SnapshotActuator)
+	if !ok {
+		return nil, nil, nil, nil, nil, fmt.Errorf("actuator %s does not support output snapshot", protoio.DTMMoveActuatorName)
+	}
+
+	return leftSetter, frontSetter, rightSetter, rewardSetter, output, nil
+}

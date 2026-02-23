@@ -76,6 +76,28 @@ func TestConstructSeedPopulationCartPoleLite(t *testing.T) {
 	}
 }
 
+func TestConstructSeedPopulationPole2Balancing(t *testing.T) {
+	seed, err := ConstructSeedPopulation("pole2-balancing", 2, 17)
+	if err != nil {
+		t.Fatalf("construct pole2-balancing population: %v", err)
+	}
+	if len(seed.Genomes) != 2 {
+		t.Fatalf("expected 2 genomes, got %d", len(seed.Genomes))
+	}
+	if len(seed.InputNeuronIDs) != 6 {
+		t.Fatalf("unexpected input ids: %#v", seed.InputNeuronIDs)
+	}
+	if len(seed.OutputNeuronIDs) != 1 || seed.OutputNeuronIDs[0] != "f" {
+		t.Fatalf("unexpected output ids: %#v", seed.OutputNeuronIDs)
+	}
+	if len(seed.Genomes[0].SensorIDs) != 6 || seed.Genomes[0].SensorIDs[0] != protoio.Pole2CartPositionSensorName {
+		t.Fatalf("unexpected pole2 sensor ids: %#v", seed.Genomes[0].SensorIDs)
+	}
+	if len(seed.Genomes[0].ActuatorIDs) != 1 || seed.Genomes[0].ActuatorIDs[0] != protoio.Pole2PushActuatorName {
+		t.Fatalf("unexpected pole2 actuator ids: %#v", seed.Genomes[0].ActuatorIDs)
+	}
+}
+
 func TestConstructSeedPopulationFlatland(t *testing.T) {
 	seed, err := ConstructSeedPopulation("flatland", 2, 19)
 	if err != nil {
@@ -95,6 +117,28 @@ func TestConstructSeedPopulationFlatland(t *testing.T) {
 	}
 	if len(seed.Genomes[0].ActuatorIDs) != 1 || seed.Genomes[0].ActuatorIDs[0] != protoio.FlatlandMoveActuatorName {
 		t.Fatalf("unexpected flatland actuator ids: %#v", seed.Genomes[0].ActuatorIDs)
+	}
+}
+
+func TestConstructSeedPopulationDTM(t *testing.T) {
+	seed, err := ConstructSeedPopulation("dtm", 2, 21)
+	if err != nil {
+		t.Fatalf("construct dtm population: %v", err)
+	}
+	if len(seed.Genomes) != 2 {
+		t.Fatalf("expected 2 genomes, got %d", len(seed.Genomes))
+	}
+	if len(seed.InputNeuronIDs) != 4 || seed.InputNeuronIDs[0] != "rl" || seed.InputNeuronIDs[1] != "rf" || seed.InputNeuronIDs[2] != "rr" || seed.InputNeuronIDs[3] != "r" {
+		t.Fatalf("unexpected input ids: %#v", seed.InputNeuronIDs)
+	}
+	if len(seed.OutputNeuronIDs) != 1 || seed.OutputNeuronIDs[0] != "m" {
+		t.Fatalf("unexpected output ids: %#v", seed.OutputNeuronIDs)
+	}
+	if len(seed.Genomes[0].SensorIDs) != 4 || seed.Genomes[0].SensorIDs[0] != protoio.DTMRangeLeftSensorName || seed.Genomes[0].SensorIDs[1] != protoio.DTMRangeFrontSensorName || seed.Genomes[0].SensorIDs[2] != protoio.DTMRangeRightSensorName || seed.Genomes[0].SensorIDs[3] != protoio.DTMRewardSensorName {
+		t.Fatalf("unexpected dtm sensor ids: %#v", seed.Genomes[0].SensorIDs)
+	}
+	if len(seed.Genomes[0].ActuatorIDs) != 1 || seed.Genomes[0].ActuatorIDs[0] != protoio.DTMMoveActuatorName {
+		t.Fatalf("unexpected dtm actuator ids: %#v", seed.Genomes[0].ActuatorIDs)
 	}
 }
 
@@ -139,6 +183,50 @@ func TestConstructSeedPopulationFX(t *testing.T) {
 	}
 	if len(seed.Genomes[0].ActuatorIDs) != 1 || seed.Genomes[0].ActuatorIDs[0] != protoio.FXTradeActuatorName {
 		t.Fatalf("unexpected fx actuator ids: %#v", seed.Genomes[0].ActuatorIDs)
+	}
+}
+
+func TestConstructSeedPopulationEpitopes(t *testing.T) {
+	seed, err := ConstructSeedPopulation("epitopes", 2, 31)
+	if err != nil {
+		t.Fatalf("construct epitopes population: %v", err)
+	}
+	if len(seed.Genomes) != 2 {
+		t.Fatalf("expected 2 genomes, got %d", len(seed.Genomes))
+	}
+	if len(seed.InputNeuronIDs) != 2 || seed.InputNeuronIDs[0] != "s" || seed.InputNeuronIDs[1] != "m" {
+		t.Fatalf("unexpected input ids: %#v", seed.InputNeuronIDs)
+	}
+	if len(seed.OutputNeuronIDs) != 1 || seed.OutputNeuronIDs[0] != "r" {
+		t.Fatalf("unexpected output ids: %#v", seed.OutputNeuronIDs)
+	}
+	if len(seed.Genomes[0].SensorIDs) != 2 || seed.Genomes[0].SensorIDs[0] != protoio.EpitopesSignalSensorName || seed.Genomes[0].SensorIDs[1] != protoio.EpitopesMemorySensorName {
+		t.Fatalf("unexpected epitopes sensor ids: %#v", seed.Genomes[0].SensorIDs)
+	}
+	if len(seed.Genomes[0].ActuatorIDs) != 1 || seed.Genomes[0].ActuatorIDs[0] != protoio.EpitopesResponseActuatorName {
+		t.Fatalf("unexpected epitopes actuator ids: %#v", seed.Genomes[0].ActuatorIDs)
+	}
+}
+
+func TestConstructSeedPopulationLLVMPhaseOrdering(t *testing.T) {
+	seed, err := ConstructSeedPopulation("llvm-phase-ordering", 2, 37)
+	if err != nil {
+		t.Fatalf("construct llvm-phase-ordering population: %v", err)
+	}
+	if len(seed.Genomes) != 2 {
+		t.Fatalf("expected 2 genomes, got %d", len(seed.Genomes))
+	}
+	if len(seed.InputNeuronIDs) != 2 || seed.InputNeuronIDs[0] != "c" || seed.InputNeuronIDs[1] != "p" {
+		t.Fatalf("unexpected input ids: %#v", seed.InputNeuronIDs)
+	}
+	if len(seed.OutputNeuronIDs) != 1 || seed.OutputNeuronIDs[0] != "o" {
+		t.Fatalf("unexpected output ids: %#v", seed.OutputNeuronIDs)
+	}
+	if len(seed.Genomes[0].SensorIDs) != 2 || seed.Genomes[0].SensorIDs[0] != protoio.LLVMComplexitySensorName || seed.Genomes[0].SensorIDs[1] != protoio.LLVMPassIndexSensorName {
+		t.Fatalf("unexpected llvm sensor ids: %#v", seed.Genomes[0].SensorIDs)
+	}
+	if len(seed.Genomes[0].ActuatorIDs) != 1 || seed.Genomes[0].ActuatorIDs[0] != protoio.LLVMPhaseActuatorName {
+		t.Fatalf("unexpected llvm actuator ids: %#v", seed.Genomes[0].ActuatorIDs)
 	}
 }
 

@@ -1,0 +1,88 @@
+package scape
+
+import (
+	"context"
+	"testing"
+
+	"protogonos/internal/agent"
+	protoio "protogonos/internal/io"
+	"protogonos/internal/model"
+)
+
+func TestEpitopesScapeRewardsMemoryAwarePolicy(t *testing.T) {
+	scape := EpitopesScape{}
+	signalOnly := scriptedStepAgent{
+		id: "signal-only",
+		fn: func(in []float64) []float64 {
+			if len(in) == 0 {
+				return []float64{0}
+			}
+			return []float64{in[0]}
+		},
+	}
+	memoryAware := scriptedStepAgent{
+		id: "memory-aware",
+		fn: func(in []float64) []float64 {
+			if len(in) < 2 {
+				return []float64{0}
+			}
+			return []float64{in[0] + 0.7*in[1]}
+		},
+	}
+
+	signalFitness, _, err := scape.Evaluate(context.Background(), signalOnly)
+	if err != nil {
+		t.Fatalf("evaluate signal-only: %v", err)
+	}
+	memoryFitness, _, err := scape.Evaluate(context.Background(), memoryAware)
+	if err != nil {
+		t.Fatalf("evaluate memory-aware: %v", err)
+	}
+	if memoryFitness <= signalFitness {
+		t.Fatalf("expected memory-aware policy to outperform signal-only, got memory=%f signal=%f", memoryFitness, signalFitness)
+	}
+}
+
+func TestEpitopesScapeEvaluateWithIOComponents(t *testing.T) {
+	genome := model.Genome{
+		SensorIDs: []string{
+			protoio.EpitopesSignalSensorName,
+			protoio.EpitopesMemorySensorName,
+		},
+		ActuatorIDs: []string{protoio.EpitopesResponseActuatorName},
+		Neurons: []model.Neuron{
+			{ID: "s", Activation: "identity"},
+			{ID: "m", Activation: "identity"},
+			{ID: "r", Activation: "tanh"},
+		},
+		Synapses: []model.Synapse{
+			{From: "s", To: "r", Weight: 1.0, Enabled: true},
+			{From: "m", To: "r", Weight: 0.7, Enabled: true},
+		},
+	}
+
+	sensors := map[string]protoio.Sensor{
+		protoio.EpitopesSignalSensorName: protoio.NewScalarInputSensor(0),
+		protoio.EpitopesMemorySensorName: protoio.NewScalarInputSensor(0),
+	}
+	actuators := map[string]protoio.Actuator{
+		protoio.EpitopesResponseActuatorName: protoio.NewScalarOutputActuator(),
+	}
+
+	cortex, err := agent.NewCortex("epitopes-agent-io", genome, sensors, actuators, []string{"s", "m"}, []string{"r"}, nil)
+	if err != nil {
+		t.Fatalf("new cortex: %v", err)
+	}
+
+	scape := EpitopesScape{}
+	fitness, trace, err := scape.Evaluate(context.Background(), cortex)
+	if err != nil {
+		t.Fatalf("evaluate: %v", err)
+	}
+	if fitness < 0.75 {
+		t.Fatalf("expected fitness >= 0.75, got %f", fitness)
+	}
+	if _, ok := trace["accuracy"].(float64); !ok {
+		t.Fatalf("trace missing accuracy: %+v", trace)
+	}
+}
