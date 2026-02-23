@@ -168,7 +168,13 @@ func evaluateDTM(
 	episode := newDTMEpisode(agentID, cfg)
 	terminalRuns := 0
 	crashRuns := 0
+	timeoutRuns := 0
 	steps := 0
+	runStepsAcc := 0
+	terminalRewardTotal := 0.0
+	leftTerminalRuns := 0
+	rightTerminalRuns := 0
+	switchTriggeredAt := -1
 
 	for episode.runIndex < episode.totalRuns {
 		if err := ctx.Err(); err != nil {
@@ -178,9 +184,11 @@ func evaluateDTM(
 		if episode.runIndex == episode.switchEvent && !episode.switched {
 			episode.swapRewardSectors()
 			episode.switched = true
+			switchTriggeredAt = episode.runIndex
 		}
 
 		runDone := false
+		runSteps := 0
 		for runStep := 0; runStep < cfg.maxStepsPerRun; runStep++ {
 			if err := ctx.Err(); err != nil {
 				return 0, nil, err
@@ -196,19 +204,28 @@ func evaluateDTM(
 				return 0, nil, err
 			}
 
-			done, crashed, reachedTerminal, err := episode.applyMove(move)
+			done, crashed, reachedTerminal, reward, terminalPosition, err := episode.applyMove(move)
 			if err != nil {
 				return 0, nil, err
 			}
 
 			steps++
+			runSteps++
 			if done {
 				runDone = true
+				runStepsAcc += runSteps
 				if crashed {
 					crashRuns++
 				}
 				if reachedTerminal {
 					terminalRuns++
+					terminalRewardTotal += reward
+					switch terminalPosition {
+					case (dtmCoord{x: -1, y: 1}):
+						leftTerminalRuns++
+					case (dtmCoord{x: 1, y: 1}):
+						rightTerminalRuns++
+					}
 				}
 				break
 			}
@@ -219,19 +236,39 @@ func evaluateDTM(
 			episode.resetRun()
 			episode.runIndex++
 			crashRuns++
+			timeoutRuns++
+			runStepsAcc += cfg.maxStepsPerRun
 		}
 	}
 
+	avgStepsPerRun := 0.0
+	if episode.totalRuns > 0 {
+		avgStepsPerRun = float64(runStepsAcc) / float64(episode.totalRuns)
+	}
+	fitnessStart := 50.0
+	fitnessDelta := episode.fitnessAcc - fitnessStart
+
 	return Fitness(episode.fitnessAcc), Trace{
-		"fitness_acc":    episode.fitnessAcc,
-		"total_runs":     episode.totalRuns,
-		"switch_event":   episode.switchEvent,
-		"switched":       episode.switched,
-		"terminal_runs":  terminalRuns,
-		"crash_runs":     crashRuns,
-		"steps_executed": steps,
-		"mode":           cfg.mode,
-		"max_steps":      cfg.maxStepsPerRun,
+		"fitness_acc":            episode.fitnessAcc,
+		"fitness_start":          fitnessStart,
+		"fitness_delta":          fitnessDelta,
+		"total_runs":             episode.totalRuns,
+		"switch_event":           episode.switchEvent,
+		"switch_triggered_at":    switchTriggeredAt,
+		"switched":               episode.switched,
+		"terminal_runs":          terminalRuns,
+		"left_terminal_runs":     leftTerminalRuns,
+		"right_terminal_runs":    rightTerminalRuns,
+		"terminal_reward_total":  terminalRewardTotal,
+		"crash_runs":             crashRuns,
+		"timeout_runs":           timeoutRuns,
+		"steps_executed":         steps,
+		"avg_steps_per_run":      avgStepsPerRun,
+		"mode":                   cfg.mode,
+		"max_steps":              cfg.maxStepsPerRun,
+		"last_run_index":         episode.runIndex,
+		"switch_spread_floor":    cfg.switchFloor,
+		"switch_spread_interval": cfg.switchSpread,
 	}, nil
 }
 
@@ -336,25 +373,27 @@ func (e *dtmEpisode) sense() ([]float64, error) {
 	return []float64{view.rangeLeft, view.rangeFwd, view.rangeRight, sector.reward}, nil
 }
 
-func (e *dtmEpisode) applyMove(move float64) (done bool, crashed bool, reachedTerminal bool, err error) {
+func (e *dtmEpisode) applyMove(move float64) (done bool, crashed bool, reachedTerminal bool, reward float64, terminalPosition dtmCoord, err error) {
 	if e.position == (dtmCoord{x: 1, y: 1}) || e.position == (dtmCoord{x: -1, y: 1}) {
 		sector := e.sectors[e.position]
-		e.fitnessAcc += sector.reward
+		reward = sector.reward
+		terminalPosition = e.position
+		e.fitnessAcc += reward
 		e.resetRun()
 		e.runIndex++
-		return true, false, true, nil
+		return true, false, true, reward, terminalPosition, nil
 	}
 
 	sector, ok := e.sectors[e.position]
 	if !ok {
-		return false, false, false, fmt.Errorf("dtm missing sector at position=%+v", e.position)
+		return false, false, false, 0, dtmCoord{}, fmt.Errorf("dtm missing sector at position=%+v", e.position)
 	}
 
 	if move > 0.33 {
 		e.direction = (e.direction + 270) % 360
 		view, ok := sector.views[e.direction]
 		if !ok {
-			return false, false, false, fmt.Errorf("dtm missing clockwise view for direction=%d at position=%+v", e.direction, e.position)
+			return false, false, false, 0, dtmCoord{}, fmt.Errorf("dtm missing clockwise view for direction=%d at position=%+v", e.direction, e.position)
 		}
 		return e.applyTransition(view)
 	}
@@ -362,27 +401,27 @@ func (e *dtmEpisode) applyMove(move float64) (done bool, crashed bool, reachedTe
 		e.direction = (e.direction + 90) % 360
 		view, ok := sector.views[e.direction]
 		if !ok {
-			return false, false, false, fmt.Errorf("dtm missing counterclockwise view for direction=%d at position=%+v", e.direction, e.position)
+			return false, false, false, 0, dtmCoord{}, fmt.Errorf("dtm missing counterclockwise view for direction=%d at position=%+v", e.direction, e.position)
 		}
 		return e.applyTransition(view)
 	}
 
 	view, ok := sector.views[e.direction]
 	if !ok {
-		return false, false, false, fmt.Errorf("dtm missing forward view for direction=%d at position=%+v", e.direction, e.position)
+		return false, false, false, 0, dtmCoord{}, fmt.Errorf("dtm missing forward view for direction=%d at position=%+v", e.direction, e.position)
 	}
 	return e.applyTransition(view)
 }
 
-func (e *dtmEpisode) applyTransition(view dtmView) (done bool, crashed bool, reachedTerminal bool, err error) {
+func (e *dtmEpisode) applyTransition(view dtmView) (done bool, crashed bool, reachedTerminal bool, reward float64, terminalPosition dtmCoord, err error) {
 	if !view.hasNext {
 		e.fitnessAcc -= 0.4
 		e.resetRun()
 		e.runIndex++
-		return true, true, false, nil
+		return true, true, false, 0, dtmCoord{}, nil
 	}
 	e.position = view.next
-	return false, false, false, nil
+	return false, false, false, 0, dtmCoord{}, nil
 }
 
 func (e *dtmEpisode) resetRun() {

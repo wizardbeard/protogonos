@@ -52,9 +52,12 @@ type pole2State struct {
 type pole2ModeConfig struct {
 	mode       string
 	maxSteps   int
+	goalSteps  int
 	angleLimit float64
 	initAngle1 float64
 	initAngle2 float64
+	damping    bool
+	doublePole bool
 }
 
 func pole2ConfigForMode(mode string) (pole2ModeConfig, error) {
@@ -66,25 +69,34 @@ func pole2ConfigForMode(mode string) (pole2ModeConfig, error) {
 		return pole2ModeConfig{
 			mode:       "gt",
 			maxSteps:   1500,
+			goalSteps:  1500,
 			angleLimit: angleLimit,
 			initAngle1: 3.6 * rad,
 			initAngle2: 0,
+			damping:    true,
+			doublePole: true,
 		}, nil
 	case "validation":
 		return pole2ModeConfig{
 			mode:       "validation",
 			maxSteps:   1200,
+			goalSteps:  1200,
 			angleLimit: angleLimit,
 			initAngle1: 2.4 * rad,
 			initAngle2: 1.2 * rad,
+			damping:    true,
+			doublePole: true,
 		}, nil
 	case "test":
 		return pole2ModeConfig{
 			mode:       "test",
 			maxSteps:   1200,
+			goalSteps:  1200,
 			angleLimit: angleLimit,
 			initAngle1: 4.8 * rad,
 			initAngle2: -1.8 * rad,
+			damping:    true,
+			doublePole: true,
 		}, nil
 	default:
 		return pole2ModeConfig{}, fmt.Errorf("unsupported pole2-balancing mode: %s", mode)
@@ -98,50 +110,32 @@ func initialPole2State(cfg pole2ModeConfig) pole2State {
 	}
 }
 
+type pole2EpisodeResult struct {
+	finalState         pole2State
+	stepsSurvived      int
+	fitnessAcc         float64
+	avgStepFitness     float64
+	goalReached        bool
+	terminationReason  string
+	terminatedByBounds bool
+}
+
 func evaluatePole2BalancingWithStep(ctx context.Context, runner StepAgent, cfg pole2ModeConfig) (Fitness, Trace, error) {
-	state := initialPole2State(cfg)
-	stepsSurvived := 0
-	stabilityAcc := 0.0
-
-	for step := 0; step < cfg.maxSteps; step++ {
-		if err := ctx.Err(); err != nil {
-			return 0, nil, err
-		}
-
-		in := pole2Observation(state, cfg.angleLimit)
-		out, err := runner.RunStep(ctx, in)
-		if err != nil {
-			return 0, nil, err
-		}
-		if len(out) != 1 {
-			return 0, nil, fmt.Errorf("pole2-balancing requires one output, got %d", len(out))
-		}
-
-		force := clampPole2(out[0], -1, 1)
-		state = simulateDoublePole(force*10, state, 2)
-		stepsSurvived++
-
-		if pole2Terminated(state, cfg.angleLimit) {
-			break
-		}
-		stabilityAcc += pole2StabilityScore(step+1, state)
-	}
-
-	return summarizePole2Outcome(stepsSurvived, cfg.maxSteps, stabilityAcc), Trace{
-		"steps_survived": stepsSurvived,
-		"max_steps":      cfg.maxSteps,
-		"goal_reached":   stepsSurvived >= cfg.maxSteps,
-		"cart_position":  state.cartPosition,
-		"cart_velocity":  state.cartVelocity,
-		"angle1":         state.angle1,
-		"velocity1":      state.velocity1,
-		"angle2":         state.angle2,
-		"velocity2":      state.velocity2,
-		"stability":      stabilityAcc,
-		"mode":           cfg.mode,
-		"init_angle1":    cfg.initAngle1,
-		"init_angle2":    cfg.initAngle2,
-	}, nil
+	return evaluatePole2Balancing(
+		ctx,
+		cfg,
+		func(ctx context.Context, state pole2State) (float64, error) {
+			in := pole2Observation(state, cfg.angleLimit)
+			out, err := runner.RunStep(ctx, in)
+			if err != nil {
+				return 0, err
+			}
+			if len(out) != 1 {
+				return 0, fmt.Errorf("pole2-balancing requires one output, got %d", len(out))
+			}
+			return out[0], nil
+		},
+	)
 }
 
 func evaluatePole2BalancingWithTick(ctx context.Context, ticker TickAgent, cfg pole2ModeConfig) (Fitness, Trace, error) {
@@ -150,82 +144,107 @@ func evaluatePole2BalancingWithTick(ctx context.Context, ticker TickAgent, cfg p
 		return 0, nil, err
 	}
 
+	return evaluatePole2Balancing(
+		ctx,
+		cfg,
+		func(ctx context.Context, state pole2State) (float64, error) {
+			positionSetter.Set(scaleToUnit(state.cartPosition, 2.4, -2.4))
+			velocitySetter.Set(scaleToUnit(state.cartVelocity, 10, -10))
+			angle1Setter.Set(scaleToUnit(state.angle1, cfg.angleLimit, -cfg.angleLimit))
+			velocity1Setter.Set(state.velocity1)
+			angle2Setter.Set(scaleToUnit(state.angle2, cfg.angleLimit, -cfg.angleLimit))
+			velocity2Setter.Set(state.velocity2)
+
+			out, err := ticker.Tick(ctx)
+			if err != nil {
+				return 0, err
+			}
+
+			force := 0.0
+			last := forceOutput.Last()
+			if len(last) > 0 {
+				force = last[0]
+			} else if len(out) > 0 {
+				force = out[0]
+			}
+			return force, nil
+		},
+	)
+}
+
+func evaluatePole2Balancing(
+	ctx context.Context,
+	cfg pole2ModeConfig,
+	chooseForce func(context.Context, pole2State) (float64, error),
+) (Fitness, Trace, error) {
 	state := initialPole2State(cfg)
 	stepsSurvived := 0
-	stabilityAcc := 0.0
+	fitnessAcc := 0.0
+	terminationReason := "max_steps"
+	goalReached := false
+	terminatedByBounds := false
 
 	for step := 0; step < cfg.maxSteps; step++ {
 		if err := ctx.Err(); err != nil {
 			return 0, nil, err
 		}
 
-		positionSetter.Set(scaleToUnit(state.cartPosition, 2.4, -2.4))
-		velocitySetter.Set(scaleToUnit(state.cartVelocity, 10, -10))
-		angle1Setter.Set(scaleToUnit(state.angle1, cfg.angleLimit, -cfg.angleLimit))
-		velocity1Setter.Set(state.velocity1)
-		angle2Setter.Set(scaleToUnit(state.angle2, cfg.angleLimit, -cfg.angleLimit))
-		velocity2Setter.Set(state.velocity2)
-
-		out, err := ticker.Tick(ctx)
+		force, err := chooseForce(ctx, state)
 		if err != nil {
 			return 0, nil, err
-		}
-
-		force := 0.0
-		last := forceOutput.Last()
-		if len(last) > 0 {
-			force = last[0]
-		} else if len(out) > 0 {
-			force = out[0]
 		}
 		force = clampPole2(force, -1, 1)
 
 		state = simulateDoublePole(force*10, state, 2)
 		stepsSurvived++
 
-		if pole2Terminated(state, cfg.angleLimit) {
+		terminated, reason, reachedGoal := pole2Termination(state, cfg, stepsSurvived)
+		if terminated {
+			terminationReason = reason
+			goalReached = reachedGoal
+			terminatedByBounds = !reachedGoal
 			break
 		}
-		stabilityAcc += pole2StabilityScore(step+1, state)
+
+		// Mirror the reference damping-oriented fitness accumulator while the run is active.
+		fitnessAcc += pole2StepFitness(stepsSurvived, state, cfg.damping)
 	}
 
-	return summarizePole2Outcome(stepsSurvived, cfg.maxSteps, stabilityAcc), Trace{
-		"steps_survived": stepsSurvived,
-		"max_steps":      cfg.maxSteps,
-		"goal_reached":   stepsSurvived >= cfg.maxSteps,
-		"cart_position":  state.cartPosition,
-		"cart_velocity":  state.cartVelocity,
-		"angle1":         state.angle1,
-		"velocity1":      state.velocity1,
-		"angle2":         state.angle2,
-		"velocity2":      state.velocity2,
-		"stability":      stabilityAcc,
-		"mode":           cfg.mode,
-		"init_angle1":    cfg.initAngle1,
-		"init_angle2":    cfg.initAngle2,
-	}, nil
-}
-
-func summarizePole2Outcome(stepsSurvived, maxSteps int, stabilityAcc float64) Fitness {
-	if maxSteps <= 0 {
-		return 0
-	}
-	survival := float64(stepsSurvived) / float64(maxSteps)
-	stability := 0.0
+	avgStepFitness := 0.0
 	if stepsSurvived > 0 {
-		stability = stabilityAcc / float64(stepsSurvived)
+		avgStepFitness = fitnessAcc / float64(stepsSurvived)
 	}
-	if stability > 5 {
-		stability = 5
+	result := pole2EpisodeResult{
+		finalState:         state,
+		stepsSurvived:      stepsSurvived,
+		fitnessAcc:         fitnessAcc,
+		avgStepFitness:     avgStepFitness,
+		goalReached:        goalReached,
+		terminationReason:  terminationReason,
+		terminatedByBounds: terminatedByBounds,
 	}
-	fitness := survival + 0.05*stability
-	if stepsSurvived >= maxSteps {
-		fitness += 0.25
-	}
-	if math.IsNaN(fitness) || math.IsInf(fitness, 0) {
-		return 0
-	}
-	return Fitness(fitness)
+
+	return summarizePole2Outcome(result, cfg), Trace{
+		"steps_survived":       stepsSurvived,
+		"max_steps":            cfg.maxSteps,
+		"goal_steps":           cfg.goalSteps,
+		"goal_reached":         goalReached,
+		"termination_reason":   terminationReason,
+		"terminated_by_bounds": terminatedByBounds,
+		"fitness_acc":          fitnessAcc,
+		"avg_step_fitness":     avgStepFitness,
+		"cart_position":        state.cartPosition,
+		"cart_velocity":        state.cartVelocity,
+		"angle1":               state.angle1,
+		"velocity1":            state.velocity1,
+		"angle2":               state.angle2,
+		"velocity2":            state.velocity2,
+		"mode":                 cfg.mode,
+		"init_angle1":          cfg.initAngle1,
+		"init_angle2":          cfg.initAngle2,
+		"damping":              cfg.damping,
+		"double_pole":          cfg.doublePole,
+	}, nil
 }
 
 func pole2Observation(state pole2State, angleLimit float64) []float64 {
@@ -239,27 +258,65 @@ func pole2Observation(state pole2State, angleLimit float64) []float64 {
 	}
 }
 
-func pole2Terminated(state pole2State, angleLimit float64) bool {
-	return math.Abs(state.angle1) > angleLimit ||
-		math.Abs(state.angle2) > angleLimit ||
-		math.Abs(state.cartPosition) > 2.4
+func pole2Termination(state pole2State, cfg pole2ModeConfig, stepsSurvived int) (terminated bool, reason string, goalReached bool) {
+	angle1Out := math.Abs(state.angle1) > cfg.angleLimit
+	angle2Out := cfg.doublePole && math.Abs(state.angle2) > cfg.angleLimit
+	cartOut := math.Abs(state.cartPosition) > 2.4
+	stepOut := stepsSurvived >= cfg.maxSteps
+	terminated = angle1Out || angle2Out || cartOut || stepOut
+	if !terminated {
+		return false, "", false
+	}
+
+	// Preserve reference-style ordering where reaching goal-step budget dominates
+	// terminal signaling once a terminal state has been observed.
+	if stepsSurvived >= cfg.goalSteps {
+		return true, "goal_reached", true
+	}
+	if angle1Out {
+		return true, "angle1_limit", false
+	}
+	if angle2Out {
+		return true, "angle2_limit", false
+	}
+	if cartOut {
+		return true, "cart_limit", false
+	}
+	return true, "max_steps", false
 }
 
-func pole2StabilityScore(step int, state pole2State) float64 {
+func pole2StepFitness(step int, state pole2State, damping bool) float64 {
+	if !damping {
+		return 1
+	}
+	fitness1 := float64(step) / 1000.0
 	if step < 100 {
-		return 0
+		return fitness1 * 0.1
 	}
 	denom := math.Abs(state.cartPosition) + math.Abs(state.cartVelocity) + math.Abs(state.angle1) + math.Abs(state.velocity1)
 	if denom < 1e-9 {
 		denom = 1e-9
 	}
-	fitness1 := float64(step) / 1000.0
 	fitness2 := 0.75 / denom
-	score := fitness1*0.1 + fitness2*0.9
-	if score > 5 {
-		return 5
+	return fitness1*0.1 + fitness2*0.9
+}
+
+func summarizePole2Outcome(result pole2EpisodeResult, cfg pole2ModeConfig) Fitness {
+	if cfg.maxSteps <= 0 || result.stepsSurvived <= 0 {
+		return 0
 	}
-	return score
+	survival := float64(result.stepsSurvived) / float64(cfg.maxSteps)
+	fitness := survival + 0.08*result.avgStepFitness
+	if result.goalReached {
+		fitness += 0.2
+	}
+	if math.IsNaN(fitness) || math.IsInf(fitness, 0) {
+		return 0
+	}
+	if fitness < 0 {
+		return 0
+	}
+	return Fitness(fitness)
 }
 
 func simulateDoublePole(force float64, state pole2State, steps int) pole2State {

@@ -132,3 +132,42 @@ func TestDTMScapeEvaluateModeAnnotatesMode(t *testing.T) {
 		t.Fatalf("expected matching total_runs between validation/test windows, got validation=%d test=%+v", validationRuns, testTrace["total_runs"])
 	}
 }
+
+func TestDTMScapeTraceIncludesRunDiagnostics(t *testing.T) {
+	scape := DTMScape{}
+	junctionTurn := scriptedStepAgent{
+		id: "junction-turn",
+		fn: func(in []float64) []float64 {
+			if len(in) >= 3 && in[0] > 0.5 && in[2] > 0.5 {
+				return []float64{1}
+			}
+			return []float64{0}
+		},
+	}
+
+	_, trace, err := scape.Evaluate(context.Background(), junctionTurn)
+	if err != nil {
+		t.Fatalf("evaluate junction turn: %v", err)
+	}
+	if _, ok := trace["terminal_reward_total"].(float64); !ok {
+		t.Fatalf("trace missing terminal_reward_total: %+v", trace)
+	}
+	if _, ok := trace["avg_steps_per_run"].(float64); !ok {
+		t.Fatalf("trace missing avg_steps_per_run: %+v", trace)
+	}
+	if _, ok := trace["fitness_delta"].(float64); !ok {
+		t.Fatalf("trace missing fitness_delta: %+v", trace)
+	}
+	if _, ok := trace["switch_triggered_at"].(int); !ok {
+		t.Fatalf("trace missing switch_triggered_at: %+v", trace)
+	}
+	leftRuns, lok := trace["left_terminal_runs"].(int)
+	rightRuns, rok := trace["right_terminal_runs"].(int)
+	terminalRuns, tok := trace["terminal_runs"].(int)
+	if !lok || !rok || !tok {
+		t.Fatalf("trace missing terminal run side diagnostics: %+v", trace)
+	}
+	if leftRuns+rightRuns != terminalRuns {
+		t.Fatalf("expected side terminal runs to sum to terminal_runs, got left=%d right=%d total=%d", leftRuns, rightRuns, terminalRuns)
+	}
+}

@@ -150,3 +150,31 @@ func TestPole2BalancingScapeEvaluateModeAnnotatesMode(t *testing.T) {
 		}
 	}
 }
+
+func TestPole2BalancingScapeTraceIncludesTerminationAccounting(t *testing.T) {
+	scape := Pole2BalancingScape{}
+	thrash := scriptedStepAgent{
+		id: "thrash",
+		fn: func(_ []float64) []float64 { return []float64{1} },
+	}
+
+	_, trace, err := scape.Evaluate(context.Background(), thrash)
+	if err != nil {
+		t.Fatalf("evaluate thrash: %v", err)
+	}
+	if _, ok := trace["termination_reason"].(string); !ok {
+		t.Fatalf("trace missing termination_reason: %+v", trace)
+	}
+	if _, ok := trace["fitness_acc"].(float64); !ok {
+		t.Fatalf("trace missing fitness_acc: %+v", trace)
+	}
+	if _, ok := trace["avg_step_fitness"].(float64); !ok {
+		t.Fatalf("trace missing avg_step_fitness: %+v", trace)
+	}
+	if _, ok := trace["goal_steps"].(int); !ok {
+		t.Fatalf("trace missing goal_steps: %+v", trace)
+	}
+	if _, ok := trace["terminated_by_bounds"].(bool); !ok {
+		t.Fatalf("trace missing terminated_by_bounds: %+v", trace)
+	}
+}
