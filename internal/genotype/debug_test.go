@@ -30,6 +30,15 @@ func TestFormatGenomeIncludesCoreSections(t *testing.T) {
 		NeuronActuatorLinks: []model.NeuronActuatorLink{
 			{NeuronID: "o", ActuatorID: protoio.XOROutputActuatorName},
 		},
+		Substrate: &model.SubstrateConfig{
+			CPPName:     "cpp-basic",
+			CEPName:     "cep-basic",
+			CPPIDs:      []string{"cpp-2", "cpp-1"},
+			CEPIDs:      []string{"cep-1"},
+			Dimensions:  []int{3, 4},
+			Parameters:  map[string]float64{"alpha": 0.5, "beta": 0.25},
+			WeightCount: 6,
+		},
 	}
 
 	out := FormatGenome(genome)
@@ -42,6 +51,10 @@ func TestFormatGenomeIncludesCoreSections(t *testing.T) {
 		"sensor_links: 1",
 		"actuator_links: 1",
 		"synapse s1 i->o",
+		"substrate: cpp=cpp-basic cep=cep-basic weight_count=6 dimensions=[3 4]",
+		"substrate_cpp_ids: [cpp-1 cpp-2]",
+		"substrate_cep_ids: [cep-1]",
+		"substrate_parameters: {alpha=0.5, beta=0.25}",
 	}
 	for _, token := range required {
 		if !strings.Contains(out, token) {

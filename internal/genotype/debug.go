@@ -42,6 +42,23 @@ func FormatGenome(genome model.Genome) string {
 			fmt.Fprintf(&b, "  %s->%s\n", link.NeuronID, link.ActuatorID)
 		}
 	}
+	if genome.Substrate != nil {
+		fmt.Fprintf(&b, "substrate: cpp=%s cep=%s weight_count=%d dimensions=%v\n",
+			genome.Substrate.CPPName,
+			genome.Substrate.CEPName,
+			genome.Substrate.WeightCount,
+			genome.Substrate.Dimensions,
+		)
+		if len(genome.Substrate.CPPIDs) > 0 {
+			fmt.Fprintf(&b, "  substrate_cpp_ids: %v\n", uniqueSortedStrings(genome.Substrate.CPPIDs))
+		}
+		if len(genome.Substrate.CEPIDs) > 0 {
+			fmt.Fprintf(&b, "  substrate_cep_ids: %v\n", uniqueSortedStrings(genome.Substrate.CEPIDs))
+		}
+		if len(genome.Substrate.Parameters) > 0 {
+			fmt.Fprintf(&b, "  substrate_parameters: %s\n", formatSortedFloatMap(genome.Substrate.Parameters))
+		}
+	}
 	return b.String()
 }
 
@@ -219,6 +236,22 @@ func sortedNeuronActuatorLinks(links []model.NeuronActuatorLink) []model.NeuronA
 		return out[i].NeuronID < out[j].NeuronID
 	})
 	return out
+}
+
+func formatSortedFloatMap(values map[string]float64) string {
+	if len(values) == 0 {
+		return "{}"
+	}
+	keys := make([]string, 0, len(values))
+	for key := range values {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	parts := make([]string, 0, len(keys))
+	for _, key := range keys {
+		parts = append(parts, fmt.Sprintf("%s=%g", key, values[key]))
+	}
+	return "{" + strings.Join(parts, ", ") + "}"
 }
 
 func incomingSynapses(synapses []model.Synapse, toNeuronID string) []model.Synapse {
