@@ -3,6 +3,7 @@ package scape
 import (
 	"context"
 	"fmt"
+	"hash/fnv"
 	"math"
 	"strings"
 
@@ -10,7 +11,7 @@ import (
 )
 
 // LLVMPhaseOrderingScape is a deterministic surrogate for the reference
-// phase-ordering workflow, preserving a phase-indexed optimize/unroll loop.
+// phase-ordering workflow, preserving a phase-indexed optimize loop.
 type LLVMPhaseOrderingScape struct{}
 
 func (LLVMPhaseOrderingScape) Name() string {
@@ -45,15 +46,15 @@ func evaluateLLVMPhaseOrderingWithStep(ctx context.Context, runner StepAgent, cf
 	return evaluateLLVMPhaseOrdering(
 		ctx,
 		cfg,
-		func(ctx context.Context, in []float64) (float64, error) {
+		func(ctx context.Context, in []float64) ([]float64, error) {
 			out, err := runner.RunStep(ctx, in)
 			if err != nil {
-				return 0, err
+				return nil, err
 			}
-			if len(out) != 1 {
-				return 0, fmt.Errorf("llvm-phase-ordering requires one output, got %d", len(out))
+			if len(out) == 0 {
+				return nil, fmt.Errorf("llvm-phase-ordering requires at least one output")
 			}
-			return out[0], nil
+			return append([]float64(nil), out...), nil
 		},
 	)
 }
@@ -67,23 +68,23 @@ func evaluateLLVMPhaseOrderingWithTick(ctx context.Context, ticker TickAgent, cf
 	return evaluateLLVMPhaseOrdering(
 		ctx,
 		cfg,
-		func(ctx context.Context, in []float64) (float64, error) {
+		func(ctx context.Context, in []float64) ([]float64, error) {
 			complexitySetter.Set(in[0])
 			passSetter.Set(in[1])
 
 			out, err := ticker.Tick(ctx)
 			if err != nil {
-				return 0, err
+				return nil, err
 			}
 
-			phase := 0.0
 			last := phaseOutput.Last()
 			if len(last) > 0 {
-				phase = last[0]
-			} else if len(out) > 0 {
-				phase = out[0]
+				return append([]float64(nil), last...), nil
 			}
-			return phase, nil
+			if len(out) > 0 {
+				return append([]float64(nil), out...), nil
+			}
+			return []float64{0}, nil
 		},
 	)
 }
@@ -91,39 +92,63 @@ func evaluateLLVMPhaseOrderingWithTick(ctx context.Context, ticker TickAgent, cf
 func evaluateLLVMPhaseOrdering(
 	ctx context.Context,
 	cfg llvmPhaseOrderingConfig,
-	choosePhase func(context.Context, []float64) (float64, error),
+	choosePhase func(context.Context, []float64) ([]float64, error),
 ) (Fitness, Trace, error) {
 	complexity := cfg.initialComplexity
+	bestComplexity := complexity
 	alignmentAcc := 0.0
 	phasesUsed := 0
 	done := false
+	terminationReason := "max_phases"
+	optimizationHistory := make([]string, 0, cfg.maxPhases)
+	scalarDecisions := 0
+	vectorDecisions := 0
+	uniqueOpts := make(map[string]struct{}, cfg.maxPhases)
+	runtimeBaseline := cfg.baseRuntime * (0.7 + 1.1*cfg.initialComplexity)
 
-	for phase := 0; phase < cfg.maxPhases; phase++ {
+	for phase := 1; phase <= cfg.maxPhases; phase++ {
 		if err := ctx.Err(); err != nil {
 			return 0, nil, err
 		}
 
 		passNorm := 0.0
 		if cfg.maxPhases > 1 {
-			passNorm = float64(phase) / float64(cfg.maxPhases-1)
+			passNorm = float64(phase-1) / float64(cfg.maxPhases-1)
 		}
-		in := []float64{complexity, passNorm}
-		output, err := choosePhase(ctx, in)
+		percept := llvmPerceptVector(cfg.program, phase, cfg.maxPhases, complexity, passNorm, optimizationHistory)
+		output, err := choosePhase(ctx, percept)
 		if err != nil {
 			return 0, nil, err
 		}
+		if len(output) == 0 {
+			return 0, nil, fmt.Errorf("llvm-phase-ordering requires at least one output")
+		}
 
-		action := clampLLVM(output, -1, 1)
-		target := llvmTargetPhase(passNorm)
-		alignment := 1.0 - 0.5*math.Abs(action-target)
-		alignmentAcc += alignment
+		decision := decodeLLVMDecision(output, passNorm)
+		if decision.mode == "scalar" {
+			scalarDecisions++
+		} else {
+			vectorDecisions++
+		}
+		alignmentAcc += decision.alignment
 		phasesUsed++
 
-		improvement := 0.045*alignment - 0.015*math.Abs(action)
-		complexity = clampLLVM(complexity-improvement, 0.05, 2.0)
-
-		if action < -0.97 {
+		if decision.done {
 			done = true
+			terminationReason = "done_action"
+			break
+		}
+
+		optimizationHistory = append(optimizationHistory, decision.optimization)
+		uniqueOpts[decision.optimization] = struct{}{}
+		gain := llvmOptimizationGain(cfg, decision, phase, complexity, optimizationHistory)
+		complexity = clampLLVM(complexity-gain, 0.03, 2.5)
+		if complexity < bestComplexity {
+			bestComplexity = complexity
+		}
+		if complexity <= cfg.targetComplexity {
+			done = true
+			terminationReason = "target_complexity"
 			break
 		}
 	}
@@ -133,41 +158,301 @@ func evaluateLLVMPhaseOrdering(
 	}
 
 	alignmentAvg := alignmentAcc / float64(phasesUsed)
-	runtimeScore := 1.0 / (1.0 + complexity)
-	fitness := 0.7*runtimeScore + 0.3*alignmentAvg
-	if done && phasesUsed < cfg.maxPhases {
-		fitness -= 0.05 * float64(cfg.maxPhases-phasesUsed) / float64(cfg.maxPhases)
+	diversity := float64(len(uniqueOpts)) / float64(maxIntLLVM(1, len(optimizationHistory)))
+	runtimeEstimate := llvmRuntimeEstimate(cfg, complexity, phasesUsed, diversity, done)
+	runtimeScore := 1.0 / (1.0 + runtimeEstimate)
+	fitness := 0.56*runtimeScore + 0.24*alignmentAvg + 0.20*diversity
+	if !done && phasesUsed >= cfg.maxPhases {
+		fitness -= 0.03
 	}
 	fitness = clampLLVM(fitness, 0, 1.5)
+	improvement := 0.0
+	if runtimeBaseline > 0 {
+		improvement = (runtimeBaseline - runtimeEstimate) / runtimeBaseline
+	}
 
 	return Fitness(fitness), Trace{
-		"fitness":          fitness,
-		"phases":           phasesUsed,
-		"max_phases":       cfg.maxPhases,
-		"done":             done,
-		"alignment":        alignmentAvg,
-		"final_complexity": complexity,
-		"mode":             cfg.mode,
+		"fitness":                fitness,
+		"phases":                 phasesUsed,
+		"max_phases":             cfg.maxPhases,
+		"done":                   done,
+		"alignment":              alignmentAvg,
+		"final_complexity":       complexity,
+		"best_complexity":        bestComplexity,
+		"estimated_runtime":      runtimeEstimate,
+		"runtime_improvement":    improvement,
+		"mode":                   cfg.mode,
+		"program":                cfg.program,
+		"termination_reason":     terminationReason,
+		"optimization_surface":   len(llvmOptimizationList),
+		"percept_width":          llvmPerceptWidth,
+		"percept_layout":         "legacy2+extended29",
+		"selected_optimizations": optimizationHistory,
+		"unique_optimizations":   len(uniqueOpts),
+		"scalar_decisions":       scalarDecisions,
+		"vector_decisions":       vectorDecisions,
 	}, nil
 }
 
 type llvmPhaseOrderingConfig struct {
 	mode              string
+	program           string
 	maxPhases         int
 	initialComplexity float64
+	targetComplexity  float64
+	baseRuntime       float64
 }
 
 func llvmPhaseOrderingConfigForMode(mode string) (llvmPhaseOrderingConfig, error) {
 	switch strings.TrimSpace(strings.ToLower(mode)) {
 	case "", "gt":
-		return llvmPhaseOrderingConfig{mode: "gt", maxPhases: 24, initialComplexity: 1.2}, nil
+		return llvmPhaseOrderingConfig{
+			mode:              "gt",
+			program:           "bzip2",
+			maxPhases:         50,
+			initialComplexity: 1.25,
+			targetComplexity:  0.34,
+			baseRuntime:       1.0,
+		}, nil
 	case "validation":
-		return llvmPhaseOrderingConfig{mode: "validation", maxPhases: 16, initialComplexity: 1.35}, nil
+		return llvmPhaseOrderingConfig{
+			mode:              "validation",
+			program:           "gcc",
+			maxPhases:         40,
+			initialComplexity: 1.40,
+			targetComplexity:  0.40,
+			baseRuntime:       1.08,
+		}, nil
 	case "test":
-		return llvmPhaseOrderingConfig{mode: "test", maxPhases: 16, initialComplexity: 1.5}, nil
+		return llvmPhaseOrderingConfig{
+			mode:              "test",
+			program:           "parser",
+			maxPhases:         40,
+			initialComplexity: 1.50,
+			targetComplexity:  0.45,
+			baseRuntime:       1.12,
+		}, nil
+	case "benchmark":
+		return llvmPhaseOrderingConfig{
+			mode:              "benchmark",
+			program:           "bzip2",
+			maxPhases:         50,
+			initialComplexity: 1.30,
+			targetComplexity:  0.36,
+			baseRuntime:       1.00,
+		}, nil
 	default:
 		return llvmPhaseOrderingConfig{}, fmt.Errorf("unsupported llvm-phase-ordering mode: %s", mode)
 	}
+}
+
+type llvmDecision struct {
+	mode              string
+	scalarAction      float64
+	optimizationIndex int
+	optimization      string
+	done              bool
+	alignment         float64
+}
+
+const llvmPerceptWidth = 31
+
+var llvmOptimizationList = []string{
+	"done",
+	"adce",
+	"always-inline",
+	"argpromotion",
+	"bb-vectorize",
+	"break-crit-edges",
+	"codegenprepare",
+	"constmerge",
+	"constprop",
+	"dce",
+	"deadargelim",
+	"die",
+	"dse",
+	"functionattrs",
+	"globaldce",
+	"globalopt",
+	"gvn",
+	"indvars",
+	"inline",
+	"instcombine",
+	"internalize",
+	"ipconstprop",
+	"ipsccp",
+	"jump-threading",
+	"lcssa",
+	"licm",
+	"loop-deletion",
+	"loop-extract",
+	"loop-extract-single",
+	"loop-reduce",
+	"loop-rotate",
+	"loop-simplify",
+	"loop-unroll",
+	"loop-unswitch",
+	"loweratomic",
+	"lowerinvoke",
+	"lowerswitch",
+	"mem2reg",
+	"memcpyopt",
+	"mergefunc",
+	"mergereturn",
+	"partial-inliner",
+	"prune-eh",
+	"reassociate",
+	"reg2mem",
+	"scalarrepl",
+	"sccp",
+	"simplifycfg",
+	"sink",
+	"strip",
+	"strip-dead-debug-info",
+	"strip-dead-prototypes",
+	"strip-debug-declare",
+	"strip-nondebug",
+	"tailcallelim",
+}
+
+func decodeLLVMDecision(output []float64, passNorm float64) llvmDecision {
+	if len(output) == 1 {
+		action := clampLLVM(output[0], -1, 1)
+		target := llvmTargetPhase(passNorm)
+		alignment := 1.0 - 0.5*math.Abs(action-target)
+		optIndex := scalarActionToOptimizationIndex(action)
+		done := action < -0.995 && passNorm >= 0.80
+		return llvmDecision{
+			mode:              "scalar",
+			scalarAction:      action,
+			optimizationIndex: optIndex,
+			optimization:      llvmOptimizationName(optIndex),
+			done:              done,
+			alignment:         clampLLVM(alignment, 0, 1),
+		}
+	}
+
+	optIndex := argmax(output)
+	if optIndex >= len(llvmOptimizationList) {
+		optIndex = len(llvmOptimizationList) - 1
+	}
+	targetIndex := int(math.Round((1.0 - passNorm) * float64(len(llvmOptimizationList)-1)))
+	targetIndex = clampIntLLVM(targetIndex, 0, len(llvmOptimizationList)-1)
+	distance := math.Abs(float64(optIndex - targetIndex))
+	alignment := 1.0 - distance/float64(len(llvmOptimizationList)-1)
+	return llvmDecision{
+		mode:              "vector",
+		scalarAction:      0,
+		optimizationIndex: optIndex,
+		optimization:      llvmOptimizationName(optIndex),
+		done:              optIndex == 0,
+		alignment:         clampLLVM(alignment, 0, 1),
+	}
+}
+
+func llvmPerceptVector(program string, phaseIndex, maxPhases int, complexity, passNorm float64, history []string) []float64 {
+	percept := make([]float64, llvmPerceptWidth)
+	// Keep the first two dimensions backward-compatible with existing scalar policies.
+	percept[0] = clampLLVM(complexity, 0, 2.5)
+	percept[1] = clampLLVM(passNorm, 0, 1)
+
+	inversePhase := 1.0 / float64(maxIntLLVM(1, phaseIndex))
+	for i := 2; i < llvmPerceptWidth; i++ {
+		base := math.Sin(float64(i)*0.37 + float64(phaseIndex)*0.21)
+		trend := math.Cos(float64(i)*0.11 + complexity*1.7)
+		historyBias := llvmHistorySignal(history, i)
+		programBias := llvmProgramFeatureBias(program, i)
+		value := 0.5 + 0.18*base + 0.17*trend + 0.12*historyBias + 0.20*programBias + 0.33*inversePhase
+		percept[i] = clampLLVM(value, 0, 1)
+	}
+	return percept
+}
+
+func llvmOptimizationGain(cfg llvmPhaseOrderingConfig, decision llvmDecision, phase int, complexity float64, history []string) float64 {
+	if decision.mode == "scalar" {
+		progress := float64(phase-1) / float64(maxIntLLVM(1, cfg.maxPhases-1))
+		effortPenalty := 0.012 * math.Abs(decision.scalarAction)
+		gain := (0.028 + 0.032*decision.alignment) * (1.0 - 0.35*progress)
+		gain = (gain - effortPenalty) * (0.65 + 0.35*complexity)
+		return clampLLVM(gain, -0.03, 0.11)
+	}
+
+	affinity := llvmProgramOptimizationAffinity(cfg.program, decision.optimization)
+	progress := float64(phase) / float64(maxIntLLVM(1, cfg.maxPhases))
+	gain := (0.015 + 0.055*affinity) * (1.0 - 0.45*progress)
+	gain = gain * (0.55 + 0.45*complexity)
+
+	if len(history) >= 2 && history[len(history)-2] == decision.optimization {
+		gain -= 0.012
+	}
+	if len(history) >= 3 && history[len(history)-3] == decision.optimization {
+		gain -= 0.008
+	}
+	if strings.Contains(decision.optimization, "loop") && progress < 0.40 {
+		gain += 0.004
+	}
+	if strings.Contains(decision.optimization, "strip") && progress > 0.60 {
+		gain += 0.003
+	}
+	return clampLLVM(gain, -0.025, 0.12)
+}
+
+func llvmRuntimeEstimate(cfg llvmPhaseOrderingConfig, complexity float64, phasesUsed int, diversity float64, done bool) float64 {
+	runtime := cfg.baseRuntime * (0.70 + 1.10*complexity)
+	runtime += 0.015 * float64(phasesUsed)
+	runtime -= 0.08 * diversity
+	if !done && phasesUsed >= cfg.maxPhases {
+		runtime += 0.12
+	}
+	if runtime < 0.05 {
+		return 0.05
+	}
+	return runtime
+}
+
+func scalarActionToOptimizationIndex(action float64) int {
+	scale := (clampLLVM(action, -1, 1) + 1) / 2
+	index := int(math.Round(scale * float64(len(llvmOptimizationList)-1)))
+	return clampIntLLVM(index, 0, len(llvmOptimizationList)-1)
+}
+
+func llvmOptimizationName(index int) string {
+	index = clampIntLLVM(index, 0, len(llvmOptimizationList)-1)
+	return llvmOptimizationList[index]
+}
+
+func llvmProgramOptimizationAffinity(program, optimization string) float64 {
+	h := fnv.New32a()
+	_, _ = h.Write([]byte(program))
+	_, _ = h.Write([]byte("|"))
+	_, _ = h.Write([]byte(optimization))
+	return float64(h.Sum32()%1000) / 1000.0
+}
+
+func llvmProgramFeatureBias(program string, feature int) float64 {
+	h := fnv.New32a()
+	_, _ = h.Write([]byte(program))
+	_, _ = h.Write([]byte(":"))
+	_, _ = h.Write([]byte(fmt.Sprintf("%d", feature)))
+	raw := float64(h.Sum32()%1000) / 1000.0
+	return raw - 0.5
+}
+
+func llvmHistorySignal(history []string, feature int) float64 {
+	if len(history) == 0 {
+		return 0
+	}
+	count := maxIntLLVM(1, minIntLLVM(3, len(history)))
+	acc := 0.0
+	for i := 0; i < count; i++ {
+		opt := history[len(history)-1-i]
+		h := fnv.New32a()
+		_, _ = h.Write([]byte(opt))
+		_, _ = h.Write([]byte("#"))
+		_, _ = h.Write([]byte(fmt.Sprintf("%d", feature+i)))
+		acc += float64(h.Sum32()%200)/100.0 - 1.0
+	}
+	return acc / float64(count)
 }
 
 func llvmTargetPhase(passNorm float64) float64 {
@@ -211,6 +496,45 @@ func llvmPhaseOrderingIO(agent TickAgent) (protoio.ScalarSensorSetter, protoio.S
 	}
 
 	return complexitySetter, passSetter, output, nil
+}
+
+func argmax(values []float64) int {
+	if len(values) == 0 {
+		return 0
+	}
+	maxIndex := 0
+	maxVal := values[0]
+	for i := 1; i < len(values); i++ {
+		if values[i] > maxVal {
+			maxVal = values[i]
+			maxIndex = i
+		}
+	}
+	return maxIndex
+}
+
+func maxIntLLVM(a, b int) int {
+	if a > b {
+		return a
+	}
+	return b
+}
+
+func minIntLLVM(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
+}
+
+func clampIntLLVM(v, lo, hi int) int {
+	if v < lo {
+		return lo
+	}
+	if v > hi {
+		return hi
+	}
+	return v
 }
 
 func clampLLVM(v, lo, hi float64) float64 {

@@ -110,3 +110,34 @@ func TestEpitopesScapeEvaluateModeAnnotatesMode(t *testing.T) {
 		t.Fatalf("expected positive start_index in validation mode, got %+v", trace)
 	}
 }
+
+func TestEpitopesScapeStepPerceptIncludesSequenceFeatures(t *testing.T) {
+	scape := EpitopesScape{}
+	maxPerceptWidth := 0
+	memoryAware := scriptedStepAgent{
+		id: "memory-aware",
+		fn: func(in []float64) []float64 {
+			if len(in) > maxPerceptWidth {
+				maxPerceptWidth = len(in)
+			}
+			if len(in) < 2 {
+				return []float64{0}
+			}
+			return []float64{in[0] + 0.7*in[1]}
+		},
+	}
+
+	_, trace, err := scape.Evaluate(context.Background(), memoryAware)
+	if err != nil {
+		t.Fatalf("evaluate memory-aware: %v", err)
+	}
+	if maxPerceptWidth <= 2 {
+		t.Fatalf("expected step percept to include sequence features, got width=%d", maxPerceptWidth)
+	}
+	if width, ok := trace["feature_width"].(int); !ok || width <= 2 {
+		t.Fatalf("expected feature_width > 2 in trace, got %+v", trace)
+	}
+	if seqLen, ok := trace["sequence_length"].(int); !ok || seqLen <= 0 {
+		t.Fatalf("expected positive sequence_length in trace, got %+v", trace)
+	}
+}

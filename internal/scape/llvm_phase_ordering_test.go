@@ -110,3 +110,46 @@ func TestLLVMPhaseOrderingScapeEvaluateModeAnnotatesMode(t *testing.T) {
 		t.Fatalf("expected test mode trace marker, got %+v", testTrace)
 	}
 }
+
+func TestLLVMPhaseOrderingScapeSupportsVectorOptimizationSurface(t *testing.T) {
+	scape := LLVMPhaseOrderingScape{}
+	vectorPolicy := scriptedStepAgent{
+		id: "vector-policy",
+		fn: func(in []float64) []float64 {
+			out := make([]float64, len(llvmOptimizationList))
+			passNorm := 0.0
+			if len(in) > 1 {
+				passNorm = in[1]
+			}
+			switch {
+			case passNorm < 0.25:
+				out[16] = 1 // gvn
+			case passNorm < 0.50:
+				out[31] = 1 // loop-simplify
+			case passNorm < 0.80:
+				out[47] = 1 // simplifycfg
+			default:
+				out[0] = 1 // done
+			}
+			return out
+		},
+	}
+
+	_, trace, err := scape.Evaluate(context.Background(), vectorPolicy)
+	if err != nil {
+		t.Fatalf("evaluate vector policy: %v", err)
+	}
+	if surface, ok := trace["optimization_surface"].(int); !ok || surface != len(llvmOptimizationList) {
+		t.Fatalf("expected optimization surface width=%d, got %+v", len(llvmOptimizationList), trace)
+	}
+	if vectors, ok := trace["vector_decisions"].(int); !ok || vectors <= 0 {
+		t.Fatalf("expected positive vector_decisions, got %+v", trace)
+	}
+	if width, ok := trace["percept_width"].(int); !ok || width != 31 {
+		t.Fatalf("expected percept_width=31, got %+v", trace)
+	}
+	history, ok := trace["selected_optimizations"].([]string)
+	if !ok || len(history) == 0 {
+		t.Fatalf("expected selected_optimizations history, got %+v", trace)
+	}
+}
