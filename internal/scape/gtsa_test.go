@@ -108,3 +108,28 @@ func TestGTSAScapeEvaluateWithIOComponents(t *testing.T) {
 		t.Fatalf("trace missing mse: %+v", trace)
 	}
 }
+
+func TestGTSAScapeTraceIncludesPredictionDiagnostics(t *testing.T) {
+	scape := GTSAScape{}
+	copyInput := scriptedStepAgent{
+		id: "copy",
+		fn: func(input []float64) []float64 {
+			return []float64{input[0]}
+		},
+	}
+
+	_, trace, err := scape.EvaluateMode(context.Background(), copyInput, "validation")
+	if err != nil {
+		t.Fatalf("evaluate validation mode: %v", err)
+	}
+	if _, ok := trace["mae"].(float64); !ok {
+		t.Fatalf("trace missing mae: %+v", trace)
+	}
+	accuracy, ok := trace["direction_accuracy"].(float64)
+	if !ok {
+		t.Fatalf("trace missing direction_accuracy: %+v", trace)
+	}
+	if accuracy < 0 || accuracy > 1 {
+		t.Fatalf("direction_accuracy out of range: %f", accuracy)
+	}
+}

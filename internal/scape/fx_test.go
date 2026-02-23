@@ -17,9 +17,7 @@ func TestFXScapeRewardsSignalFollowingPolicy(t *testing.T) {
 	}
 	follow := scriptedStepAgent{
 		id: "follow",
-		fn: func(input []float64) []float64 {
-			return []float64{input[1]}
-		},
+		fn: fxFollowSignalAction,
 	}
 
 	flatFitness, _, err := scape.Evaluate(context.Background(), flat)
@@ -39,9 +37,7 @@ func TestFXScapeEvaluateModeAnnotatesMode(t *testing.T) {
 	scape := FXScape{}
 	follow := scriptedStepAgent{
 		id: "follow",
-		fn: func(input []float64) []float64 {
-			return []float64{input[1]}
-		},
+		fn: fxFollowSignalAction,
 	}
 
 	_, validationTrace, err := scape.EvaluateMode(context.Background(), follow, "validation")
@@ -109,5 +105,44 @@ func TestFXScapeEvaluateWithIOComponents(t *testing.T) {
 	}
 	if _, ok := trace["equity"].(float64); !ok {
 		t.Fatalf("trace missing equity: %+v", trace)
+	}
+}
+
+func TestFXScapeTraceIncludesAccountLifecycle(t *testing.T) {
+	scape := FXScape{}
+	follow := scriptedStepAgent{
+		id: "follow",
+		fn: fxFollowSignalAction,
+	}
+
+	_, trace, err := scape.Evaluate(context.Background(), follow)
+	if err != nil {
+		t.Fatalf("evaluate follow: %v", err)
+	}
+	if _, ok := trace["net_worth"].(float64); !ok {
+		t.Fatalf("trace missing net_worth: %+v", trace)
+	}
+	if opened, ok := trace["orders_opened"].(int); !ok || opened <= 0 {
+		t.Fatalf("expected positive orders_opened in trace, got %+v", trace)
+	}
+	if _, ok := trace["realized_pl"].(float64); !ok {
+		t.Fatalf("trace missing realized_pl: %+v", trace)
+	}
+	if _, ok := trace["margin_call"].(bool); !ok {
+		t.Fatalf("trace missing margin_call flag: %+v", trace)
+	}
+}
+
+func fxFollowSignalAction(input []float64) []float64 {
+	if len(input) < 2 {
+		return []float64{0}
+	}
+	switch {
+	case input[1] > 0:
+		return []float64{1}
+	case input[1] < 0:
+		return []float64{-1}
+	default:
+		return []float64{0}
 	}
 }

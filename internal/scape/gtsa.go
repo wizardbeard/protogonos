@@ -40,8 +40,8 @@ func (GTSAScape) EvaluateMode(ctx context.Context, agent Agent, mode string) (Fi
 }
 
 func evaluateGTSAWithStep(ctx context.Context, runner StepAgent, cfg gtsaModeConfig) (Fitness, Trace, error) {
-	return evaluateGTSA(ctx, cfg, func(ctx context.Context, last float64) (float64, error) {
-		out, err := runner.RunStep(ctx, []float64{last})
+	return evaluateGTSA(ctx, cfg, func(ctx context.Context, current float64) (float64, error) {
+		out, err := runner.RunStep(ctx, []float64{current})
 		if err != nil {
 			return 0, err
 		}
@@ -58,8 +58,8 @@ func evaluateGTSAWithTick(ctx context.Context, ticker TickAgent, cfg gtsaModeCon
 		return 0, nil, err
 	}
 
-	return evaluateGTSA(ctx, cfg, func(ctx context.Context, last float64) (float64, error) {
-		inputSetter.Set(last)
+	return evaluateGTSA(ctx, cfg, func(ctx context.Context, current float64) (float64, error) {
+		inputSetter.Set(current)
 		out, err := ticker.Tick(ctx)
 		if err != nil {
 			return 0, err
@@ -80,33 +80,126 @@ func evaluateGTSA(
 	cfg gtsaModeConfig,
 	predict func(context.Context, float64) (float64, error),
 ) (Fitness, Trace, error) {
-	t := cfg.startT
-	last := gtsaSignal(t)
-	mse := 0.0
+	index := cfg.startIndex
+	current := gtsaSeries(index)
 
-	for i := 0; i < cfg.steps; i++ {
+	for i := 0; i < cfg.warmupSteps; i++ {
 		if err := ctx.Err(); err != nil {
 			return 0, nil, err
 		}
-		predicted, err := predict(ctx, last)
+		if _, err := predict(ctx, current); err != nil {
+			return 0, nil, err
+		}
+		index++
+		current = gtsaSeries(index)
+	}
+
+	if cfg.scoreSteps <= 0 {
+		return 0, Trace{
+			"mse":                0.0,
+			"mae":                0.0,
+			"direction_accuracy": 0.0,
+			"prediction_jitter":  0.0,
+			"mode":               cfg.mode,
+			"start_index":        cfg.startIndex,
+			"start_t":            float64(cfg.startIndex),
+			"warmup_steps":       cfg.warmupSteps,
+			"steps":              0,
+			"window":             cfg.warmupSteps,
+		}, nil
+	}
+
+	squaredErr := 0.0
+	absErr := 0.0
+	directionalCorrect := 0
+	predictionJitter := 0.0
+	prevPrediction := 0.0
+	hasPrevPrediction := false
+
+	for i := 0; i < cfg.scoreSteps; i++ {
+		if err := ctx.Err(); err != nil {
+			return 0, nil, err
+		}
+
+		predicted, err := predict(ctx, current)
 		if err != nil {
 			return 0, nil, err
 		}
-		t += 1.0
-		next := gtsaSignal(t)
+		next := gtsaSeries(index + 1)
 		delta := predicted - next
-		mse += delta * delta
-		last = next
+		squaredErr += delta * delta
+		absErr += math.Abs(delta)
+
+		if gtsaDirectionalMatch(current, predicted, next) {
+			directionalCorrect++
+		}
+		if hasPrevPrediction {
+			predictionJitter += math.Abs(predicted - prevPrediction)
+		}
+		prevPrediction = predicted
+		hasPrevPrediction = true
+
+		index++
+		current = next
 	}
 
-	mse /= float64(cfg.steps)
-	fitness := 1.0 / (1.0 + mse)
+	mse := squaredErr / float64(cfg.scoreSteps)
+	mae := absErr / float64(cfg.scoreSteps)
+	directionAccuracy := float64(directionalCorrect) / float64(cfg.scoreSteps)
+	avgJitter := 0.0
+	if cfg.scoreSteps > 1 {
+		avgJitter = predictionJitter / float64(cfg.scoreSteps-1)
+	}
+
+	base := 1.0 / (1.0 + mae + 0.5*mse)
+	directionTerm := 0.75 + 0.25*directionAccuracy
+	stabilityTerm := 1.0 / (1.0 + avgJitter)
+	fitness := clampGTSA(base*directionTerm*stabilityTerm, 0, 1.5)
+
 	return Fitness(fitness), Trace{
-		"mse":     mse,
-		"mode":    cfg.mode,
-		"steps":   cfg.steps,
-		"start_t": cfg.startT,
+		"mse":                mse,
+		"mae":                mae,
+		"direction_accuracy": directionAccuracy,
+		"prediction_jitter":  avgJitter,
+		"mode":               cfg.mode,
+		"start_index":        cfg.startIndex,
+		"start_t":            float64(cfg.startIndex),
+		"warmup_steps":       cfg.warmupSteps,
+		"steps":              cfg.scoreSteps,
+		"window":             cfg.warmupSteps + cfg.scoreSteps,
 	}, nil
+}
+
+func gtsaDirectionalMatch(current, predicted, expectedNext float64) bool {
+	predictedDelta := predicted - current
+	expectedDelta := expectedNext - current
+	if math.Abs(expectedDelta) < 1e-9 {
+		return math.Abs(predictedDelta) < 0.05
+	}
+	return predictedDelta*expectedDelta > 0
+}
+
+func gtsaSeries(index int) float64 {
+	t := float64(index)
+	seasonal := math.Sin(t*0.17) + 0.45*math.Sin(t*0.043+0.6)
+	trend := 0.0018 * t
+	regime := 0.0
+	switch {
+	case index >= 180 && index < 360:
+		regime = -0.24
+	case index >= 360 && index < 540:
+		regime = 0.18
+	case index >= 540:
+		regime = -0.1
+	}
+	shock := 0.0
+	if index%97 == 0 {
+		shock += 0.2
+	}
+	if index%131 == 0 {
+		shock -= 0.15
+	}
+	return trend + seasonal + regime + shock
 }
 
 func gtsaIO(agent TickAgent) (protoio.ScalarSensorSetter, protoio.SnapshotActuator, error) {
@@ -139,24 +232,31 @@ func gtsaIO(agent TickAgent) (protoio.ScalarSensorSetter, protoio.SnapshotActuat
 }
 
 type gtsaModeConfig struct {
-	mode   string
-	steps  int
-	startT float64
+	mode        string
+	startIndex  int
+	warmupSteps int
+	scoreSteps  int
 }
 
 func gtsaConfigForMode(mode string) (gtsaModeConfig, error) {
 	switch strings.TrimSpace(strings.ToLower(mode)) {
 	case "", "gt":
-		return gtsaModeConfig{mode: "gt", steps: 40, startT: 0}, nil
+		return gtsaModeConfig{mode: "gt", startIndex: 0, warmupSteps: 8, scoreSteps: 40}, nil
 	case "validation":
-		return gtsaModeConfig{mode: "validation", steps: 32, startT: 120}, nil
+		return gtsaModeConfig{mode: "validation", startIndex: 320, warmupSteps: 8, scoreSteps: 32}, nil
 	case "test":
-		return gtsaModeConfig{mode: "test", steps: 32, startT: 240}, nil
+		return gtsaModeConfig{mode: "test", startIndex: 640, warmupSteps: 8, scoreSteps: 32}, nil
 	default:
 		return gtsaModeConfig{}, fmt.Errorf("unsupported gtsa mode: %s", mode)
 	}
 }
 
-func gtsaSignal(t float64) float64 {
-	return math.Sin(t*0.2) + 0.5*math.Sin(t*0.05)
+func clampGTSA(v, lo, hi float64) float64 {
+	if v < lo {
+		return lo
+	}
+	if v > hi {
+		return hi
+	}
+	return v
 }
