@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"hash/fnv"
+	"strings"
 
 	protoio "protogonos/internal/io"
 )
@@ -16,8 +17,17 @@ func (DTMScape) Name() string {
 }
 
 func (DTMScape) Evaluate(ctx context.Context, agent Agent) (Fitness, Trace, error) {
+	return DTMScape{}.EvaluateMode(ctx, agent, "gt")
+}
+
+func (DTMScape) EvaluateMode(ctx context.Context, agent Agent, mode string) (Fitness, Trace, error) {
+	cfg, err := dtmConfigForMode(mode)
+	if err != nil {
+		return 0, nil, err
+	}
+
 	if ticker, ok := agent.(TickAgent); ok {
-		fitness, trace, err := evaluateDTMWithTick(ctx, ticker)
+		fitness, trace, err := evaluateDTMWithTick(ctx, ticker, cfg)
 		if err == nil {
 			return fitness, trace, nil
 		}
@@ -27,7 +37,7 @@ func (DTMScape) Evaluate(ctx context.Context, agent Agent) (Fitness, Trace, erro
 	if !ok {
 		return 0, nil, fmt.Errorf("agent %s does not implement step runner", agent.ID())
 	}
-	return evaluateDTMWithStep(ctx, runner)
+	return evaluateDTMWithStep(ctx, runner, cfg)
 }
 
 type dtmCoord struct {
@@ -59,10 +69,50 @@ type dtmEpisode struct {
 	fitnessAcc  float64
 }
 
-func evaluateDTMWithStep(ctx context.Context, runner StepAgent) (Fitness, Trace, error) {
+type dtmModeConfig struct {
+	mode           string
+	totalRuns      int
+	maxStepsPerRun int
+	switchFloor    int
+	switchSpread   int
+}
+
+func dtmConfigForMode(mode string) (dtmModeConfig, error) {
+	switch strings.TrimSpace(strings.ToLower(mode)) {
+	case "", "gt":
+		return dtmModeConfig{
+			mode:           "gt",
+			totalRuns:      100,
+			maxStepsPerRun: 16,
+			switchFloor:    35,
+			switchSpread:   30,
+		}, nil
+	case "validation":
+		return dtmModeConfig{
+			mode:           "validation",
+			totalRuns:      72,
+			maxStepsPerRun: 14,
+			switchFloor:    18,
+			switchSpread:   20,
+		}, nil
+	case "test":
+		return dtmModeConfig{
+			mode:           "test",
+			totalRuns:      72,
+			maxStepsPerRun: 14,
+			switchFloor:    42,
+			switchSpread:   20,
+		}, nil
+	default:
+		return dtmModeConfig{}, fmt.Errorf("unsupported dtm mode: %s", mode)
+	}
+}
+
+func evaluateDTMWithStep(ctx context.Context, runner StepAgent, cfg dtmModeConfig) (Fitness, Trace, error) {
 	return evaluateDTM(
 		ctx,
 		runner.ID(),
+		cfg,
 		func(ctx context.Context, sense []float64) (float64, error) {
 			out, err := runner.RunStep(ctx, sense)
 			if err != nil {
@@ -76,7 +126,7 @@ func evaluateDTMWithStep(ctx context.Context, runner StepAgent) (Fitness, Trace,
 	)
 }
 
-func evaluateDTMWithTick(ctx context.Context, ticker TickAgent) (Fitness, Trace, error) {
+func evaluateDTMWithTick(ctx context.Context, ticker TickAgent, cfg dtmModeConfig) (Fitness, Trace, error) {
 	leftSetter, frontSetter, rightSetter, rewardSetter, moveOutput, err := dtmIO(ticker)
 	if err != nil {
 		return 0, nil, err
@@ -85,6 +135,7 @@ func evaluateDTMWithTick(ctx context.Context, ticker TickAgent) (Fitness, Trace,
 	return evaluateDTM(
 		ctx,
 		ticker.ID(),
+		cfg,
 		func(ctx context.Context, sense []float64) (float64, error) {
 			leftSetter.Set(sense[0])
 			frontSetter.Set(sense[1])
@@ -108,10 +159,13 @@ func evaluateDTMWithTick(ctx context.Context, ticker TickAgent) (Fitness, Trace,
 	)
 }
 
-func evaluateDTM(ctx context.Context, agentID string, chooseMove func(context.Context, []float64) (float64, error)) (Fitness, Trace, error) {
-	episode := newDTMEpisode(agentID)
-
-	const maxStepsPerRun = 16
+func evaluateDTM(
+	ctx context.Context,
+	agentID string,
+	cfg dtmModeConfig,
+	chooseMove func(context.Context, []float64) (float64, error),
+) (Fitness, Trace, error) {
+	episode := newDTMEpisode(agentID, cfg)
 	terminalRuns := 0
 	crashRuns := 0
 	steps := 0
@@ -127,7 +181,7 @@ func evaluateDTM(ctx context.Context, agentID string, chooseMove func(context.Co
 		}
 
 		runDone := false
-		for runStep := 0; runStep < maxStepsPerRun; runStep++ {
+		for runStep := 0; runStep < cfg.maxStepsPerRun; runStep++ {
 			if err := ctx.Err(); err != nil {
 				return 0, nil, err
 			}
@@ -176,26 +230,47 @@ func evaluateDTM(ctx context.Context, agentID string, chooseMove func(context.Co
 		"terminal_runs":  terminalRuns,
 		"crash_runs":     crashRuns,
 		"steps_executed": steps,
+		"mode":           cfg.mode,
+		"max_steps":      cfg.maxStepsPerRun,
 	}, nil
 }
 
-func newDTMEpisode(agentID string) dtmEpisode {
+func newDTMEpisode(agentID string, cfg dtmModeConfig) dtmEpisode {
+	totalRuns := cfg.totalRuns
+	if totalRuns <= 0 {
+		totalRuns = 1
+	}
 	return dtmEpisode{
 		sectors:     buildTMazeSectors(),
 		position:    dtmCoord{x: 0, y: 0},
 		direction:   90,
-		totalRuns:   100,
+		totalRuns:   totalRuns,
 		runIndex:    0,
-		switchEvent: deterministicDTMSwitch(agentID),
+		switchEvent: deterministicDTMSwitch(agentID, totalRuns, cfg.switchFloor, cfg.switchSpread),
 		fitnessAcc:  50,
 	}
 }
 
-func deterministicDTMSwitch(agentID string) int {
+func deterministicDTMSwitch(agentID string, totalRuns, floor, spread int) int {
+	if totalRuns <= 1 {
+		return 0
+	}
+	if floor < 0 {
+		floor = 0
+	}
+	if spread <= 0 {
+		spread = 1
+	}
+
 	h := fnv.New32a()
 	_, _ = h.Write([]byte(agentID))
-	// 35 + uniform(30) in reference, where uniform is 1..30.
-	return 35 + int(h.Sum32()%30) + 1
+	// Reference-style switch window approximation:
+	// floor + uniform(spread), where uniform is 1..spread.
+	switchEvent := floor + int(h.Sum32()%uint32(spread)) + 1
+	if switchEvent >= totalRuns {
+		return totalRuns - 1
+	}
+	return switchEvent
 }
 
 func buildTMazeSectors() map[dtmCoord]dtmSector {

@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"math"
+	"strings"
 
 	protoio "protogonos/internal/io"
 )
@@ -16,8 +17,17 @@ func (Pole2BalancingScape) Name() string {
 }
 
 func (Pole2BalancingScape) Evaluate(ctx context.Context, agent Agent) (Fitness, Trace, error) {
+	return Pole2BalancingScape{}.EvaluateMode(ctx, agent, "gt")
+}
+
+func (Pole2BalancingScape) EvaluateMode(ctx context.Context, agent Agent, mode string) (Fitness, Trace, error) {
+	cfg, err := pole2ConfigForMode(mode)
+	if err != nil {
+		return 0, nil, err
+	}
+
 	if ticker, ok := agent.(TickAgent); ok {
-		fitness, trace, err := evaluatePole2BalancingWithTick(ctx, ticker)
+		fitness, trace, err := evaluatePole2BalancingWithTick(ctx, ticker, cfg)
 		if err == nil {
 			return fitness, trace, nil
 		}
@@ -27,7 +37,7 @@ func (Pole2BalancingScape) Evaluate(ctx context.Context, agent Agent) (Fitness, 
 	if !ok {
 		return 0, nil, fmt.Errorf("agent %s does not implement step runner", agent.ID())
 	}
-	return evaluatePole2BalancingWithStep(ctx, runner)
+	return evaluatePole2BalancingWithStep(ctx, runner, cfg)
 }
 
 type pole2State struct {
@@ -39,28 +49,66 @@ type pole2State struct {
 	velocity2    float64
 }
 
-func initialPole2State() pole2State {
-	return pole2State{
-		angle1: 3.6 * (2 * math.Pi / 360),
+type pole2ModeConfig struct {
+	mode       string
+	maxSteps   int
+	angleLimit float64
+	initAngle1 float64
+	initAngle2 float64
+}
+
+func pole2ConfigForMode(mode string) (pole2ModeConfig, error) {
+	rad := 2 * math.Pi / 360
+	angleLimit := 36.0 * rad
+
+	switch strings.TrimSpace(strings.ToLower(mode)) {
+	case "", "gt":
+		return pole2ModeConfig{
+			mode:       "gt",
+			maxSteps:   1500,
+			angleLimit: angleLimit,
+			initAngle1: 3.6 * rad,
+			initAngle2: 0,
+		}, nil
+	case "validation":
+		return pole2ModeConfig{
+			mode:       "validation",
+			maxSteps:   1200,
+			angleLimit: angleLimit,
+			initAngle1: 2.4 * rad,
+			initAngle2: 1.2 * rad,
+		}, nil
+	case "test":
+		return pole2ModeConfig{
+			mode:       "test",
+			maxSteps:   1200,
+			angleLimit: angleLimit,
+			initAngle1: 4.8 * rad,
+			initAngle2: -1.8 * rad,
+		}, nil
+	default:
+		return pole2ModeConfig{}, fmt.Errorf("unsupported pole2-balancing mode: %s", mode)
 	}
 }
 
-func evaluatePole2BalancingWithStep(ctx context.Context, runner StepAgent) (Fitness, Trace, error) {
-	const (
-		maxSteps   = 1500
-		angleLimit = 2 * math.Pi * (36.0 / 360.0)
-	)
+func initialPole2State(cfg pole2ModeConfig) pole2State {
+	return pole2State{
+		angle1: cfg.initAngle1,
+		angle2: cfg.initAngle2,
+	}
+}
 
-	state := initialPole2State()
+func evaluatePole2BalancingWithStep(ctx context.Context, runner StepAgent, cfg pole2ModeConfig) (Fitness, Trace, error) {
+	state := initialPole2State(cfg)
 	stepsSurvived := 0
 	stabilityAcc := 0.0
 
-	for step := 0; step < maxSteps; step++ {
+	for step := 0; step < cfg.maxSteps; step++ {
 		if err := ctx.Err(); err != nil {
 			return 0, nil, err
 		}
 
-		in := pole2Observation(state, angleLimit)
+		in := pole2Observation(state, cfg.angleLimit)
 		out, err := runner.RunStep(ctx, in)
 		if err != nil {
 			return 0, nil, err
@@ -73,16 +121,16 @@ func evaluatePole2BalancingWithStep(ctx context.Context, runner StepAgent) (Fitn
 		state = simulateDoublePole(force*10, state, 2)
 		stepsSurvived++
 
-		if pole2Terminated(state, angleLimit) {
+		if pole2Terminated(state, cfg.angleLimit) {
 			break
 		}
 		stabilityAcc += pole2StabilityScore(step+1, state)
 	}
 
-	return summarizePole2Outcome(stepsSurvived, maxSteps, stabilityAcc), Trace{
+	return summarizePole2Outcome(stepsSurvived, cfg.maxSteps, stabilityAcc), Trace{
 		"steps_survived": stepsSurvived,
-		"max_steps":      maxSteps,
-		"goal_reached":   stepsSurvived >= maxSteps,
+		"max_steps":      cfg.maxSteps,
+		"goal_reached":   stepsSurvived >= cfg.maxSteps,
 		"cart_position":  state.cartPosition,
 		"cart_velocity":  state.cartVelocity,
 		"angle1":         state.angle1,
@@ -90,34 +138,32 @@ func evaluatePole2BalancingWithStep(ctx context.Context, runner StepAgent) (Fitn
 		"angle2":         state.angle2,
 		"velocity2":      state.velocity2,
 		"stability":      stabilityAcc,
+		"mode":           cfg.mode,
+		"init_angle1":    cfg.initAngle1,
+		"init_angle2":    cfg.initAngle2,
 	}, nil
 }
 
-func evaluatePole2BalancingWithTick(ctx context.Context, ticker TickAgent) (Fitness, Trace, error) {
+func evaluatePole2BalancingWithTick(ctx context.Context, ticker TickAgent, cfg pole2ModeConfig) (Fitness, Trace, error) {
 	positionSetter, velocitySetter, angle1Setter, velocity1Setter, angle2Setter, velocity2Setter, forceOutput, err := pole2BalancingIO(ticker)
 	if err != nil {
 		return 0, nil, err
 	}
 
-	const (
-		maxSteps   = 1500
-		angleLimit = 2 * math.Pi * (36.0 / 360.0)
-	)
-
-	state := initialPole2State()
+	state := initialPole2State(cfg)
 	stepsSurvived := 0
 	stabilityAcc := 0.0
 
-	for step := 0; step < maxSteps; step++ {
+	for step := 0; step < cfg.maxSteps; step++ {
 		if err := ctx.Err(); err != nil {
 			return 0, nil, err
 		}
 
 		positionSetter.Set(scaleToUnit(state.cartPosition, 2.4, -2.4))
 		velocitySetter.Set(scaleToUnit(state.cartVelocity, 10, -10))
-		angle1Setter.Set(scaleToUnit(state.angle1, angleLimit, -angleLimit))
+		angle1Setter.Set(scaleToUnit(state.angle1, cfg.angleLimit, -cfg.angleLimit))
 		velocity1Setter.Set(state.velocity1)
-		angle2Setter.Set(scaleToUnit(state.angle2, angleLimit, -angleLimit))
+		angle2Setter.Set(scaleToUnit(state.angle2, cfg.angleLimit, -cfg.angleLimit))
 		velocity2Setter.Set(state.velocity2)
 
 		out, err := ticker.Tick(ctx)
@@ -137,16 +183,16 @@ func evaluatePole2BalancingWithTick(ctx context.Context, ticker TickAgent) (Fitn
 		state = simulateDoublePole(force*10, state, 2)
 		stepsSurvived++
 
-		if pole2Terminated(state, angleLimit) {
+		if pole2Terminated(state, cfg.angleLimit) {
 			break
 		}
 		stabilityAcc += pole2StabilityScore(step+1, state)
 	}
 
-	return summarizePole2Outcome(stepsSurvived, maxSteps, stabilityAcc), Trace{
+	return summarizePole2Outcome(stepsSurvived, cfg.maxSteps, stabilityAcc), Trace{
 		"steps_survived": stepsSurvived,
-		"max_steps":      maxSteps,
-		"goal_reached":   stepsSurvived >= maxSteps,
+		"max_steps":      cfg.maxSteps,
+		"goal_reached":   stepsSurvived >= cfg.maxSteps,
 		"cart_position":  state.cartPosition,
 		"cart_velocity":  state.cartVelocity,
 		"angle1":         state.angle1,
@@ -154,6 +200,9 @@ func evaluatePole2BalancingWithTick(ctx context.Context, ticker TickAgent) (Fitn
 		"angle2":         state.angle2,
 		"velocity2":      state.velocity2,
 		"stability":      stabilityAcc,
+		"mode":           cfg.mode,
+		"init_angle1":    cfg.initAngle1,
+		"init_angle2":    cfg.initAngle2,
 	}, nil
 }
 

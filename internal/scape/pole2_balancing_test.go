@@ -112,3 +112,41 @@ func TestPole2BalancingScapeEvaluateWithIOComponents(t *testing.T) {
 		t.Fatalf("trace missing steps_survived: %+v", trace)
 	}
 }
+
+func TestPole2BalancingScapeEvaluateModeAnnotatesMode(t *testing.T) {
+	scape := Pole2BalancingScape{}
+	stabilize := scriptedStepAgent{
+		id: "stabilize",
+		fn: func(in []float64) []float64 {
+			if len(in) < 6 {
+				return []float64{0}
+			}
+			force := -(0.9*in[0] + 0.6*in[1] + 8.0*in[2] + 1.4*in[3] + 10.0*in[4] + 1.8*in[5])
+			return []float64{force}
+		},
+	}
+
+	_, validationTrace, err := scape.EvaluateMode(context.Background(), stabilize, "validation")
+	if err != nil {
+		t.Fatalf("evaluate validation mode: %v", err)
+	}
+	if mode, _ := validationTrace["mode"].(string); mode != "validation" {
+		t.Fatalf("expected validation mode trace marker, got %+v", validationTrace)
+	}
+	if maxSteps, ok := validationTrace["max_steps"].(int); !ok || maxSteps <= 0 {
+		t.Fatalf("expected positive max_steps in validation trace, got %+v", validationTrace)
+	}
+
+	_, testTrace, err := scape.EvaluateMode(context.Background(), stabilize, "test")
+	if err != nil {
+		t.Fatalf("evaluate test mode: %v", err)
+	}
+	if mode, _ := testTrace["mode"].(string); mode != "test" {
+		t.Fatalf("expected test mode trace marker, got %+v", testTrace)
+	}
+	if validationInit, vok := validationTrace["init_angle2"].(float64); vok {
+		if testInit, tok := testTrace["init_angle2"].(float64); tok && validationInit == testInit {
+			t.Fatalf("expected distinct mode initialization for pole2 windows, got validation=%f test=%f", validationInit, testInit)
+		}
+	}
+}

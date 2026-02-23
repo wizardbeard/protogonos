@@ -95,3 +95,40 @@ func TestDTMScapeEvaluateWithIOComponents(t *testing.T) {
 		t.Fatalf("trace missing terminal_runs: %+v", trace)
 	}
 }
+
+func TestDTMScapeEvaluateModeAnnotatesMode(t *testing.T) {
+	scape := DTMScape{}
+	junctionTurn := scriptedStepAgent{
+		id: "junction-turn",
+		fn: func(in []float64) []float64 {
+			if len(in) >= 3 && in[0] > 0.5 && in[2] > 0.5 {
+				return []float64{1}
+			}
+			return []float64{0}
+		},
+	}
+
+	_, validationTrace, err := scape.EvaluateMode(context.Background(), junctionTurn, "validation")
+	if err != nil {
+		t.Fatalf("evaluate validation mode: %v", err)
+	}
+	if mode, _ := validationTrace["mode"].(string); mode != "validation" {
+		t.Fatalf("expected validation mode trace marker, got %+v", validationTrace)
+	}
+	validationRuns, ok := validationTrace["total_runs"].(int)
+	if !ok || validationRuns <= 0 {
+		t.Fatalf("expected positive validation total_runs, got %+v", validationTrace)
+	}
+
+	_, testTrace, err := scape.EvaluateMode(context.Background(), junctionTurn, "test")
+	if err != nil {
+		t.Fatalf("evaluate test mode: %v", err)
+	}
+	if mode, _ := testTrace["mode"].(string); mode != "test" {
+		t.Fatalf("expected test mode trace marker, got %+v", testTrace)
+	}
+	testRuns, ok := testTrace["total_runs"].(int)
+	if !ok || testRuns != validationRuns {
+		t.Fatalf("expected matching total_runs between validation/test windows, got validation=%d test=%+v", validationRuns, testTrace["total_runs"])
+	}
+}
