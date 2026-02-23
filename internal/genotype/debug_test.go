@@ -77,6 +77,10 @@ func TestFormatGenomeListFormDeterministic(t *testing.T) {
 			{ID: "s3", From: "i", To: "o", Weight: 0.25, Enabled: true},
 			{ID: "s1", From: "i", To: "h", Weight: 0.5, Enabled: true},
 		},
+		SensorNeuronLinks: []model.SensorNeuronLink{
+			{SensorID: "s-left", NeuronID: "h"},
+			{SensorID: "s-right", NeuronID: "o"},
+		},
 		NeuronActuatorLinks: []model.NeuronActuatorLink{
 			{NeuronID: "o", ActuatorID: "a1"},
 			{NeuronID: "h", ActuatorID: "a1"},
@@ -87,9 +91,9 @@ func TestFormatGenomeListFormDeterministic(t *testing.T) {
 	const want = "" +
 		"s-left:\n" +
 		"s-right:\n" +
-		"h: i# 0.5\n" +
+		"h: s-left# i# 0.5\n" +
 		"i:\n" +
-		"o: h# -1 i# 0.25\n" +
+		"o: s-right# h# -1 i# 0.25\n" +
 		"a1: h o\n"
 	if got != want {
 		t.Fatalf("unexpected list form:\nwant:\n%s\ngot:\n%s", want, got)

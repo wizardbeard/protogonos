@@ -87,6 +87,11 @@ func FormatGenomeListForm(genome model.Genome) string {
 		seenNeuron[neuronID] = struct{}{}
 
 		fmt.Fprintf(&b, "%s:", neuronID)
+		sensorInputs := neuronInputSensors(genome.SensorNeuronLinks, neuronID)
+		for _, sensorID := range sensorInputs {
+			// Sensor links do not carry per-link weights in the simplified model.
+			fmt.Fprintf(&b, " %s#", sensorID)
+		}
 		incoming := incomingSynapses(genome.Synapses, neuronID)
 		for _, synapse := range incoming {
 			fmt.Fprintf(&b, " %s# %g", synapse.From, synapse.Weight)
@@ -280,4 +285,15 @@ func actuatorFaninNeurons(links []model.NeuronActuatorLink, actuatorID string) [
 		fanin = append(fanin, link.NeuronID)
 	}
 	return uniqueSortedStrings(fanin)
+}
+
+func neuronInputSensors(links []model.SensorNeuronLink, neuronID string) []string {
+	sensors := make([]string, 0, len(links))
+	for _, link := range links {
+		if link.NeuronID != neuronID {
+			continue
+		}
+		sensors = append(sensors, link.SensorID)
+	}
+	return uniqueSortedStrings(sensors)
 }
