@@ -52,6 +52,10 @@ func AssignToFingerprintSpeciesWithHistory(
 	if species == nil {
 		species = map[string][]model.Genome{}
 	}
+	genomeID := strings.TrimSpace(genome.ID)
+	if genomeID != "" {
+		removeGenomeFromSimpleSpecies(genomeID, species)
+	}
 	key := fingerprintSpeciesKeyWithHistory(genome, history)
 	species[key] = append(species[key], CloneGenome(genome))
 	return key, species
@@ -106,6 +110,7 @@ func SpeciateInPopulationWithHistory(
 	if strings.EqualFold(genomeID, "test") || genomeID == "" {
 		return "", speciesByID
 	}
+	removeGenomeFromPopulationSpecies(genomeID, speciesByID)
 	fingerprint := fingerprintSpeciesKeyWithHistory(genome, history)
 
 	for speciesID, species := range speciesByID {
@@ -172,4 +177,39 @@ func appendUniqueString(values []string, value string) []string {
 		}
 	}
 	return append(values, value)
+}
+
+func removeGenomeFromSimpleSpecies(genomeID string, species map[string][]model.Genome) {
+	for key, members := range species {
+		filtered := members[:0]
+		for _, member := range members {
+			if strings.TrimSpace(member.ID) == genomeID {
+				continue
+			}
+			filtered = append(filtered, member)
+		}
+		if len(filtered) == 0 {
+			delete(species, key)
+			continue
+		}
+		species[key] = append([]model.Genome(nil), filtered...)
+	}
+}
+
+func removeGenomeFromPopulationSpecies(genomeID string, speciesByID map[string]FingerprintSpecies) {
+	for speciesID, species := range speciesByID {
+		filtered := species.GenomeIDs[:0]
+		for _, id := range species.GenomeIDs {
+			if strings.TrimSpace(id) == genomeID {
+				continue
+			}
+			filtered = append(filtered, id)
+		}
+		if len(filtered) == 0 {
+			delete(speciesByID, speciesID)
+			continue
+		}
+		species.GenomeIDs = append([]string(nil), filtered...)
+		speciesByID[speciesID] = species
+	}
 }

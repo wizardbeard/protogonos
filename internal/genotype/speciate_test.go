@@ -139,6 +139,39 @@ func TestAssignToFingerprintSpeciesAppendsIncrementally(t *testing.T) {
 	}
 }
 
+func TestAssignToFingerprintSpeciesReassignRemovesPreviousMembership(t *testing.T) {
+	base := model.Genome{
+		ID:          "g1",
+		SensorIDs:   []string{"s1"},
+		ActuatorIDs: []string{"a1"},
+		Neurons: []model.Neuron{
+			{ID: "i", Activation: "identity"},
+			{ID: "o", Activation: "identity"},
+		},
+		Synapses: []model.Synapse{
+			{ID: "s1", From: "i", To: "o", Enabled: true},
+		},
+	}
+
+	keyA, species := AssignToFingerprintSpecies(base, nil)
+	if keyA == "" || len(species[keyA]) != 1 {
+		t.Fatalf("expected initial assignment in one species, key=%q species=%v", keyA, species)
+	}
+
+	mutated := CloneGenome(base)
+	mutated.Neurons = append(mutated.Neurons, model.Neuron{ID: "h", Activation: "tanh"})
+	keyB, species := AssignToFingerprintSpecies(mutated, species)
+	if keyB == keyA {
+		t.Fatalf("expected changed topology to produce new species key, got keyA=%q keyB=%q", keyA, keyB)
+	}
+	if _, exists := species[keyA]; exists {
+		t.Fatalf("expected previous species membership to be removed, got species=%v", species[keyA])
+	}
+	if len(species[keyB]) != 1 || species[keyB][0].ID != "g1" {
+		t.Fatalf("expected reassigned genome in new species, got=%v", species[keyB])
+	}
+}
+
 func TestComputeSpeciationFingerprintKeyUsesReferenceFingerprint(t *testing.T) {
 	genome := model.Genome{
 		ID:          "g",
@@ -280,6 +313,40 @@ func TestSpeciateInPopulationCreatesAndReusesFingerprintSpecies(t *testing.T) {
 	}
 	if nextCalls != 2 {
 		t.Fatalf("expected species-id generation call only on new species creation, got=%d", nextCalls)
+	}
+}
+
+func TestSpeciateInPopulationReassignmentRemovesOldMembership(t *testing.T) {
+	base := model.Genome{
+		ID:          "g1",
+		SensorIDs:   []string{"s1"},
+		ActuatorIDs: []string{"a1"},
+		Neurons: []model.Neuron{
+			{ID: "i", Activation: "identity"},
+			{ID: "o", Activation: "identity"},
+		},
+		Synapses: []model.Synapse{
+			{ID: "s1", From: "i", To: "o", Enabled: true},
+		},
+	}
+
+	population := map[string]FingerprintSpecies{}
+	firstKey, population := SpeciateInPopulation(base, population, nil)
+	if firstKey == "" {
+		t.Fatal("expected initial species key")
+	}
+
+	mutated := CloneGenome(base)
+	mutated.Neurons = append(mutated.Neurons, model.Neuron{ID: "h", Activation: "tanh"})
+	secondKey, population := SpeciateInPopulation(mutated, population, nil)
+	if secondKey == firstKey {
+		t.Fatalf("expected reassignment to a new species, got first=%q second=%q", firstKey, secondKey)
+	}
+	if _, exists := population[firstKey]; exists {
+		t.Fatalf("expected old species to be removed after reassignment, population=%v", population)
+	}
+	if len(population[secondKey].GenomeIDs) != 1 || population[secondKey].GenomeIDs[0] != "g1" {
+		t.Fatalf("expected reassigned genome in new species, got=%v", population[secondKey])
 	}
 }
 
