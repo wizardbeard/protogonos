@@ -85,3 +85,37 @@ func TestRegressionMimicScapeEvaluateWithScalarIOComponents(t *testing.T) {
 		t.Fatalf("expected near-perfect fitness, got %f", fitness)
 	}
 }
+
+func TestRegressionMimicScapeEvaluateModeAnnotatesMode(t *testing.T) {
+	scape := RegressionMimicScape{}
+	identity := scriptedStepAgent{
+		id: "identity",
+		fn: func(input []float64) []float64 {
+			if len(input) == 0 {
+				return []float64{0}
+			}
+			return []float64{input[0]}
+		},
+	}
+
+	_, validationTrace, err := scape.EvaluateMode(context.Background(), identity, "validation")
+	if err != nil {
+		t.Fatalf("evaluate validation mode: %v", err)
+	}
+	if mode, _ := validationTrace["mode"].(string); mode != "validation" {
+		t.Fatalf("expected validation mode trace marker, got %+v", validationTrace)
+	}
+
+	_, testTrace, err := scape.EvaluateMode(context.Background(), identity, "test")
+	if err != nil {
+		t.Fatalf("evaluate test mode: %v", err)
+	}
+	if mode, _ := testTrace["mode"].(string); mode != "test" {
+		t.Fatalf("expected test mode trace marker, got %+v", testTrace)
+	}
+	if validationSamples, vok := validationTrace["samples"].(int); vok {
+		if testSamples, tok := testTrace["samples"].(int); tok && testSamples == validationSamples {
+			t.Fatalf("expected distinct regression mode sample windows, got validation=%d test=%d", validationSamples, testSamples)
+		}
+	}
+}

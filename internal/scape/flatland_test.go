@@ -159,3 +159,38 @@ func TestFlatlandScapeTraceCapturesMetabolicsAndCollisions(t *testing.T) {
 		t.Fatalf("trace missing terminal_reason: %+v", trace)
 	}
 }
+
+func TestFlatlandScapeEvaluateModeAnnotatesMode(t *testing.T) {
+	scape := FlatlandScape{}
+	forager := scriptedStepAgent{
+		id: "forager",
+		fn: func(input []float64) []float64 {
+			if len(input) == 0 {
+				return []float64{0}
+			}
+			if input[0] > 0 {
+				return []float64{1}
+			}
+			if input[0] < 0 {
+				return []float64{-1}
+			}
+			return []float64{0}
+		},
+	}
+
+	_, validationTrace, err := scape.EvaluateMode(context.Background(), forager, "validation")
+	if err != nil {
+		t.Fatalf("evaluate validation mode: %v", err)
+	}
+	if mode, _ := validationTrace["mode"].(string); mode != "validation" {
+		t.Fatalf("expected validation mode trace marker, got %+v", validationTrace)
+	}
+
+	_, testTrace, err := scape.EvaluateMode(context.Background(), forager, "test")
+	if err != nil {
+		t.Fatalf("evaluate test mode: %v", err)
+	}
+	if mode, _ := testTrace["mode"].(string); mode != "test" {
+		t.Fatalf("expected test mode trace marker, got %+v", testTrace)
+	}
+}

@@ -3,6 +3,7 @@ package scape
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	protoio "protogonos/internal/io"
 )
@@ -15,8 +16,17 @@ func (RegressionMimicScape) Name() string {
 }
 
 func (RegressionMimicScape) Evaluate(ctx context.Context, agent Agent) (Fitness, Trace, error) {
+	return RegressionMimicScape{}.EvaluateMode(ctx, agent, "gt")
+}
+
+func (RegressionMimicScape) EvaluateMode(ctx context.Context, agent Agent, mode string) (Fitness, Trace, error) {
+	cfg, err := regressionConfigForMode(mode)
+	if err != nil {
+		return 0, nil, err
+	}
+
 	if ticker, ok := agent.(TickAgent); ok {
-		fitness, trace, err := evaluateRegressionMimicWithTick(ctx, ticker)
+		fitness, trace, err := evaluateRegressionMimicWithTick(ctx, ticker, cfg)
 		if err == nil {
 			return fitness, trace, nil
 		}
@@ -26,64 +36,111 @@ func (RegressionMimicScape) Evaluate(ctx context.Context, agent Agent) (Fitness,
 	if !ok {
 		return 0, nil, fmt.Errorf("agent %s does not implement step runner", agent.ID())
 	}
-
-	inputs := []float64{0.0, 0.25, 0.5, 0.75, 1.0}
-	predictions := make([]float64, 0, len(inputs))
-
-	var squaredErr float64
-	for _, x := range inputs {
-		out, err := runner.RunStep(ctx, []float64{x})
-		if err != nil {
-			return 0, nil, err
-		}
-		if len(out) != 1 {
-			return 0, nil, fmt.Errorf("regression-mimic requires one output, got %d", len(out))
-		}
-
-		predictions = append(predictions, out[0])
-		delta := out[0] - x
-		squaredErr += delta * delta
-	}
-
-	mse := squaredErr / float64(len(inputs))
-	fitness := Fitness(1.0 - mse)
-	return fitness, Trace{"mse": mse, "predictions": predictions}, nil
+	return evaluateRegressionMimicWithStep(ctx, runner, cfg)
 }
 
-func evaluateRegressionMimicWithTick(ctx context.Context, ticker TickAgent) (Fitness, Trace, error) {
-	inputs := []float64{0.0, 0.25, 0.5, 0.75, 1.0}
-	predictions := make([]float64, 0, len(inputs))
+type regressionModeConfig struct {
+	mode   string
+	inputs []float64
+}
 
+func regressionConfigForMode(mode string) (regressionModeConfig, error) {
+	switch strings.TrimSpace(strings.ToLower(mode)) {
+	case "", "gt":
+		return regressionModeConfig{
+			mode:   "gt",
+			inputs: []float64{0.0, 0.25, 0.5, 0.75, 1.0},
+		}, nil
+	case "validation":
+		return regressionModeConfig{
+			mode:   "validation",
+			inputs: []float64{-1.0, -0.5, 0.0, 0.5, 1.0},
+		}, nil
+	case "test":
+		return regressionModeConfig{
+			mode:   "test",
+			inputs: []float64{-0.9, -0.45, -0.1, 0.3, 0.7, 0.95},
+		}, nil
+	default:
+		return regressionModeConfig{}, fmt.Errorf("unsupported regression-mimic mode: %s", mode)
+	}
+}
+
+func evaluateRegressionMimicWithStep(ctx context.Context, runner StepAgent, cfg regressionModeConfig) (Fitness, Trace, error) {
+	return evaluateRegressionMimic(
+		ctx,
+		cfg,
+		func(ctx context.Context, x float64) (float64, error) {
+			out, err := runner.RunStep(ctx, []float64{x})
+			if err != nil {
+				return 0, err
+			}
+			if len(out) != 1 {
+				return 0, fmt.Errorf("regression-mimic requires one output, got %d", len(out))
+			}
+			return out[0], nil
+		},
+	)
+}
+
+func evaluateRegressionMimicWithTick(ctx context.Context, ticker TickAgent, cfg regressionModeConfig) (Fitness, Trace, error) {
+	setter, output, err := regressionMimicIO(ticker)
+	if err != nil {
+		return 0, nil, err
+	}
+
+	return evaluateRegressionMimic(
+		ctx,
+		cfg,
+		func(ctx context.Context, x float64) (float64, error) {
+			setter.Set(x)
+			out, err := ticker.Tick(ctx)
+			if err != nil {
+				return 0, err
+			}
+			last := output.Last()
+			if len(last) > 0 {
+				return last[0], nil
+			}
+			if len(out) > 0 {
+				return out[0], nil
+			}
+			return 0, fmt.Errorf("regression-mimic requires one output, got 0")
+		},
+	)
+}
+
+func evaluateRegressionMimic(
+	ctx context.Context,
+	cfg regressionModeConfig,
+	predict func(context.Context, float64) (float64, error),
+) (Fitness, Trace, error) {
+	predictions := make([]float64, 0, len(cfg.inputs))
 	var squaredErr float64
-	for _, x := range inputs {
-		setter, output, err := regressionMimicIO(ticker)
+	for _, x := range cfg.inputs {
+		if err := ctx.Err(); err != nil {
+			return 0, nil, err
+		}
+		predicted, err := predict(ctx, x)
 		if err != nil {
 			return 0, nil, err
 		}
-		setter.Set(x)
-
-		out, err := ticker.Tick(ctx)
-		if err != nil {
-			return 0, nil, err
-		}
-
-		predicted := 0.0
-		if len(output.Last()) > 0 {
-			predicted = output.Last()[0]
-		} else if len(out) > 0 {
-			predicted = out[0]
-		} else {
-			return 0, nil, fmt.Errorf("regression-mimic requires one output, got 0")
-		}
-
 		predictions = append(predictions, predicted)
 		delta := predicted - x
 		squaredErr += delta * delta
 	}
 
-	mse := squaredErr / float64(len(inputs))
+	if len(cfg.inputs) == 0 {
+		return 0, Trace{"mse": 0.0, "predictions": predictions, "mode": cfg.mode, "samples": 0}, nil
+	}
+	mse := squaredErr / float64(len(cfg.inputs))
 	fitness := Fitness(1.0 - mse)
-	return fitness, Trace{"mse": mse, "predictions": predictions}, nil
+	return fitness, Trace{
+		"mse":         mse,
+		"predictions": predictions,
+		"mode":        cfg.mode,
+		"samples":     len(cfg.inputs),
+	}, nil
 }
 
 func regressionMimicIO(agent TickAgent) (protoio.ScalarSensorSetter, protoio.SnapshotActuator, error) {

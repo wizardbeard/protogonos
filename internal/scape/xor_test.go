@@ -103,3 +103,40 @@ func TestXORScapeEvaluateWithIOComponents(t *testing.T) {
 		t.Fatalf("expected fitness >= 0.95, got %f", fitness)
 	}
 }
+
+func TestXORScapeEvaluateModeAnnotatesMode(t *testing.T) {
+	xor := XORScape{}
+	parity := scriptedStepAgent{
+		id: "xor-parity",
+		fn: func(input []float64) []float64 {
+			if len(input) < 2 {
+				return []float64{0}
+			}
+			if int(input[0])^int(input[1]) == 1 {
+				return []float64{1}
+			}
+			return []float64{0}
+		},
+	}
+
+	_, validationTrace, err := xor.EvaluateMode(context.Background(), parity, "validation")
+	if err != nil {
+		t.Fatalf("evaluate validation mode: %v", err)
+	}
+	if mode, _ := validationTrace["mode"].(string); mode != "validation" {
+		t.Fatalf("expected validation mode trace marker, got %+v", validationTrace)
+	}
+
+	_, testTrace, err := xor.EvaluateMode(context.Background(), parity, "test")
+	if err != nil {
+		t.Fatalf("evaluate test mode: %v", err)
+	}
+	if mode, _ := testTrace["mode"].(string); mode != "test" {
+		t.Fatalf("expected test mode trace marker, got %+v", testTrace)
+	}
+	if validationCases, vok := validationTrace["cases"].(int); vok {
+		if testCases, tok := testTrace["cases"].(int); tok && testCases == validationCases {
+			t.Fatalf("expected distinct xor mode case windows, got validation=%d test=%d", validationCases, testCases)
+		}
+	}
+}

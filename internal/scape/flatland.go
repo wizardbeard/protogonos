@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"math"
+	"strings"
 
 	protoio "protogonos/internal/io"
 )
@@ -15,8 +16,17 @@ func (FlatlandScape) Name() string {
 }
 
 func (FlatlandScape) Evaluate(ctx context.Context, agent Agent) (Fitness, Trace, error) {
+	return FlatlandScape{}.EvaluateMode(ctx, agent, "gt")
+}
+
+func (FlatlandScape) EvaluateMode(ctx context.Context, agent Agent, mode string) (Fitness, Trace, error) {
+	cfg, err := flatlandConfigForMode(mode)
+	if err != nil {
+		return 0, nil, err
+	}
+
 	if ticker, ok := agent.(TickAgent); ok {
-		fitness, trace, err := evaluateFlatlandWithTick(ctx, ticker)
+		fitness, trace, err := evaluateFlatlandWithTick(ctx, ticker, cfg)
 		if err == nil {
 			return fitness, trace, nil
 		}
@@ -26,11 +36,50 @@ func (FlatlandScape) Evaluate(ctx context.Context, agent Agent) (Fitness, Trace,
 	if !ok {
 		return 0, nil, fmt.Errorf("agent %s does not implement step runner", agent.ID())
 	}
-	return evaluateFlatlandWithStep(ctx, runner)
+	return evaluateFlatlandWithStep(ctx, runner, cfg)
 }
 
-func evaluateFlatlandWithStep(ctx context.Context, runner StepAgent) (Fitness, Trace, error) {
-	return evaluateFlatland(ctx, func(ctx context.Context, distance, energy float64) (float64, error) {
+type flatlandModeConfig struct {
+	mode            string
+	maxAge          int
+	forageGoal      int
+	foodPositions   []int
+	poisonPositions []int
+}
+
+func flatlandConfigForMode(mode string) (flatlandModeConfig, error) {
+	switch strings.TrimSpace(strings.ToLower(mode)) {
+	case "", "gt":
+		return flatlandModeConfig{
+			mode:            "gt",
+			maxAge:          flatlandDefaultMaxAge,
+			forageGoal:      flatlandDefaultForageGoal,
+			foodPositions:   []int{5, 11, 19, 27, 35, 43},
+			poisonPositions: []int{14, 30},
+		}, nil
+	case "validation":
+		return flatlandModeConfig{
+			mode:            "validation",
+			maxAge:          180,
+			forageGoal:      6,
+			foodPositions:   []int{4, 10, 18, 26, 34, 42},
+			poisonPositions: []int{13, 29},
+		}, nil
+	case "test":
+		return flatlandModeConfig{
+			mode:            "test",
+			maxAge:          180,
+			forageGoal:      6,
+			foodPositions:   []int{6, 12, 20, 28, 36, 44},
+			poisonPositions: []int{15, 31},
+		}, nil
+	default:
+		return flatlandModeConfig{}, fmt.Errorf("unsupported flatland mode: %s", mode)
+	}
+}
+
+func evaluateFlatlandWithStep(ctx context.Context, runner StepAgent, cfg flatlandModeConfig) (Fitness, Trace, error) {
+	return evaluateFlatland(ctx, cfg, func(ctx context.Context, distance, energy float64) (float64, error) {
 		out, err := runner.RunStep(ctx, []float64{distance, energy})
 		if err != nil {
 			return 0, err
@@ -42,13 +91,13 @@ func evaluateFlatlandWithStep(ctx context.Context, runner StepAgent) (Fitness, T
 	})
 }
 
-func evaluateFlatlandWithTick(ctx context.Context, ticker TickAgent) (Fitness, Trace, error) {
+func evaluateFlatlandWithTick(ctx context.Context, ticker TickAgent, cfg flatlandModeConfig) (Fitness, Trace, error) {
 	distanceSetter, energySetter, moveOutput, err := flatlandIO(ticker)
 	if err != nil {
 		return 0, nil, err
 	}
 
-	return evaluateFlatland(ctx, func(ctx context.Context, distance, energy float64) (float64, error) {
+	return evaluateFlatland(ctx, cfg, func(ctx context.Context, distance, energy float64) (float64, error) {
 		distanceSetter.Set(distance)
 		energySetter.Set(energy)
 		out, err := ticker.Tick(ctx)
@@ -68,16 +117,17 @@ func evaluateFlatlandWithTick(ctx context.Context, ticker TickAgent) (Fitness, T
 
 func evaluateFlatland(
 	ctx context.Context,
+	cfg flatlandModeConfig,
 	chooseMove func(context.Context, float64, float64) (float64, error),
 ) (Fitness, Trace, error) {
-	episode := newFlatlandEpisode()
+	episode := newFlatlandEpisode(cfg)
 	movementSteps := 0
 	foodCollisions := 0
 	poisonCollisions := 0
 	lastDistance := 0.0
 	terminalReason := "age_limit"
 
-	for episode.age < flatlandMaxAge && episode.energy > 0 {
+	for episode.age < cfg.maxAge && episode.energy > 0 {
 		if err := ctx.Err(); err != nil {
 			return 0, nil, err
 		}
@@ -111,7 +161,7 @@ func evaluateFlatland(
 	if episode.energy <= 0 {
 		terminalReason = "depleted"
 	}
-	if episode.foodCollected >= flatlandForageGoal {
+	if episode.foodCollected >= episode.forageGoal {
 		terminalReason = "forage_goal"
 	}
 
@@ -122,7 +172,7 @@ func evaluateFlatland(
 
 	totalCollisions := foodCollisions + poisonCollisions
 	avgReward := episode.rewardAcc / float64(age)
-	survival := float64(episode.age) / float64(flatlandMaxAge)
+	survival := float64(episode.age) / float64(cfg.maxAge)
 	energyTerm := clamp(episode.normalizedEnergy(), 0, 1)
 	forageDenom := float64(totalCollisions + 2)
 	forageBalance := float64(episode.foodCollected-episode.poisonHits) / forageDenom
@@ -130,7 +180,7 @@ func evaluateFlatland(
 	rewardTerm := 0.5 + 0.5*clamp(avgReward, -1, 1)
 
 	fitness := 0.35*survival + 0.25*energyTerm + 0.25*forageTerm + 0.15*rewardTerm
-	if episode.foodCollected >= flatlandForageGoal {
+	if episode.foodCollected >= episode.forageGoal {
 		fitness += 0.1
 	}
 	fitness = clamp(fitness, 0, 1.4)
@@ -142,39 +192,43 @@ func evaluateFlatland(
 		"reward":             avgReward,
 		"reward_total":       episode.rewardAcc,
 		"age":                episode.age,
-		"max_age":            flatlandMaxAge,
+		"max_age":            cfg.maxAge,
+		"forage_goal":        episode.forageGoal,
 		"food_collected":     episode.foodCollected,
 		"poison_hits":        episode.poisonHits,
 		"collisions":         totalCollisions,
 		"movement_steps":     movementSteps,
 		"terminal_reason":    terminalReason,
 		"last_food_distance": lastDistance,
+		"mode":               cfg.mode,
 	}, nil
 }
 
 const (
-	flatlandWorldSize        = 48
-	flatlandMaxAge           = 220
-	flatlandInitialEnergy    = 1.2
-	flatlandEnergyCap        = 2.0
-	flatlandBaseMetabolic    = 0.012
-	flatlandMoveMetabolic    = 0.018
-	flatlandFoodEnergy       = 0.32
-	flatlandPoisonDamage     = 0.38
-	flatlandSurvivalReward   = 0.01
-	flatlandFoodReward       = 0.25
-	flatlandPoisonPenalty    = 0.30
-	flatlandFoodRespawn      = 12
-	flatlandPoisonRespawn    = 16
-	flatlandForageGoal       = 8
-	flatlandSensorDistanceLo = -1.0
-	flatlandSensorDistanceHi = 1.0
+	flatlandWorldSize         = 48
+	flatlandDefaultMaxAge     = 220
+	flatlandInitialEnergy     = 1.2
+	flatlandEnergyCap         = 2.0
+	flatlandBaseMetabolic     = 0.012
+	flatlandMoveMetabolic     = 0.018
+	flatlandFoodEnergy        = 0.32
+	flatlandPoisonDamage      = 0.38
+	flatlandSurvivalReward    = 0.01
+	flatlandFoodReward        = 0.25
+	flatlandPoisonPenalty     = 0.30
+	flatlandFoodRespawn       = 12
+	flatlandPoisonRespawn     = 16
+	flatlandDefaultForageGoal = 8
+	flatlandSensorDistanceLo  = -1.0
+	flatlandSensorDistanceHi  = 1.0
 )
 
 type flatlandEpisode struct {
 	position      int
 	energy        float64
 	age           int
+	maxAge        int
+	forageGoal    int
 	foodCollected int
 	poisonHits    int
 	rewardAcc     float64
@@ -182,22 +236,41 @@ type flatlandEpisode struct {
 	poison        map[int]int
 }
 
-func newFlatlandEpisode() *flatlandEpisode {
+func newFlatlandEpisode(cfg flatlandModeConfig) *flatlandEpisode {
+	maxAge := cfg.maxAge
+	if maxAge <= 0 {
+		maxAge = flatlandDefaultMaxAge
+	}
+	forageGoal := cfg.forageGoal
+	if forageGoal <= 0 {
+		forageGoal = flatlandDefaultForageGoal
+	}
+
+	foodPositions := cfg.foodPositions
+	if len(foodPositions) == 0 {
+		foodPositions = []int{5, 11, 19, 27, 35, 43}
+	}
+	poisonPositions := cfg.poisonPositions
+	if len(poisonPositions) == 0 {
+		poisonPositions = []int{14, 30}
+	}
+
+	food := make(map[int]int, len(foodPositions))
+	for _, position := range foodPositions {
+		food[wrapFlatlandPosition(position)] = 0
+	}
+	poison := make(map[int]int, len(poisonPositions))
+	for _, position := range poisonPositions {
+		poison[wrapFlatlandPosition(position)] = 0
+	}
+
 	return &flatlandEpisode{
-		position: 0,
-		energy:   flatlandInitialEnergy,
-		food: map[int]int{
-			5:  0,
-			11: 0,
-			19: 0,
-			27: 0,
-			35: 0,
-			43: 0,
-		},
-		poison: map[int]int{
-			14: 0,
-			30: 0,
-		},
+		position:   0,
+		energy:     flatlandInitialEnergy,
+		maxAge:     maxAge,
+		forageGoal: forageGoal,
+		food:       food,
+		poison:     poison,
 	}
 }
 
@@ -290,10 +363,10 @@ func (e *flatlandEpisode) step(move float64) (int, bool, bool, string) {
 	if e.energy <= 0 {
 		return moveStep, hitFood, hitPoison, "depleted"
 	}
-	if e.foodCollected >= flatlandForageGoal {
+	if e.foodCollected >= e.forageGoal {
 		return moveStep, hitFood, hitPoison, "forage_goal"
 	}
-	if e.age >= flatlandMaxAge {
+	if e.age >= e.maxAge {
 		return moveStep, hitFood, hitPoison, "age_limit"
 	}
 	return moveStep, hitFood, hitPoison, ""

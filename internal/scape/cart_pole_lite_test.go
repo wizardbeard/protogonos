@@ -88,3 +88,32 @@ func TestCartPoleLiteScapeEvaluateWithIOComponents(t *testing.T) {
 		t.Fatalf("expected fitness > 0.5, got %f", fitness)
 	}
 }
+
+func TestCartPoleLiteScapeEvaluateModeAnnotatesMode(t *testing.T) {
+	scape := CartPoleLiteScape{}
+	stabilizer := scriptedStepAgent{
+		id: "stabilizer",
+		fn: func(input []float64) []float64 {
+			if len(input) < 2 {
+				return []float64{0}
+			}
+			return []float64{-1.2*input[0] - 0.6*input[1]}
+		},
+	}
+
+	_, validationTrace, err := scape.EvaluateMode(context.Background(), stabilizer, "validation")
+	if err != nil {
+		t.Fatalf("evaluate validation mode: %v", err)
+	}
+	if mode, _ := validationTrace["mode"].(string); mode != "validation" {
+		t.Fatalf("expected validation mode trace marker, got %+v", validationTrace)
+	}
+
+	_, testTrace, err := scape.EvaluateMode(context.Background(), stabilizer, "test")
+	if err != nil {
+		t.Fatalf("evaluate test mode: %v", err)
+	}
+	if mode, _ := testTrace["mode"].(string); mode != "test" {
+		t.Fatalf("expected test mode trace marker, got %+v", testTrace)
+	}
+}

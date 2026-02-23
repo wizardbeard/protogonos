@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"math"
+	"strings"
 
 	protoio "protogonos/internal/io"
 )
@@ -16,8 +17,17 @@ func (CartPoleLiteScape) Name() string {
 }
 
 func (CartPoleLiteScape) Evaluate(ctx context.Context, agent Agent) (Fitness, Trace, error) {
+	return CartPoleLiteScape{}.EvaluateMode(ctx, agent, "gt")
+}
+
+func (CartPoleLiteScape) EvaluateMode(ctx context.Context, agent Agent, mode string) (Fitness, Trace, error) {
+	cfg, err := cartPoleLiteConfigForMode(mode)
+	if err != nil {
+		return 0, nil, err
+	}
+
 	if ticker, ok := agent.(TickAgent); ok {
-		fitness, trace, err := evaluateCartPoleLiteWithTick(ctx, ticker)
+		fitness, trace, err := evaluateCartPoleLiteWithTick(ctx, ticker, cfg)
 		if err == nil {
 			return fitness, trace, nil
 		}
@@ -27,75 +37,105 @@ func (CartPoleLiteScape) Evaluate(ctx context.Context, agent Agent) (Fitness, Tr
 	if !ok {
 		return 0, nil, fmt.Errorf("agent %s does not implement step runner", agent.ID())
 	}
-	return evaluateCartPoleLiteWithStep(ctx, runner)
+	return evaluateCartPoleLiteWithStep(ctx, runner, cfg)
 }
 
-func evaluateCartPoleLiteWithStep(ctx context.Context, runner StepAgent) (Fitness, Trace, error) {
-	totalReward := 0.0
-	stepsSurvived := 0
+type cartPoleLiteModeConfig struct {
+	mode            string
+	startPositions  []float64
+	stepsPerEpisode int
+}
 
-	for _, start := range []float64{-0.8, -0.4, 0.0, 0.4, 0.8} {
-		x := start
-		v := 0.0
+func cartPoleLiteConfigForMode(mode string) (cartPoleLiteModeConfig, error) {
+	switch strings.TrimSpace(strings.ToLower(mode)) {
+	case "", "gt":
+		return cartPoleLiteModeConfig{
+			mode:            "gt",
+			startPositions:  []float64{-0.8, -0.4, 0.0, 0.4, 0.8},
+			stepsPerEpisode: 60,
+		}, nil
+	case "validation":
+		return cartPoleLiteModeConfig{
+			mode:            "validation",
+			startPositions:  []float64{-1.0, -0.5, 0.5, 1.0},
+			stepsPerEpisode: 48,
+		}, nil
+	case "test":
+		return cartPoleLiteModeConfig{
+			mode:            "test",
+			startPositions:  []float64{-1.2, -0.6, 0.0, 0.6, 1.2},
+			stepsPerEpisode: 48,
+		}, nil
+	default:
+		return cartPoleLiteModeConfig{}, fmt.Errorf("unsupported cart-pole-lite mode: %s", mode)
+	}
+}
 
-		for step := 0; step < 60; step++ {
-			if err := ctx.Err(); err != nil {
-				return 0, nil, err
-			}
-
+func evaluateCartPoleLiteWithStep(ctx context.Context, runner StepAgent, cfg cartPoleLiteModeConfig) (Fitness, Trace, error) {
+	return evaluateCartPoleLite(
+		ctx,
+		cfg,
+		func(ctx context.Context, x, v float64) (float64, error) {
 			out, err := runner.RunStep(ctx, []float64{x, v})
 			if err != nil {
-				return 0, nil, err
+				return 0, err
 			}
 			if len(out) != 1 {
-				return 0, nil, fmt.Errorf("cart-pole-lite requires one output, got %d", len(out))
+				return 0, fmt.Errorf("cart-pole-lite requires one output, got %d", len(out))
 			}
-			var reward float64
-			x, v, reward = cartPoleLiteStep(x, v, out[0])
-			totalReward += reward
-			stepsSurvived++
-			if math.Abs(x) > 2.0 {
-				break
-			}
-		}
-	}
-
-	if stepsSurvived == 0 {
-		return 0, Trace{"avg_reward": 0.0, "steps_survived": 0}, nil
-	}
-	avgReward := totalReward / float64(stepsSurvived)
-	return Fitness(avgReward), Trace{"avg_reward": avgReward, "steps_survived": stepsSurvived}, nil
+			return out[0], nil
+		},
+	)
 }
 
-func evaluateCartPoleLiteWithTick(ctx context.Context, ticker TickAgent) (Fitness, Trace, error) {
+func evaluateCartPoleLiteWithTick(ctx context.Context, ticker TickAgent, cfg cartPoleLiteModeConfig) (Fitness, Trace, error) {
 	positionSetter, velocitySetter, forceOutput, err := cartPoleLiteIO(ticker)
 	if err != nil {
 		return 0, nil, err
 	}
 
-	totalReward := 0.0
-	stepsSurvived := 0
-	for _, start := range []float64{-0.8, -0.4, 0.0, 0.4, 0.8} {
-		x := start
-		v := 0.0
-		for step := 0; step < 60; step++ {
-			if err := ctx.Err(); err != nil {
-				return 0, nil, err
-			}
-
+	return evaluateCartPoleLite(
+		ctx,
+		cfg,
+		func(ctx context.Context, x, v float64) (float64, error) {
 			positionSetter.Set(x)
 			velocitySetter.Set(v)
 			out, err := ticker.Tick(ctx)
 			if err != nil {
+				return 0, err
+			}
+			last := forceOutput.Last()
+			if len(last) > 0 {
+				return last[0], nil
+			}
+			if len(out) > 0 {
+				return out[0], nil
+			}
+			return 0, nil
+		},
+	)
+}
+
+func evaluateCartPoleLite(
+	ctx context.Context,
+	cfg cartPoleLiteModeConfig,
+	chooseForce func(context.Context, float64, float64) (float64, error),
+) (Fitness, Trace, error) {
+	totalReward := 0.0
+	stepsSurvived := 0
+
+	for _, start := range cfg.startPositions {
+		x := start
+		v := 0.0
+
+		for step := 0; step < cfg.stepsPerEpisode; step++ {
+			if err := ctx.Err(); err != nil {
 				return 0, nil, err
 			}
 
-			force := 0.0
-			last := forceOutput.Last()
-			if len(last) > 0 {
-				force = last[0]
-			} else if len(out) > 0 {
-				force = out[0]
+			force, err := chooseForce(ctx, x, v)
+			if err != nil {
+				return 0, nil, err
 			}
 			var reward float64
 			x, v, reward = cartPoleLiteStep(x, v, force)
@@ -108,10 +148,22 @@ func evaluateCartPoleLiteWithTick(ctx context.Context, ticker TickAgent) (Fitnes
 	}
 
 	if stepsSurvived == 0 {
-		return 0, Trace{"avg_reward": 0.0, "steps_survived": 0}, nil
+		return 0, Trace{
+			"avg_reward":        0.0,
+			"steps_survived":    0,
+			"mode":              cfg.mode,
+			"episodes":          len(cfg.startPositions),
+			"steps_per_episode": cfg.stepsPerEpisode,
+		}, nil
 	}
 	avgReward := totalReward / float64(stepsSurvived)
-	return Fitness(avgReward), Trace{"avg_reward": avgReward, "steps_survived": stepsSurvived}, nil
+	return Fitness(avgReward), Trace{
+		"avg_reward":        avgReward,
+		"steps_survived":    stepsSurvived,
+		"mode":              cfg.mode,
+		"episodes":          len(cfg.startPositions),
+		"steps_per_episode": cfg.stepsPerEpisode,
+	}, nil
 }
 
 func cartPoleLiteStep(x, v, force float64) (nextX, nextV, reward float64) {

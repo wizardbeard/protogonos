@@ -3,6 +3,7 @@ package scape
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	protoio "protogonos/internal/io"
 )
@@ -19,8 +20,17 @@ func (XORScape) Name() string {
 }
 
 func (XORScape) Evaluate(ctx context.Context, agent Agent) (Fitness, Trace, error) {
+	return XORScape{}.EvaluateMode(ctx, agent, "gt")
+}
+
+func (XORScape) EvaluateMode(ctx context.Context, agent Agent, mode string) (Fitness, Trace, error) {
+	cfg, err := xorConfigForMode(mode)
+	if err != nil {
+		return 0, nil, err
+	}
+
 	if ticker, ok := agent.(TickAgent); ok {
-		fitness, trace, err := evaluateXORWithTick(ctx, ticker)
+		fitness, trace, err := evaluateXORWithTick(ctx, ticker, cfg)
 		if err == nil {
 			return fitness, trace, nil
 		}
@@ -30,82 +40,127 @@ func (XORScape) Evaluate(ctx context.Context, agent Agent) (Fitness, Trace, erro
 	if !ok {
 		return 0, nil, fmt.Errorf("agent %s does not implement step runner", agent.ID())
 	}
+	return evaluateXORWithStep(ctx, runner, cfg)
+}
 
-	cases := []struct {
-		in   []float64
-		want float64
-	}{
+type xorCase struct {
+	in   []float64
+	want float64
+}
+
+type xorModeConfig struct {
+	mode  string
+	cases []xorCase
+}
+
+func xorConfigForMode(mode string) (xorModeConfig, error) {
+	base := []xorCase{
 		{in: []float64{0, 0}, want: 0},
 		{in: []float64{0, 1}, want: 1},
 		{in: []float64{1, 0}, want: 1},
 		{in: []float64{1, 1}, want: 0},
 	}
 
-	var squaredErr float64
-	predictions := make([]float64, 0, len(cases))
-	for _, c := range cases {
-		out, err := runner.RunStep(ctx, c.in)
-		if err != nil {
-			return 0, nil, err
-		}
-		if len(out) != 1 {
-			return 0, nil, fmt.Errorf("xor requires one output, got %d", len(out))
-		}
-		predictions = append(predictions, out[0])
-		delta := out[0] - c.want
-		squaredErr += delta * delta
+	switch strings.TrimSpace(strings.ToLower(mode)) {
+	case "", "gt":
+		return xorModeConfig{mode: "gt", cases: base}, nil
+	case "validation":
+		return xorModeConfig{
+			mode: "validation",
+			cases: []xorCase{
+				base[1], base[2], base[0], base[3], base[1], base[2],
+			},
+		}, nil
+	case "test":
+		return xorModeConfig{
+			mode: "test",
+			cases: []xorCase{
+				base[3], base[2], base[1], base[0], base[3], base[0], base[2], base[1],
+			},
+		}, nil
+	default:
+		return xorModeConfig{}, fmt.Errorf("unsupported xor mode: %s", mode)
 	}
-
-	mse := squaredErr / float64(len(cases))
-	fitness := Fitness(1.0 - mse)
-	return fitness, Trace{"mse": mse, "predictions": predictions}, nil
 }
 
-func evaluateXORWithTick(ctx context.Context, ticker TickAgent) (Fitness, Trace, error) {
-	cases := []struct {
-		left  float64
-		right float64
-		want  float64
-	}{
-		{left: 0, right: 0, want: 0},
-		{left: 0, right: 1, want: 1},
-		{left: 1, right: 0, want: 1},
-		{left: 1, right: 1, want: 0},
-	}
+func evaluateXORWithStep(ctx context.Context, runner StepAgent, cfg xorModeConfig) (Fitness, Trace, error) {
+	return evaluateXOR(
+		ctx,
+		cfg,
+		func(ctx context.Context, in []float64) (float64, error) {
+			out, err := runner.RunStep(ctx, in)
+			if err != nil {
+				return 0, err
+			}
+			if len(out) != 1 {
+				return 0, fmt.Errorf("xor requires one output, got %d", len(out))
+			}
+			return out[0], nil
+		},
+	)
+}
 
+func evaluateXORWithTick(ctx context.Context, ticker TickAgent, cfg xorModeConfig) (Fitness, Trace, error) {
 	leftSetter, rightSetter, output, err := xorIO(ticker)
 	if err != nil {
 		return 0, nil, err
 	}
 
-	var squaredErr float64
-	predictions := make([]float64, 0, len(cases))
-	for _, c := range cases {
-		leftSetter.Set(c.left)
-		rightSetter.Set(c.right)
+	return evaluateXOR(
+		ctx,
+		cfg,
+		func(ctx context.Context, in []float64) (float64, error) {
+			leftSetter.Set(in[0])
+			rightSetter.Set(in[1])
 
-		out, err := ticker.Tick(ctx)
+			out, err := ticker.Tick(ctx)
+			if err != nil {
+				return 0, err
+			}
+			last := output.Last()
+			if len(last) > 0 {
+				return last[0], nil
+			}
+			if len(out) > 0 {
+				return out[0], nil
+			}
+			return 0, fmt.Errorf("xor requires one output, got 0")
+		},
+	)
+}
+
+func evaluateXOR(
+	ctx context.Context,
+	cfg xorModeConfig,
+	predict func(context.Context, []float64) (float64, error),
+) (Fitness, Trace, error) {
+	var squaredErr float64
+	predictions := make([]float64, 0, len(cfg.cases))
+	for _, c := range cfg.cases {
+		if err := ctx.Err(); err != nil {
+			return 0, nil, err
+		}
+		predicted, err := predict(ctx, c.in)
 		if err != nil {
 			return 0, nil, err
 		}
-
-		predicted := 0.0
-		if len(output.Last()) > 0 {
-			predicted = output.Last()[0]
-		} else if len(out) > 0 {
-			predicted = out[0]
-		} else {
-			return 0, nil, fmt.Errorf("xor requires one output, got 0")
-		}
-
 		predictions = append(predictions, predicted)
 		delta := predicted - c.want
 		squaredErr += delta * delta
 	}
 
-	mse := squaredErr / float64(len(cases))
+	if len(cfg.cases) == 0 {
+		return 0, Trace{"mse": 0.0, "predictions": predictions, "mode": cfg.mode, "cases": 0}, nil
+	}
+
+	mse := squaredErr / float64(len(cfg.cases))
 	fitness := Fitness(1.0 - mse)
-	return fitness, Trace{"mse": mse, "predictions": predictions}, nil
+	return fitness, Trace{
+		"mse":         mse,
+		"predictions": predictions,
+		"mode":        cfg.mode,
+		"cases":       len(cfg.cases),
+	}, nil
 }
 
 func xorIO(agent TickAgent) (protoio.ScalarSensorSetter, protoio.ScalarSensorSetter, protoio.SnapshotActuator, error) {
