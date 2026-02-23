@@ -1160,76 +1160,124 @@ func mutationChangedIDs(before, after model.Genome) []string {
 		ids = append(ids, id)
 	}
 
+	beforeSensors := setFromStrings(before.SensorIDs)
+	afterSensors := setFromStrings(after.SensorIDs)
+	beforeActuators := setFromStrings(before.ActuatorIDs)
+	afterActuators := setFromStrings(after.ActuatorIDs)
+
 	beforeNeurons := mapNeuronsByID(before.Neurons)
 	afterNeurons := mapNeuronsByID(after.Neurons)
+	knownNeuronIDs := keysFromNeuronMap(beforeNeurons)
+	for id := range keysFromNeuronMap(afterNeurons) {
+		knownNeuronIDs[id] = struct{}{}
+	}
+	knownSensorIDs := setFromStrings(before.SensorIDs)
+	for id := range afterSensors {
+		knownSensorIDs[id] = struct{}{}
+	}
+	knownActuatorIDs := setFromStrings(before.ActuatorIDs)
+	for id := range afterActuators {
+		knownActuatorIDs[id] = struct{}{}
+	}
+	classifyIDKind := func(id string) string {
+		id = strings.TrimSpace(id)
+		if id == "" {
+			return "element"
+		}
+		if _, ok := knownNeuronIDs[id]; ok {
+			return "neuron"
+		}
+		if _, ok := knownSensorIDs[id]; ok {
+			return "sensor"
+		}
+		if _, ok := knownActuatorIDs[id]; ok {
+			return "actuator"
+		}
+		lower := strings.ToLower(id)
+		switch {
+		case strings.Contains(lower, "sensor"):
+			return "sensor"
+		case strings.Contains(lower, "actuator"):
+			return "actuator"
+		case strings.Contains(lower, "neuron"):
+			return "neuron"
+		default:
+			return "element"
+		}
+	}
 	for _, id := range sortedSetDiff(keysFromNeuronMap(afterNeurons), keysFromNeuronMap(beforeNeurons)) {
-		appendID(id)
+		appendTypedElementIDs(appendID, "neuron", id)
 	}
 	for _, id := range sortedSetDiff(keysFromNeuronMap(beforeNeurons), keysFromNeuronMap(afterNeurons)) {
-		appendID(id)
+		appendTypedElementIDs(appendID, "neuron", id)
 	}
 	for _, id := range sortedIntersection(keysFromNeuronMap(beforeNeurons), keysFromNeuronMap(afterNeurons)) {
 		if !reflect.DeepEqual(beforeNeurons[id], afterNeurons[id]) {
-			appendID(id)
+			appendTypedElementIDs(appendID, "neuron", id)
 		}
 	}
 
 	beforeSynapses := mapSynapsesByID(before.Synapses)
 	afterSynapses := mapSynapsesByID(after.Synapses)
 	for _, id := range sortedSetDiff(keysFromSynapseMap(afterSynapses), keysFromSynapseMap(beforeSynapses)) {
-		appendID(id)
+		synapse := afterSynapses[id]
+		appendTypedElementIDs(appendID, "synapse", id)
+		appendTypedElementIDs(appendID, classifyIDKind(synapse.From), synapse.From)
+		appendTypedElementIDs(appendID, classifyIDKind(synapse.To), synapse.To)
 	}
 	for _, id := range sortedSetDiff(keysFromSynapseMap(beforeSynapses), keysFromSynapseMap(afterSynapses)) {
-		appendID(id)
+		synapse := beforeSynapses[id]
+		appendTypedElementIDs(appendID, "synapse", id)
+		appendTypedElementIDs(appendID, classifyIDKind(synapse.From), synapse.From)
+		appendTypedElementIDs(appendID, classifyIDKind(synapse.To), synapse.To)
 	}
 	for _, id := range sortedIntersection(keysFromSynapseMap(beforeSynapses), keysFromSynapseMap(afterSynapses)) {
 		if !reflect.DeepEqual(beforeSynapses[id], afterSynapses[id]) {
-			appendID(id)
+			synapse := afterSynapses[id]
+			appendTypedElementIDs(appendID, "synapse", id)
+			appendTypedElementIDs(appendID, classifyIDKind(synapse.From), synapse.From)
+			appendTypedElementIDs(appendID, classifyIDKind(synapse.To), synapse.To)
 		}
 	}
 
-	beforeSensors := setFromStrings(before.SensorIDs)
-	afterSensors := setFromStrings(after.SensorIDs)
 	for _, id := range sortedSetDiff(afterSensors, beforeSensors) {
-		appendID(id)
+		appendTypedElementIDs(appendID, "sensor", id)
 	}
 	for _, id := range sortedSetDiff(beforeSensors, afterSensors) {
-		appendID(id)
+		appendTypedElementIDs(appendID, "sensor", id)
 	}
 
-	beforeActuators := setFromStrings(before.ActuatorIDs)
-	afterActuators := setFromStrings(after.ActuatorIDs)
 	for _, id := range sortedSetDiff(afterActuators, beforeActuators) {
-		appendID(id)
+		appendTypedElementIDs(appendID, "actuator", id)
 	}
 	for _, id := range sortedSetDiff(beforeActuators, afterActuators) {
-		appendID(id)
+		appendTypedElementIDs(appendID, "actuator", id)
 	}
 
 	beforeSensorLinks := mapSensorLinks(before.SensorNeuronLinks)
 	afterSensorLinks := mapSensorLinks(after.SensorNeuronLinks)
 	for _, key := range sortedSetDiff(keysFromSensorLinkMap(afterSensorLinks), keysFromSensorLinkMap(beforeSensorLinks)) {
 		link := afterSensorLinks[key]
-		appendID(link.SensorID)
-		appendID(link.NeuronID)
+		appendTypedElementIDs(appendID, "sensor", link.SensorID)
+		appendTypedElementIDs(appendID, "neuron", link.NeuronID)
 	}
 	for _, key := range sortedSetDiff(keysFromSensorLinkMap(beforeSensorLinks), keysFromSensorLinkMap(afterSensorLinks)) {
 		link := beforeSensorLinks[key]
-		appendID(link.SensorID)
-		appendID(link.NeuronID)
+		appendTypedElementIDs(appendID, "sensor", link.SensorID)
+		appendTypedElementIDs(appendID, "neuron", link.NeuronID)
 	}
 
 	beforeActuatorLinks := mapActuatorLinks(before.NeuronActuatorLinks)
 	afterActuatorLinks := mapActuatorLinks(after.NeuronActuatorLinks)
 	for _, key := range sortedSetDiff(keysFromActuatorLinkMap(afterActuatorLinks), keysFromActuatorLinkMap(beforeActuatorLinks)) {
 		link := afterActuatorLinks[key]
-		appendID(link.NeuronID)
-		appendID(link.ActuatorID)
+		appendTypedElementIDs(appendID, "neuron", link.NeuronID)
+		appendTypedElementIDs(appendID, "actuator", link.ActuatorID)
 	}
 	for _, key := range sortedSetDiff(keysFromActuatorLinkMap(beforeActuatorLinks), keysFromActuatorLinkMap(afterActuatorLinks)) {
 		link := beforeActuatorLinks[key]
-		appendID(link.NeuronID)
-		appendID(link.ActuatorID)
+		appendTypedElementIDs(appendID, "neuron", link.NeuronID)
+		appendTypedElementIDs(appendID, "actuator", link.ActuatorID)
 	}
 
 	appendSubstrateDifferences(before.Substrate, after.Substrate, appendID)
@@ -1250,10 +1298,10 @@ func appendSubstrateDifferences(
 		appendID("substrate")
 		if after != nil {
 			for _, id := range after.CPPIDs {
-				appendID(id)
+				appendTypedElementIDs(appendID, "sensor", id)
 			}
 			for _, id := range after.CEPIDs {
-				appendID(id)
+				appendTypedElementIDs(appendID, "actuator", id)
 			}
 		}
 		return
@@ -1262,19 +1310,19 @@ func appendSubstrateDifferences(
 	beforeCPPs := setFromStrings(before.CPPIDs)
 	afterCPPs := setFromStrings(after.CPPIDs)
 	for _, id := range sortedSetDiff(afterCPPs, beforeCPPs) {
-		appendID(id)
+		appendTypedElementIDs(appendID, "sensor", id)
 	}
 	for _, id := range sortedSetDiff(beforeCPPs, afterCPPs) {
-		appendID(id)
+		appendTypedElementIDs(appendID, "sensor", id)
 	}
 
 	beforeCEPs := setFromStrings(before.CEPIDs)
 	afterCEPs := setFromStrings(after.CEPIDs)
 	for _, id := range sortedSetDiff(afterCEPs, beforeCEPs) {
-		appendID(id)
+		appendTypedElementIDs(appendID, "actuator", id)
 	}
 	for _, id := range sortedSetDiff(beforeCEPs, afterCEPs) {
-		appendID(id)
+		appendTypedElementIDs(appendID, "actuator", id)
 	}
 
 	if before.CPPName != after.CPPName {
@@ -1308,6 +1356,24 @@ func appendPlasticityDifferences(
 		return
 	}
 	appendID("plasticity")
+}
+
+func appendTypedElementIDs(appendID func(id string), kind string, ids ...string) {
+	kind = strings.TrimSpace(strings.ToLower(kind))
+	for _, id := range ids {
+		id = strings.TrimSpace(id)
+		if id == "" {
+			continue
+		}
+		appendID(id)
+		if kind == "" {
+			continue
+		}
+		if strings.HasPrefix(strings.ToLower(id), kind+":") {
+			continue
+		}
+		appendID(kind + ":" + id)
+	}
 }
 
 func setFromStrings(values []string) map[string]struct{} {

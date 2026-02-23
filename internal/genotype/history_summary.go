@@ -101,6 +101,8 @@ func generalizeElementID(id string) GeneralizedElementRef {
 func inferElementKind(id string, hasLayer bool) string {
 	lower := strings.ToLower(strings.TrimSpace(id))
 	switch {
+	case strings.Contains(lower, "synapse"):
+		return "synapse"
 	case strings.Contains(lower, "sensor"):
 		return "sensor"
 	case strings.Contains(lower, "actuator"):
@@ -109,6 +111,12 @@ func inferElementKind(id string, hasLayer bool) string {
 		return "cortex"
 	case strings.Contains(lower, "substrate"):
 		return "substrate"
+	case strings.Contains(lower, "strategy"):
+		return "strategy"
+	case strings.Contains(lower, "plasticity"):
+		return "plasticity"
+	case strings.Contains(lower, "neuron"):
+		return "neuron"
 	case hasLayer:
 		return "neuron"
 	default:

@@ -1434,8 +1434,8 @@ func TestPopulationMonitorMutationRetriesUntilSuccessCount(t *testing.T) {
 		if event.Mutation != "flaky" {
 			t.Fatalf("expected flaky event mutation name at index %d, got=%+v", i, event)
 		}
-		if len(event.IDs) != 1 || event.IDs[0] != "s" {
-			t.Fatalf("expected flaky event IDs to include changed synapse id 's' at index %d, got=%v", i, event.IDs)
+		if !containsString(event.IDs, "s") || !containsString(event.IDs, "synapse:s") {
+			t.Fatalf("expected flaky event IDs to include raw+typed changed synapse id at index %d, got=%v", i, event.IDs)
 		}
 	}
 	// Parent g3 has initial weight -0.4. With 3 successful mutations (+1 each),
@@ -1463,6 +1463,15 @@ func TestDeriveMutationEventCapturesChangedElementIDs(t *testing.T) {
 	if !seen["h"] || !seen["s2"] {
 		t.Fatalf("expected added neuron/synapse ids in mutation event, got=%v", event.IDs)
 	}
+}
+
+func containsString(values []string, target string) bool {
+	for _, value := range values {
+		if value == target {
+			return true
+		}
+	}
+	return false
 }
 
 func TestPopulationMonitorUsesRegisteredIOForRegressionMimic(t *testing.T) {

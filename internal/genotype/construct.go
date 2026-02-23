@@ -518,8 +518,11 @@ func parseLayerIndex(id string) (float64, bool) {
 	}
 
 	for _, sep := range []string{":", "|", "/", ","} {
-		if token, _, ok := strings.Cut(id, sep); ok {
+		if token, remainder, ok := strings.Cut(id, sep); ok {
 			if layer, layerOK := parseFloatToken(token); layerOK {
+				return layer, true
+			}
+			if layer, layerOK := parseLayerIndex(remainder); layerOK {
 				return layer, true
 			}
 		}

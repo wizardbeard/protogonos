@@ -78,3 +78,23 @@ func TestGeneralizeEvoHistoryHandlesEmptyInput(t *testing.T) {
 		t.Fatalf("expected nil for empty history, got=%v", got)
 	}
 }
+
+func TestGeneralizeEvoHistorySupportsKindPrefixedIDs(t *testing.T) {
+	history := []EvoHistoryEvent{
+		{Mutation: "mutate_weights", IDs: []string{"neuron:L1:n1", "synapse:s1"}},
+	}
+
+	generalized := GeneralizeEvoHistory(history)
+	if len(generalized) != 1 || len(generalized[0].Elements) != 2 {
+		t.Fatalf("unexpected generalized history: %+v", generalized)
+	}
+
+	neuronRef := generalized[0].Elements[0]
+	if neuronRef.Layer == nil || *neuronRef.Layer != 1 || neuronRef.Kind != "neuron" {
+		t.Fatalf("expected typed neuron ref with layer, got=%+v", neuronRef)
+	}
+	synapseRef := generalized[0].Elements[1]
+	if synapseRef.Layer != nil || synapseRef.Kind != "synapse" {
+		t.Fatalf("expected typed synapse ref without layer, got=%+v", synapseRef)
+	}
+}
