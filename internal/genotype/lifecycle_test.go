@@ -237,6 +237,38 @@ func TestConstructSeedPopulationUnsupportedScape(t *testing.T) {
 	}
 }
 
+func TestConstructSeedPopulationSupportsReferenceScapeAliases(t *testing.T) {
+	aliases := map[string]string{
+		"xor_sim":                 "xor",
+		"pb_sim":                  "pole2-balancing",
+		"pb_sim1":                 "pole2-balancing",
+		"dtm_sim":                 "dtm",
+		"fx_sim":                  "fx",
+		"scape_GTSA":              "gtsa",
+		"scape_LLVMPhaseOrdering": "llvm-phase-ordering",
+	}
+
+	for alias, canonical := range aliases {
+		seedAlias, err := ConstructSeedPopulation(alias, 2, 41)
+		if err != nil {
+			t.Fatalf("construct alias %s: %v", alias, err)
+		}
+		seedCanonical, err := ConstructSeedPopulation(canonical, 2, 41)
+		if err != nil {
+			t.Fatalf("construct canonical %s: %v", canonical, err)
+		}
+		if len(seedAlias.InputNeuronIDs) != len(seedCanonical.InputNeuronIDs) {
+			t.Fatalf("input arity mismatch alias=%s canonical=%s alias_ids=%v canonical_ids=%v", alias, canonical, seedAlias.InputNeuronIDs, seedCanonical.InputNeuronIDs)
+		}
+		if len(seedAlias.OutputNeuronIDs) != len(seedCanonical.OutputNeuronIDs) {
+			t.Fatalf("output arity mismatch alias=%s canonical=%s alias_ids=%v canonical_ids=%v", alias, canonical, seedAlias.OutputNeuronIDs, seedCanonical.OutputNeuronIDs)
+		}
+		if len(seedAlias.Genomes) != len(seedCanonical.Genomes) {
+			t.Fatalf("genome count mismatch alias=%s canonical=%s", alias, canonical)
+		}
+	}
+}
+
 func TestCloneAgent(t *testing.T) {
 	in := model.Genome{
 		ID:          "g1",

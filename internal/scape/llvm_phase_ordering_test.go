@@ -81,3 +81,32 @@ func TestLLVMPhaseOrderingScapeEvaluateWithIOComponents(t *testing.T) {
 		t.Fatalf("trace missing phases: %+v", trace)
 	}
 }
+
+func TestLLVMPhaseOrderingScapeEvaluateModeAnnotatesMode(t *testing.T) {
+	scape := LLVMPhaseOrderingScape{}
+	phaseAware := scriptedStepAgent{
+		id: "phase-aware",
+		fn: func(in []float64) []float64 {
+			if len(in) < 2 {
+				return []float64{0}
+			}
+			return []float64{1 - 2*in[1]}
+		},
+	}
+
+	_, validationTrace, err := scape.EvaluateMode(context.Background(), phaseAware, "validation")
+	if err != nil {
+		t.Fatalf("evaluate validation mode: %v", err)
+	}
+	if mode, _ := validationTrace["mode"].(string); mode != "validation" {
+		t.Fatalf("expected validation mode trace marker, got %+v", validationTrace)
+	}
+
+	_, testTrace, err := scape.EvaluateMode(context.Background(), phaseAware, "test")
+	if err != nil {
+		t.Fatalf("evaluate test mode: %v", err)
+	}
+	if mode, _ := testTrace["mode"].(string); mode != "test" {
+		t.Fatalf("expected test mode trace marker, got %+v", testTrace)
+	}
+}

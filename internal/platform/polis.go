@@ -11,6 +11,7 @@ import (
 	"protogonos/internal/genotype"
 	"protogonos/internal/model"
 	"protogonos/internal/scape"
+	"protogonos/internal/scapeid"
 	"protogonos/internal/storage"
 	"protogonos/internal/tuning"
 )
@@ -347,7 +348,7 @@ func (p *Polis) initLocked(
 			p.resetRuntimeStateLocked()
 			return fmt.Errorf("public scape is nil at index %d", i)
 		}
-		name := spec.Scape.Name()
+		name := scapeid.Normalize(spec.Scape.Name())
 		if name == "" {
 			stopManagedScapes(ctx, startedScapes)
 			stopSupportModules(ctx, startedModules)
@@ -402,7 +403,7 @@ func (p *Polis) RegisterScape(s scape.Scape) error {
 		return fmt.Errorf("scape is nil")
 	}
 
-	name := s.Name()
+	name := scapeid.Normalize(s.Name())
 	if name == "" {
 		return fmt.Errorf("scape name is required")
 	}
@@ -484,7 +485,7 @@ func (p *Polis) AddPublicScape(ctx context.Context, spec PublicScapeSpec) error 
 	if spec.Scape == nil {
 		return fmt.Errorf("public scape is nil")
 	}
-	name := spec.Scape.Name()
+	name := scapeid.Normalize(spec.Scape.Name())
 	if name == "" {
 		return fmt.Errorf("public scape name is required")
 	}
@@ -512,6 +513,7 @@ func (p *Polis) AddPublicScape(ctx context.Context, spec PublicScapeSpec) error 
 }
 
 func (p *Polis) RemovePublicScape(ctx context.Context, name string, reason StopReason) error {
+	name = scapeid.Normalize(name)
 	if name == "" {
 		return fmt.Errorf("public scape name is required")
 	}
@@ -566,6 +568,7 @@ func (p *Polis) RemovePublicScape(ctx context.Context, name string, reason StopR
 }
 
 func (p *Polis) GetScape(name string) (scape.Scape, bool) {
+	name = scapeid.Normalize(name)
 	p.mu.RLock()
 	defer p.mu.RUnlock()
 

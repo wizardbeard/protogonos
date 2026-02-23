@@ -86,3 +86,27 @@ func TestEpitopesScapeEvaluateWithIOComponents(t *testing.T) {
 		t.Fatalf("trace missing accuracy: %+v", trace)
 	}
 }
+
+func TestEpitopesScapeEvaluateModeAnnotatesMode(t *testing.T) {
+	scape := EpitopesScape{}
+	memoryAware := scriptedStepAgent{
+		id: "memory-aware",
+		fn: func(in []float64) []float64 {
+			if len(in) < 2 {
+				return []float64{0}
+			}
+			return []float64{in[0] + 0.7*in[1]}
+		},
+	}
+
+	_, trace, err := scape.EvaluateMode(context.Background(), memoryAware, "validation")
+	if err != nil {
+		t.Fatalf("evaluate validation mode: %v", err)
+	}
+	if mode, _ := trace["mode"].(string); mode != "validation" {
+		t.Fatalf("expected validation mode trace marker, got %+v", trace)
+	}
+	if startIndex, ok := trace["start_index"].(int); !ok || startIndex <= 0 {
+		t.Fatalf("expected positive start_index in validation mode, got %+v", trace)
+	}
+}

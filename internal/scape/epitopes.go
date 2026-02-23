@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"math"
+	"strings"
 
 	protoio "protogonos/internal/io"
 )
@@ -16,8 +17,17 @@ func (EpitopesScape) Name() string {
 }
 
 func (EpitopesScape) Evaluate(ctx context.Context, agent Agent) (Fitness, Trace, error) {
+	return EpitopesScape{}.EvaluateMode(ctx, agent, "gt")
+}
+
+func (EpitopesScape) EvaluateMode(ctx context.Context, agent Agent, mode string) (Fitness, Trace, error) {
+	cfg, err := epitopesConfigForMode(mode)
+	if err != nil {
+		return 0, nil, err
+	}
+
 	if ticker, ok := agent.(TickAgent); ok {
-		fitness, trace, err := evaluateEpitopesWithTick(ctx, ticker)
+		fitness, trace, err := evaluateEpitopesWithTick(ctx, ticker, cfg)
 		if err == nil {
 			return fitness, trace, nil
 		}
@@ -27,21 +37,21 @@ func (EpitopesScape) Evaluate(ctx context.Context, agent Agent) (Fitness, Trace,
 	if !ok {
 		return 0, nil, fmt.Errorf("agent %s does not implement step runner", agent.ID())
 	}
-	return evaluateEpitopesWithStep(ctx, runner)
+	return evaluateEpitopesWithStep(ctx, runner, cfg)
 }
 
-func evaluateEpitopesWithStep(ctx context.Context, runner StepAgent) (Fitness, Trace, error) {
-	const samples = 64
+func evaluateEpitopesWithStep(ctx context.Context, runner StepAgent, cfg epitopesModeConfig) (Fitness, Trace, error) {
 	correct := 0
-	predictions := make([]float64, 0, samples)
+	predictions := make([]float64, 0, cfg.samples)
 	prev := 0.0
 
-	for i := 0; i < samples; i++ {
+	for i := 0; i < cfg.samples; i++ {
 		if err := ctx.Err(); err != nil {
 			return 0, nil, err
 		}
 
-		signal := epitopesSignal(i)
+		index := cfg.startIndex + i
+		signal := epitopesSignal(index)
 		memory := prev
 		out, err := runner.RunStep(ctx, []float64{signal, memory})
 		if err != nil {
@@ -60,32 +70,34 @@ func evaluateEpitopesWithStep(ctx context.Context, runner StepAgent) (Fitness, T
 		prev = signal
 	}
 
-	accuracy := float64(correct) / samples
+	accuracy := float64(correct) / float64(cfg.samples)
 	return Fitness(accuracy), Trace{
 		"accuracy":    accuracy,
 		"correct":     correct,
-		"total":       samples,
+		"total":       cfg.samples,
 		"predictions": predictions,
+		"mode":        cfg.mode,
+		"start_index": cfg.startIndex,
 	}, nil
 }
 
-func evaluateEpitopesWithTick(ctx context.Context, ticker TickAgent) (Fitness, Trace, error) {
+func evaluateEpitopesWithTick(ctx context.Context, ticker TickAgent, cfg epitopesModeConfig) (Fitness, Trace, error) {
 	signalSetter, memorySetter, responseOutput, err := epitopesIO(ticker)
 	if err != nil {
 		return 0, nil, err
 	}
 
-	const samples = 64
 	correct := 0
-	predictions := make([]float64, 0, samples)
+	predictions := make([]float64, 0, cfg.samples)
 	prev := 0.0
 
-	for i := 0; i < samples; i++ {
+	for i := 0; i < cfg.samples; i++ {
 		if err := ctx.Err(); err != nil {
 			return 0, nil, err
 		}
 
-		signal := epitopesSignal(i)
+		index := cfg.startIndex + i
+		signal := epitopesSignal(index)
 		memory := prev
 		signalSetter.Set(signal)
 		memorySetter.Set(memory)
@@ -111,13 +123,34 @@ func evaluateEpitopesWithTick(ctx context.Context, ticker TickAgent) (Fitness, T
 		prev = signal
 	}
 
-	accuracy := float64(correct) / samples
+	accuracy := float64(correct) / float64(cfg.samples)
 	return Fitness(accuracy), Trace{
 		"accuracy":    accuracy,
 		"correct":     correct,
-		"total":       samples,
+		"total":       cfg.samples,
 		"predictions": predictions,
+		"mode":        cfg.mode,
+		"start_index": cfg.startIndex,
 	}, nil
+}
+
+type epitopesModeConfig struct {
+	mode       string
+	startIndex int
+	samples    int
+}
+
+func epitopesConfigForMode(mode string) (epitopesModeConfig, error) {
+	switch strings.TrimSpace(strings.ToLower(mode)) {
+	case "", "gt":
+		return epitopesModeConfig{mode: "gt", startIndex: 0, samples: 64}, nil
+	case "validation":
+		return epitopesModeConfig{mode: "validation", startIndex: 512, samples: 32}, nil
+	case "test":
+		return epitopesModeConfig{mode: "test", startIndex: 1024, samples: 32}, nil
+	default:
+		return epitopesModeConfig{}, fmt.Errorf("unsupported epitopes mode: %s", mode)
+	}
 }
 
 func epitopesSignal(index int) float64 {

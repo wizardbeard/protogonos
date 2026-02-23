@@ -30,3 +30,31 @@ func TestGTSAScapeScoresBetterForSignalAwarePolicy(t *testing.T) {
 		t.Fatalf("expected signal-aware policy to outperform zero, got copy=%f zero=%f", copyFitness, zeroFitness)
 	}
 }
+
+func TestGTSAScapeEvaluateModeUsesConfiguredWindow(t *testing.T) {
+	scape := GTSAScape{}
+	copyInput := scriptedStepAgent{
+		id: "copy",
+		fn: func(input []float64) []float64 {
+			return []float64{input[0]}
+		},
+	}
+
+	gtFitness, gtTrace, err := scape.EvaluateMode(context.Background(), copyInput, "gt")
+	if err != nil {
+		t.Fatalf("evaluate gt mode: %v", err)
+	}
+	validationFitness, validationTrace, err := scape.EvaluateMode(context.Background(), copyInput, "validation")
+	if err != nil {
+		t.Fatalf("evaluate validation mode: %v", err)
+	}
+	if gtMode, _ := gtTrace["mode"].(string); gtMode != "gt" {
+		t.Fatalf("expected gt mode trace marker, got %+v", gtTrace)
+	}
+	if validationMode, _ := validationTrace["mode"].(string); validationMode != "validation" {
+		t.Fatalf("expected validation mode trace marker, got %+v", validationTrace)
+	}
+	if gtFitness == validationFitness {
+		t.Fatalf("expected mode windows to produce distinct fitness values, got gt=%f validation=%f", gtFitness, validationFitness)
+	}
+}

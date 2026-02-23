@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"math"
+	"strings"
 )
 
 type FXScape struct{}
@@ -13,21 +14,30 @@ func (FXScape) Name() string {
 }
 
 func (FXScape) Evaluate(ctx context.Context, agent Agent) (Fitness, Trace, error) {
+	return FXScape{}.EvaluateMode(ctx, agent, "gt")
+}
+
+func (FXScape) EvaluateMode(ctx context.Context, agent Agent, mode string) (Fitness, Trace, error) {
 	runner, ok := agent.(StepAgent)
 	if !ok {
 		return 0, nil, fmt.Errorf("agent %s does not implement step runner", agent.ID())
 	}
 
-	const steps = 64
-	price := 1.0
+	cfg, err := fxConfigForMode(mode)
+	if err != nil {
+		return 0, nil, err
+	}
+
+	price := fxPrice(cfg.startStep)
 	prevPrice := price
 	equity := 1.0
 	position := 0.0
 	turnover := 0.0
 
-	for i := 0; i < steps; i++ {
-		price = fxPrice(i)
-		signal := fxSignal(i)
+	for i := 0; i < cfg.steps; i++ {
+		step := cfg.startStep + i
+		price = fxPrice(step)
+		signal := fxSignal(step)
 		out, err := runner.RunStep(ctx, []float64{price, signal})
 		if err != nil {
 			return 0, nil, err
@@ -50,9 +60,31 @@ func (FXScape) Evaluate(ctx context.Context, agent Agent) (Fitness, Trace, error
 
 	fitness := math.Log(equity) - 0.002*turnover
 	return Fitness(1.0 / (1.0 + math.Exp(-fitness))), Trace{
-		"equity":   equity,
-		"turnover": turnover,
+		"equity":     equity,
+		"turnover":   turnover,
+		"mode":       cfg.mode,
+		"steps":      cfg.steps,
+		"start_step": cfg.startStep,
 	}, nil
+}
+
+type fxModeConfig struct {
+	mode      string
+	steps     int
+	startStep int
+}
+
+func fxConfigForMode(mode string) (fxModeConfig, error) {
+	switch strings.TrimSpace(strings.ToLower(mode)) {
+	case "", "gt":
+		return fxModeConfig{mode: "gt", steps: 64, startStep: 0}, nil
+	case "validation":
+		return fxModeConfig{mode: "validation", steps: 48, startStep: 128}, nil
+	case "test":
+		return fxModeConfig{mode: "test", steps: 48, startStep: 256}, nil
+	default:
+		return fxModeConfig{}, fmt.Errorf("unsupported fx mode: %s", mode)
+	}
 }
 
 func fxPrice(step int) float64 {

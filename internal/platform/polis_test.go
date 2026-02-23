@@ -508,6 +508,56 @@ func TestPolisAddAndRemovePublicScape(t *testing.T) {
 	}
 }
 
+func TestPolisAddPublicScapeNormalizesNameAliases(t *testing.T) {
+	ctx := context.Background()
+	aliased := &managedTestScape{testScape: testScape{name: "scape_GTSA"}}
+	p := NewPolis(Config{Store: storage.NewMemoryStore()})
+	if err := p.Init(ctx); err != nil {
+		t.Fatalf("init failed: %v", err)
+	}
+	if err := p.AddPublicScape(ctx, PublicScapeSpec{Scape: aliased, Type: "timeseries"}); err != nil {
+		t.Fatalf("add aliased public scape: %v", err)
+	}
+	if _, ok := p.GetScape("gtsa"); !ok {
+		t.Fatal("expected canonical gtsa lookup to resolve aliased public scape")
+	}
+	if _, ok := p.GetScape("scape_GTSA"); !ok {
+		t.Fatal("expected alias gtsa lookup to resolve aliased public scape")
+	}
+	if err := p.RemovePublicScape(ctx, "scape_GTSA", StopReasonNormal); err != nil {
+		t.Fatalf("remove aliased public scape by alias: %v", err)
+	}
+	if aliased.stopCalls != 1 || aliased.stopReason != StopReasonNormal {
+		t.Fatalf("expected aliased scape normal stop semantics, calls=%d reason=%q", aliased.stopCalls, aliased.stopReason)
+	}
+}
+
+func TestPolisInitNormalizesConfiguredPublicScapeAliases(t *testing.T) {
+	aliased := &managedTestScape{testScape: testScape{name: "scape_LLVMPhaseOrdering"}}
+	p := NewPolis(Config{
+		Store: storage.NewMemoryStore(),
+		PublicScapes: []PublicScapeSpec{
+			{Scape: aliased, Type: "llvm"},
+		},
+	})
+	if err := p.Init(context.Background()); err != nil {
+		t.Fatalf("init failed: %v", err)
+	}
+	if _, ok := p.GetScape("llvm-phase-ordering"); !ok {
+		t.Fatal("expected canonical llvm-phase-ordering lookup to resolve configured aliased scape")
+	}
+	if _, ok := p.GetScape("scape_LLVMPhaseOrdering"); !ok {
+		t.Fatal("expected alias llvm lookup to resolve configured aliased scape")
+	}
+	summaries := p.ActivePublicScapes()
+	if len(summaries) != 1 {
+		t.Fatalf("expected one active public scape, got=%d", len(summaries))
+	}
+	if summaries[0].Name != "llvm-phase-ordering" {
+		t.Fatalf("expected normalized summary name llvm-phase-ordering, got=%q", summaries[0].Name)
+	}
+}
+
 func TestPolisStopWithReasonRejectsInvalidReason(t *testing.T) {
 	p := NewPolis(Config{Store: storage.NewMemoryStore()})
 	if err := p.Init(context.Background()); err != nil {

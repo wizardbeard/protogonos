@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"math"
+	"strings"
 
 	protoio "protogonos/internal/io"
 )
@@ -17,8 +18,17 @@ func (LLVMPhaseOrderingScape) Name() string {
 }
 
 func (LLVMPhaseOrderingScape) Evaluate(ctx context.Context, agent Agent) (Fitness, Trace, error) {
+	return LLVMPhaseOrderingScape{}.EvaluateMode(ctx, agent, "gt")
+}
+
+func (LLVMPhaseOrderingScape) EvaluateMode(ctx context.Context, agent Agent, mode string) (Fitness, Trace, error) {
+	cfg, err := llvmPhaseOrderingConfigForMode(mode)
+	if err != nil {
+		return 0, nil, err
+	}
+
 	if ticker, ok := agent.(TickAgent); ok {
-		fitness, trace, err := evaluateLLVMPhaseOrderingWithTick(ctx, ticker)
+		fitness, trace, err := evaluateLLVMPhaseOrderingWithTick(ctx, ticker, cfg)
 		if err == nil {
 			return fitness, trace, nil
 		}
@@ -28,12 +38,13 @@ func (LLVMPhaseOrderingScape) Evaluate(ctx context.Context, agent Agent) (Fitnes
 	if !ok {
 		return 0, nil, fmt.Errorf("agent %s does not implement step runner", agent.ID())
 	}
-	return evaluateLLVMPhaseOrderingWithStep(ctx, runner)
+	return evaluateLLVMPhaseOrderingWithStep(ctx, runner, cfg)
 }
 
-func evaluateLLVMPhaseOrderingWithStep(ctx context.Context, runner StepAgent) (Fitness, Trace, error) {
+func evaluateLLVMPhaseOrderingWithStep(ctx context.Context, runner StepAgent, cfg llvmPhaseOrderingConfig) (Fitness, Trace, error) {
 	return evaluateLLVMPhaseOrdering(
 		ctx,
+		cfg,
 		func(ctx context.Context, in []float64) (float64, error) {
 			out, err := runner.RunStep(ctx, in)
 			if err != nil {
@@ -47,7 +58,7 @@ func evaluateLLVMPhaseOrderingWithStep(ctx context.Context, runner StepAgent) (F
 	)
 }
 
-func evaluateLLVMPhaseOrderingWithTick(ctx context.Context, ticker TickAgent) (Fitness, Trace, error) {
+func evaluateLLVMPhaseOrderingWithTick(ctx context.Context, ticker TickAgent, cfg llvmPhaseOrderingConfig) (Fitness, Trace, error) {
 	complexitySetter, passSetter, phaseOutput, err := llvmPhaseOrderingIO(ticker)
 	if err != nil {
 		return 0, nil, err
@@ -55,6 +66,7 @@ func evaluateLLVMPhaseOrderingWithTick(ctx context.Context, ticker TickAgent) (F
 
 	return evaluateLLVMPhaseOrdering(
 		ctx,
+		cfg,
 		func(ctx context.Context, in []float64) (float64, error) {
 			complexitySetter.Set(in[0])
 			passSetter.Set(in[1])
@@ -76,21 +88,24 @@ func evaluateLLVMPhaseOrderingWithTick(ctx context.Context, ticker TickAgent) (F
 	)
 }
 
-func evaluateLLVMPhaseOrdering(ctx context.Context, choosePhase func(context.Context, []float64) (float64, error)) (Fitness, Trace, error) {
-	const maxPhases = 24
-	complexity := 1.2
+func evaluateLLVMPhaseOrdering(
+	ctx context.Context,
+	cfg llvmPhaseOrderingConfig,
+	choosePhase func(context.Context, []float64) (float64, error),
+) (Fitness, Trace, error) {
+	complexity := cfg.initialComplexity
 	alignmentAcc := 0.0
 	phasesUsed := 0
 	done := false
 
-	for phase := 0; phase < maxPhases; phase++ {
+	for phase := 0; phase < cfg.maxPhases; phase++ {
 		if err := ctx.Err(); err != nil {
 			return 0, nil, err
 		}
 
 		passNorm := 0.0
-		if maxPhases > 1 {
-			passNorm = float64(phase) / float64(maxPhases-1)
+		if cfg.maxPhases > 1 {
+			passNorm = float64(phase) / float64(cfg.maxPhases-1)
 		}
 		in := []float64{complexity, passNorm}
 		output, err := choosePhase(ctx, in)
@@ -120,19 +135,39 @@ func evaluateLLVMPhaseOrdering(ctx context.Context, choosePhase func(context.Con
 	alignmentAvg := alignmentAcc / float64(phasesUsed)
 	runtimeScore := 1.0 / (1.0 + complexity)
 	fitness := 0.7*runtimeScore + 0.3*alignmentAvg
-	if done && phasesUsed < maxPhases {
-		fitness -= 0.05 * float64(maxPhases-phasesUsed) / float64(maxPhases)
+	if done && phasesUsed < cfg.maxPhases {
+		fitness -= 0.05 * float64(cfg.maxPhases-phasesUsed) / float64(cfg.maxPhases)
 	}
 	fitness = clampLLVM(fitness, 0, 1.5)
 
 	return Fitness(fitness), Trace{
 		"fitness":          fitness,
 		"phases":           phasesUsed,
-		"max_phases":       maxPhases,
+		"max_phases":       cfg.maxPhases,
 		"done":             done,
 		"alignment":        alignmentAvg,
 		"final_complexity": complexity,
+		"mode":             cfg.mode,
 	}, nil
+}
+
+type llvmPhaseOrderingConfig struct {
+	mode              string
+	maxPhases         int
+	initialComplexity float64
+}
+
+func llvmPhaseOrderingConfigForMode(mode string) (llvmPhaseOrderingConfig, error) {
+	switch strings.TrimSpace(strings.ToLower(mode)) {
+	case "", "gt":
+		return llvmPhaseOrderingConfig{mode: "gt", maxPhases: 24, initialComplexity: 1.2}, nil
+	case "validation":
+		return llvmPhaseOrderingConfig{mode: "validation", maxPhases: 16, initialComplexity: 1.35}, nil
+	case "test":
+		return llvmPhaseOrderingConfig{mode: "test", maxPhases: 16, initialComplexity: 1.5}, nil
+	default:
+		return llvmPhaseOrderingConfig{}, fmt.Errorf("unsupported llvm-phase-ordering mode: %s", mode)
+	}
 }
 
 func llvmTargetPhase(passNorm float64) float64 {

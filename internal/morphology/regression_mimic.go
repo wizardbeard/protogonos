@@ -5,6 +5,7 @@ import (
 
 	protoio "protogonos/internal/io"
 	"protogonos/internal/model"
+	"protogonos/internal/scapeid"
 )
 
 type RegressionMimicMorphology struct{}
@@ -26,6 +27,7 @@ func (RegressionMimicMorphology) Compatible(scape string) bool {
 }
 
 func EnsureScapeCompatibility(scapeName string) error {
+	scapeName = scapeid.Normalize(scapeName)
 	m, ok := defaultMorphologyForScape(scapeName)
 	if !ok {
 		return nil
@@ -34,6 +36,7 @@ func EnsureScapeCompatibility(scapeName string) error {
 }
 
 func EnsureGenomeIOCompatibility(scapeName string, genome model.Genome) error {
+	scapeName = scapeid.Normalize(scapeName)
 	for _, sensorName := range genome.SensorIDs {
 		if _, err := protoio.ResolveSensor(sensorName, scapeName); err != nil {
 			return fmt.Errorf("genome %s sensor %s incompatible with scape %s: %w", genome.ID, sensorName, scapeName, err)
@@ -75,6 +78,7 @@ func ValidateRegisteredComponents(scapeName string, m Morphology) error {
 }
 
 func defaultMorphologyForScape(scapeName string) (Morphology, bool) {
+	scapeName = scapeid.Normalize(scapeName)
 	switch scapeName {
 	case "xor":
 		return XORMorphology{}, true

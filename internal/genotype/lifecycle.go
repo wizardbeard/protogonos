@@ -8,6 +8,7 @@ import (
 
 	protoio "protogonos/internal/io"
 	"protogonos/internal/model"
+	"protogonos/internal/scapeid"
 	"protogonos/internal/storage"
 )
 
@@ -18,6 +19,7 @@ type SeedPopulation struct {
 }
 
 func ConstructSeedPopulation(scapeName string, size int, seed int64) (SeedPopulation, error) {
+	scapeName = scapeid.Normalize(scapeName)
 	switch scapeName {
 	case "xor":
 		return SeedPopulation{

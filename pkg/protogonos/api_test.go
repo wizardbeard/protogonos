@@ -113,6 +113,13 @@ func TestClientRunRunsAndExport(t *testing.T) {
 	if scapeSummary.Name != "xor" {
 		t.Fatalf("unexpected scape summary: %+v", scapeSummary)
 	}
+	scapeSummaryAlias, err := client.ScapeSummary(context.Background(), "xor_sim")
+	if err != nil {
+		t.Fatalf("scape summary alias: %v", err)
+	}
+	if scapeSummaryAlias.Name != "xor" {
+		t.Fatalf("unexpected scape summary alias: %+v", scapeSummaryAlias)
+	}
 
 	exported, err := client.Export(context.Background(), ExportRequest{Latest: true})
 	if err != nil {
@@ -681,6 +688,21 @@ func TestMaterializeRunConfigFromRequestParsesCompositeOpModeForGTProbes(t *test
 	}
 	if !cfg.Request.ValidationProbe || !cfg.Request.TestProbe {
 		t.Fatalf("expected validation/test probes implied by composite op mode, got validation=%t test=%t", cfg.Request.ValidationProbe, cfg.Request.TestProbe)
+	}
+}
+
+func TestMaterializeRunConfigFromRequestNormalizesReferenceScapeAlias(t *testing.T) {
+	cfg, err := materializeRunConfigFromRequest(RunRequest{
+		Scape:       "scape_LLVMPhaseOrdering",
+		Population:  6,
+		Generations: 1,
+		OpMode:      "gt",
+	})
+	if err != nil {
+		t.Fatalf("materialize run config: %v", err)
+	}
+	if cfg.Request.Scape != "llvm-phase-ordering" {
+		t.Fatalf("expected normalized scape llvm-phase-ordering, got %s", cfg.Request.Scape)
 	}
 }
 

@@ -16,6 +16,7 @@ import (
 	"protogonos/internal/morphology"
 	"protogonos/internal/platform"
 	"protogonos/internal/scape"
+	"protogonos/internal/scapeid"
 	"protogonos/internal/stats"
 	"protogonos/internal/storage"
 	"protogonos/internal/tuning"
@@ -1046,9 +1047,10 @@ func (c *Client) TopGenomes(ctx context.Context, req TopGenomesRequest) ([]model
 }
 
 func (c *Client) ScapeSummary(ctx context.Context, scapeName string) (ScapeSummaryItem, error) {
-	if scapeName == "" {
+	if strings.TrimSpace(scapeName) == "" {
 		return ScapeSummaryItem{}, errors.New("scape name is required")
 	}
+	scapeName = scapeid.Normalize(scapeName)
 	if _, err := c.ensurePolis(ctx); err != nil {
 		return ScapeSummaryItem{}, err
 	}
@@ -1205,6 +1207,7 @@ func materializeRunConfigFromRequest(req RunRequest) (materializedRunConfig, err
 	if req.Scape == "" {
 		req.Scape = "xor"
 	}
+	req.Scape = scapeid.Normalize(req.Scape)
 	if req.Population < 0 {
 		return materializedRunConfig{}, errors.New("population must be >= 0")
 	}

@@ -296,4 +296,17 @@ func TestScalarComponentsRegistered(t *testing.T) {
 	if llvmPhase.Name() != ScalarOutputActuatorName {
 		t.Fatalf("unexpected llvm phase actuator name: %s", llvmPhase.Name())
 	}
+
+	if _, err := ResolveSensor(Pole2CartPositionSensorName, "pb_sim"); err != nil {
+		t.Fatalf("resolve pole2 alias sensor pb_sim: %v", err)
+	}
+	if _, err := ResolveSensor(DTMRangeFrontSensorName, "dtm_sim"); err != nil {
+		t.Fatalf("resolve dtm alias sensor dtm_sim: %v", err)
+	}
+	if _, err := ResolveSensor(GTSAInputSensorName, "scape_GTSA"); err != nil {
+		t.Fatalf("resolve gtsa alias sensor scape_GTSA: %v", err)
+	}
+	if _, err := ResolveActuator(LLVMPhaseActuatorName, "scape_LLVMPhaseOrdering"); err != nil {
+		t.Fatalf("resolve llvm alias actuator scape_LLVMPhaseOrdering: %v", err)
+	}
 }

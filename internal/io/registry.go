@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"sort"
 	"sync"
+
+	"protogonos/internal/scapeid"
 )
 
 const (
@@ -116,6 +118,7 @@ func ResolveSensor(name, scape string) (Sensor, error) {
 	if entry.schemaVersion != SupportedSchemaVersion || entry.codecVersion != SupportedCodecVersion {
 		return nil, fmt.Errorf("%w: %s", ErrVersionMismatch, name)
 	}
+	scape = scapeid.Normalize(scape)
 	if entry.compatible != nil {
 		if err := entry.compatible(scape); err != nil {
 			return nil, fmt.Errorf("%w: sensor=%s: %v", ErrIncompatible, name, err)
@@ -181,6 +184,7 @@ func ResolveActuator(name, scape string) (Actuator, error) {
 	if entry.schemaVersion != SupportedSchemaVersion || entry.codecVersion != SupportedCodecVersion {
 		return nil, fmt.Errorf("%w: %s", ErrVersionMismatch, name)
 	}
+	scape = scapeid.Normalize(scape)
 	if entry.compatible != nil {
 		if err := entry.compatible(scape); err != nil {
 			return nil, fmt.Errorf("%w: actuator=%s: %v", ErrIncompatible, name, err)
