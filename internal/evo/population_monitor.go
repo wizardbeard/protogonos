@@ -1575,6 +1575,15 @@ func (m *PopulationMonitor) evaluatePopulation(ctx context.Context, population [
 					attempts = m.cfg.TuneAttemptPolicy.Attempts(m.cfg.TuneAttempts, generation, m.cfg.Generations, j.genome)
 				}
 				if m.cfg.OpMode == OpModeGT && m.cfg.Tuner != nil && attempts > 0 {
+					if runtimeTuner, ok := m.cfg.Tuner.(tuning.RuntimeReportingTuner); ok && len(j.genome.Synapses) > 0 {
+						scoredRuntime, runtimeReport, err := m.evaluateGenomeWithRuntimeTuning(ctx, j.genome, attempts, runtimeTuner)
+						if err != nil {
+							results <- result{idx: j.idx, err: err}
+							continue
+						}
+						results <- result{idx: j.idx, scored: scoredRuntime, tune: runtimeReport}
+						continue
+					}
 					if reporting, ok := m.cfg.Tuner.(tuning.ReportingTuner); ok {
 						tuned, report, err := reporting.TuneWithReport(ctx, j.genome, attempts, func(ctx context.Context, g model.Genome) (float64, error) {
 							fitness, _, err := m.evaluateGenome(ctx, g, OpModeGT)
@@ -1674,6 +1683,54 @@ func (m *PopulationMonitor) evaluatePopulation(ctx context.Context, population [
 	return scored, tuningStats, countedEvaluations, nil
 }
 
+func (m *PopulationMonitor) evaluateGenomeWithRuntimeTuning(
+	ctx context.Context,
+	genome model.Genome,
+	attempts int,
+	tuner tuning.RuntimeReportingTuner,
+) (ScoredGenome, tuning.TuneReport, error) {
+	cortex, err := m.buildCortex(genome)
+	if err != nil {
+		return ScoredGenome{}, tuning.TuneReport{}, err
+	}
+
+	runtimeResult, err := tuner.TuneRuntimeWithReport(
+		ctx,
+		cortex,
+		attempts,
+		OpModeGT,
+		func(ctx context.Context, mode string) (float64, map[string]any, bool, error) {
+			fitness, trace, err := m.evaluateCortex(ctx, cortex, mode)
+			if err != nil {
+				return 0, nil, false, err
+			}
+			return fitness, map[string]any(trace), traceGoalReached(trace), nil
+		},
+	)
+	if err != nil {
+		return ScoredGenome{}, tuning.TuneReport{}, err
+	}
+
+	trace := scape.Trace(runtimeResult.Trace)
+	fitness := runtimeResult.Fitness
+	if trace == nil {
+		if err := cortex.Reactivate(); err != nil {
+			return ScoredGenome{}, tuning.TuneReport{}, err
+		}
+		var evalErr error
+		fitness, trace, evalErr = m.evaluateCortex(ctx, cortex, OpModeGT)
+		if evalErr != nil {
+			return ScoredGenome{}, tuning.TuneReport{}, evalErr
+		}
+	}
+
+	return ScoredGenome{
+		Genome:  runtimeResult.Genome,
+		Fitness: fitness,
+		Trace:   trace,
+	}, runtimeResult.Report, nil
+}
+
 func (m *PopulationMonitor) applyQueuedControl(ctx context.Context) error {
 	if m.cfg.Control == nil {
 		return nil
@@ -1697,13 +1754,21 @@ func (m *PopulationMonitor) applyQueuedControl(ctx context.Context) error {
 }
 
 func (m *PopulationMonitor) evaluateGenome(ctx context.Context, genome model.Genome, mode string) (float64, scape.Trace, error) {
-	sensors, actuators, err := m.buildIO(genome)
+	cortex, err := m.buildCortex(genome)
 	if err != nil {
 		return 0, nil, err
 	}
+	return m.evaluateCortex(ctx, cortex, mode)
+}
+
+func (m *PopulationMonitor) buildCortex(genome model.Genome) (*agent.Cortex, error) {
+	sensors, actuators, err := m.buildIO(genome)
+	if err != nil {
+		return nil, err
+	}
 	substrateRuntime, err := m.buildSubstrate(genome)
 	if err != nil {
-		return 0, nil, err
+		return nil, err
 	}
 
 	cortex, err := agent.NewCortex(
@@ -1716,11 +1781,19 @@ func (m *PopulationMonitor) evaluateGenome(ctx context.Context, genome model.Gen
 		substrateRuntime,
 	)
 	if err != nil {
-		return 0, nil, err
+		return nil, err
+	}
+	return cortex, nil
+}
+
+func (m *PopulationMonitor) evaluateCortex(ctx context.Context, cortex *agent.Cortex, mode string) (float64, scape.Trace, error) {
+	if cortex == nil {
+		return 0, nil, fmt.Errorf("cortex is required")
 	}
 	var (
 		fitness scape.Fitness
 		trace   scape.Trace
+		err     error
 	)
 	if modeAware, ok := m.cfg.Scape.(scape.ModeAwareScape); ok {
 		fitness, trace, err = modeAware.EvaluateMode(ctx, cortex, mode)
@@ -1731,6 +1804,48 @@ func (m *PopulationMonitor) evaluateGenome(ctx context.Context, genome model.Gen
 		return 0, nil, err
 	}
 	return float64(fitness), trace, nil
+}
+
+func traceGoalReached(trace scape.Trace) bool {
+	if trace == nil {
+		return false
+	}
+	keys := []string{"goal_reached", "goalReached", "goal_reached_flag", "goal"}
+	for _, key := range keys {
+		raw, ok := trace[key]
+		if !ok {
+			continue
+		}
+		switch value := raw.(type) {
+		case bool:
+			return value
+		case int:
+			return value > 0
+		case int8:
+			return value > 0
+		case int16:
+			return value > 0
+		case int32:
+			return value > 0
+		case int64:
+			return value > 0
+		case uint:
+			return value > 0
+		case uint8:
+			return value > 0
+		case uint16:
+			return value > 0
+		case uint32:
+			return value > 0
+		case uint64:
+			return value > 0
+		case float32:
+			return value > 0
+		case float64:
+			return value > 0
+		}
+	}
+	return false
 }
 
 func (m *PopulationMonitor) buildIO(genome model.Genome) (map[string]protoio.Sensor, map[string]protoio.Actuator, error) {

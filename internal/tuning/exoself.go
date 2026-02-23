@@ -54,6 +54,176 @@ func (e *Exoself) Tune(ctx context.Context, genome model.Genome, attempts int, f
 	return tuned, err
 }
 
+func (e *Exoself) TuneRuntime(
+	ctx context.Context,
+	runtime RuntimeAgent,
+	attempts int,
+	mode string,
+	evaluate RuntimeEvaluateFn,
+) (RuntimeTuneResult, error) {
+	return e.TuneRuntimeWithReport(ctx, runtime, attempts, mode, evaluate)
+}
+
+func (e *Exoself) TuneRuntimeWithReport(
+	ctx context.Context,
+	runtime RuntimeAgent,
+	attempts int,
+	mode string,
+	evaluate RuntimeEvaluateFn,
+) (RuntimeTuneResult, error) {
+	result := RuntimeTuneResult{
+		Report: TuneReport{AttemptsPlanned: attempts},
+	}
+	if err := ctx.Err(); err != nil {
+		return RuntimeTuneResult{}, err
+	}
+	if e == nil || e.Rand == nil {
+		return RuntimeTuneResult{}, errors.New("random source is required")
+	}
+	if runtime == nil {
+		return RuntimeTuneResult{}, errors.New("runtime agent is required")
+	}
+	if evaluate == nil {
+		return RuntimeTuneResult{}, errors.New("runtime evaluate function is required")
+	}
+	if attempts <= 0 {
+		result.Genome = cloneGenome(runtime.SnapshotGenome())
+		return result, nil
+	}
+	if e.Steps <= 0 {
+		return RuntimeTuneResult{}, errors.New("steps must be > 0")
+	}
+	if e.StepSize <= 0 {
+		return RuntimeTuneResult{}, errors.New("step size must be > 0")
+	}
+	if e.PerturbationRange < 0 {
+		return RuntimeTuneResult{}, errors.New("perturbation range must be >= 0")
+	}
+	if e.AnnealingFactor < 0 {
+		return RuntimeTuneResult{}, errors.New("annealing factor must be >= 0")
+	}
+	if e.MinImprovement < 0 {
+		return RuntimeTuneResult{}, errors.New("min improvement must be >= 0")
+	}
+	if mode == "" {
+		mode = "gt"
+	}
+	perturbationRange := e.PerturbationRange
+	if perturbationRange == 0 {
+		perturbationRange = 1.0
+	}
+	annealingFactor := e.AnnealingFactor
+	if annealingFactor == 0 {
+		annealingFactor = 1.0
+	}
+
+	original := cloneGenome(runtime.SnapshotGenome())
+	if len(original.Synapses) == 0 {
+		result.Genome = original
+		return result, nil
+	}
+	if err := runtime.ApplyGenome(original); err != nil {
+		return RuntimeTuneResult{}, err
+	}
+	bestFitness, bestTrace, goalReached, err := evaluate(ctx, mode)
+	if err != nil {
+		return RuntimeTuneResult{}, err
+	}
+	result.Report.CandidateEvaluations++
+	if e.GoalFitness > 0 && bestFitness >= e.GoalFitness {
+		goalReached = true
+	}
+	runtime.BackupWeights()
+
+	best := cloneGenome(original)
+	recentBase := cloneGenome(best)
+
+	if goalReached {
+		result.Genome = best
+		result.Fitness = bestFitness
+		result.Trace = cloneRuntimeTrace(bestTrace)
+		result.Report.GoalReached = true
+		return result, nil
+	}
+
+	consecutiveNoImprovement := 0
+	for consecutiveNoImprovement < attempts {
+		result.Report.AttemptsExecuted++
+		bases, err := e.candidateBases(best, original, recentBase)
+		if err != nil {
+			return RuntimeTuneResult{}, err
+		}
+		localBest := cloneGenome(best)
+		localBestFitness := bestFitness
+		localBestTrace := cloneRuntimeTrace(bestTrace)
+		localGoalReached := false
+		for _, base := range bases {
+			if err := runtime.Reactivate(); err != nil {
+				return RuntimeTuneResult{}, err
+			}
+			candidate, err := e.perturbCandidate(ctx, base, perturbationRange, annealingFactor)
+			if err != nil {
+				return RuntimeTuneResult{}, err
+			}
+			if err := runtime.ApplyGenome(candidate); err != nil {
+				return RuntimeTuneResult{}, err
+			}
+			candidateFitness, candidateTrace, candidateGoalReached, err := evaluate(ctx, mode)
+			if err != nil {
+				return RuntimeTuneResult{}, err
+			}
+			result.Report.CandidateEvaluations++
+			if e.GoalFitness > 0 && candidateFitness >= e.GoalFitness {
+				candidateGoalReached = true
+			}
+			if scalarFitnessDominates(candidateFitness, localBestFitness, e.MinImprovement) {
+				result.Report.AcceptedCandidates++
+				localBest = candidate
+				localBestFitness = candidateFitness
+				localBestTrace = cloneRuntimeTrace(candidateTrace)
+				localGoalReached = candidateGoalReached
+			} else {
+				result.Report.RejectedCandidates++
+			}
+		}
+
+		recentBase = cloneGenome(localBest)
+		improved := scalarFitnessDominates(localBestFitness, bestFitness, e.MinImprovement)
+		if improved {
+			if err := runtime.ApplyGenome(localBest); err != nil {
+				return RuntimeTuneResult{}, err
+			}
+			runtime.BackupWeights()
+			best = localBest
+			bestFitness = localBestFitness
+			bestTrace = cloneRuntimeTrace(localBestTrace)
+		} else {
+			if err := runtime.RestoreWeights(); err != nil {
+				return RuntimeTuneResult{}, err
+			}
+			if err := runtime.Reactivate(); err != nil {
+				return RuntimeTuneResult{}, err
+			}
+		}
+
+		if improved {
+			consecutiveNoImprovement = 0
+		} else {
+			consecutiveNoImprovement++
+		}
+
+		if localGoalReached || (e.GoalFitness > 0 && bestFitness >= e.GoalFitness) {
+			result.Report.GoalReached = true
+			break
+		}
+	}
+
+	result.Genome = cloneGenome(best)
+	result.Fitness = bestFitness
+	result.Trace = cloneRuntimeTrace(bestTrace)
+	return result, nil
+}
+
 func (e *Exoself) TuneWithReport(ctx context.Context, genome model.Genome, attempts int, fitness FitnessFn) (model.Genome, TuneReport, error) {
 	report := TuneReport{AttemptsPlanned: attempts}
 	if err := ctx.Err(); err != nil {
@@ -939,4 +1109,15 @@ func cloneFloatSlice(values []float64) []float64 {
 		return nil
 	}
 	return append([]float64(nil), values...)
+}
+
+func cloneRuntimeTrace(trace map[string]any) map[string]any {
+	if trace == nil {
+		return nil
+	}
+	out := make(map[string]any, len(trace))
+	for key, value := range trace {
+		out[key] = value
+	}
+	return out
 }

@@ -558,6 +558,74 @@ func TestCortexBackupRestoreWeights(t *testing.T) {
 	}
 }
 
+func TestCortexSnapshotGenomeReturnsClone(t *testing.T) {
+	genome := model.Genome{
+		Neurons: []model.Neuron{
+			{ID: "i", Activation: "identity"},
+			{ID: "o", Activation: "identity"},
+		},
+		Synapses: []model.Synapse{
+			{ID: "s", From: "i", To: "o", Weight: 0.2, Enabled: true},
+		},
+	}
+	c, err := NewCortex("agent-snapshot", genome, nil, nil, []string{"i"}, []string{"o"}, nil)
+	if err != nil {
+		t.Fatalf("new cortex: %v", err)
+	}
+
+	snap := c.SnapshotGenome()
+	snap.Synapses[0].Weight = 7.5
+	if c.genome.Synapses[0].Weight == 7.5 {
+		t.Fatal("expected snapshot mutation not to affect runtime genome")
+	}
+}
+
+func TestCortexApplyGenomeReplacesRuntimeWeights(t *testing.T) {
+	genome := model.Genome{
+		Neurons: []model.Neuron{
+			{ID: "i", Activation: "identity"},
+			{ID: "o", Activation: "identity"},
+		},
+		Synapses: []model.Synapse{
+			{ID: "s", From: "i", To: "o", Weight: 0.2, Enabled: true},
+		},
+	}
+	c, err := NewCortex("agent-apply", genome, nil, nil, []string{"i"}, []string{"o"}, nil)
+	if err != nil {
+		t.Fatalf("new cortex: %v", err)
+	}
+
+	applied := genome
+	applied.Synapses = append([]model.Synapse(nil), genome.Synapses...)
+	applied.Synapses[0].Weight = -3.7
+	if err := c.ApplyGenome(applied); err != nil {
+		t.Fatalf("apply genome: %v", err)
+	}
+	if got := c.SnapshotGenome().Synapses[0].Weight; got != -3.7 {
+		t.Fatalf("expected applied synapse weight -3.7, got=%f", got)
+	}
+}
+
+func TestCortexApplyGenomeTerminatedError(t *testing.T) {
+	genome := model.Genome{
+		Neurons: []model.Neuron{
+			{ID: "i", Activation: "identity"},
+			{ID: "o", Activation: "identity"},
+		},
+		Synapses: []model.Synapse{
+			{ID: "s", From: "i", To: "o", Weight: 0.2, Enabled: true},
+		},
+	}
+	c, err := NewCortex("agent-apply-term", genome, nil, nil, []string{"i"}, []string{"o"}, nil)
+	if err != nil {
+		t.Fatalf("new cortex: %v", err)
+	}
+	c.Terminate()
+	if err := c.ApplyGenome(genome); !errors.Is(err, ErrCortexTerminated) {
+		t.Fatalf("expected ErrCortexTerminated, got %v", err)
+	}
+}
+
 func TestCortexRestoreWeightsWithoutBackupErrors(t *testing.T) {
 	genome := model.Genome{
 		Neurons: []model.Neuron{

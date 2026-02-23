@@ -51,6 +51,68 @@ func (r *reportingTuner) TuneWithReport(_ context.Context, genome model.Genome, 
 	return genome, r.report, nil
 }
 
+type runtimeReportingTuner struct {
+	mu             sync.Mutex
+	runtimeCalls   int
+	reportingCalls int
+	legacyCalls    int
+}
+
+func (r *runtimeReportingTuner) Name() string {
+	return "runtime_reporting_tuner"
+}
+
+func (r *runtimeReportingTuner) Tune(_ context.Context, genome model.Genome, _ int, _ tuning.FitnessFn) (model.Genome, error) {
+	r.mu.Lock()
+	r.legacyCalls++
+	r.mu.Unlock()
+	return genome, nil
+}
+
+func (r *runtimeReportingTuner) TuneWithReport(_ context.Context, genome model.Genome, _ int, _ tuning.FitnessFn) (model.Genome, tuning.TuneReport, error) {
+	r.mu.Lock()
+	r.reportingCalls++
+	r.mu.Unlock()
+	return genome, tuning.TuneReport{}, nil
+}
+
+func (r *runtimeReportingTuner) TuneRuntime(
+	ctx context.Context,
+	runtime tuning.RuntimeAgent,
+	attempts int,
+	mode string,
+	evaluate tuning.RuntimeEvaluateFn,
+) (tuning.RuntimeTuneResult, error) {
+	return r.TuneRuntimeWithReport(ctx, runtime, attempts, mode, evaluate)
+}
+
+func (r *runtimeReportingTuner) TuneRuntimeWithReport(
+	ctx context.Context,
+	runtime tuning.RuntimeAgent,
+	attempts int,
+	mode string,
+	evaluate tuning.RuntimeEvaluateFn,
+) (tuning.RuntimeTuneResult, error) {
+	r.mu.Lock()
+	r.runtimeCalls++
+	r.mu.Unlock()
+	genome := runtime.SnapshotGenome()
+	fitness, trace, _, err := evaluate(ctx, mode)
+	if err != nil {
+		return tuning.RuntimeTuneResult{}, err
+	}
+	return tuning.RuntimeTuneResult{
+		Genome:  genome,
+		Fitness: fitness,
+		Trace:   trace,
+		Report: tuning.TuneReport{
+			AttemptsPlanned:      attempts,
+			AttemptsExecuted:     attempts,
+			CandidateEvaluations: 1,
+		},
+	}, nil
+}
+
 func TestPopulationMonitorTuningImprovesFirstGeneration(t *testing.T) {
 	initial := []model.Genome{
 		newLinearGenome("g0", -2.0),
@@ -249,5 +311,47 @@ func TestPopulationMonitorAggregatesReportingTunerTelemetry(t *testing.T) {
 	}
 	if d.TuningEvalsPerAttempt != 2.5 {
 		t.Fatalf("unexpected tuning evals per attempt: got=%f want=2.5", d.TuningEvalsPerAttempt)
+	}
+}
+
+func TestPopulationMonitorUsesRuntimeReportingTunerPath(t *testing.T) {
+	initial := []model.Genome{
+		newLinearGenome("g0", -1.0),
+		newLinearGenome("g1", -0.8),
+	}
+	rt := &runtimeReportingTuner{}
+	monitor, err := NewPopulationMonitor(MonitorConfig{
+		Scape:           oneDimScape{},
+		Mutation:        PerturbWeightAt{Index: 0, Delta: 0},
+		PopulationSize:  len(initial),
+		EliteCount:      1,
+		Generations:     1,
+		Workers:         1,
+		Seed:            1,
+		InputNeuronIDs:  []string{"i"},
+		OutputNeuronIDs: []string{"o"},
+		Tuner:           rt,
+		TuneAttempts:    2,
+	})
+	if err != nil {
+		t.Fatalf("new monitor: %v", err)
+	}
+	result, err := monitor.Run(context.Background(), initial)
+	if err != nil {
+		t.Fatalf("run: %v", err)
+	}
+	if len(result.GenerationDiagnostics) != 1 {
+		t.Fatalf("expected one diagnostics row, got %d", len(result.GenerationDiagnostics))
+	}
+	rt.mu.Lock()
+	defer rt.mu.Unlock()
+	if rt.runtimeCalls != len(initial) {
+		t.Fatalf("expected runtime path per genome, got runtimeCalls=%d want=%d", rt.runtimeCalls, len(initial))
+	}
+	if rt.reportingCalls != 0 {
+		t.Fatalf("expected legacy reporting path to be bypassed, got=%d", rt.reportingCalls)
+	}
+	if rt.legacyCalls != 0 {
+		t.Fatalf("expected legacy tune path to be bypassed, got=%d", rt.legacyCalls)
 	}
 }

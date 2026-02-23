@@ -148,6 +148,23 @@ func (c *Cortex) BackupWeights() {
 	c.mu.Unlock()
 }
 
+func (c *Cortex) SnapshotGenome() model.Genome {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return genotype.CloneGenome(c.genome)
+}
+
+func (c *Cortex) ApplyGenome(genome model.Genome) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.status == CortexStatusTerminated {
+		return ErrCortexTerminated
+	}
+	c.genome = genotype.CloneGenome(genome)
+	c.nnState = nn.NewForwardState()
+	return nil
+}
+
 func (c *Cortex) RestoreWeights() error {
 	c.mu.Lock()
 	defer c.mu.Unlock()

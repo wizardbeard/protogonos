@@ -2,6 +2,7 @@ package tuning
 
 import (
 	"context"
+	"errors"
 	"math"
 	"math/rand"
 	"sync"
@@ -9,6 +10,64 @@ import (
 
 	"protogonos/internal/model"
 )
+
+type runtimeEvalStep struct {
+	fitness float64
+	trace   map[string]any
+	goal    bool
+	err     error
+}
+
+type runtimeProbeAgent struct {
+	genome          model.Genome
+	backup          *model.Genome
+	evalPlan        []runtimeEvalStep
+	evalCalls       int
+	backupCalls     int
+	restoreCalls    int
+	reactivateCalls int
+	applyCalls      int
+}
+
+func (r *runtimeProbeAgent) SnapshotGenome() model.Genome {
+	return cloneGenome(r.genome)
+}
+
+func (r *runtimeProbeAgent) ApplyGenome(genome model.Genome) error {
+	r.genome = cloneGenome(genome)
+	r.applyCalls++
+	return nil
+}
+
+func (r *runtimeProbeAgent) BackupWeights() {
+	backup := cloneGenome(r.genome)
+	r.backup = &backup
+	r.backupCalls++
+}
+
+func (r *runtimeProbeAgent) RestoreWeights() error {
+	if r.backup == nil {
+		return errors.New("no backup")
+	}
+	r.genome = cloneGenome(*r.backup)
+	r.restoreCalls++
+	return nil
+}
+
+func (r *runtimeProbeAgent) Reactivate() error {
+	r.reactivateCalls++
+	return nil
+}
+
+func (r *runtimeProbeAgent) evaluate(_ context.Context, _ string) (float64, map[string]any, bool, error) {
+	if r.evalCalls < len(r.evalPlan) {
+		step := r.evalPlan[r.evalCalls]
+		r.evalCalls++
+		return step.fitness, cloneRuntimeTrace(step.trace), step.goal, step.err
+	}
+	r.evalCalls++
+	return r.genome.Synapses[0].Weight, map[string]any{}, false, nil
+}
 
 func TestExoselfImprovesFitness(t *testing.T) {
 	genome := model.Genome{
@@ -146,6 +205,83 @@ func TestExoselfTuneWithReportProvidesTelemetry(t *testing.T) {
 	}
 	if report.CandidateEvaluations == 0 {
 		t.Fatalf("expected candidate evaluations in report: %+v", report)
+	}
+}
+
+func TestExoselfTuneRuntimeWithReportUsesBackupAndRestore(t *testing.T) {
+	genome := model.Genome{
+		ID:       "g",
+		Synapses: []model.Synapse{{ID: "s", Weight: 0.2, Enabled: true}},
+	}
+	runtime := &runtimeProbeAgent{
+		genome: cloneGenome(genome),
+		evalPlan: []runtimeEvalStep{
+			{fitness: 1.0, trace: map[string]any{"cycles": 1}},
+			{fitness: 0.4, trace: map[string]any{"cycles": 1}},
+		},
+	}
+	tuner := &Exoself{
+		Rand:               rand.New(rand.NewSource(101)),
+		Steps:              1,
+		StepSize:           0.25,
+		CandidateSelection: CandidateSelectOriginal,
+	}
+
+	result, err := tuner.TuneRuntimeWithReport(context.Background(), runtime, 1, "gt", runtime.evaluate)
+	if err != nil {
+		t.Fatalf("tune runtime with report: %v", err)
+	}
+	if result.Report.AttemptsExecuted != 1 {
+		t.Fatalf("expected one executed attempt, got=%d", result.Report.AttemptsExecuted)
+	}
+	if result.Report.CandidateEvaluations != 2 {
+		t.Fatalf("expected baseline+candidate evaluations, got=%d", result.Report.CandidateEvaluations)
+	}
+	if runtime.backupCalls == 0 {
+		t.Fatal("expected runtime backup to be invoked")
+	}
+	if runtime.restoreCalls == 0 {
+		t.Fatal("expected runtime restore on non-improving candidate")
+	}
+	if runtime.reactivateCalls == 0 {
+		t.Fatal("expected runtime reactivate during tuning loop")
+	}
+	if result.Fitness != 1.0 {
+		t.Fatalf("expected best fitness to remain baseline, got=%f", result.Fitness)
+	}
+}
+
+func TestExoselfTuneRuntimeWithReportStopsAtGoal(t *testing.T) {
+	genome := model.Genome{
+		ID:       "g",
+		Synapses: []model.Synapse{{ID: "s", Weight: 0.2, Enabled: true}},
+	}
+	runtime := &runtimeProbeAgent{
+		genome: cloneGenome(genome),
+		evalPlan: []runtimeEvalStep{
+			{fitness: 0.95, trace: map[string]any{"goal_reached": true}, goal: true},
+		},
+	}
+	tuner := &Exoself{
+		Rand:               rand.New(rand.NewSource(103)),
+		Steps:              1,
+		StepSize:           0.25,
+		GoalFitness:        0.9,
+		CandidateSelection: CandidateSelectOriginal,
+	}
+
+	result, err := tuner.TuneRuntimeWithReport(context.Background(), runtime, 5, "gt", runtime.evaluate)
+	if err != nil {
+		t.Fatalf("tune runtime with report: %v", err)
+	}
+	if !result.Report.GoalReached {
+		t.Fatalf("expected goal reached in runtime report: %+v", result.Report)
+	}
+	if result.Report.AttemptsExecuted != 0 {
+		t.Fatalf("expected no perturb attempts after baseline goal hit, got=%d", result.Report.AttemptsExecuted)
+	}
+	if result.Report.CandidateEvaluations != 1 {
+		t.Fatalf("expected one baseline evaluation, got=%d", result.Report.CandidateEvaluations)
 	}
 }
 
