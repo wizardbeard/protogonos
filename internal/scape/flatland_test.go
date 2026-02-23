@@ -20,14 +20,14 @@ func (a scriptedStepAgent) RunStep(_ context.Context, input []float64) ([]float6
 	return a.fn(input), nil
 }
 
-func TestFlatlandScapeRewardsForwardMotion(t *testing.T) {
+func TestFlatlandScapeForagingCollectsResources(t *testing.T) {
 	scape := FlatlandScape{}
 	stationary := scriptedStepAgent{
 		id: "stationary",
 		fn: func(_ []float64) []float64 { return []float64{0} },
 	}
-	forward := scriptedStepAgent{
-		id: "forward",
+	forager := scriptedStepAgent{
+		id: "forager",
 		fn: func(input []float64) []float64 {
 			if len(input) == 0 {
 				return []float64{0}
@@ -35,20 +35,40 @@ func TestFlatlandScapeRewardsForwardMotion(t *testing.T) {
 			if input[0] > 0 {
 				return []float64{1}
 			}
-			return []float64{-1}
+			if input[0] < 0 {
+				return []float64{-1}
+			}
+			return []float64{0}
 		},
 	}
 
-	stationaryFitness, _, err := scape.Evaluate(context.Background(), stationary)
+	stationaryFitness, stationaryTrace, err := scape.Evaluate(context.Background(), stationary)
 	if err != nil {
 		t.Fatalf("evaluate stationary: %v", err)
 	}
-	forwardFitness, _, err := scape.Evaluate(context.Background(), forward)
+	foragerFitness, foragerTrace, err := scape.Evaluate(context.Background(), forager)
 	if err != nil {
-		t.Fatalf("evaluate forward: %v", err)
+		t.Fatalf("evaluate forager: %v", err)
 	}
-	if forwardFitness <= stationaryFitness {
-		t.Fatalf("expected forward policy to outperform stationary, got forward=%f stationary=%f", forwardFitness, stationaryFitness)
+	if foragerFitness <= 0 || stationaryFitness <= 0 {
+		t.Fatalf("expected positive fitness signals, got forager=%f stationary=%f", foragerFitness, stationaryFitness)
+	}
+	stationaryFood, ok := stationaryTrace["food_collected"].(int)
+	if !ok {
+		t.Fatalf("stationary trace missing food_collected: %+v", stationaryTrace)
+	}
+	foragerFood, ok := foragerTrace["food_collected"].(int)
+	if !ok {
+		t.Fatalf("forager trace missing food_collected: %+v", foragerTrace)
+	}
+	if foragerFood <= stationaryFood {
+		t.Fatalf(
+			"expected forager to collect more food than stationary, got forager=%d stationary=%d forager_trace=%+v stationary_trace=%+v",
+			foragerFood,
+			stationaryFood,
+			foragerTrace,
+			stationaryTrace,
+		)
 	}
 }
 
@@ -101,5 +121,41 @@ func TestFlatlandScapeEvaluateWithIOComponents(t *testing.T) {
 	}
 	if _, ok := trace["energy"].(float64); !ok {
 		t.Fatalf("trace missing energy: %+v", trace)
+	}
+}
+
+func TestFlatlandScapeTraceCapturesMetabolicsAndCollisions(t *testing.T) {
+	scape := FlatlandScape{}
+	forager := scriptedStepAgent{
+		id: "forager",
+		fn: func(input []float64) []float64 {
+			if len(input) < 2 {
+				return []float64{0}
+			}
+			if input[0] > 0 {
+				return []float64{1}
+			}
+			if input[0] < 0 {
+				return []float64{-1}
+			}
+			return []float64{0}
+		},
+	}
+
+	_, trace, err := scape.Evaluate(context.Background(), forager)
+	if err != nil {
+		t.Fatalf("evaluate forager: %v", err)
+	}
+	if _, ok := trace["age"].(int); !ok {
+		t.Fatalf("trace missing age: %+v", trace)
+	}
+	if _, ok := trace["food_collected"].(int); !ok {
+		t.Fatalf("trace missing food_collected: %+v", trace)
+	}
+	if _, ok := trace["poison_hits"].(int); !ok {
+		t.Fatalf("trace missing poison_hits: %+v", trace)
+	}
+	if reason, ok := trace["terminal_reason"].(string); !ok || reason == "" {
+		t.Fatalf("trace missing terminal_reason: %+v", trace)
 	}
 }
