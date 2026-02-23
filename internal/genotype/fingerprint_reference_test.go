@@ -68,3 +68,39 @@ func TestComputeReferenceFingerprintDeterministicAndSensitive(t *testing.T) {
 		t.Fatalf("expected topology change to alter reference fingerprint, got=%q", gotC)
 	}
 }
+
+func TestBuildReferenceFingerprintInfersPatternWithoutLayerTaggedIDs(t *testing.T) {
+	genome := model.Genome{
+		SensorIDs:   []string{"s1"},
+		ActuatorIDs: []string{"a1"},
+		Neurons: []model.Neuron{
+			{ID: "i", Activation: "identity"},
+			{ID: "h", Activation: "tanh"},
+			{ID: "o", Activation: "identity"},
+		},
+		Synapses: []model.Synapse{
+			{ID: "s1", From: "i", To: "h", Enabled: true},
+			{ID: "s2", From: "h", To: "o", Enabled: true},
+		},
+		SensorNeuronLinks: []model.SensorNeuronLink{
+			{SensorID: "s1", NeuronID: "i"},
+		},
+		NeuronActuatorLinks: []model.NeuronActuatorLink{
+			{NeuronID: "o", ActuatorID: "a1"},
+		},
+	}
+
+	fp := BuildReferenceFingerprint(genome, nil)
+	if len(fp.Pattern) != 3 {
+		t.Fatalf("expected inferred 3-layer pattern, got=%v", fp.Pattern)
+	}
+	if fp.Pattern[0].Layer != 0 || len(fp.Pattern[0].NeuronIDs) != 1 || fp.Pattern[0].NeuronIDs[0] != "i" {
+		t.Fatalf("expected layer 0 to contain input neuron, got=%v", fp.Pattern[0])
+	}
+	if fp.Pattern[1].Layer != 1 || len(fp.Pattern[1].NeuronIDs) != 1 || fp.Pattern[1].NeuronIDs[0] != "h" {
+		t.Fatalf("expected layer 1 to contain hidden neuron, got=%v", fp.Pattern[1])
+	}
+	if fp.Pattern[2].Layer != 2 || len(fp.Pattern[2].NeuronIDs) != 1 || fp.Pattern[2].NeuronIDs[0] != "o" {
+		t.Fatalf("expected layer 2 to contain output neuron, got=%v", fp.Pattern[2])
+	}
+}
