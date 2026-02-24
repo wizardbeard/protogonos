@@ -129,22 +129,25 @@ type pole2EpisodeResult struct {
 	goalReached        bool
 	terminationReason  string
 	terminatedByBounds bool
+	vectorControlSteps int
+	dampingOffSteps    int
+	singlePoleSteps    int
 }
 
 func evaluatePole2BalancingWithStep(ctx context.Context, runner StepAgent, cfg pole2ModeConfig) (Fitness, Trace, error) {
 	return evaluatePole2Balancing(
 		ctx,
 		cfg,
-		func(ctx context.Context, state pole2State) (float64, error) {
+		func(ctx context.Context, state pole2State) (pole2Control, error) {
 			in := pole2Observation(state, cfg.angleLimit)
 			out, err := runner.RunStep(ctx, in)
 			if err != nil {
-				return 0, err
+				return pole2Control{}, err
 			}
-			if len(out) != 1 {
-				return 0, fmt.Errorf("pole2-balancing requires one output, got %d", len(out))
+			if len(out) < 1 {
+				return pole2Control{}, fmt.Errorf("pole2-balancing requires at least one output, got %d", len(out))
 			}
-			return out[0], nil
+			return decodePole2Control(out, cfg), nil
 		},
 	)
 }
@@ -158,7 +161,7 @@ func evaluatePole2BalancingWithTick(ctx context.Context, ticker TickAgent, cfg p
 	return evaluatePole2Balancing(
 		ctx,
 		cfg,
-		func(ctx context.Context, state pole2State) (float64, error) {
+		func(ctx context.Context, state pole2State) (pole2Control, error) {
 			positionSetter.Set(scaleToUnit(state.cartPosition, 2.4, -2.4))
 			velocitySetter.Set(scaleToUnit(state.cartVelocity, 10, -10))
 			angle1Setter.Set(scaleToUnit(state.angle1, cfg.angleLimit, -cfg.angleLimit))
@@ -168,25 +171,58 @@ func evaluatePole2BalancingWithTick(ctx context.Context, ticker TickAgent, cfg p
 
 			out, err := ticker.Tick(ctx)
 			if err != nil {
-				return 0, err
+				return pole2Control{}, err
 			}
 
-			force := 0.0
+			control := pole2Control{
+				force:      0,
+				damping:    cfg.damping,
+				doublePole: cfg.doublePole,
+			}
+
 			last := forceOutput.Last()
 			if len(last) > 0 {
-				force = last[0]
+				return decodePole2Control(last, cfg), nil
 			} else if len(out) > 0 {
-				force = out[0]
+				return decodePole2Control(out, cfg), nil
 			}
-			return force, nil
+			return control, nil
 		},
 	)
+}
+
+type pole2Control struct {
+	force      float64
+	damping    bool
+	doublePole bool
+	vector     bool
+}
+
+func decodePole2Control(output []float64, cfg pole2ModeConfig) pole2Control {
+	control := pole2Control{
+		force:      0,
+		damping:    cfg.damping,
+		doublePole: cfg.doublePole,
+		vector:     false,
+	}
+	if len(output) > 0 {
+		control.force = output[0]
+	}
+	if len(output) > 1 {
+		control.damping = output[1] >= 0
+		control.vector = true
+	}
+	if len(output) > 2 {
+		control.doublePole = output[2] > 0
+		control.vector = true
+	}
+	return control
 }
 
 func evaluatePole2Balancing(
 	ctx context.Context,
 	cfg pole2ModeConfig,
-	chooseForce func(context.Context, pole2State) (float64, error),
+	chooseControl func(context.Context, pole2State) (pole2Control, error),
 ) (Fitness, Trace, error) {
 	state := initialPole2State(cfg)
 	stepsSurvived := 0
@@ -194,22 +230,34 @@ func evaluatePole2Balancing(
 	terminationReason := "max_steps"
 	goalReached := false
 	terminatedByBounds := false
+	vectorControlSteps := 0
+	dampingOffSteps := 0
+	singlePoleSteps := 0
 
 	for step := 0; step < cfg.maxSteps; step++ {
 		if err := ctx.Err(); err != nil {
 			return 0, nil, err
 		}
 
-		force, err := chooseForce(ctx, state)
+		control, err := chooseControl(ctx, state)
 		if err != nil {
 			return 0, nil, err
 		}
-		force = clampPole2(force, -1, 1)
+		force := clampPole2(control.force, -1, 1)
+		if control.vector {
+			vectorControlSteps++
+		}
+		if !control.damping {
+			dampingOffSteps++
+		}
+		if !control.doublePole {
+			singlePoleSteps++
+		}
 
 		state = simulateDoublePole(force*10, state, 2)
 		stepsSurvived++
 
-		terminated, reason, reachedGoal := pole2Termination(state, cfg, stepsSurvived)
+		terminated, reason, reachedGoal := pole2Termination(state, cfg, stepsSurvived, control.doublePole)
 		if terminated {
 			terminationReason = reason
 			goalReached = reachedGoal
@@ -218,7 +266,7 @@ func evaluatePole2Balancing(
 		}
 
 		// Mirror the reference damping-oriented fitness accumulator while the run is active.
-		fitnessAcc += pole2StepFitness(stepsSurvived, state, cfg.damping)
+		fitnessAcc += pole2StepFitness(stepsSurvived, state, control.damping)
 	}
 
 	avgStepFitness := 0.0
@@ -233,6 +281,9 @@ func evaluatePole2Balancing(
 		goalReached:        goalReached,
 		terminationReason:  terminationReason,
 		terminatedByBounds: terminatedByBounds,
+		vectorControlSteps: vectorControlSteps,
+		dampingOffSteps:    dampingOffSteps,
+		singlePoleSteps:    singlePoleSteps,
 	}
 
 	return summarizePole2Outcome(result, cfg), Trace{
@@ -253,8 +304,11 @@ func evaluatePole2Balancing(
 		"mode":                 cfg.mode,
 		"init_angle1":          cfg.initAngle1,
 		"init_angle2":          cfg.initAngle2,
-		"damping":              cfg.damping,
-		"double_pole":          cfg.doublePole,
+		"default_damping":      cfg.damping,
+		"default_double_pole":  cfg.doublePole,
+		"vector_control_steps": result.vectorControlSteps,
+		"damping_off_steps":    result.dampingOffSteps,
+		"single_pole_steps":    result.singlePoleSteps,
 	}, nil
 }
 
@@ -269,9 +323,9 @@ func pole2Observation(state pole2State, angleLimit float64) []float64 {
 	}
 }
 
-func pole2Termination(state pole2State, cfg pole2ModeConfig, stepsSurvived int) (terminated bool, reason string, goalReached bool) {
+func pole2Termination(state pole2State, cfg pole2ModeConfig, stepsSurvived int, doublePole bool) (terminated bool, reason string, goalReached bool) {
 	angle1Out := math.Abs(state.angle1) > cfg.angleLimit
-	angle2Out := cfg.doublePole && math.Abs(state.angle2) > cfg.angleLimit
+	angle2Out := doublePole && math.Abs(state.angle2) > cfg.angleLimit
 	cartOut := math.Abs(state.cartPosition) > 2.4
 	stepOut := stepsSurvived >= cfg.maxSteps
 	terminated = angle1Out || angle2Out || cartOut || stepOut

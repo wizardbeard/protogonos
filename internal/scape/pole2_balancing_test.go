@@ -180,4 +180,48 @@ func TestPole2BalancingScapeTraceIncludesTerminationAccounting(t *testing.T) {
 	if _, ok := trace["terminated_by_bounds"].(bool); !ok {
 		t.Fatalf("trace missing terminated_by_bounds: %+v", trace)
 	}
+	if _, ok := trace["default_damping"].(bool); !ok {
+		t.Fatalf("trace missing default_damping: %+v", trace)
+	}
+	if _, ok := trace["default_double_pole"].(bool); !ok {
+		t.Fatalf("trace missing default_double_pole: %+v", trace)
+	}
+	if vectorSteps, ok := trace["vector_control_steps"].(int); !ok || vectorSteps != 0 {
+		t.Fatalf("expected scalar thrash policy to report zero vector_control_steps, got %+v", trace)
+	}
+	if _, ok := trace["damping_off_steps"].(int); !ok {
+		t.Fatalf("trace missing damping_off_steps: %+v", trace)
+	}
+	if _, ok := trace["single_pole_steps"].(int); !ok {
+		t.Fatalf("trace missing single_pole_steps: %+v", trace)
+	}
+}
+
+func TestPole2BalancingScapeSupportsVectorPushControls(t *testing.T) {
+	scape := Pole2BalancingScape{}
+	vectorControl := scriptedStepAgent{
+		id: "vector-control",
+		fn: func(_ []float64) []float64 {
+			// Force + damping flag + double-pole flag.
+			// Negative damping flag disables damping; negative double-pole flag emulates single-pole mode.
+			return []float64{0.25, -1.0, -1.0}
+		},
+	}
+
+	_, trace, err := scape.Evaluate(context.Background(), vectorControl)
+	if err != nil {
+		t.Fatalf("evaluate vector-control policy: %v", err)
+	}
+	vectorSteps, ok := trace["vector_control_steps"].(int)
+	if !ok || vectorSteps <= 0 {
+		t.Fatalf("expected positive vector_control_steps, got %+v", trace)
+	}
+	dampingOffSteps, ok := trace["damping_off_steps"].(int)
+	if !ok || dampingOffSteps <= 0 {
+		t.Fatalf("expected positive damping_off_steps, got %+v", trace)
+	}
+	singlePoleSteps, ok := trace["single_pole_steps"].(int)
+	if !ok || singlePoleSteps <= 0 {
+		t.Fatalf("expected positive single_pole_steps, got %+v", trace)
+	}
 }
