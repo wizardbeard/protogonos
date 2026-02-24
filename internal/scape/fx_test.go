@@ -2,6 +2,10 @@ package scape
 
 import (
 	"context"
+	"fmt"
+	"os"
+	"path/filepath"
+	"strings"
 	"testing"
 
 	"protogonos/internal/agent"
@@ -227,6 +231,72 @@ func TestFXScapeStepPerceptIncludesMarketInternals(t *testing.T) {
 	}
 	if width, ok := trace["feature_width"].(int); !ok || width <= 2 {
 		t.Fatalf("expected feature_width > 2 in trace, got %+v", trace)
+	}
+}
+
+func TestFXScapeLoadSeriesCSV(t *testing.T) {
+	ResetFXSeriesSource()
+	t.Cleanup(ResetFXSeriesSource)
+
+	path := filepath.Join(t.TempDir(), "fx_custom.csv")
+	var builder strings.Builder
+	builder.WriteString("t,close\n")
+	for i := 0; i < 400; i++ {
+		fmt.Fprintf(&builder, "%d,%0.6f\n", i, 1.02+0.00045*float64(i))
+	}
+	if err := os.WriteFile(path, []byte(builder.String()), 0o644); err != nil {
+		t.Fatalf("write fx csv: %v", err)
+	}
+
+	if err := LoadFXSeriesCSV(path); err != nil {
+		t.Fatalf("load fx csv: %v", err)
+	}
+
+	scape := FXScape{}
+	follow := scriptedStepAgent{
+		id: "follow",
+		fn: fxFollowSignalAction,
+	}
+
+	_, trace, err := scape.EvaluateMode(context.Background(), follow, "test")
+	if err != nil {
+		t.Fatalf("evaluate test mode: %v", err)
+	}
+	seriesName, ok := trace["series_name"].(string)
+	if !ok || !strings.Contains(seriesName, "fx_custom.csv") {
+		t.Fatalf("expected loaded fx csv series in trace, got %+v", trace)
+	}
+	if points, ok := trace["series_points"].(int); !ok || points != 400 {
+		t.Fatalf("expected series_points=400, got %+v", trace)
+	}
+}
+
+func TestFXScapeLoadSeriesCSVRejectsInvalidPrice(t *testing.T) {
+	ResetFXSeriesSource()
+	t.Cleanup(ResetFXSeriesSource)
+
+	path := filepath.Join(t.TempDir(), "fx_invalid.csv")
+	data := "close\n1.020\n1.021\n-1.000\n"
+	if err := os.WriteFile(path, []byte(data), 0o644); err != nil {
+		t.Fatalf("write fx csv: %v", err)
+	}
+
+	if err := LoadFXSeriesCSV(path); err == nil {
+		t.Fatal("expected invalid-price error")
+	}
+
+	scape := FXScape{}
+	follow := scriptedStepAgent{
+		id: "follow",
+		fn: fxFollowSignalAction,
+	}
+
+	_, trace, err := scape.Evaluate(context.Background(), follow)
+	if err != nil {
+		t.Fatalf("evaluate default series: %v", err)
+	}
+	if series, _ := trace["series_name"].(string); series != "fx.synthetic.v2" {
+		t.Fatalf("expected default fx series after rejected load, got %+v", trace)
 	}
 }
 

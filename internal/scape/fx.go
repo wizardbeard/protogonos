@@ -2,14 +2,30 @@ package scape
 
 import (
 	"context"
+	"encoding/csv"
 	"fmt"
+	"io"
 	"math"
+	"os"
+	"path/filepath"
+	"strconv"
 	"strings"
+	"sync"
 
 	protoio "protogonos/internal/io"
 )
 
 type FXScape struct{}
+
+type fxSeries struct {
+	name   string
+	values []float64
+}
+
+var (
+	fxSeriesSourceMu sync.RWMutex
+	fxSeriesSource   = defaultFXSeries()
+)
 
 func (FXScape) Name() string {
 	return "fx"
@@ -99,6 +115,7 @@ func evaluateFX(
 	cfg fxModeConfig,
 	chooseTrade func(context.Context, []float64) (float64, error),
 ) (Fitness, Trace, error) {
+	series := currentFXSeries()
 	account := newFXAccount()
 	ordersOpened := 0
 	ordersClosed := 0
@@ -106,8 +123,8 @@ func evaluateFX(
 	marginCall := false
 	turnover := 0.0
 	lastAction := 0.0
-	lastQuote := fxPrice(cfg.startStep)
-	prevQuote := fxPrice(maxIntFX(0, cfg.startStep-1))
+	lastQuote := fxPrice(series, cfg.startStep)
+	prevQuote := fxPrice(series, maxIntFX(0, cfg.startStep-1))
 
 	for i := 0; i < cfg.steps; i++ {
 		if err := ctx.Err(); err != nil {
@@ -115,8 +132,8 @@ func evaluateFX(
 		}
 
 		step := cfg.startStep + i
-		quote := fxPrice(step)
-		signal := fxSignal(step)
+		quote := fxPrice(series, step)
+		signal := fxSignal(series, step)
 		lastQuote = quote
 
 		updateFXMarkToMarket(&account, quote)
@@ -127,7 +144,7 @@ func evaluateFX(
 		}
 		backQuote := prevQuote
 		if step >= 4 {
-			backQuote = fxPrice(step - 4)
+			backQuote = fxPrice(series, step-4)
 		}
 		momentum4 := 0.0
 		if backQuote != 0 {
@@ -200,6 +217,8 @@ func evaluateFX(
 		"mode":              cfg.mode,
 		"steps":             cfg.steps,
 		"start_step":        cfg.startStep,
+		"series_name":       series.name,
+		"series_points":     len(series.values),
 		"balance":           account.balance,
 		"net_worth":         netWorth,
 		"realized_pl":       account.realizedPL,
@@ -467,6 +486,105 @@ type fxModeConfig struct {
 	startStep int
 }
 
+// ResetFXSeriesSource restores the deterministic built-in FX series.
+func ResetFXSeriesSource() {
+	fxSeriesSourceMu.Lock()
+	defer fxSeriesSourceMu.Unlock()
+	fxSeriesSource = defaultFXSeries()
+}
+
+// LoadFXSeriesCSV loads price points from CSV and makes the series active.
+// The last non-empty column per row is interpreted as the price.
+func LoadFXSeriesCSV(path string) error {
+	series, err := loadFXSeriesCSV(path)
+	if err != nil {
+		return err
+	}
+	fxSeriesSourceMu.Lock()
+	defer fxSeriesSourceMu.Unlock()
+	fxSeriesSource = series
+	return nil
+}
+
+func loadFXSeriesCSV(path string) (fxSeries, error) {
+	path = strings.TrimSpace(path)
+	if path == "" {
+		return fxSeries{}, fmt.Errorf("fx csv path is required")
+	}
+
+	f, err := os.Open(path)
+	if err != nil {
+		return fxSeries{}, fmt.Errorf("open fx csv %s: %w", path, err)
+	}
+	defer f.Close()
+
+	reader := csv.NewReader(f)
+	reader.FieldsPerRecord = -1
+
+	values := make([]float64, 0, 512)
+	row := 0
+	for {
+		record, err := reader.Read()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return fxSeries{}, fmt.Errorf("read fx csv row %d: %w", row+1, err)
+		}
+		row++
+
+		field, ok := fxCSVValueField(record)
+		if !ok {
+			continue
+		}
+		price, err := strconv.ParseFloat(field, 64)
+		if err != nil {
+			if len(values) == 0 {
+				continue
+			}
+			return fxSeries{}, fmt.Errorf("parse fx csv price row %d: %w", row, err)
+		}
+		if price <= 0 {
+			return fxSeries{}, fmt.Errorf("invalid fx csv price row %d: %f", row, price)
+		}
+		values = append(values, price)
+	}
+
+	if len(values) < 8 {
+		return fxSeries{}, fmt.Errorf("fx csv %s requires at least 8 price rows, got %d", path, len(values))
+	}
+
+	return fxSeries{
+		name:   fmt.Sprintf("fx.csv.%s", filepath.Base(path)),
+		values: values,
+	}, nil
+}
+
+func fxCSVValueField(record []string) (string, bool) {
+	for i := len(record) - 1; i >= 0; i-- {
+		field := strings.TrimSpace(record[i])
+		if field != "" {
+			return field, true
+		}
+	}
+	return "", false
+}
+
+func defaultFXSeries() fxSeries {
+	const total = 512
+	values := make([]float64, total)
+	for i := 0; i < total; i++ {
+		values[i] = fxSyntheticPrice(i)
+	}
+	return fxSeries{name: "fx.synthetic.v2", values: values}
+}
+
+func currentFXSeries() fxSeries {
+	fxSeriesSourceMu.RLock()
+	defer fxSeriesSourceMu.RUnlock()
+	return fxSeriesSource
+}
+
 func fxConfigForMode(mode string) (fxModeConfig, error) {
 	switch strings.TrimSpace(strings.ToLower(mode)) {
 	case "", "gt":
@@ -482,7 +600,7 @@ func fxConfigForMode(mode string) (fxModeConfig, error) {
 	}
 }
 
-func fxPrice(step int) float64 {
+func fxSyntheticPrice(step int) float64 {
 	t := float64(step)
 	base := 1.05 + 0.0006*t
 	cycle := 0.035*math.Sin(t*0.11) + 0.012*math.Sin(t*0.37+0.9)
@@ -502,17 +620,30 @@ func fxPrice(step int) float64 {
 	return price
 }
 
-func fxSignal(step int) float64 {
+func fxPrice(series fxSeries, step int) float64 {
+	if len(series.values) == 0 {
+		return fxSyntheticPrice(step)
+	}
+	if step < 0 {
+		step = 0
+	}
+	if step >= len(series.values) {
+		step = len(series.values) - 1
+	}
+	return clampFX(series.values[step], 0.2, math.MaxFloat64)
+}
+
+func fxSignal(series fxSeries, step int) float64 {
 	if step <= 0 {
 		return 0
 	}
-	p0 := fxPrice(step)
-	p1 := fxPrice(step - 1)
+	p0 := fxPrice(series, step)
+	p1 := fxPrice(series, step-1)
 	mom1 := (p0 - p1) / p1
 	if step < 4 {
 		return clampFX(mom1, -1, 1)
 	}
-	p4 := fxPrice(step - 4)
+	p4 := fxPrice(series, step-4)
 	mom4 := (p0 - p4) / p4
 	vol := math.Abs(mom1 - mom4)
 	signal := 0.65*mom1 + 0.35*mom4 - 0.2*vol
