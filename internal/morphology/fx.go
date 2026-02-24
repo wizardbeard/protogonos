@@ -12,6 +12,11 @@ func (FXMorphology) Sensors() []string {
 	return []string{
 		protoio.FXPriceSensorName,
 		protoio.FXSignalSensorName,
+		protoio.FXMomentumSensorName,
+		protoio.FXVolatilitySensorName,
+		protoio.FXNAVSensorName,
+		protoio.FXDrawdownSensorName,
+		protoio.FXPositionSensorName,
 	}
 }
 

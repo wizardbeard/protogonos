@@ -242,6 +242,41 @@ func TestScalarComponentsRegistered(t *testing.T) {
 	if fxSignal.Name() != ScalarInputSensorName {
 		t.Fatalf("unexpected fx signal sensor name: %s", fxSignal.Name())
 	}
+	fxMomentum, err := ResolveSensor(FXMomentumSensorName, "fx")
+	if err != nil {
+		t.Fatalf("resolve fx momentum sensor: %v", err)
+	}
+	if fxMomentum.Name() != ScalarInputSensorName {
+		t.Fatalf("unexpected fx momentum sensor name: %s", fxMomentum.Name())
+	}
+	fxVolatility, err := ResolveSensor(FXVolatilitySensorName, "fx")
+	if err != nil {
+		t.Fatalf("resolve fx volatility sensor: %v", err)
+	}
+	if fxVolatility.Name() != ScalarInputSensorName {
+		t.Fatalf("unexpected fx volatility sensor name: %s", fxVolatility.Name())
+	}
+	fxNAV, err := ResolveSensor(FXNAVSensorName, "fx")
+	if err != nil {
+		t.Fatalf("resolve fx nav sensor: %v", err)
+	}
+	if fxNAV.Name() != ScalarInputSensorName {
+		t.Fatalf("unexpected fx nav sensor name: %s", fxNAV.Name())
+	}
+	fxDrawdown, err := ResolveSensor(FXDrawdownSensorName, "fx")
+	if err != nil {
+		t.Fatalf("resolve fx drawdown sensor: %v", err)
+	}
+	if fxDrawdown.Name() != ScalarInputSensorName {
+		t.Fatalf("unexpected fx drawdown sensor name: %s", fxDrawdown.Name())
+	}
+	fxPosition, err := ResolveSensor(FXPositionSensorName, "fx")
+	if err != nil {
+		t.Fatalf("resolve fx position sensor: %v", err)
+	}
+	if fxPosition.Name() != ScalarInputSensorName {
+		t.Fatalf("unexpected fx position sensor name: %s", fxPosition.Name())
+	}
 
 	fxTrade, err := ResolveActuator(FXTradeActuatorName, "fx")
 	if err != nil {

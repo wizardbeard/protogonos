@@ -53,7 +53,7 @@ func evaluateFXWithStep(ctx context.Context, runner StepAgent, cfg fxModeConfig)
 }
 
 func evaluateFXWithTick(ctx context.Context, ticker TickAgent, cfg fxModeConfig) (Fitness, Trace, error) {
-	priceSetter, signalSetter, tradeOutput, err := fxIO(ticker)
+	io, err := fxIO(ticker)
 	if err != nil {
 		return 0, nil, err
 	}
@@ -62,13 +62,28 @@ func evaluateFXWithTick(ctx context.Context, ticker TickAgent, cfg fxModeConfig)
 		if len(percept) < 2 {
 			return 0, fmt.Errorf("fx percept width <2 for tick agent: %d", len(percept))
 		}
-		priceSetter.Set(percept[0])
-		signalSetter.Set(percept[1])
+		io.price.Set(percept[0])
+		io.signal.Set(percept[1])
+		if io.momentum != nil && len(percept) > 2 {
+			io.momentum.Set(percept[2])
+		}
+		if io.volatility != nil && len(percept) > 4 {
+			io.volatility.Set(percept[4])
+		}
+		if io.nav != nil && len(percept) > 7 {
+			io.nav.Set(percept[7])
+		}
+		if io.drawdown != nil && len(percept) > 6 {
+			io.drawdown.Set(percept[6])
+		}
+		if io.position != nil && len(percept) > 8 {
+			io.position.Set(percept[8])
+		}
 		out, err := ticker.Tick(ctx)
 		if err != nil {
 			return 0, err
 		}
-		lastOutput := tradeOutput.Last()
+		lastOutput := io.tradeOutput.Last()
 		if len(lastOutput) > 0 {
 			return lastOutput[0], nil
 		}
@@ -350,47 +365,100 @@ func closeFXOrder(account *fxAccount, quote float64) bool {
 	return true
 }
 
-func fxIO(agent TickAgent) (
-	protoio.ScalarSensorSetter,
-	protoio.ScalarSensorSetter,
-	protoio.SnapshotActuator,
-	error,
-) {
+type fxIOBindings struct {
+	price       protoio.ScalarSensorSetter
+	signal      protoio.ScalarSensorSetter
+	momentum    protoio.ScalarSensorSetter
+	volatility  protoio.ScalarSensorSetter
+	nav         protoio.ScalarSensorSetter
+	drawdown    protoio.ScalarSensorSetter
+	position    protoio.ScalarSensorSetter
+	tradeOutput protoio.SnapshotActuator
+}
+
+func fxIO(agent TickAgent) (fxIOBindings, error) {
 	typed, ok := agent.(interface {
 		RegisteredSensor(id string) (protoio.Sensor, bool)
 		RegisteredActuator(id string) (protoio.Actuator, bool)
 	})
 	if !ok {
-		return nil, nil, nil, fmt.Errorf("agent %s does not expose IO registry access", agent.ID())
+		return fxIOBindings{}, fmt.Errorf("agent %s does not expose IO registry access", agent.ID())
 	}
 
 	price, ok := typed.RegisteredSensor(protoio.FXPriceSensorName)
 	if !ok {
-		return nil, nil, nil, fmt.Errorf("agent %s missing sensor %s", agent.ID(), protoio.FXPriceSensorName)
+		return fxIOBindings{}, fmt.Errorf("agent %s missing sensor %s", agent.ID(), protoio.FXPriceSensorName)
 	}
 	priceSetter, ok := price.(protoio.ScalarSensorSetter)
 	if !ok {
-		return nil, nil, nil, fmt.Errorf("sensor %s does not support scalar set", protoio.FXPriceSensorName)
+		return fxIOBindings{}, fmt.Errorf("sensor %s does not support scalar set", protoio.FXPriceSensorName)
 	}
 
 	signal, ok := typed.RegisteredSensor(protoio.FXSignalSensorName)
 	if !ok {
-		return nil, nil, nil, fmt.Errorf("agent %s missing sensor %s", agent.ID(), protoio.FXSignalSensorName)
+		return fxIOBindings{}, fmt.Errorf("agent %s missing sensor %s", agent.ID(), protoio.FXSignalSensorName)
 	}
 	signalSetter, ok := signal.(protoio.ScalarSensorSetter)
 	if !ok {
-		return nil, nil, nil, fmt.Errorf("sensor %s does not support scalar set", protoio.FXSignalSensorName)
+		return fxIOBindings{}, fmt.Errorf("sensor %s does not support scalar set", protoio.FXSignalSensorName)
+	}
+
+	momentumSetter, err := optionalFXSensorSetter(typed, protoio.FXMomentumSensorName)
+	if err != nil {
+		return fxIOBindings{}, err
+	}
+	volatilitySetter, err := optionalFXSensorSetter(typed, protoio.FXVolatilitySensorName)
+	if err != nil {
+		return fxIOBindings{}, err
+	}
+	navSetter, err := optionalFXSensorSetter(typed, protoio.FXNAVSensorName)
+	if err != nil {
+		return fxIOBindings{}, err
+	}
+	drawdownSetter, err := optionalFXSensorSetter(typed, protoio.FXDrawdownSensorName)
+	if err != nil {
+		return fxIOBindings{}, err
+	}
+	positionSetter, err := optionalFXSensorSetter(typed, protoio.FXPositionSensorName)
+	if err != nil {
+		return fxIOBindings{}, err
 	}
 
 	actuator, ok := typed.RegisteredActuator(protoio.FXTradeActuatorName)
 	if !ok {
-		return nil, nil, nil, fmt.Errorf("agent %s missing actuator %s", agent.ID(), protoio.FXTradeActuatorName)
+		return fxIOBindings{}, fmt.Errorf("agent %s missing actuator %s", agent.ID(), protoio.FXTradeActuatorName)
 	}
 	tradeOutput, ok := actuator.(protoio.SnapshotActuator)
 	if !ok {
-		return nil, nil, nil, fmt.Errorf("actuator %s does not support output snapshot", protoio.FXTradeActuatorName)
+		return fxIOBindings{}, fmt.Errorf("actuator %s does not support output snapshot", protoio.FXTradeActuatorName)
 	}
-	return priceSetter, signalSetter, tradeOutput, nil
+	return fxIOBindings{
+		price:       priceSetter,
+		signal:      signalSetter,
+		momentum:    momentumSetter,
+		volatility:  volatilitySetter,
+		nav:         navSetter,
+		drawdown:    drawdownSetter,
+		position:    positionSetter,
+		tradeOutput: tradeOutput,
+	}, nil
+}
+
+func optionalFXSensorSetter(
+	typed interface {
+		RegisteredSensor(id string) (protoio.Sensor, bool)
+	},
+	sensorID string,
+) (protoio.ScalarSensorSetter, error) {
+	sensor, ok := typed.RegisteredSensor(sensorID)
+	if !ok {
+		return nil, nil
+	}
+	setter, ok := sensor.(protoio.ScalarSensorSetter)
+	if !ok {
+		return nil, fmt.Errorf("sensor %s does not support scalar set", sensorID)
+	}
+	return setter, nil
 }
 
 type fxModeConfig struct {

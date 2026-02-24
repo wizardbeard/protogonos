@@ -66,7 +66,7 @@ func ConstructSeedPopulation(scapeName string, size int, seed int64) (SeedPopula
 	case "fx":
 		return SeedPopulation{
 			Genomes:         seedFXPopulation(size, seed),
-			InputNeuronIDs:  []string{"p", "s"},
+			InputNeuronIDs:  []string{"p", "s", "m", "v", "n", "d", "q"},
 			OutputNeuronIDs: []string{"t"},
 		}, nil
 	case "epitopes":
@@ -362,16 +362,34 @@ func seedFXPopulation(size int, seed int64) []model.Genome {
 		population = append(population, model.Genome{
 			VersionedRecord: model.VersionedRecord{SchemaVersion: storage.CurrentSchemaVersion, CodecVersion: storage.CurrentCodecVersion},
 			ID:              fmt.Sprintf("fx-g0-%d", i),
-			SensorIDs:       []string{protoio.FXPriceSensorName, protoio.FXSignalSensorName},
-			ActuatorIDs:     []string{protoio.FXTradeActuatorName},
+			SensorIDs: []string{
+				protoio.FXPriceSensorName,
+				protoio.FXSignalSensorName,
+				protoio.FXMomentumSensorName,
+				protoio.FXVolatilitySensorName,
+				protoio.FXNAVSensorName,
+				protoio.FXDrawdownSensorName,
+				protoio.FXPositionSensorName,
+			},
+			ActuatorIDs: []string{protoio.FXTradeActuatorName},
 			Neurons: []model.Neuron{
 				{ID: "p", Activation: "identity", Bias: 0},
 				{ID: "s", Activation: "identity", Bias: 0},
+				{ID: "m", Activation: "identity", Bias: 0},
+				{ID: "v", Activation: "identity", Bias: 0},
+				{ID: "n", Activation: "identity", Bias: 0},
+				{ID: "d", Activation: "identity", Bias: 0},
+				{ID: "q", Activation: "identity", Bias: 0},
 				{ID: "t", Activation: "tanh", Bias: jitter(rng, 0.25)},
 			},
 			Synapses: []model.Synapse{
-				{ID: "s1", From: "p", To: "t", Weight: jitter(rng, 1.1), Enabled: true},
-				{ID: "s2", From: "s", To: "t", Weight: jitter(rng, 1.1), Enabled: true},
+				{ID: "s1", From: "p", To: "t", Weight: 0.35 + jitter(rng, 0.25), Enabled: true},
+				{ID: "s2", From: "s", To: "t", Weight: 1.10 + jitter(rng, 0.25), Enabled: true},
+				{ID: "s3", From: "m", To: "t", Weight: 0.85 + jitter(rng, 0.20), Enabled: true},
+				{ID: "s4", From: "v", To: "t", Weight: -0.55 + jitter(rng, 0.20), Enabled: true},
+				{ID: "s5", From: "n", To: "t", Weight: 0.25 + jitter(rng, 0.15), Enabled: true},
+				{ID: "s6", From: "d", To: "t", Weight: -0.65 + jitter(rng, 0.15), Enabled: true},
+				{ID: "s7", From: "q", To: "t", Weight: 0.15 + jitter(rng, 0.15), Enabled: true},
 			},
 		})
 	}
