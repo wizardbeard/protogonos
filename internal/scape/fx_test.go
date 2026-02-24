@@ -133,6 +133,31 @@ func TestFXScapeTraceIncludesAccountLifecycle(t *testing.T) {
 	}
 }
 
+func TestFXScapeStepPerceptIncludesMarketInternals(t *testing.T) {
+	scape := FXScape{}
+	maxPerceptWidth := 0
+	follow := scriptedStepAgent{
+		id: "follow",
+		fn: func(input []float64) []float64 {
+			if len(input) > maxPerceptWidth {
+				maxPerceptWidth = len(input)
+			}
+			return fxFollowSignalAction(input)
+		},
+	}
+
+	_, trace, err := scape.Evaluate(context.Background(), follow)
+	if err != nil {
+		t.Fatalf("evaluate follow: %v", err)
+	}
+	if maxPerceptWidth <= 2 {
+		t.Fatalf("expected fx step percept to include internal features, got width=%d", maxPerceptWidth)
+	}
+	if width, ok := trace["feature_width"].(int); !ok || width <= 2 {
+		t.Fatalf("expected feature_width > 2 in trace, got %+v", trace)
+	}
+}
+
 func fxFollowSignalAction(input []float64) []float64 {
 	if len(input) < 2 {
 		return []float64{0}

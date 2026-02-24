@@ -40,8 +40,8 @@ func (FXScape) EvaluateMode(ctx context.Context, agent Agent, mode string) (Fitn
 }
 
 func evaluateFXWithStep(ctx context.Context, runner StepAgent, cfg fxModeConfig) (Fitness, Trace, error) {
-	return evaluateFX(ctx, cfg, func(ctx context.Context, price, signal float64) (float64, error) {
-		out, err := runner.RunStep(ctx, []float64{price, signal})
+	return evaluateFX(ctx, cfg, func(ctx context.Context, percept []float64) (float64, error) {
+		out, err := runner.RunStep(ctx, percept)
 		if err != nil {
 			return 0, err
 		}
@@ -58,9 +58,12 @@ func evaluateFXWithTick(ctx context.Context, ticker TickAgent, cfg fxModeConfig)
 		return 0, nil, err
 	}
 
-	return evaluateFX(ctx, cfg, func(ctx context.Context, price, signal float64) (float64, error) {
-		priceSetter.Set(price)
-		signalSetter.Set(signal)
+	return evaluateFX(ctx, cfg, func(ctx context.Context, percept []float64) (float64, error) {
+		if len(percept) < 2 {
+			return 0, fmt.Errorf("fx percept width <2 for tick agent: %d", len(percept))
+		}
+		priceSetter.Set(percept[0])
+		signalSetter.Set(percept[1])
 		out, err := ticker.Tick(ctx)
 		if err != nil {
 			return 0, err
@@ -79,7 +82,7 @@ func evaluateFXWithTick(ctx context.Context, ticker TickAgent, cfg fxModeConfig)
 func evaluateFX(
 	ctx context.Context,
 	cfg fxModeConfig,
-	chooseTrade func(context.Context, float64, float64) (float64, error),
+	chooseTrade func(context.Context, []float64) (float64, error),
 ) (Fitness, Trace, error) {
 	account := newFXAccount()
 	ordersOpened := 0
@@ -89,6 +92,7 @@ func evaluateFX(
 	turnover := 0.0
 	lastAction := 0.0
 	lastQuote := fxPrice(cfg.startStep)
+	prevQuote := fxPrice(maxIntFX(0, cfg.startStep-1))
 
 	for i := 0; i < cfg.steps; i++ {
 		if err := ctx.Err(); err != nil {
@@ -102,7 +106,22 @@ func evaluateFX(
 
 		updateFXMarkToMarket(&account, quote)
 
-		rawAction, err := chooseTrade(ctx, quote, signal)
+		momentum1 := 0.0
+		if prevQuote != 0 {
+			momentum1 = (quote - prevQuote) / prevQuote
+		}
+		backQuote := prevQuote
+		if step >= 4 {
+			backQuote = fxPrice(step - 4)
+		}
+		momentum4 := 0.0
+		if backQuote != 0 {
+			momentum4 = (quote - backQuote) / backQuote
+		}
+		volatility := math.Abs(momentum1 - momentum4)
+		percept := fxPerceptVector(quote, signal, momentum1, momentum4, volatility, account, lastAction)
+
+		rawAction, err := chooseTrade(ctx, percept)
 		if err != nil {
 			return 0, nil, err
 		}
@@ -118,6 +137,7 @@ func evaluateFX(
 		ordersOpened += opened
 		ordersClosed += closed
 		lastAction = action
+		prevQuote = quote
 
 		updateFXMarkToMarket(&account, quote)
 		if account.netAssetValue <= fxMarginCallFloor {
@@ -177,6 +197,7 @@ func evaluateFX(
 		"position":          position,
 		"entry":             entry,
 		"units":             units,
+		"feature_width":     fxPerceptWidth,
 	}, nil
 }
 
@@ -207,6 +228,7 @@ const (
 	fxLeverage        = 50.0
 	fxOrderBudget     = 100.0
 	fxTradeThreshold  = 0.33
+	fxPerceptWidth    = 10
 )
 
 func newFXAccount() fxAccount {
@@ -427,6 +449,39 @@ func fxSignal(step int) float64 {
 	vol := math.Abs(mom1 - mom4)
 	signal := 0.65*mom1 + 0.35*mom4 - 0.2*vol
 	return clampFX(signal, -1, 1)
+}
+
+func fxPerceptVector(
+	quote, signal, momentum1, momentum4, volatility float64,
+	account fxAccount,
+	lastAction float64,
+) []float64 {
+	position := 0.0
+	exposure := 0.0
+	if account.order != nil {
+		position = account.order.position
+		exposure = (account.order.units * quote) / fxInitialBalance
+	}
+
+	return []float64{
+		quote,
+		signal,
+		momentum1,
+		momentum4,
+		volatility,
+		account.unrealizedPL / fxInitialBalance,
+		account.maxDrawdown / fxInitialBalance,
+		account.netAssetValue / fxInitialBalance,
+		position,
+		0.2*lastAction + 0.01*exposure,
+	}
+}
+
+func maxIntFX(a, b int) int {
+	if a > b {
+		return a
+	}
+	return b
 }
 
 func clampFX(v, lo, hi float64) float64 {
