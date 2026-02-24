@@ -96,6 +96,101 @@ func TestDTMScapeEvaluateWithIOComponents(t *testing.T) {
 	}
 }
 
+func TestDTMScapeEvaluateWithRangeOnlyIOComponents(t *testing.T) {
+	genome := model.Genome{
+		SensorIDs: []string{
+			protoio.DTMRangeLeftSensorName,
+			protoio.DTMRangeFrontSensorName,
+			protoio.DTMRangeRightSensorName,
+		},
+		ActuatorIDs: []string{protoio.DTMMoveActuatorName},
+		Neurons: []model.Neuron{
+			{ID: "rl", Activation: "identity"},
+			{ID: "rf", Activation: "identity"},
+			{ID: "rr", Activation: "identity"},
+			{ID: "m", Activation: "tanh"},
+		},
+		Synapses: []model.Synapse{
+			{From: "rl", To: "m", Weight: 1, Enabled: true},
+			{From: "rr", To: "m", Weight: 1, Enabled: true},
+		},
+	}
+
+	sensors := map[string]protoio.Sensor{
+		protoio.DTMRangeLeftSensorName:  protoio.NewScalarInputSensor(0),
+		protoio.DTMRangeFrontSensorName: protoio.NewScalarInputSensor(0),
+		protoio.DTMRangeRightSensorName: protoio.NewScalarInputSensor(0),
+	}
+	actuators := map[string]protoio.Actuator{
+		protoio.DTMMoveActuatorName: protoio.NewScalarOutputActuator(),
+	}
+
+	cortex, err := agent.NewCortex(
+		"dtm-agent-range-only",
+		genome,
+		sensors,
+		actuators,
+		[]string{"rl", "rf", "rr"},
+		[]string{"m"},
+		nil,
+	)
+	if err != nil {
+		t.Fatalf("new cortex: %v", err)
+	}
+
+	scape := DTMScape{}
+	fitness, _, err := scape.Evaluate(context.Background(), cortex)
+	if err != nil {
+		t.Fatalf("evaluate: %v", err)
+	}
+	if fitness <= 0 {
+		t.Fatalf("expected positive fitness, got %f", fitness)
+	}
+}
+
+func TestDTMScapeEvaluateWithRewardOnlyIOComponents(t *testing.T) {
+	genome := model.Genome{
+		SensorIDs:   []string{protoio.DTMRewardSensorName},
+		ActuatorIDs: []string{protoio.DTMMoveActuatorName},
+		Neurons: []model.Neuron{
+			{ID: "r", Activation: "identity"},
+			{ID: "m", Activation: "tanh"},
+		},
+		Synapses: []model.Synapse{
+			{From: "r", To: "m", Weight: 0.7, Enabled: true},
+		},
+	}
+
+	sensors := map[string]protoio.Sensor{
+		protoio.DTMRewardSensorName: protoio.NewScalarInputSensor(0),
+	}
+	actuators := map[string]protoio.Actuator{
+		protoio.DTMMoveActuatorName: protoio.NewScalarOutputActuator(),
+	}
+
+	cortex, err := agent.NewCortex(
+		"dtm-agent-reward-only",
+		genome,
+		sensors,
+		actuators,
+		[]string{"r"},
+		[]string{"m"},
+		nil,
+	)
+	if err != nil {
+		t.Fatalf("new cortex: %v", err)
+	}
+
+	scape := DTMScape{}
+	fitness, _, err := scape.Evaluate(context.Background(), cortex)
+	if err != nil {
+		t.Fatalf("evaluate: %v", err)
+	}
+	if fitness <= 0 {
+		t.Fatalf("expected positive fitness, got %f", fitness)
+	}
+}
+
 func TestDTMScapeEvaluateModeAnnotatesMode(t *testing.T) {
 	scape := DTMScape{}
 	junctionTurn := scriptedStepAgent{

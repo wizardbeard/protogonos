@@ -136,7 +136,7 @@ func evaluateDTMWithStep(ctx context.Context, runner StepAgent, cfg dtmModeConfi
 }
 
 func evaluateDTMWithTick(ctx context.Context, ticker TickAgent, cfg dtmModeConfig) (Fitness, Trace, error) {
-	leftSetter, frontSetter, rightSetter, rewardSetter, moveOutput, err := dtmIO(ticker)
+	ioBindings, err := dtmIO(ticker)
 	if err != nil {
 		return 0, nil, err
 	}
@@ -146,10 +146,18 @@ func evaluateDTMWithTick(ctx context.Context, ticker TickAgent, cfg dtmModeConfi
 		ticker.ID(),
 		cfg,
 		func(ctx context.Context, sense []float64) (float64, error) {
-			leftSetter.Set(sense[0])
-			frontSetter.Set(sense[1])
-			rightSetter.Set(sense[2])
-			rewardSetter.Set(sense[3])
+			if ioBindings.leftSetter != nil {
+				ioBindings.leftSetter.Set(sense[0])
+			}
+			if ioBindings.frontSetter != nil {
+				ioBindings.frontSetter.Set(sense[1])
+			}
+			if ioBindings.rightSetter != nil {
+				ioBindings.rightSetter.Set(sense[2])
+			}
+			if ioBindings.rewardSetter != nil {
+				ioBindings.rewardSetter.Set(sense[3])
+			}
 
 			out, err := ticker.Tick(ctx)
 			if err != nil {
@@ -157,7 +165,7 @@ func evaluateDTMWithTick(ctx context.Context, ticker TickAgent, cfg dtmModeConfi
 			}
 
 			move := 0.0
-			last := moveOutput.Last()
+			last := ioBindings.moveOutput.Last()
 			if len(last) > 0 {
 				move = last[0]
 			} else if len(out) > 0 {
@@ -446,66 +454,92 @@ func (e *dtmEpisode) resetRun() {
 	e.stepIndex = 0
 }
 
-func dtmIO(agent TickAgent) (
-	protoio.ScalarSensorSetter,
-	protoio.ScalarSensorSetter,
-	protoio.ScalarSensorSetter,
-	protoio.ScalarSensorSetter,
-	protoio.SnapshotActuator,
-	error,
-) {
+type dtmIOBindings struct {
+	leftSetter   protoio.ScalarSensorSetter
+	frontSetter  protoio.ScalarSensorSetter
+	rightSetter  protoio.ScalarSensorSetter
+	rewardSetter protoio.ScalarSensorSetter
+	moveOutput   protoio.SnapshotActuator
+}
+
+func dtmIO(agent TickAgent) (dtmIOBindings, error) {
 	typed, ok := agent.(interface {
 		RegisteredSensor(id string) (protoio.Sensor, bool)
 		RegisteredActuator(id string) (protoio.Actuator, bool)
 	})
 	if !ok {
-		return nil, nil, nil, nil, nil, fmt.Errorf("agent %s does not expose IO registry access", agent.ID())
+		return dtmIOBindings{}, fmt.Errorf("agent %s does not expose IO registry access", agent.ID())
 	}
 
-	left, ok := typed.RegisteredSensor(protoio.DTMRangeLeftSensorName)
-	if !ok {
-		return nil, nil, nil, nil, nil, fmt.Errorf("agent %s missing sensor %s", agent.ID(), protoio.DTMRangeLeftSensorName)
-	}
-	leftSetter, ok := left.(protoio.ScalarSensorSetter)
-	if !ok {
-		return nil, nil, nil, nil, nil, fmt.Errorf("sensor %s does not support scalar set", protoio.DTMRangeLeftSensorName)
+	leftSetter, hasLeft, err := resolveOptionalDTMSetter(typed, protoio.DTMRangeLeftSensorName)
+	if err != nil {
+		return dtmIOBindings{}, err
 	}
 
-	front, ok := typed.RegisteredSensor(protoio.DTMRangeFrontSensorName)
-	if !ok {
-		return nil, nil, nil, nil, nil, fmt.Errorf("agent %s missing sensor %s", agent.ID(), protoio.DTMRangeFrontSensorName)
-	}
-	frontSetter, ok := front.(protoio.ScalarSensorSetter)
-	if !ok {
-		return nil, nil, nil, nil, nil, fmt.Errorf("sensor %s does not support scalar set", protoio.DTMRangeFrontSensorName)
+	frontSetter, hasFront, err := resolveOptionalDTMSetter(typed, protoio.DTMRangeFrontSensorName)
+	if err != nil {
+		return dtmIOBindings{}, err
 	}
 
-	right, ok := typed.RegisteredSensor(protoio.DTMRangeRightSensorName)
-	if !ok {
-		return nil, nil, nil, nil, nil, fmt.Errorf("agent %s missing sensor %s", agent.ID(), protoio.DTMRangeRightSensorName)
-	}
-	rightSetter, ok := right.(protoio.ScalarSensorSetter)
-	if !ok {
-		return nil, nil, nil, nil, nil, fmt.Errorf("sensor %s does not support scalar set", protoio.DTMRangeRightSensorName)
+	rightSetter, hasRight, err := resolveOptionalDTMSetter(typed, protoio.DTMRangeRightSensorName)
+	if err != nil {
+		return dtmIOBindings{}, err
 	}
 
-	reward, ok := typed.RegisteredSensor(protoio.DTMRewardSensorName)
-	if !ok {
-		return nil, nil, nil, nil, nil, fmt.Errorf("agent %s missing sensor %s", agent.ID(), protoio.DTMRewardSensorName)
+	rangeCount := 0
+	if hasLeft {
+		rangeCount++
 	}
-	rewardSetter, ok := reward.(protoio.ScalarSensorSetter)
-	if !ok {
-		return nil, nil, nil, nil, nil, fmt.Errorf("sensor %s does not support scalar set", protoio.DTMRewardSensorName)
+	if hasFront {
+		rangeCount++
+	}
+	if hasRight {
+		rangeCount++
+	}
+
+	if rangeCount != 0 && rangeCount != 3 {
+		return dtmIOBindings{}, fmt.Errorf("agent %s has partial dtm range sensor set (%d/3); expected all or none", agent.ID(), rangeCount)
+	}
+
+	rewardSetter, hasReward, err := resolveOptionalDTMSetter(typed, protoio.DTMRewardSensorName)
+	if err != nil {
+		return dtmIOBindings{}, err
+	}
+	if rangeCount == 0 && !hasReward {
+		return dtmIOBindings{}, fmt.Errorf("agent %s missing dtm sensing surface: expected range_sense and/or reward sensor", agent.ID())
 	}
 
 	actuator, ok := typed.RegisteredActuator(protoio.DTMMoveActuatorName)
 	if !ok {
-		return nil, nil, nil, nil, nil, fmt.Errorf("agent %s missing actuator %s", agent.ID(), protoio.DTMMoveActuatorName)
+		return dtmIOBindings{}, fmt.Errorf("agent %s missing actuator %s", agent.ID(), protoio.DTMMoveActuatorName)
 	}
 	output, ok := actuator.(protoio.SnapshotActuator)
 	if !ok {
-		return nil, nil, nil, nil, nil, fmt.Errorf("actuator %s does not support output snapshot", protoio.DTMMoveActuatorName)
+		return dtmIOBindings{}, fmt.Errorf("actuator %s does not support output snapshot", protoio.DTMMoveActuatorName)
 	}
 
-	return leftSetter, frontSetter, rightSetter, rewardSetter, output, nil
+	return dtmIOBindings{
+		leftSetter:   leftSetter,
+		frontSetter:  frontSetter,
+		rightSetter:  rightSetter,
+		rewardSetter: rewardSetter,
+		moveOutput:   output,
+	}, nil
+}
+
+func resolveOptionalDTMSetter(
+	typed interface {
+		RegisteredSensor(id string) (protoio.Sensor, bool)
+	},
+	sensorID string,
+) (protoio.ScalarSensorSetter, bool, error) {
+	sensor, ok := typed.RegisteredSensor(sensorID)
+	if !ok {
+		return nil, false, nil
+	}
+	setter, ok := sensor.(protoio.ScalarSensorSetter)
+	if !ok {
+		return nil, false, fmt.Errorf("sensor %s does not support scalar set", sensorID)
+	}
+	return setter, true, nil
 }
