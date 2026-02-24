@@ -66,6 +66,12 @@ func cartPoleLiteConfigForMode(mode string) (cartPoleLiteModeConfig, error) {
 			startPositions:  []float64{-1.2, -0.6, 0.0, 0.6, 1.2},
 			stepsPerEpisode: 48,
 		}, nil
+	case "benchmark":
+		return cartPoleLiteModeConfig{
+			mode:            "benchmark",
+			startPositions:  []float64{-1.2, -0.6, 0.0, 0.6, 1.2},
+			stepsPerEpisode: 48,
+		}, nil
 	default:
 		return cartPoleLiteModeConfig{}, fmt.Errorf("unsupported cart-pole-lite mode: %s", mode)
 	}

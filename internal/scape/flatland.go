@@ -73,6 +73,14 @@ func flatlandConfigForMode(mode string) (flatlandModeConfig, error) {
 			foodPositions:   []int{6, 12, 20, 28, 36, 44},
 			poisonPositions: []int{15, 31},
 		}, nil
+	case "benchmark":
+		return flatlandModeConfig{
+			mode:            "benchmark",
+			maxAge:          180,
+			forageGoal:      6,
+			foodPositions:   []int{6, 12, 20, 28, 36, 44},
+			poisonPositions: []int{15, 31},
+		}, nil
 	default:
 		return flatlandModeConfig{}, fmt.Errorf("unsupported flatland mode: %s", mode)
 	}

@@ -98,6 +98,17 @@ func pole2ConfigForMode(mode string) (pole2ModeConfig, error) {
 			damping:    true,
 			doublePole: true,
 		}, nil
+	case "benchmark":
+		return pole2ModeConfig{
+			mode:       "benchmark",
+			maxSteps:   1200,
+			goalSteps:  1200,
+			angleLimit: angleLimit,
+			initAngle1: 4.8 * rad,
+			initAngle2: -1.8 * rad,
+			damping:    true,
+			doublePole: true,
+		}, nil
 	default:
 		return pole2ModeConfig{}, fmt.Errorf("unsupported pole2-balancing mode: %s", mode)
 	}

@@ -61,6 +61,11 @@ func regressionConfigForMode(mode string) (regressionModeConfig, error) {
 			mode:   "test",
 			inputs: []float64{-0.9, -0.45, -0.1, 0.3, 0.7, 0.95},
 		}, nil
+	case "benchmark":
+		return regressionModeConfig{
+			mode:   "benchmark",
+			inputs: []float64{-0.9, -0.45, -0.1, 0.3, 0.7, 0.95},
+		}, nil
 	default:
 		return regressionModeConfig{}, fmt.Errorf("unsupported regression-mimic mode: %s", mode)
 	}

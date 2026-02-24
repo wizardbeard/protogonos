@@ -385,6 +385,8 @@ func fxConfigForMode(mode string) (fxModeConfig, error) {
 		return fxModeConfig{mode: "validation", steps: 48, startStep: 128}, nil
 	case "test":
 		return fxModeConfig{mode: "test", steps: 48, startStep: 256}, nil
+	case "benchmark":
+		return fxModeConfig{mode: "benchmark", steps: 48, startStep: 256}, nil
 	default:
 		return fxModeConfig{}, fmt.Errorf("unsupported fx mode: %s", mode)
 	}

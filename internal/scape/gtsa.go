@@ -246,6 +246,8 @@ func gtsaConfigForMode(mode string) (gtsaModeConfig, error) {
 		return gtsaModeConfig{mode: "validation", startIndex: 320, warmupSteps: 8, scoreSteps: 32}, nil
 	case "test":
 		return gtsaModeConfig{mode: "test", startIndex: 640, warmupSteps: 8, scoreSteps: 32}, nil
+	case "benchmark":
+		return gtsaModeConfig{mode: "benchmark", startIndex: 640, warmupSteps: 8, scoreSteps: 32}, nil
 	default:
 		return gtsaModeConfig{}, fmt.Errorf("unsupported gtsa mode: %s", mode)
 	}

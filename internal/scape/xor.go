@@ -78,6 +78,13 @@ func xorConfigForMode(mode string) (xorModeConfig, error) {
 				base[3], base[2], base[1], base[0], base[3], base[0], base[2], base[1],
 			},
 		}, nil
+	case "benchmark":
+		return xorModeConfig{
+			mode: "benchmark",
+			cases: []xorCase{
+				base[3], base[2], base[1], base[0], base[3], base[0], base[2], base[1],
+			},
+		}, nil
 	default:
 		return xorModeConfig{}, fmt.Errorf("unsupported xor mode: %s", mode)
 	}

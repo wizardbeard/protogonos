@@ -103,6 +103,14 @@ func dtmConfigForMode(mode string) (dtmModeConfig, error) {
 			switchFloor:    42,
 			switchSpread:   20,
 		}, nil
+	case "benchmark":
+		return dtmModeConfig{
+			mode:           "benchmark",
+			totalRuns:      72,
+			maxStepsPerRun: 14,
+			switchFloor:    42,
+			switchSpread:   20,
+		}, nil
 	default:
 		return dtmModeConfig{}, fmt.Errorf("unsupported dtm mode: %s", mode)
 	}
