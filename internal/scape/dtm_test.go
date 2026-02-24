@@ -170,4 +170,21 @@ func TestDTMScapeTraceIncludesRunDiagnostics(t *testing.T) {
 	if leftRuns+rightRuns != terminalRuns {
 		t.Fatalf("expected side terminal runs to sum to terminal_runs, got left=%d right=%d total=%d", leftRuns, rightRuns, terminalRuns)
 	}
+	timeoutRuns, ok := trace["timeout_runs"].(int)
+	if !ok {
+		t.Fatalf("trace missing timeout_runs: %+v", trace)
+	}
+	if timeoutRuns != 0 {
+		t.Fatalf("expected zero timeout_runs for reference-style dtm run flow, got %+v", trace)
+	}
+	maxRunStepIndex, ok := trace["max_run_step_index"].(int)
+	if !ok || maxRunStepIndex <= 0 {
+		t.Fatalf("expected positive max_run_step_index, got %+v", trace)
+	}
+	if maxRunStepIndex > 3 {
+		t.Fatalf("expected bounded dtm run-step depth <= 3, got %+v", trace)
+	}
+	if stepIndex, ok := trace["last_step_index"].(int); !ok || stepIndex != 0 {
+		t.Fatalf("expected reset last_step_index=0 after terminal episode completion, got %+v", trace)
+	}
 }

@@ -64,6 +64,7 @@ type dtmEpisode struct {
 	direction   int
 	totalRuns   int
 	runIndex    int
+	stepIndex   int
 	switchEvent int
 	switched    bool
 	fitnessAcc  float64
@@ -83,7 +84,7 @@ func dtmConfigForMode(mode string) (dtmModeConfig, error) {
 		return dtmModeConfig{
 			mode:           "gt",
 			totalRuns:      100,
-			maxStepsPerRun: 16,
+			maxStepsPerRun: 0,
 			switchFloor:    35,
 			switchSpread:   30,
 		}, nil
@@ -91,7 +92,7 @@ func dtmConfigForMode(mode string) (dtmModeConfig, error) {
 		return dtmModeConfig{
 			mode:           "validation",
 			totalRuns:      72,
-			maxStepsPerRun: 14,
+			maxStepsPerRun: 0,
 			switchFloor:    18,
 			switchSpread:   20,
 		}, nil
@@ -99,7 +100,7 @@ func dtmConfigForMode(mode string) (dtmModeConfig, error) {
 		return dtmModeConfig{
 			mode:           "test",
 			totalRuns:      72,
-			maxStepsPerRun: 14,
+			maxStepsPerRun: 0,
 			switchFloor:    42,
 			switchSpread:   20,
 		}, nil
@@ -107,7 +108,7 @@ func dtmConfigForMode(mode string) (dtmModeConfig, error) {
 		return dtmModeConfig{
 			mode:           "benchmark",
 			totalRuns:      72,
-			maxStepsPerRun: 14,
+			maxStepsPerRun: 0,
 			switchFloor:    42,
 			switchSpread:   20,
 		}, nil
@@ -179,6 +180,7 @@ func evaluateDTM(
 	timeoutRuns := 0
 	steps := 0
 	runStepsAcc := 0
+	maxRunStepIndex := 0
 	terminalRewardTotal := 0.0
 	leftTerminalRuns := 0
 	rightTerminalRuns := 0
@@ -195,11 +197,19 @@ func evaluateDTM(
 			switchTriggeredAt = episode.runIndex
 		}
 
-		runDone := false
 		runSteps := 0
-		for runStep := 0; runStep < cfg.maxStepsPerRun; runStep++ {
+		for {
 			if err := ctx.Err(); err != nil {
 				return 0, nil, err
+			}
+			if cfg.maxStepsPerRun > 0 && runSteps >= cfg.maxStepsPerRun {
+				episode.fitnessAcc -= 0.4
+				episode.resetRun()
+				episode.runIndex++
+				crashRuns++
+				timeoutRuns++
+				runStepsAcc += runSteps
+				break
 			}
 
 			sense, err := episode.sense()
@@ -219,8 +229,10 @@ func evaluateDTM(
 
 			steps++
 			runSteps++
+			if runSteps > maxRunStepIndex {
+				maxRunStepIndex = runSteps
+			}
 			if done {
-				runDone = true
 				runStepsAcc += runSteps
 				if crashed {
 					crashRuns++
@@ -237,15 +249,6 @@ func evaluateDTM(
 				}
 				break
 			}
-		}
-
-		if !runDone {
-			episode.fitnessAcc -= 0.4
-			episode.resetRun()
-			episode.runIndex++
-			crashRuns++
-			timeoutRuns++
-			runStepsAcc += cfg.maxStepsPerRun
 		}
 	}
 
@@ -271,10 +274,12 @@ func evaluateDTM(
 		"crash_runs":             crashRuns,
 		"timeout_runs":           timeoutRuns,
 		"steps_executed":         steps,
+		"max_run_step_index":     maxRunStepIndex,
 		"avg_steps_per_run":      avgStepsPerRun,
 		"mode":                   cfg.mode,
 		"max_steps":              cfg.maxStepsPerRun,
 		"last_run_index":         episode.runIndex,
+		"last_step_index":        episode.stepIndex,
 		"switch_spread_floor":    cfg.switchFloor,
 		"switch_spread_interval": cfg.switchSpread,
 	}, nil
@@ -291,6 +296,7 @@ func newDTMEpisode(agentID string, cfg dtmModeConfig) dtmEpisode {
 		direction:   90,
 		totalRuns:   totalRuns,
 		runIndex:    0,
+		stepIndex:   0,
 		switchEvent: deterministicDTMSwitch(agentID, totalRuns, cfg.switchFloor, cfg.switchSpread),
 		fitnessAcc:  50,
 	}
@@ -382,6 +388,8 @@ func (e *dtmEpisode) sense() ([]float64, error) {
 }
 
 func (e *dtmEpisode) applyMove(move float64) (done bool, crashed bool, reachedTerminal bool, reward float64, terminalPosition dtmCoord, err error) {
+	e.stepIndex++
+
 	if e.position == (dtmCoord{x: 1, y: 1}) || e.position == (dtmCoord{x: -1, y: 1}) {
 		sector := e.sectors[e.position]
 		reward = sector.reward
@@ -435,6 +443,7 @@ func (e *dtmEpisode) applyTransition(view dtmView) (done bool, crashed bool, rea
 func (e *dtmEpisode) resetRun() {
 	e.position = dtmCoord{x: 0, y: 0}
 	e.direction = 90
+	e.stepIndex = 0
 }
 
 func dtmIO(agent TickAgent) (
