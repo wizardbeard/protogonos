@@ -2,6 +2,10 @@ package scape
 
 import (
 	"context"
+	"fmt"
+	"os"
+	"path/filepath"
+	"strings"
 	"testing"
 
 	"protogonos/internal/agent"
@@ -167,5 +171,85 @@ func TestGTSAScapeTraceIncludesTableWindowState(t *testing.T) {
 	}
 	if current < start || current > end {
 		t.Fatalf("index_current out of bounds in trace: %+v", trace)
+	}
+}
+
+func TestGTSAScapeLoadTableCSV(t *testing.T) {
+	ResetGTSATableSource()
+	t.Cleanup(ResetGTSATableSource)
+
+	path := filepath.Join(t.TempDir(), "gtsa_custom.csv")
+	var builder strings.Builder
+	builder.WriteString("t,value\n")
+	for i := 0; i < 96; i++ {
+		fmt.Fprintf(&builder, "%d,%0.8f\n", i, gtsaSeries(i)+0.03)
+	}
+	if err := os.WriteFile(path, []byte(builder.String()), 0o644); err != nil {
+		t.Fatalf("write csv: %v", err)
+	}
+
+	if err := LoadGTSATableCSV(path, GTSATableBounds{
+		TrainEnd:      24,
+		ValidationEnd: 48,
+		TestEnd:       96,
+	}); err != nil {
+		t.Fatalf("load csv table: %v", err)
+	}
+
+	scape := GTSAScape{}
+	copyInput := scriptedStepAgent{
+		id: "copy",
+		fn: func(input []float64) []float64 {
+			return []float64{input[0]}
+		},
+	}
+
+	_, trace, err := scape.EvaluateMode(context.Background(), copyInput, "test")
+	if err != nil {
+		t.Fatalf("evaluate test mode: %v", err)
+	}
+	tableName, ok := trace["table_name"].(string)
+	if !ok || !strings.Contains(tableName, "gtsa_custom.csv") {
+		t.Fatalf("expected loaded csv table in trace, got %+v", trace)
+	}
+	start, sok := trace["index_start"].(int)
+	end, eok := trace["index_end"].(int)
+	if !sok || !eok || start != 49 || end != 96 {
+		t.Fatalf("expected csv bounds in trace start=49 end=96, got %+v", trace)
+	}
+}
+
+func TestGTSAScapeLoadTableCSVRejectsInvalidBounds(t *testing.T) {
+	ResetGTSATableSource()
+	t.Cleanup(ResetGTSATableSource)
+
+	path := filepath.Join(t.TempDir(), "gtsa_invalid.csv")
+	if err := os.WriteFile(path, []byte("1\n2\n3\n4\n5\n"), 0o644); err != nil {
+		t.Fatalf("write csv: %v", err)
+	}
+
+	err := LoadGTSATableCSV(path, GTSATableBounds{
+		TrainEnd:      4,
+		ValidationEnd: 3,
+		TestEnd:       5,
+	})
+	if err == nil {
+		t.Fatal("expected invalid bounds error")
+	}
+
+	scape := GTSAScape{}
+	copyInput := scriptedStepAgent{
+		id: "copy",
+		fn: func(input []float64) []float64 {
+			return []float64{input[0]}
+		},
+	}
+
+	_, trace, evalErr := scape.EvaluateMode(context.Background(), copyInput, "gt")
+	if evalErr != nil {
+		t.Fatalf("evaluate gt mode: %v", evalErr)
+	}
+	if table, _ := trace["table_name"].(string); table != "gtsa.synthetic.v2" {
+		t.Fatalf("expected default table after rejected load, got %+v", trace)
 	}
 }

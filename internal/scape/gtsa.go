@@ -2,14 +2,25 @@ package scape
 
 import (
 	"context"
+	"encoding/csv"
 	"fmt"
+	"io"
 	"math"
+	"os"
+	"path/filepath"
+	"strconv"
 	"strings"
+	"sync"
 
 	protoio "protogonos/internal/io"
 )
 
 type GTSAScape struct{}
+
+var (
+	gtsaTableSourceMu sync.RWMutex
+	gtsaTableSource   = defaultGTSATable()
+)
 
 func (GTSAScape) Name() string {
 	return "gtsa"
@@ -80,7 +91,7 @@ func evaluateGTSA(
 	cfg gtsaModeConfig,
 	predict func(context.Context, float64) (float64, error),
 ) (Fitness, Trace, error) {
-	table := defaultGTSATable()
+	table := currentGTSATable()
 	state, err := newGTSAWindowState(cfg, table)
 	if err != nil {
 		return 0, nil, err
@@ -300,6 +311,148 @@ type gtsaModeConfig struct {
 	windowRows  int
 }
 
+// GTSATableBounds controls gt/validation/test table window cutoffs.
+// Zero values use defaults derived from dataset size.
+type GTSATableBounds struct {
+	TrainEnd      int
+	ValidationEnd int
+	TestEnd       int
+}
+
+// ResetGTSATableSource restores the deterministic built-in GTSA dataset.
+func ResetGTSATableSource() {
+	gtsaTableSourceMu.Lock()
+	defer gtsaTableSourceMu.Unlock()
+	gtsaTableSource = defaultGTSATable()
+}
+
+// LoadGTSATableCSV loads GTSA values from CSV and makes the table active.
+// The last non-empty column per row is interpreted as the series value.
+func LoadGTSATableCSV(path string, bounds GTSATableBounds) error {
+	table, err := loadGTSATableCSV(path, bounds)
+	if err != nil {
+		return err
+	}
+
+	gtsaTableSourceMu.Lock()
+	defer gtsaTableSourceMu.Unlock()
+	gtsaTableSource = table
+	return nil
+}
+
+func loadGTSATableCSV(path string, bounds GTSATableBounds) (gtsaTable, error) {
+	path = strings.TrimSpace(path)
+	if path == "" {
+		return gtsaTable{}, fmt.Errorf("gtsa csv path is required")
+	}
+
+	f, err := os.Open(path)
+	if err != nil {
+		return gtsaTable{}, fmt.Errorf("open gtsa csv %s: %w", path, err)
+	}
+	defer f.Close()
+
+	reader := csv.NewReader(f)
+	reader.FieldsPerRecord = -1
+
+	values := make([]float64, 0, 1024)
+	row := 0
+	for {
+		record, err := reader.Read()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return gtsaTable{}, fmt.Errorf("read gtsa csv row %d: %w", row+1, err)
+		}
+		row++
+
+		field, ok := gtsaCSVValueField(record)
+		if !ok {
+			continue
+		}
+
+		value, err := strconv.ParseFloat(field, 64)
+		if err != nil {
+			if len(values) == 0 {
+				continue
+			}
+			return gtsaTable{}, fmt.Errorf("parse gtsa csv value row %d: %w", row, err)
+		}
+		values = append(values, value)
+	}
+
+	name := fmt.Sprintf("gtsa.csv.%s", filepath.Base(path))
+	return buildGTSATable(name, values, bounds)
+}
+
+func gtsaCSVValueField(record []string) (string, bool) {
+	for i := len(record) - 1; i >= 0; i-- {
+		field := strings.TrimSpace(record[i])
+		if field != "" {
+			return field, true
+		}
+	}
+	return "", false
+}
+
+func buildGTSATable(name string, series []float64, bounds GTSATableBounds) (gtsaTable, error) {
+	if len(series) == 0 {
+		return gtsaTable{}, fmt.Errorf("gtsa table %s has no values", name)
+	}
+	tableName := strings.TrimSpace(name)
+	if tableName == "" {
+		tableName = "gtsa.custom"
+	}
+
+	total := len(series)
+	trainEnd := bounds.TrainEnd
+	validationEnd := bounds.ValidationEnd
+	testEnd := bounds.TestEnd
+
+	if trainEnd <= 0 {
+		trainEnd = minGTSA(320, total)
+	}
+	if validationEnd <= 0 {
+		validationEnd = trainEnd + minGTSA(320, maxGTSA(0, total-trainEnd))
+	}
+	if testEnd <= 0 {
+		testEnd = total
+	}
+
+	switch {
+	case trainEnd <= 0 || trainEnd > total:
+		return gtsaTable{}, fmt.Errorf("invalid gtsa train_end=%d total=%d", trainEnd, total)
+	case validationEnd < trainEnd || validationEnd > total:
+		return gtsaTable{}, fmt.Errorf("invalid gtsa validation_end=%d train_end=%d total=%d", validationEnd, trainEnd, total)
+	case testEnd < validationEnd || testEnd > total:
+		return gtsaTable{}, fmt.Errorf("invalid gtsa test_end=%d validation_end=%d total=%d", testEnd, validationEnd, total)
+	}
+
+	values := make([]float64, testEnd+1) // 1-based indexing for reference-style parity.
+	for idx := 1; idx <= testEnd; idx++ {
+		values[idx] = series[idx-1]
+	}
+
+	return gtsaTable{
+		info: gtsaInfo{
+			name:   tableName,
+			ivl:    1,
+			ovl:    1,
+			trnEnd: trainEnd,
+			valEnd: validationEnd,
+			tstEnd: testEnd,
+		},
+		values: values,
+	}, nil
+}
+
+func currentGTSATable() gtsaTable {
+	gtsaTableSourceMu.RLock()
+	defer gtsaTableSourceMu.RUnlock()
+	return gtsaTableSource
+}
+
 func gtsaConfigForMode(mode string) (gtsaModeConfig, error) {
 	switch strings.TrimSpace(strings.ToLower(mode)) {
 	case "", "gt":
@@ -446,6 +599,13 @@ func (s *gtsaWindowState) applyPrediction() (expected float64, done bool, err er
 
 func maxGTSA(a, b int) int {
 	if a > b {
+		return a
+	}
+	return b
+}
+
+func minGTSA(a, b int) int {
+	if a < b {
 		return a
 	}
 	return b
