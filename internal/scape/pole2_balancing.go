@@ -68,8 +68,8 @@ func pole2ConfigForMode(mode string) (pole2ModeConfig, error) {
 	case "", "gt":
 		return pole2ModeConfig{
 			mode:       "gt",
-			maxSteps:   1500,
-			goalSteps:  1500,
+			maxSteps:   100000,
+			goalSteps:  100000,
 			angleLimit: angleLimit,
 			initAngle1: 3.6 * rad,
 			initAngle2: 0,

@@ -174,6 +174,9 @@ func TestPole2BalancingScapeTraceIncludesTerminationAccounting(t *testing.T) {
 	if _, ok := trace["goal_steps"].(int); !ok {
 		t.Fatalf("trace missing goal_steps: %+v", trace)
 	}
+	if goalSteps, ok := trace["goal_steps"].(int); !ok || goalSteps != 100000 {
+		t.Fatalf("expected reference goal_steps=100000 in gt mode, got %+v", trace)
+	}
 	if _, ok := trace["terminated_by_bounds"].(bool); !ok {
 		t.Fatalf("trace missing terminated_by_bounds: %+v", trace)
 	}
