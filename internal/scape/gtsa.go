@@ -80,18 +80,34 @@ func evaluateGTSA(
 	cfg gtsaModeConfig,
 	predict func(context.Context, float64) (float64, error),
 ) (Fitness, Trace, error) {
-	index := cfg.startIndex
-	current := gtsaSeries(index)
+	table := defaultGTSATable()
+	state, err := newGTSAWindowState(cfg, table)
+	if err != nil {
+		return 0, nil, err
+	}
 
+	warmupSteps := 0
 	for i := 0; i < cfg.warmupSteps; i++ {
 		if err := ctx.Err(); err != nil {
+			return 0, nil, err
+		}
+
+		current, err := state.getPercept()
+		if err != nil {
 			return 0, nil, err
 		}
 		if _, err := predict(ctx, current); err != nil {
 			return 0, nil, err
 		}
-		index++
-		current = gtsaSeries(index)
+
+		_, done, err := state.applyPrediction()
+		if err != nil {
+			return 0, nil, err
+		}
+		warmupSteps++
+		if done {
+			break
+		}
 	}
 
 	if cfg.scoreSteps <= 0 {
@@ -101,11 +117,17 @@ func evaluateGTSA(
 			"direction_accuracy": 0.0,
 			"prediction_jitter":  0.0,
 			"mode":               cfg.mode,
-			"start_index":        cfg.startIndex,
-			"start_t":            float64(cfg.startIndex),
-			"warmup_steps":       cfg.warmupSteps,
+			"start_index":        state.indexStart - 1,
+			"start_t":            float64(state.indexStart - 1),
+			"warmup_steps":       warmupSteps,
 			"steps":              0,
-			"window":             cfg.warmupSteps,
+			"window":             warmupSteps,
+			"window_length":      state.windowLength,
+			"window_rows":        state.totRows,
+			"table_name":         state.info.name,
+			"index_start":        state.indexStart,
+			"index_current":      state.indexCurrent,
+			"index_end":          state.indexEnd,
 		}, nil
 	}
 
@@ -115,9 +137,15 @@ func evaluateGTSA(
 	predictionJitter := 0.0
 	prevPrediction := 0.0
 	hasPrevPrediction := false
+	scoredSteps := 0
 
 	for i := 0; i < cfg.scoreSteps; i++ {
 		if err := ctx.Err(); err != nil {
+			return 0, nil, err
+		}
+
+		current, err := state.getPercept()
+		if err != nil {
 			return 0, nil, err
 		}
 
@@ -125,12 +153,20 @@ func evaluateGTSA(
 		if err != nil {
 			return 0, nil, err
 		}
-		next := gtsaSeries(index + 1)
-		delta := predicted - next
+
+		expected, done, err := state.applyPrediction()
+		if err != nil {
+			return 0, nil, err
+		}
+		if done {
+			break
+		}
+
+		delta := predicted - expected
 		squaredErr += delta * delta
 		absErr += math.Abs(delta)
 
-		if gtsaDirectionalMatch(current, predicted, next) {
+		if gtsaDirectionalMatch(current, predicted, expected) {
 			directionalCorrect++
 		}
 		if hasPrevPrediction {
@@ -138,17 +174,36 @@ func evaluateGTSA(
 		}
 		prevPrediction = predicted
 		hasPrevPrediction = true
-
-		index++
-		current = next
+		scoredSteps++
 	}
 
-	mse := squaredErr / float64(cfg.scoreSteps)
-	mae := absErr / float64(cfg.scoreSteps)
-	directionAccuracy := float64(directionalCorrect) / float64(cfg.scoreSteps)
+	if scoredSteps <= 0 {
+		return 0, Trace{
+			"mse":                0.0,
+			"mae":                0.0,
+			"direction_accuracy": 0.0,
+			"prediction_jitter":  0.0,
+			"mode":               cfg.mode,
+			"start_index":        state.indexStart - 1,
+			"start_t":            float64(state.indexStart - 1),
+			"warmup_steps":       warmupSteps,
+			"steps":              0,
+			"window":             warmupSteps,
+			"window_length":      state.windowLength,
+			"window_rows":        state.totRows,
+			"table_name":         state.info.name,
+			"index_start":        state.indexStart,
+			"index_current":      state.indexCurrent,
+			"index_end":          state.indexEnd,
+		}, nil
+	}
+
+	mse := squaredErr / float64(scoredSteps)
+	mae := absErr / float64(scoredSteps)
+	directionAccuracy := float64(directionalCorrect) / float64(scoredSteps)
 	avgJitter := 0.0
-	if cfg.scoreSteps > 1 {
-		avgJitter = predictionJitter / float64(cfg.scoreSteps-1)
+	if scoredSteps > 1 {
+		avgJitter = predictionJitter / float64(scoredSteps-1)
 	}
 
 	base := 1.0 / (1.0 + mae + 0.5*mse)
@@ -162,11 +217,17 @@ func evaluateGTSA(
 		"direction_accuracy": directionAccuracy,
 		"prediction_jitter":  avgJitter,
 		"mode":               cfg.mode,
-		"start_index":        cfg.startIndex,
-		"start_t":            float64(cfg.startIndex),
-		"warmup_steps":       cfg.warmupSteps,
-		"steps":              cfg.scoreSteps,
-		"window":             cfg.warmupSteps + cfg.scoreSteps,
+		"start_index":        state.indexStart - 1,
+		"start_t":            float64(state.indexStart - 1),
+		"warmup_steps":       warmupSteps,
+		"steps":              scoredSteps,
+		"window":             warmupSteps + scoredSteps,
+		"window_length":      state.windowLength,
+		"window_rows":        state.totRows,
+		"table_name":         state.info.name,
+		"index_start":        state.indexStart,
+		"index_current":      state.indexCurrent,
+		"index_end":          state.indexEnd,
 	}, nil
 }
 
@@ -236,21 +297,158 @@ type gtsaModeConfig struct {
 	startIndex  int
 	warmupSteps int
 	scoreSteps  int
+	windowRows  int
 }
 
 func gtsaConfigForMode(mode string) (gtsaModeConfig, error) {
 	switch strings.TrimSpace(strings.ToLower(mode)) {
 	case "", "gt":
-		return gtsaModeConfig{mode: "gt", startIndex: 0, warmupSteps: 8, scoreSteps: 40}, nil
+		return gtsaModeConfig{mode: "gt", startIndex: 0, warmupSteps: 8, scoreSteps: 40, windowRows: 8}, nil
 	case "validation":
-		return gtsaModeConfig{mode: "validation", startIndex: 320, warmupSteps: 8, scoreSteps: 32}, nil
+		return gtsaModeConfig{mode: "validation", startIndex: 320, warmupSteps: 8, scoreSteps: 32, windowRows: 8}, nil
 	case "test":
-		return gtsaModeConfig{mode: "test", startIndex: 640, warmupSteps: 8, scoreSteps: 32}, nil
+		return gtsaModeConfig{mode: "test", startIndex: 640, warmupSteps: 8, scoreSteps: 32, windowRows: 8}, nil
 	case "benchmark":
-		return gtsaModeConfig{mode: "benchmark", startIndex: 640, warmupSteps: 8, scoreSteps: 32}, nil
+		return gtsaModeConfig{mode: "benchmark", startIndex: 640, warmupSteps: 8, scoreSteps: 32, windowRows: 8}, nil
 	default:
 		return gtsaModeConfig{}, fmt.Errorf("unsupported gtsa mode: %s", mode)
 	}
+}
+
+type gtsaInfo struct {
+	name   string
+	ivl    int
+	ovl    int
+	trnEnd int
+	valEnd int
+	tstEnd int
+}
+
+type gtsaTable struct {
+	info   gtsaInfo
+	values []float64
+}
+
+func defaultGTSATable() gtsaTable {
+	info := gtsaInfo{
+		name:   "gtsa.synthetic.v2",
+		ivl:    1,
+		ovl:    1,
+		trnEnd: 320,
+		valEnd: 640,
+		tstEnd: 960,
+	}
+
+	values := make([]float64, info.tstEnd+1) // 1-based indexing for reference-style parity.
+	for idx := 1; idx <= info.tstEnd; idx++ {
+		values[idx] = gtsaSeries(idx - 1)
+	}
+	return gtsaTable{info: info, values: values}
+}
+
+type gtsaWindowState struct {
+	info         gtsaInfo
+	values       []float64
+	indexStart   int
+	indexCurrent int
+	indexEnd     int
+	windowLength int
+	window       []float64
+	totRows      int
+}
+
+func newGTSAWindowState(cfg gtsaModeConfig, table gtsaTable) (*gtsaWindowState, error) {
+	if len(table.values) <= 1 {
+		return nil, fmt.Errorf("gtsa table %s is empty", table.info.name)
+	}
+
+	start, end, err := gtsaBoundsForMode(cfg.mode, table.info)
+	if err != nil {
+		return nil, err
+	}
+
+	if cfg.startIndex >= 0 {
+		desired := cfg.startIndex + 1
+		if desired >= start && desired <= end {
+			start = desired
+		}
+	}
+
+	rows := cfg.windowRows
+	if rows <= 0 {
+		rows = 1
+	}
+	windowLength := rows * maxGTSA(1, table.info.ivl)
+
+	return &gtsaWindowState{
+		info:         table.info,
+		values:       table.values,
+		indexStart:   start,
+		indexCurrent: start,
+		indexEnd:     end,
+		windowLength: windowLength,
+		window:       make([]float64, 0, windowLength),
+		totRows:      rows,
+	}, nil
+}
+
+func gtsaBoundsForMode(mode string, info gtsaInfo) (start int, end int, err error) {
+	switch strings.TrimSpace(strings.ToLower(mode)) {
+	case "", "gt":
+		start, end = 1, info.trnEnd
+	case "validation":
+		if info.valEnd > info.trnEnd {
+			start, end = info.trnEnd+1, info.valEnd
+		} else {
+			start, end = 1, info.trnEnd
+		}
+	case "test", "benchmark":
+		if info.tstEnd > info.valEnd && info.valEnd > 0 {
+			start, end = info.valEnd+1, info.tstEnd
+		} else if info.valEnd > info.trnEnd {
+			start, end = info.trnEnd+1, info.valEnd
+		} else {
+			start, end = 1, info.trnEnd
+		}
+	default:
+		return 0, 0, fmt.Errorf("unsupported gtsa mode: %s", mode)
+	}
+	if start <= 0 || end < start {
+		return 0, 0, fmt.Errorf("invalid gtsa bounds for mode=%s start=%d end=%d", mode, start, end)
+	}
+	return start, end, nil
+}
+
+func (s *gtsaWindowState) getPercept() (float64, error) {
+	if s.indexCurrent <= 0 || s.indexCurrent >= len(s.values) {
+		return 0, fmt.Errorf("gtsa index out of range: %d", s.indexCurrent)
+	}
+	value := s.values[s.indexCurrent]
+	s.window = append([]float64{value}, s.window...)
+	if len(s.window) > s.windowLength {
+		s.window = s.window[:s.windowLength]
+	}
+	return value, nil
+}
+
+func (s *gtsaWindowState) applyPrediction() (expected float64, done bool, err error) {
+	next := s.indexCurrent + 1
+	if next > s.indexEnd {
+		return 0, true, nil
+	}
+	if next <= 0 || next >= len(s.values) {
+		return 0, false, fmt.Errorf("gtsa next index out of range: %d", next)
+	}
+	expected = s.values[next]
+	s.indexCurrent = next
+	return expected, false, nil
+}
+
+func maxGTSA(a, b int) int {
+	if a > b {
+		return a
+	}
+	return b
 }
 
 func clampGTSA(v, lo, hi float64) float64 {

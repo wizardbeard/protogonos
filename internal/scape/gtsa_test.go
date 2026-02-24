@@ -133,3 +133,39 @@ func TestGTSAScapeTraceIncludesPredictionDiagnostics(t *testing.T) {
 		t.Fatalf("direction_accuracy out of range: %f", accuracy)
 	}
 }
+
+func TestGTSAScapeTraceIncludesTableWindowState(t *testing.T) {
+	scape := GTSAScape{}
+	copyInput := scriptedStepAgent{
+		id: "copy",
+		fn: func(input []float64) []float64 {
+			return []float64{input[0]}
+		},
+	}
+
+	_, trace, err := scape.EvaluateMode(context.Background(), copyInput, "validation")
+	if err != nil {
+		t.Fatalf("evaluate validation mode: %v", err)
+	}
+	if table, ok := trace["table_name"].(string); !ok || table == "" {
+		t.Fatalf("trace missing table_name: %+v", trace)
+	}
+	if rows, ok := trace["window_rows"].(int); !ok || rows <= 0 {
+		t.Fatalf("trace missing window_rows: %+v", trace)
+	}
+	if length, ok := trace["window_length"].(int); !ok || length <= 0 {
+		t.Fatalf("trace missing window_length: %+v", trace)
+	}
+	start, sok := trace["index_start"].(int)
+	current, cok := trace["index_current"].(int)
+	end, eok := trace["index_end"].(int)
+	if !sok || !cok || !eok {
+		t.Fatalf("trace missing index window fields: %+v", trace)
+	}
+	if start <= 0 || end < start {
+		t.Fatalf("invalid index window in trace: %+v", trace)
+	}
+	if current < start || current > end {
+		t.Fatalf("index_current out of bounds in trace: %+v", trace)
+	}
+}
