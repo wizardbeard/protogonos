@@ -138,6 +138,7 @@ func evaluatePole2BalancingWithStep(ctx context.Context, runner StepAgent, cfg p
 	return evaluatePole2Balancing(
 		ctx,
 		cfg,
+		"step-agent",
 		func(ctx context.Context, state pole2State) (pole2Control, error) {
 			in := pole2Observation(state, cfg.angleLimit)
 			out, err := runner.RunStep(ctx, in)
@@ -153,7 +154,7 @@ func evaluatePole2BalancingWithStep(ctx context.Context, runner StepAgent, cfg p
 }
 
 func evaluatePole2BalancingWithTick(ctx context.Context, ticker TickAgent, cfg pole2ModeConfig) (Fitness, Trace, error) {
-	positionSetter, velocitySetter, angle1Setter, velocity1Setter, angle2Setter, velocity2Setter, forceOutput, err := pole2BalancingIO(ticker)
+	ioBindings, err := pole2BalancingIO(ticker)
 	if err != nil {
 		return 0, nil, err
 	}
@@ -161,13 +162,26 @@ func evaluatePole2BalancingWithTick(ctx context.Context, ticker TickAgent, cfg p
 	return evaluatePole2Balancing(
 		ctx,
 		cfg,
+		ioBindings.surface,
 		func(ctx context.Context, state pole2State) (pole2Control, error) {
-			positionSetter.Set(scaleToUnit(state.cartPosition, 2.4, -2.4))
-			velocitySetter.Set(scaleToUnit(state.cartVelocity, 10, -10))
-			angle1Setter.Set(scaleToUnit(state.angle1, cfg.angleLimit, -cfg.angleLimit))
-			velocity1Setter.Set(state.velocity1)
-			angle2Setter.Set(scaleToUnit(state.angle2, cfg.angleLimit, -cfg.angleLimit))
-			velocity2Setter.Set(state.velocity2)
+			if ioBindings.positionSetter != nil {
+				ioBindings.positionSetter.Set(scaleToUnit(state.cartPosition, 2.4, -2.4))
+			}
+			if ioBindings.velocitySetter != nil {
+				ioBindings.velocitySetter.Set(scaleToUnit(state.cartVelocity, 10, -10))
+			}
+			if ioBindings.angle1Setter != nil {
+				ioBindings.angle1Setter.Set(scaleToUnit(state.angle1, cfg.angleLimit, -cfg.angleLimit))
+			}
+			if ioBindings.velocity1Setter != nil {
+				ioBindings.velocity1Setter.Set(state.velocity1)
+			}
+			if ioBindings.angle2Setter != nil {
+				ioBindings.angle2Setter.Set(scaleToUnit(state.angle2, cfg.angleLimit, -cfg.angleLimit))
+			}
+			if ioBindings.velocity2Setter != nil {
+				ioBindings.velocity2Setter.Set(state.velocity2)
+			}
 
 			out, err := ticker.Tick(ctx)
 			if err != nil {
@@ -180,7 +194,7 @@ func evaluatePole2BalancingWithTick(ctx context.Context, ticker TickAgent, cfg p
 				doublePole: cfg.doublePole,
 			}
 
-			last := forceOutput.Last()
+			last := ioBindings.forceOutput.Last()
 			if len(last) > 0 {
 				return decodePole2Control(last, cfg), nil
 			} else if len(out) > 0 {
@@ -222,6 +236,7 @@ func decodePole2Control(output []float64, cfg pole2ModeConfig) pole2Control {
 func evaluatePole2Balancing(
 	ctx context.Context,
 	cfg pole2ModeConfig,
+	sensorSurface string,
 	chooseControl func(context.Context, pole2State) (pole2Control, error),
 ) (Fitness, Trace, error) {
 	state := initialPole2State(cfg)
@@ -302,6 +317,7 @@ func evaluatePole2Balancing(
 		"angle2":               state.angle2,
 		"velocity2":            state.velocity2,
 		"mode":                 cfg.mode,
+		"sensor_surface":       sensorSurface,
 		"init_angle1":          cfg.initAngle1,
 		"init_angle2":          cfg.initAngle2,
 		"default_damping":      cfg.damping,
@@ -437,88 +453,135 @@ func simulateDoublePole(force float64, state pole2State, steps int) pole2State {
 	return next
 }
 
-func pole2BalancingIO(agent TickAgent) (
-	protoio.ScalarSensorSetter,
-	protoio.ScalarSensorSetter,
-	protoio.ScalarSensorSetter,
-	protoio.ScalarSensorSetter,
-	protoio.ScalarSensorSetter,
-	protoio.ScalarSensorSetter,
-	protoio.SnapshotActuator,
-	error,
-) {
+type pole2IOBindings struct {
+	positionSetter  protoio.ScalarSensorSetter
+	velocitySetter  protoio.ScalarSensorSetter
+	angle1Setter    protoio.ScalarSensorSetter
+	velocity1Setter protoio.ScalarSensorSetter
+	angle2Setter    protoio.ScalarSensorSetter
+	velocity2Setter protoio.ScalarSensorSetter
+	forceOutput     protoio.SnapshotActuator
+	surface         string
+}
+
+func pole2BalancingIO(agent TickAgent) (pole2IOBindings, error) {
 	typed, ok := agent.(interface {
 		RegisteredSensor(id string) (protoio.Sensor, bool)
 		RegisteredActuator(id string) (protoio.Actuator, bool)
 	})
 	if !ok {
-		return nil, nil, nil, nil, nil, nil, nil, fmt.Errorf("agent %s does not expose IO registry access", agent.ID())
+		return pole2IOBindings{}, fmt.Errorf("agent %s does not expose IO registry access", agent.ID())
 	}
 
-	position, ok := typed.RegisteredSensor(protoio.Pole2CartPositionSensorName)
-	if !ok {
-		return nil, nil, nil, nil, nil, nil, nil, fmt.Errorf("agent %s missing sensor %s", agent.ID(), protoio.Pole2CartPositionSensorName)
+	positionSetter, hasPosition, err := resolveOptionalPole2Setter(typed, protoio.Pole2CartPositionSensorName)
+	if err != nil {
+		return pole2IOBindings{}, err
 	}
-	positionSetter, ok := position.(protoio.ScalarSensorSetter)
-	if !ok {
-		return nil, nil, nil, nil, nil, nil, nil, fmt.Errorf("sensor %s does not support scalar set", protoio.Pole2CartPositionSensorName)
+	velocitySetter, hasVelocity, err := resolveOptionalPole2Setter(typed, protoio.Pole2CartVelocitySensorName)
+	if err != nil {
+		return pole2IOBindings{}, err
 	}
-
-	velocity, ok := typed.RegisteredSensor(protoio.Pole2CartVelocitySensorName)
-	if !ok {
-		return nil, nil, nil, nil, nil, nil, nil, fmt.Errorf("agent %s missing sensor %s", agent.ID(), protoio.Pole2CartVelocitySensorName)
+	angle1Setter, hasAngle1, err := resolveOptionalPole2Setter(typed, protoio.Pole2Angle1SensorName)
+	if err != nil {
+		return pole2IOBindings{}, err
 	}
-	velocitySetter, ok := velocity.(protoio.ScalarSensorSetter)
-	if !ok {
-		return nil, nil, nil, nil, nil, nil, nil, fmt.Errorf("sensor %s does not support scalar set", protoio.Pole2CartVelocitySensorName)
+	velocity1Setter, hasVelocity1, err := resolveOptionalPole2Setter(typed, protoio.Pole2Velocity1SensorName)
+	if err != nil {
+		return pole2IOBindings{}, err
 	}
-
-	angle1, ok := typed.RegisteredSensor(protoio.Pole2Angle1SensorName)
-	if !ok {
-		return nil, nil, nil, nil, nil, nil, nil, fmt.Errorf("agent %s missing sensor %s", agent.ID(), protoio.Pole2Angle1SensorName)
+	angle2Setter, hasAngle2, err := resolveOptionalPole2Setter(typed, protoio.Pole2Angle2SensorName)
+	if err != nil {
+		return pole2IOBindings{}, err
 	}
-	angle1Setter, ok := angle1.(protoio.ScalarSensorSetter)
-	if !ok {
-		return nil, nil, nil, nil, nil, nil, nil, fmt.Errorf("sensor %s does not support scalar set", protoio.Pole2Angle1SensorName)
+	velocity2Setter, hasVelocity2, err := resolveOptionalPole2Setter(typed, protoio.Pole2Velocity2SensorName)
+	if err != nil {
+		return pole2IOBindings{}, err
 	}
 
-	velocity1, ok := typed.RegisteredSensor(protoio.Pole2Velocity1SensorName)
-	if !ok {
-		return nil, nil, nil, nil, nil, nil, nil, fmt.Errorf("agent %s missing sensor %s", agent.ID(), protoio.Pole2Velocity1SensorName)
-	}
-	velocity1Setter, ok := velocity1.(protoio.ScalarSensorSetter)
-	if !ok {
-		return nil, nil, nil, nil, nil, nil, nil, fmt.Errorf("sensor %s does not support scalar set", protoio.Pole2Velocity1SensorName)
-	}
-
-	angle2, ok := typed.RegisteredSensor(protoio.Pole2Angle2SensorName)
-	if !ok {
-		return nil, nil, nil, nil, nil, nil, nil, fmt.Errorf("agent %s missing sensor %s", agent.ID(), protoio.Pole2Angle2SensorName)
-	}
-	angle2Setter, ok := angle2.(protoio.ScalarSensorSetter)
-	if !ok {
-		return nil, nil, nil, nil, nil, nil, nil, fmt.Errorf("sensor %s does not support scalar set", protoio.Pole2Angle2SensorName)
-	}
-
-	velocity2, ok := typed.RegisteredSensor(protoio.Pole2Velocity2SensorName)
-	if !ok {
-		return nil, nil, nil, nil, nil, nil, nil, fmt.Errorf("agent %s missing sensor %s", agent.ID(), protoio.Pole2Velocity2SensorName)
-	}
-	velocity2Setter, ok := velocity2.(protoio.ScalarSensorSetter)
-	if !ok {
-		return nil, nil, nil, nil, nil, nil, nil, fmt.Errorf("sensor %s does not support scalar set", protoio.Pole2Velocity2SensorName)
+	surface, supported := classifyPole2SenseSurface(
+		hasPosition,
+		hasVelocity,
+		hasAngle1,
+		hasVelocity1,
+		hasAngle2,
+		hasVelocity2,
+	)
+	if !supported {
+		return pole2IOBindings{}, fmt.Errorf(
+			"agent %s has unsupported pole2 sensing surface (position=%t velocity=%t angle1=%t velocity1=%t angle2=%t velocity2=%t)",
+			agent.ID(),
+			hasPosition,
+			hasVelocity,
+			hasAngle1,
+			hasVelocity1,
+			hasAngle2,
+			hasVelocity2,
+		)
 	}
 
 	actuator, ok := typed.RegisteredActuator(protoio.Pole2PushActuatorName)
 	if !ok {
-		return nil, nil, nil, nil, nil, nil, nil, fmt.Errorf("agent %s missing actuator %s", agent.ID(), protoio.Pole2PushActuatorName)
+		return pole2IOBindings{}, fmt.Errorf("agent %s missing actuator %s", agent.ID(), protoio.Pole2PushActuatorName)
 	}
 	output, ok := actuator.(protoio.SnapshotActuator)
 	if !ok {
-		return nil, nil, nil, nil, nil, nil, nil, fmt.Errorf("actuator %s does not support output snapshot", protoio.Pole2PushActuatorName)
+		return pole2IOBindings{}, fmt.Errorf("actuator %s does not support output snapshot", protoio.Pole2PushActuatorName)
 	}
 
-	return positionSetter, velocitySetter, angle1Setter, velocity1Setter, angle2Setter, velocity2Setter, output, nil
+	return pole2IOBindings{
+		positionSetter:  positionSetter,
+		velocitySetter:  velocitySetter,
+		angle1Setter:    angle1Setter,
+		velocity1Setter: velocity1Setter,
+		angle2Setter:    angle2Setter,
+		velocity2Setter: velocity2Setter,
+		forceOutput:     output,
+		surface:         surface,
+	}, nil
+}
+
+func resolveOptionalPole2Setter(
+	typed interface {
+		RegisteredSensor(id string) (protoio.Sensor, bool)
+	},
+	sensorID string,
+) (protoio.ScalarSensorSetter, bool, error) {
+	sensor, ok := typed.RegisteredSensor(sensorID)
+	if !ok {
+		return nil, false, nil
+	}
+	setter, ok := sensor.(protoio.ScalarSensorSetter)
+	if !ok {
+		return nil, false, fmt.Errorf("sensor %s does not support scalar set", sensorID)
+	}
+	return setter, true, nil
+}
+
+func classifyPole2SenseSurface(hasPosition, hasVelocity, hasAngle1, hasVelocity1, hasAngle2, hasVelocity2 bool) (string, bool) {
+	switch {
+	case hasPosition && !hasVelocity && !hasAngle1 && !hasVelocity1 && !hasAngle2 && !hasVelocity2:
+		return "cpos", true
+	case !hasPosition && hasVelocity && !hasAngle1 && !hasVelocity1 && !hasAngle2 && !hasVelocity2:
+		return "cvel", true
+	case !hasPosition && !hasVelocity && hasAngle1 && !hasVelocity1 && !hasAngle2 && !hasVelocity2:
+		return "pangle1", true
+	case !hasPosition && !hasVelocity && !hasAngle1 && hasVelocity1 && !hasAngle2 && !hasVelocity2:
+		return "pvel1", true
+	case !hasPosition && !hasVelocity && !hasAngle1 && !hasVelocity1 && hasAngle2 && !hasVelocity2:
+		return "pangle2", true
+	case !hasPosition && !hasVelocity && !hasAngle1 && !hasVelocity1 && !hasAngle2 && hasVelocity2:
+		return "pvel2", true
+	case hasPosition && !hasVelocity && hasAngle1 && !hasVelocity1 && !hasAngle2 && !hasVelocity2:
+		return "2", true
+	case hasPosition && !hasVelocity && hasAngle1 && !hasVelocity1 && hasAngle2 && !hasVelocity2:
+		return "3", true
+	case hasPosition && hasVelocity && hasAngle1 && hasVelocity1 && !hasAngle2 && !hasVelocity2:
+		return "4", true
+	case hasPosition && hasVelocity && hasAngle1 && hasVelocity1 && hasAngle2 && hasVelocity2:
+		return "6", true
+	default:
+		return "", false
+	}
 }
 
 func sgn(v float64) float64 {

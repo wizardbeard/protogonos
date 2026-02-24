@@ -111,6 +111,65 @@ func TestPole2BalancingScapeEvaluateWithIOComponents(t *testing.T) {
 	if _, ok := trace["steps_survived"].(int); !ok {
 		t.Fatalf("trace missing steps_survived: %+v", trace)
 	}
+	if surface, ok := trace["sensor_surface"].(string); !ok || surface != "6" {
+		t.Fatalf("expected full pole2 sensor_surface=6, got %+v", trace)
+	}
+}
+
+func TestPole2BalancingScapeEvaluateWithReducedIOComponents(t *testing.T) {
+	genome := model.Genome{
+		SensorIDs: []string{
+			protoio.Pole2CartPositionSensorName,
+			protoio.Pole2Angle1SensorName,
+			protoio.Pole2Angle2SensorName,
+		},
+		ActuatorIDs: []string{protoio.Pole2PushActuatorName},
+		Neurons: []model.Neuron{
+			{ID: "x", Activation: "identity"},
+			{ID: "a1", Activation: "identity"},
+			{ID: "a2", Activation: "identity"},
+			{ID: "f", Activation: "tanh"},
+		},
+		Synapses: []model.Synapse{
+			{From: "x", To: "f", Weight: -0.7, Enabled: true},
+			{From: "a1", To: "f", Weight: -3.8, Enabled: true},
+			{From: "a2", To: "f", Weight: -5.4, Enabled: true},
+		},
+	}
+
+	sensors := map[string]protoio.Sensor{
+		protoio.Pole2CartPositionSensorName: protoio.NewScalarInputSensor(0),
+		protoio.Pole2Angle1SensorName:       protoio.NewScalarInputSensor(0),
+		protoio.Pole2Angle2SensorName:       protoio.NewScalarInputSensor(0),
+	}
+	actuators := map[string]protoio.Actuator{
+		protoio.Pole2PushActuatorName: protoio.NewScalarOutputActuator(),
+	}
+
+	cortex, err := agent.NewCortex(
+		"pole2-agent-io-reduced",
+		genome,
+		sensors,
+		actuators,
+		[]string{"x", "a1", "a2"},
+		[]string{"f"},
+		nil,
+	)
+	if err != nil {
+		t.Fatalf("new cortex: %v", err)
+	}
+
+	scape := Pole2BalancingScape{}
+	fitness, trace, err := scape.Evaluate(context.Background(), cortex)
+	if err != nil {
+		t.Fatalf("evaluate: %v", err)
+	}
+	if fitness <= 0 {
+		t.Fatalf("expected positive fitness, got %f", fitness)
+	}
+	if surface, ok := trace["sensor_surface"].(string); !ok || surface != "3" {
+		t.Fatalf("expected reduced pole2 sensor_surface=3, got %+v", trace)
+	}
 }
 
 func TestPole2BalancingScapeEvaluateModeAnnotatesMode(t *testing.T) {
