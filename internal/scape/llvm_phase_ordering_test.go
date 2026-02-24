@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"protogonos/internal/agent"
+	"protogonos/internal/genotype"
 	protoio "protogonos/internal/io"
 	"protogonos/internal/model"
 )
@@ -151,5 +152,38 @@ func TestLLVMPhaseOrderingScapeSupportsVectorOptimizationSurface(t *testing.T) {
 	history, ok := trace["selected_optimizations"].([]string)
 	if !ok || len(history) == 0 {
 		t.Fatalf("expected selected_optimizations history, got %+v", trace)
+	}
+}
+
+func TestLLVMPhaseOrderingScapeEvaluateWithSeedVectorCortex(t *testing.T) {
+	seed, err := genotype.ConstructSeedPopulation("llvm-phase-ordering", 1, 71)
+	if err != nil {
+		t.Fatalf("construct llvm seed population: %v", err)
+	}
+	genome := seed.Genomes[0]
+
+	sensors := map[string]protoio.Sensor{
+		protoio.LLVMComplexitySensorName: protoio.NewScalarInputSensor(0),
+		protoio.LLVMPassIndexSensorName:  protoio.NewScalarInputSensor(0),
+	}
+	actuators := map[string]protoio.Actuator{
+		protoio.LLVMPhaseActuatorName: protoio.NewScalarOutputActuator(),
+	}
+
+	cortex, err := agent.NewCortex("llvm-seed-vector", genome, sensors, actuators, seed.InputNeuronIDs, seed.OutputNeuronIDs, nil)
+	if err != nil {
+		t.Fatalf("new cortex: %v", err)
+	}
+
+	scape := LLVMPhaseOrderingScape{}
+	_, trace, err := scape.Evaluate(context.Background(), cortex)
+	if err != nil {
+		t.Fatalf("evaluate: %v", err)
+	}
+	if vectors, ok := trace["vector_decisions"].(int); !ok || vectors <= 0 {
+		t.Fatalf("expected vector decisions from seed cortex, got %+v", trace)
+	}
+	if surface, ok := trace["optimization_surface"].(int); !ok || surface != 55 {
+		t.Fatalf("expected optimization surface=55, got %+v", trace)
 	}
 }

@@ -79,7 +79,7 @@ func ConstructSeedPopulation(scapeName string, size int, seed int64) (SeedPopula
 		return SeedPopulation{
 			Genomes:         seedLLVMPhaseOrderingPopulation(size, seed),
 			InputNeuronIDs:  []string{"c", "p"},
-			OutputNeuronIDs: []string{"o"},
+			OutputNeuronIDs: llvmSeedOutputNeuronIDs(),
 		}, nil
 	default:
 		return SeedPopulation{}, fmt.Errorf("unsupported scape: %s", scapeName)
@@ -404,26 +404,72 @@ func seedEpitopesPopulation(size int, seed int64) []model.Genome {
 func seedLLVMPhaseOrderingPopulation(size int, seed int64) []model.Genome {
 	rng := rand.New(rand.NewSource(seed))
 	population := make([]model.Genome, 0, size)
+	outputIDs := llvmSeedOutputNeuronIDs()
+	surfaceSize := len(outputIDs)
+	if surfaceSize <= 0 {
+		surfaceSize = 1
+	}
+
 	for i := 0; i < size; i++ {
+		neurons := make([]model.Neuron, 0, 2+surfaceSize)
+		neurons = append(neurons,
+			model.Neuron{ID: "c", Activation: "identity", Bias: 0},
+			model.Neuron{ID: "p", Activation: "identity", Bias: 0},
+		)
+		synapses := make([]model.Synapse, 0, surfaceSize*2)
+		for idx, outputID := range outputIDs {
+			progress := float64(idx) / float64(maxIntLifecycle(1, surfaceSize-1))
+			neurons = append(neurons, model.Neuron{
+				ID:         outputID,
+				Activation: "identity",
+				Bias:       (1.0 - 2.0*progress) + jitter(rng, 0.05),
+			})
+			synapses = append(synapses,
+				model.Synapse{
+					ID:      fmt.Sprintf("s%d:p", idx),
+					From:    "p",
+					To:      outputID,
+					Weight:  -2.2 + 4.4*progress + jitter(rng, 0.05),
+					Enabled: true,
+				},
+				model.Synapse{
+					ID:      fmt.Sprintf("s%d:c", idx),
+					From:    "c",
+					To:      outputID,
+					Weight:  -0.35 + jitter(rng, 0.1),
+					Enabled: true,
+				},
+			)
+		}
+
 		population = append(population, model.Genome{
 			VersionedRecord: model.VersionedRecord{SchemaVersion: storage.CurrentSchemaVersion, CodecVersion: storage.CurrentCodecVersion},
 			ID:              fmt.Sprintf("llvm-g0-%d", i),
 			SensorIDs:       []string{protoio.LLVMComplexitySensorName, protoio.LLVMPassIndexSensorName},
 			ActuatorIDs:     []string{protoio.LLVMPhaseActuatorName},
-			Neurons: []model.Neuron{
-				{ID: "c", Activation: "identity", Bias: 0},
-				{ID: "p", Activation: "identity", Bias: 0},
-				{ID: "o", Activation: "identity", Bias: 1 + jitter(rng, 0.1)},
-			},
-			Synapses: []model.Synapse{
-				{ID: "s1", From: "p", To: "o", Weight: -2 + jitter(rng, 0.2), Enabled: true},
-				{ID: "s2", From: "c", To: "o", Weight: -0.2 + jitter(rng, 0.15), Enabled: true},
-			},
+			Neurons:         neurons,
+			Synapses:        synapses,
 		})
 	}
 	return population
 }
 
+func llvmSeedOutputNeuronIDs() []string {
+	const optimizationSurface = 55
+	ids := make([]string, 0, optimizationSurface)
+	for i := 0; i < optimizationSurface; i++ {
+		ids = append(ids, fmt.Sprintf("o%02d", i))
+	}
+	return ids
+}
+
 func jitter(rng *rand.Rand, amplitude float64) float64 {
 	return (rng.Float64()*2 - 1) * amplitude
+}
+
+func maxIntLifecycle(a, b int) int {
+	if a > b {
+		return a
+	}
+	return b
 }
