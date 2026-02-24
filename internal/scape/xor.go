@@ -157,13 +157,16 @@ func evaluateXOR(
 	}
 
 	if len(cfg.cases) == 0 {
-		return 0, Trace{"mse": 0.0, "predictions": predictions, "mode": cfg.mode, "cases": 0}, nil
+		return 0, Trace{"mse": 0.0, "sse": 0.0, "predictions": predictions, "mode": cfg.mode, "cases": 0}, nil
 	}
 
-	mse := squaredErr / float64(len(cfg.cases))
-	fitness := Fitness(1.0 - mse)
+	sse := squaredErr
+	mse := sse / float64(len(cfg.cases))
+	// Mirror reference scape.erl xor fitness semantics: reciprocal SSE with epsilon.
+	fitness := Fitness(1.0 / (sse + 0.000001))
 	return fitness, Trace{
 		"mse":         mse,
+		"sse":         sse,
 		"predictions": predictions,
 		"mode":        cfg.mode,
 		"cases":       len(cfg.cases),

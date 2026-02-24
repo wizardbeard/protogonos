@@ -44,11 +44,16 @@ func TestXORScapeEvaluateWithHandBuiltAgent(t *testing.T) {
 	if !ok {
 		t.Fatalf("trace missing mse: %+v", trace)
 	}
+	sse, ok := trace["sse"].(float64)
+	if !ok {
+		t.Fatalf("trace missing sse: %+v", trace)
+	}
 	if mse > 0.05 {
 		t.Fatalf("expected mse <= 0.05, got %f", mse)
 	}
-	if fitness < 0.95 {
-		t.Fatalf("expected fitness >= 0.95, got %f", fitness)
+	wantFitness := Fitness(1.0 / (sse + 0.000001))
+	if diff := float64(fitness - wantFitness); diff < -1e-9 || diff > 1e-9 {
+		t.Fatalf("expected reciprocal-sse fitness %f, got %f (trace=%+v)", wantFitness, fitness, trace)
 	}
 }
 
@@ -96,11 +101,16 @@ func TestXORScapeEvaluateWithIOComponents(t *testing.T) {
 	if !ok {
 		t.Fatalf("trace missing mse: %+v", trace)
 	}
+	sse, ok := trace["sse"].(float64)
+	if !ok {
+		t.Fatalf("trace missing sse: %+v", trace)
+	}
 	if mse > 0.05 {
 		t.Fatalf("expected mse <= 0.05, got %f", mse)
 	}
-	if fitness < 0.95 {
-		t.Fatalf("expected fitness >= 0.95, got %f", fitness)
+	wantFitness := Fitness(1.0 / (sse + 0.000001))
+	if diff := float64(fitness - wantFitness); diff < -1e-9 || diff > 1e-9 {
+		t.Fatalf("expected reciprocal-sse fitness %f, got %f (trace=%+v)", wantFitness, fitness, trace)
 	}
 }
 
