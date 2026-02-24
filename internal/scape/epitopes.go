@@ -90,73 +90,99 @@ func evaluateEpitopes(
 	cfg epitopesModeConfig,
 	chooseClassification func(context.Context, []float64) ([]float64, error),
 ) (Fitness, Trace, error) {
+	table := defaultEpitopesTable(cfg.table, cfg.sequenceLength)
+	session, err := newEpitopesSession(cfg, table)
+	if err != nil {
+		return 0, nil, err
+	}
+
 	correct := 0
-	predictions := make([]float64, 0, cfg.samples)
-	prevSignal := 0.0
+	predictions := make([]float64, 0, cfg.maxSamples)
 	positiveTargets := 0
 	negativeTargets := 0
 	marginAcc := 0.0
 	signalAcc := 0.0
+	memoryAcc := 0.0
+	evaluated := 0
 	perceptWidth := 2 + cfg.sequenceLength*epitopesAlphabetSize
 
-	for i := 0; i < cfg.samples; i++ {
+	for i := 0; i < cfg.maxSamples; i++ {
 		if err := ctx.Err(); err != nil {
 			return 0, nil, err
 		}
 
-		index := cfg.startIndex + i
-		sequence := epitopesSequence(index, cfg.sequenceLength)
-		signal := epitopesSignal(sequence, index)
-		memory := prevSignal
-		percept := epitopesPercept(signal, memory, sequence)
+		percept, row, _, err := session.sense()
+		if err != nil {
+			return 0, nil, err
+		}
+
 		out, err := chooseClassification(ctx, percept)
 		if err != nil {
 			return 0, nil, err
 		}
-		pred := epitopesOutputToScalar(out)
-		target := epitopesTarget(signal, memory)
-		if target > 0 {
+		pred := epitopesOutputToBinary(out)
+		reward, halt, target, err := session.classify(pred)
+		if err != nil {
+			return 0, nil, err
+		}
+
+		if target == 1 {
 			positiveTargets++
 		} else {
 			negativeTargets++
 		}
-
-		if binarySign(pred) == target {
+		if reward == 1 {
 			correct++
 		}
-		predictions = append(predictions, pred)
-		marginAcc += pred * target
-		signalAcc += signal
-		prevSignal = signal
+		signedPred := epitopesBinaryToSigned(pred)
+		signedTarget := epitopesBinaryToSigned(target)
+		predictions = append(predictions, signedPred)
+		marginAcc += signedPred * signedTarget
+		signalAcc += row.signal
+		memoryAcc += row.memory
+		evaluated++
+		if halt {
+			break
+		}
 	}
 
-	accuracy := float64(correct) / float64(maxIntEpitopes(1, cfg.samples))
-	meanMargin := marginAcc / float64(maxIntEpitopes(1, cfg.samples))
-	meanSignal := signalAcc / float64(maxIntEpitopes(1, cfg.samples))
+	accuracy := float64(correct) / float64(maxIntEpitopes(1, evaluated))
+	meanMargin := marginAcc / float64(maxIntEpitopes(1, evaluated))
+	meanSignal := signalAcc / float64(maxIntEpitopes(1, evaluated))
+	meanMemory := memoryAcc / float64(maxIntEpitopes(1, evaluated))
 	return Fitness(accuracy), Trace{
 		"accuracy":            accuracy,
 		"correct":             correct,
-		"total":               cfg.samples,
+		"total":               evaluated,
 		"predictions":         predictions,
 		"mode":                cfg.mode,
+		"op_mode":             cfg.opMode,
 		"dataset":             cfg.table,
-		"start_index":         cfg.startIndex,
-		"end_index":           cfg.startIndex + cfg.samples - 1,
+		"table_name":          table.name,
+		"start_index":         session.startIndex,
+		"end_index":           session.endIndex,
+		"index_current":       session.indexCurrent,
+		"configured_max":      cfg.maxSamples,
 		"sequence_length":     cfg.sequenceLength,
 		"feature_width":       perceptWidth,
 		"positive_targets":    positiveTargets,
 		"negative_targets":    negativeTargets,
 		"mean_signal":         meanSignal,
+		"mean_memory":         meanMemory,
 		"mean_margin":         meanMargin,
-		"classification_skew": float64(positiveTargets-negativeTargets) / float64(maxIntEpitopes(1, cfg.samples)),
+		"classification_skew": float64(positiveTargets-negativeTargets) / float64(maxIntEpitopes(1, evaluated)),
 	}, nil
 }
 
 type epitopesModeConfig struct {
 	mode           string
+	opMode         string
 	table          string
 	startIndex     int
-	samples        int
+	endIndex       int
+	startBench     int
+	endBench       int
+	maxSamples     int
 	sequenceLength int
 }
 
@@ -165,38 +191,182 @@ func epitopesConfigForMode(mode string) (epitopesModeConfig, error) {
 	case "", "gt":
 		return epitopesModeConfig{
 			mode:           "gt",
+			opMode:         "gt",
 			table:          "abc_pred16",
-			startIndex:     0,
-			samples:        64,
+			startIndex:     1,
+			endIndex:       64,
+			startBench:     841,
+			endBench:       1120,
+			maxSamples:     64,
 			sequenceLength: 16,
 		}, nil
 	case "validation":
 		return epitopesModeConfig{
 			mode:           "validation",
+			opMode:         "gt",
 			table:          "abc_pred16",
-			startIndex:     512,
-			samples:        32,
+			startIndex:     513,
+			endIndex:       544,
+			startBench:     841,
+			endBench:       1120,
+			maxSamples:     32,
 			sequenceLength: 16,
 		}, nil
 	case "test":
 		return epitopesModeConfig{
 			mode:           "test",
+			opMode:         "gt",
 			table:          "abc_pred16",
-			startIndex:     1024,
-			samples:        32,
+			startIndex:     1025,
+			endIndex:       1056,
+			startBench:     841,
+			endBench:       1120,
+			maxSamples:     32,
 			sequenceLength: 16,
 		}, nil
 	case "benchmark":
 		return epitopesModeConfig{
 			mode:           "benchmark",
+			opMode:         "benchmark",
 			table:          "abc_pred16",
-			startIndex:     840,
-			samples:        280,
+			startIndex:     1,
+			endIndex:       64,
+			startBench:     841,
+			endBench:       1120,
+			maxSamples:     280,
 			sequenceLength: 16,
 		}, nil
 	default:
 		return epitopesModeConfig{}, fmt.Errorf("unsupported epitopes mode: %s", mode)
 	}
+}
+
+type epitopesRow struct {
+	sequence       []int
+	signal         float64
+	memory         float64
+	classification int
+}
+
+type epitopesTable struct {
+	name    string
+	rows    []epitopesRow // 1-based
+	modBase int
+}
+
+func defaultEpitopesTable(name string, sequenceLength int) epitopesTable {
+	if sequenceLength <= 0 {
+		sequenceLength = 16
+	}
+	const totalRows = 1400
+
+	rows := make([]epitopesRow, totalRows+1)
+	prevSignal := 0.0
+	for index := 1; index <= totalRows; index++ {
+		sequence := epitopesSequence(index-1, sequenceLength)
+		signal := epitopesSignal(sequence, index-1)
+		memory := prevSignal
+		classification := 0
+		if signal+0.7*memory >= 0 {
+			classification = 1
+		}
+		rows[index] = epitopesRow{
+			sequence:       sequence,
+			signal:         signal,
+			memory:         memory,
+			classification: classification,
+		}
+		prevSignal = signal
+	}
+
+	return epitopesTable{
+		name:    name,
+		rows:    rows,
+		modBase: totalRows + 1, // mirrors reference rem 1401 index wrap behavior.
+	}
+}
+
+func (t epitopesTable) rowAt(index int) (epitopesRow, error) {
+	if index <= 0 || index >= len(t.rows) {
+		return epitopesRow{}, fmt.Errorf("epitopes row index out of bounds: %d", index)
+	}
+	return t.rows[index], nil
+}
+
+type epitopesSession struct {
+	opMode       string
+	table        epitopesTable
+	startIndex   int
+	endIndex     int
+	indexCurrent int
+	halted       bool
+}
+
+func newEpitopesSession(cfg epitopesModeConfig, table epitopesTable) (*epitopesSession, error) {
+	start := cfg.startIndex
+	end := cfg.endIndex
+	if strings.EqualFold(cfg.opMode, "benchmark") {
+		start = cfg.startBench
+		end = cfg.endBench
+	}
+	if start <= 0 || end < start {
+		return nil, fmt.Errorf("invalid epitopes window start=%d end=%d", start, end)
+	}
+	if _, err := table.rowAt(start); err != nil {
+		return nil, err
+	}
+	if _, err := table.rowAt(end); err != nil {
+		return nil, err
+	}
+	return &epitopesSession{
+		opMode:       cfg.opMode,
+		table:        table,
+		startIndex:   start,
+		endIndex:     end,
+		indexCurrent: 0,
+		halted:       false,
+	}, nil
+}
+
+func (s *epitopesSession) sense() ([]float64, epitopesRow, int, error) {
+	if s.halted {
+		return nil, epitopesRow{}, 0, fmt.Errorf("epitopes session halted")
+	}
+	if s.indexCurrent == 0 {
+		s.indexCurrent = s.startIndex
+	}
+	row, err := s.table.rowAt(s.indexCurrent)
+	if err != nil {
+		return nil, epitopesRow{}, 0, err
+	}
+	return epitopesPercept(row.signal, row.memory, row.sequence), row, s.indexCurrent, nil
+}
+
+func (s *epitopesSession) classify(prediction int) (reward int, halt bool, target int, err error) {
+	if s.halted || s.indexCurrent == 0 {
+		return 0, false, 0, fmt.Errorf("epitopes classify called on inactive session")
+	}
+	row, err := s.table.rowAt(s.indexCurrent)
+	if err != nil {
+		return 0, false, 0, err
+	}
+	target = row.classification
+	if prediction == target {
+		reward = 1
+	}
+
+	if s.indexCurrent == s.endIndex {
+		s.halted = true
+		s.indexCurrent = 0
+		return reward, true, target, nil
+	}
+
+	nextIndex := (s.indexCurrent + 1) % s.table.modBase
+	if nextIndex == 0 {
+		nextIndex = 1
+	}
+	s.indexCurrent = nextIndex
+	return reward, false, target, nil
 }
 
 const epitopesAlphabetSize = 21
@@ -273,28 +443,24 @@ func epitopesHasMotif(sequence, motif []int) bool {
 	return false
 }
 
-func epitopesOutputToScalar(output []float64) float64 {
+func epitopesOutputToBinary(output []float64) int {
 	if len(output) == 1 {
-		return output[0]
+		if output[0] >= 0 {
+			return 1
+		}
+		return 0
 	}
 	if argmax(output) == 0 {
-		return -1
+		return 0
 	}
 	return 1
 }
 
-func epitopesTarget(signal, memory float64) float64 {
-	if signal+0.7*memory >= 0 {
-		return 1
+func epitopesBinaryToSigned(v int) float64 {
+	if v == 0 {
+		return -1
 	}
-	return -1
-}
-
-func binarySign(v float64) float64 {
-	if v >= 0 {
-		return 1
-	}
-	return -1
+	return 1
 }
 
 func epitopesIO(agent TickAgent) (protoio.ScalarSensorSetter, protoio.ScalarSensorSetter, protoio.SnapshotActuator, error) {

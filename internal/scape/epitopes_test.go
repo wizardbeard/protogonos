@@ -141,3 +141,35 @@ func TestEpitopesScapeStepPerceptIncludesSequenceFeatures(t *testing.T) {
 		t.Fatalf("expected positive sequence_length in trace, got %+v", trace)
 	}
 }
+
+func TestEpitopesScapeTraceIncludesTableWindowState(t *testing.T) {
+	scape := EpitopesScape{}
+	memoryAware := scriptedStepAgent{
+		id: "memory-aware",
+		fn: func(in []float64) []float64 {
+			if len(in) < 2 {
+				return []float64{0}
+			}
+			return []float64{in[0] + 0.7*in[1]}
+		},
+	}
+
+	_, trace, err := scape.EvaluateMode(context.Background(), memoryAware, "benchmark")
+	if err != nil {
+		t.Fatalf("evaluate benchmark mode: %v", err)
+	}
+	if opMode, ok := trace["op_mode"].(string); !ok || opMode != "benchmark" {
+		t.Fatalf("expected benchmark op_mode, got %+v", trace)
+	}
+	if _, ok := trace["table_name"].(string); !ok {
+		t.Fatalf("trace missing table_name: %+v", trace)
+	}
+	start, sok := trace["start_index"].(int)
+	end, eok := trace["end_index"].(int)
+	if !sok || !eok || start <= 0 || end < start {
+		t.Fatalf("trace missing or invalid window bounds: %+v", trace)
+	}
+	if total, ok := trace["total"].(int); !ok || total <= 0 {
+		t.Fatalf("trace missing total sample count: %+v", trace)
+	}
+}
