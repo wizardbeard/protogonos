@@ -66,7 +66,7 @@ func ConstructSeedPopulation(scapeName string, size int, seed int64) (SeedPopula
 	case "fx":
 		return SeedPopulation{
 			Genomes:         seedFXPopulation(size, seed),
-			InputNeuronIDs:  []string{"p", "s", "m", "v", "n", "d", "q", "e", "pc", "pr"},
+			InputNeuronIDs:  []string{"p", "s", "m", "v", "n", "d", "q", "e", "pc", "ppc", "pr"},
 			OutputNeuronIDs: []string{"t"},
 		}, nil
 	case "epitopes":
@@ -401,6 +401,7 @@ func seedFXPopulation(size int, seed int64) []model.Genome {
 				protoio.FXPositionSensorName,
 				protoio.FXEntrySensorName,
 				protoio.FXPercentChangeSensorName,
+				protoio.FXPrevPercentChangeSensorName,
 				protoio.FXProfitSensorName,
 			},
 			ActuatorIDs: []string{protoio.FXTradeActuatorName},
@@ -414,6 +415,7 @@ func seedFXPopulation(size int, seed int64) []model.Genome {
 				{ID: "q", Activation: "identity", Bias: 0},
 				{ID: "e", Activation: "identity", Bias: 0},
 				{ID: "pc", Activation: "identity", Bias: 0},
+				{ID: "ppc", Activation: "identity", Bias: 0},
 				{ID: "pr", Activation: "identity", Bias: 0},
 				{ID: "t", Activation: "tanh", Bias: jitter(rng, 0.25)},
 			},
@@ -427,7 +429,8 @@ func seedFXPopulation(size int, seed int64) []model.Genome {
 				{ID: "s7", From: "q", To: "t", Weight: 0.15 + jitter(rng, 0.15), Enabled: true},
 				{ID: "s8", From: "e", To: "t", Weight: -0.20 + jitter(rng, 0.10), Enabled: true},
 				{ID: "s9", From: "pc", To: "t", Weight: 0.45 + jitter(rng, 0.10), Enabled: true},
-				{ID: "s10", From: "pr", To: "t", Weight: 0.35 + jitter(rng, 0.10), Enabled: true},
+				{ID: "s10", From: "ppc", To: "t", Weight: 0.30 + jitter(rng, 0.10), Enabled: true},
+				{ID: "s11", From: "pr", To: "t", Weight: 0.35 + jitter(rng, 0.10), Enabled: true},
 			},
 		})
 	}

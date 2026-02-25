@@ -19,6 +19,7 @@ func (FXMorphology) Sensors() []string {
 		protoio.FXPositionSensorName,
 		protoio.FXEntrySensorName,
 		protoio.FXPercentChangeSensorName,
+		protoio.FXPrevPercentChangeSensorName,
 		protoio.FXProfitSensorName,
 	}
 }

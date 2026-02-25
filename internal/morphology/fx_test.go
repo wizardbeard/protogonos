@@ -1,6 +1,10 @@
 package morphology
 
-import "testing"
+import (
+	"testing"
+
+	protoio "protogonos/internal/io"
+)
 
 func TestFXMorphologyCompatibility(t *testing.T) {
 	m := FXMorphology{}
@@ -9,6 +13,17 @@ func TestFXMorphologyCompatibility(t *testing.T) {
 	}
 	if m.Compatible("xor") {
 		t.Fatal("expected xor to be incompatible")
+	}
+	sensors := m.Sensors()
+	if len(sensors) != 11 {
+		t.Fatalf("expected 11 fx sensors, got %d (%v)", len(sensors), sensors)
+	}
+	found := map[string]bool{}
+	for _, id := range sensors {
+		found[id] = true
+	}
+	if !found[protoio.FXPrevPercentChangeSensorName] {
+		t.Fatalf("expected fx morphology sensor %s in %v", protoio.FXPrevPercentChangeSensorName, sensors)
 	}
 }
 

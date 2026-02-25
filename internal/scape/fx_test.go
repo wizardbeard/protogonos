@@ -3,6 +3,7 @@ package scape
 import (
 	"context"
 	"fmt"
+	"math"
 	"os"
 	"path/filepath"
 	"strings"
@@ -124,6 +125,7 @@ func TestFXScapeEvaluateWithExtendedIOComponents(t *testing.T) {
 			protoio.FXPositionSensorName,
 			protoio.FXEntrySensorName,
 			protoio.FXPercentChangeSensorName,
+			protoio.FXPrevPercentChangeSensorName,
 			protoio.FXProfitSensorName,
 		},
 		ActuatorIDs: []string{protoio.FXTradeActuatorName},
@@ -137,6 +139,7 @@ func TestFXScapeEvaluateWithExtendedIOComponents(t *testing.T) {
 			{ID: "pos", Activation: "identity"},
 			{ID: "entry", Activation: "identity"},
 			{ID: "pc", Activation: "identity"},
+			{ID: "ppc", Activation: "identity"},
 			{ID: "profit", Activation: "identity"},
 			{ID: "trade", Activation: "tanh"},
 		},
@@ -149,22 +152,24 @@ func TestFXScapeEvaluateWithExtendedIOComponents(t *testing.T) {
 			{From: "pos", To: "trade", Weight: 0.15, Enabled: true},
 			{From: "entry", To: "trade", Weight: -0.2, Enabled: true},
 			{From: "pc", To: "trade", Weight: 0.45, Enabled: true},
+			{From: "ppc", To: "trade", Weight: 0.35, Enabled: true},
 			{From: "profit", To: "trade", Weight: 0.35, Enabled: true},
 			{From: "price", To: "trade", Weight: 0.2, Enabled: true},
 		},
 	}
 
 	sensors := map[string]protoio.Sensor{
-		protoio.FXPriceSensorName:         protoio.NewScalarInputSensor(0),
-		protoio.FXSignalSensorName:        protoio.NewScalarInputSensor(0),
-		protoio.FXMomentumSensorName:      protoio.NewScalarInputSensor(0),
-		protoio.FXVolatilitySensorName:    protoio.NewScalarInputSensor(0),
-		protoio.FXNAVSensorName:           protoio.NewScalarInputSensor(0),
-		protoio.FXDrawdownSensorName:      protoio.NewScalarInputSensor(0),
-		protoio.FXPositionSensorName:      protoio.NewScalarInputSensor(0),
-		protoio.FXEntrySensorName:         protoio.NewScalarInputSensor(0),
-		protoio.FXPercentChangeSensorName: protoio.NewScalarInputSensor(0),
-		protoio.FXProfitSensorName:        protoio.NewScalarInputSensor(0),
+		protoio.FXPriceSensorName:             protoio.NewScalarInputSensor(0),
+		protoio.FXSignalSensorName:            protoio.NewScalarInputSensor(0),
+		protoio.FXMomentumSensorName:          protoio.NewScalarInputSensor(0),
+		protoio.FXVolatilitySensorName:        protoio.NewScalarInputSensor(0),
+		protoio.FXNAVSensorName:               protoio.NewScalarInputSensor(0),
+		protoio.FXDrawdownSensorName:          protoio.NewScalarInputSensor(0),
+		protoio.FXPositionSensorName:          protoio.NewScalarInputSensor(0),
+		protoio.FXEntrySensorName:             protoio.NewScalarInputSensor(0),
+		protoio.FXPercentChangeSensorName:     protoio.NewScalarInputSensor(0),
+		protoio.FXPrevPercentChangeSensorName: protoio.NewScalarInputSensor(0),
+		protoio.FXProfitSensorName:            protoio.NewScalarInputSensor(0),
 	}
 	actuators := map[string]protoio.Actuator{
 		protoio.FXTradeActuatorName: protoio.NewScalarOutputActuator(),
@@ -175,7 +180,7 @@ func TestFXScapeEvaluateWithExtendedIOComponents(t *testing.T) {
 		genome,
 		sensors,
 		actuators,
-		[]string{"price", "signal", "mom", "vol", "nav", "dd", "pos", "entry", "pc", "profit"},
+		[]string{"price", "signal", "mom", "vol", "nav", "dd", "pos", "entry", "pc", "ppc", "profit"},
 		[]string{"trade"},
 		nil,
 	)
@@ -222,6 +227,9 @@ func TestFXScapeTraceIncludesAccountLifecycle(t *testing.T) {
 	if _, ok := trace["percentage_change"].(float64); !ok {
 		t.Fatalf("trace missing percentage_change: %+v", trace)
 	}
+	if _, ok := trace["prev_percentage_change"].(float64); !ok {
+		t.Fatalf("trace missing prev_percentage_change: %+v", trace)
+	}
 	if _, ok := trace["profit"].(float64); !ok {
 		t.Fatalf("trace missing profit: %+v", trace)
 	}
@@ -230,11 +238,15 @@ func TestFXScapeTraceIncludesAccountLifecycle(t *testing.T) {
 func TestFXScapeStepPerceptIncludesMarketInternals(t *testing.T) {
 	scape := FXScape{}
 	maxPerceptWidth := 0
+	maxPrevPercentChange := 0.0
 	follow := scriptedStepAgent{
 		id: "follow",
 		fn: func(input []float64) []float64 {
 			if len(input) > maxPerceptWidth {
 				maxPerceptWidth = len(input)
+			}
+			if len(input) > 12 && math.Abs(input[12]) > maxPrevPercentChange {
+				maxPrevPercentChange = math.Abs(input[12])
 			}
 			return fxFollowSignalAction(input)
 		},
@@ -249,6 +261,15 @@ func TestFXScapeStepPerceptIncludesMarketInternals(t *testing.T) {
 	}
 	if width, ok := trace["feature_width"].(int); !ok || width <= 2 {
 		t.Fatalf("expected feature_width > 2 in trace, got %+v", trace)
+	}
+	if width, ok := trace["feature_width"].(int); !ok || width < 14 {
+		t.Fatalf("expected feature_width >= 14 with prev percentage channel, got %+v", trace)
+	}
+	if _, ok := trace["prev_percentage_change"].(float64); !ok {
+		t.Fatalf("expected prev_percentage_change in trace, got %+v", trace)
+	}
+	if maxPrevPercentChange <= 0 {
+		t.Fatalf("expected non-zero previous percentage-change signal during episode, got max=%f", maxPrevPercentChange)
 	}
 }
 

@@ -101,8 +101,11 @@ func evaluateFXWithTick(ctx context.Context, ticker TickAgent, cfg fxModeConfig)
 		if io.percentChange != nil && len(percept) > 11 {
 			io.percentChange.Set(percept[11])
 		}
-		if io.profit != nil && len(percept) > 12 {
-			io.profit.Set(percept[12])
+		if io.prevPercentChange != nil && len(percept) > 12 {
+			io.prevPercentChange.Set(percept[12])
+		}
+		if io.profit != nil && len(percept) > 13 {
+			io.profit.Set(percept[13])
 		}
 		out, err := ticker.Tick(ctx)
 		if err != nil {
@@ -215,38 +218,41 @@ func evaluateFX(
 	entry := 0.0
 	units := 0.0
 	percentageChange := 0.0
+	prevPercentageChange := 0.0
 	orderProfit := 0.0
 	if account.order != nil {
 		position = account.order.position
 		entry = account.order.entry
 		units = account.order.units
 		percentageChange = account.order.percentageChange / 100
+		prevPercentageChange = account.prevPercentageChange
 		orderProfit = account.order.profit
 	}
 
 	return Fitness(fitness), Trace{
-		"equity":            netWorth / fxInitialBalance,
-		"turnover":          turnover,
-		"mode":              cfg.mode,
-		"steps":             cfg.steps,
-		"start_step":        cfg.startStep,
-		"series_name":       series.name,
-		"series_points":     len(series.values),
-		"balance":           account.balance,
-		"net_worth":         netWorth,
-		"realized_pl":       account.realizedPL,
-		"unrealized_pl":     account.unrealizedPL,
-		"max_drawdown":      account.maxDrawdown,
-		"margin_call":       marginCall,
-		"orders_opened":     ordersOpened,
-		"orders_closed":     ordersClosed,
-		"direction_changes": directionChanges,
-		"position":          position,
-		"entry":             entry,
-		"units":             units,
-		"percentage_change": percentageChange,
-		"profit":            orderProfit,
-		"feature_width":     fxPerceptWidth,
+		"equity":                 netWorth / fxInitialBalance,
+		"turnover":               turnover,
+		"mode":                   cfg.mode,
+		"steps":                  cfg.steps,
+		"start_step":             cfg.startStep,
+		"series_name":            series.name,
+		"series_points":          len(series.values),
+		"balance":                account.balance,
+		"net_worth":              netWorth,
+		"realized_pl":            account.realizedPL,
+		"unrealized_pl":          account.unrealizedPL,
+		"max_drawdown":           account.maxDrawdown,
+		"margin_call":            marginCall,
+		"orders_opened":          ordersOpened,
+		"orders_closed":          ordersClosed,
+		"direction_changes":      directionChanges,
+		"position":               position,
+		"entry":                  entry,
+		"units":                  units,
+		"percentage_change":      percentageChange,
+		"prev_percentage_change": prevPercentageChange,
+		"profit":                 orderProfit,
+		"feature_width":          fxPerceptWidth,
 	}, nil
 }
 
@@ -261,13 +267,14 @@ type fxOrder struct {
 }
 
 type fxAccount struct {
-	balance       float64
-	realizedPL    float64
-	unrealizedPL  float64
-	netAssetValue float64
-	order         *fxOrder
-	maxNetWorth   float64
-	maxDrawdown   float64
+	balance              float64
+	realizedPL           float64
+	unrealizedPL         float64
+	netAssetValue        float64
+	order                *fxOrder
+	prevPercentageChange float64
+	maxNetWorth          float64
+	maxDrawdown          float64
 }
 
 const (
@@ -277,7 +284,7 @@ const (
 	fxLeverage        = 50.0
 	fxOrderBudget     = 100.0
 	fxTradeThreshold  = 0.33
-	fxPerceptWidth    = 13
+	fxPerceptWidth    = 14
 )
 
 func newFXAccount() fxAccount {
@@ -290,10 +297,12 @@ func newFXAccount() fxAccount {
 
 func updateFXMarkToMarket(account *fxAccount, quote float64) {
 	if account.order == nil {
+		account.prevPercentageChange = 0
 		account.unrealizedPL = 0
 		account.netAssetValue = account.balance
 	} else {
 		order := account.order
+		account.prevPercentageChange = order.percentageChange / 100
 		change := quote - order.entry
 		pctChange := 0.0
 		if order.entry != 0 {
@@ -400,17 +409,18 @@ func closeFXOrder(account *fxAccount, quote float64) bool {
 }
 
 type fxIOBindings struct {
-	price         protoio.ScalarSensorSetter
-	signal        protoio.ScalarSensorSetter
-	momentum      protoio.ScalarSensorSetter
-	volatility    protoio.ScalarSensorSetter
-	nav           protoio.ScalarSensorSetter
-	drawdown      protoio.ScalarSensorSetter
-	position      protoio.ScalarSensorSetter
-	entry         protoio.ScalarSensorSetter
-	percentChange protoio.ScalarSensorSetter
-	profit        protoio.ScalarSensorSetter
-	tradeOutput   protoio.SnapshotActuator
+	price             protoio.ScalarSensorSetter
+	signal            protoio.ScalarSensorSetter
+	momentum          protoio.ScalarSensorSetter
+	volatility        protoio.ScalarSensorSetter
+	nav               protoio.ScalarSensorSetter
+	drawdown          protoio.ScalarSensorSetter
+	position          protoio.ScalarSensorSetter
+	entry             protoio.ScalarSensorSetter
+	percentChange     protoio.ScalarSensorSetter
+	prevPercentChange protoio.ScalarSensorSetter
+	profit            protoio.ScalarSensorSetter
+	tradeOutput       protoio.SnapshotActuator
 }
 
 func fxIO(agent TickAgent) (fxIOBindings, error) {
@@ -468,6 +478,10 @@ func fxIO(agent TickAgent) (fxIOBindings, error) {
 	if err != nil {
 		return fxIOBindings{}, err
 	}
+	prevPercentChangeSetter, err := optionalFXSensorSetter(typed, protoio.FXPrevPercentChangeSensorName)
+	if err != nil {
+		return fxIOBindings{}, err
+	}
 	profitSetter, err := optionalFXSensorSetter(typed, protoio.FXProfitSensorName)
 	if err != nil {
 		return fxIOBindings{}, err
@@ -482,17 +496,18 @@ func fxIO(agent TickAgent) (fxIOBindings, error) {
 		return fxIOBindings{}, fmt.Errorf("actuator %s does not support output snapshot", protoio.FXTradeActuatorName)
 	}
 	return fxIOBindings{
-		price:         priceSetter,
-		signal:        signalSetter,
-		momentum:      momentumSetter,
-		volatility:    volatilitySetter,
-		nav:           navSetter,
-		drawdown:      drawdownSetter,
-		position:      positionSetter,
-		entry:         entrySetter,
-		percentChange: percentChangeSetter,
-		profit:        profitSetter,
-		tradeOutput:   tradeOutput,
+		price:             priceSetter,
+		signal:            signalSetter,
+		momentum:          momentumSetter,
+		volatility:        volatilitySetter,
+		nav:               navSetter,
+		drawdown:          drawdownSetter,
+		position:          positionSetter,
+		entry:             entrySetter,
+		percentChange:     percentChangeSetter,
+		prevPercentChange: prevPercentChangeSetter,
+		profit:            profitSetter,
+		tradeOutput:       tradeOutput,
 	}, nil
 }
 
@@ -695,6 +710,7 @@ func fxPerceptVector(
 	exposure := 0.0
 	entryDelta := 0.0
 	percentChange := 0.0
+	prevPercentChange := 0.0
 	profitRatio := 0.0
 	if account.order != nil {
 		position = account.order.position
@@ -703,6 +719,7 @@ func fxPerceptVector(
 			entryDelta = (quote - account.order.entry) / account.order.entry
 		}
 		percentChange = account.order.percentageChange / 100
+		prevPercentChange = account.prevPercentageChange
 		profitRatio = account.order.profit / fxInitialBalance
 	}
 
@@ -719,6 +736,7 @@ func fxPerceptVector(
 		0.2*lastAction + 0.01*exposure,
 		entryDelta,
 		percentChange,
+		prevPercentChange,
 		profitRatio,
 	}
 }

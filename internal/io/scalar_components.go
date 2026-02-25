@@ -7,63 +7,64 @@ import (
 )
 
 const (
-	ScalarInputSensorName        = "scalar_input"
-	ScalarOutputActuatorName     = "scalar_output"
-	XORInputLeftSensorName       = "xor_input_left"
-	XORInputRightSensorName      = "xor_input_right"
-	XOROutputActuatorName        = "xor_output"
-	CartPolePositionSensorName   = "cart_pole_position"
-	CartPoleVelocitySensorName   = "cart_pole_velocity"
-	CartPoleForceActuatorName    = "cart_pole_force"
-	Pole2CartPositionSensorName  = "pole2_cart_position"
-	Pole2CartVelocitySensorName  = "pole2_cart_velocity"
-	Pole2Angle1SensorName        = "pole2_angle_1"
-	Pole2Velocity1SensorName     = "pole2_velocity_1"
-	Pole2Angle2SensorName        = "pole2_angle_2"
-	Pole2Velocity2SensorName     = "pole2_velocity_2"
-	Pole2RunProgressSensorName   = "pole2_run_progress"
-	Pole2StepProgressSensorName  = "pole2_step_progress"
-	Pole2FitnessSignalSensorName = "pole2_fitness_signal"
-	Pole2PushActuatorName        = "pole2_push"
-	FlatlandDistanceSensorName   = "flatland_distance"
-	FlatlandEnergySensorName     = "flatland_energy"
-	FlatlandMoveActuatorName     = "flatland_move"
-	DTMRangeLeftSensorName       = "dtm_range_left"
-	DTMRangeFrontSensorName      = "dtm_range_front"
-	DTMRangeRightSensorName      = "dtm_range_right"
-	DTMRewardSensorName          = "dtm_reward"
-	DTMRunProgressSensorName     = "dtm_run_progress"
-	DTMStepProgressSensorName    = "dtm_step_progress"
-	DTMSwitchedSensorName        = "dtm_switched"
-	DTMMoveActuatorName          = "dtm_move"
-	GTSAInputSensorName          = "gtsa_input"
-	GTSADeltaSensorName          = "gtsa_delta"
-	GTSAWindowMeanSensorName     = "gtsa_window_mean"
-	GTSAProgressSensorName       = "gtsa_progress"
-	GTSAPredictActuatorName      = "gtsa_predict"
-	FXPriceSensorName            = "fx_price"
-	FXSignalSensorName           = "fx_signal"
-	FXMomentumSensorName         = "fx_momentum"
-	FXVolatilitySensorName       = "fx_volatility"
-	FXNAVSensorName              = "fx_nav"
-	FXDrawdownSensorName         = "fx_drawdown"
-	FXPositionSensorName         = "fx_position"
-	FXEntrySensorName            = "fx_entry"
-	FXPercentChangeSensorName    = "fx_percent_change"
-	FXProfitSensorName           = "fx_profit"
-	FXTradeActuatorName          = "fx_trade"
-	EpitopesSignalSensorName     = "epitopes_signal"
-	EpitopesMemorySensorName     = "epitopes_memory"
-	EpitopesTargetSensorName     = "epitopes_target"
-	EpitopesProgressSensorName   = "epitopes_progress"
-	EpitopesMarginSensorName     = "epitopes_margin"
-	EpitopesResponseActuatorName = "epitopes_response"
-	LLVMComplexitySensorName     = "llvm_complexity"
-	LLVMPassIndexSensorName      = "llvm_pass_index"
-	LLVMAlignmentSensorName      = "llvm_alignment"
-	LLVMDiversitySensorName      = "llvm_diversity"
-	LLVMRuntimeGainSensorName    = "llvm_runtime_gain"
-	LLVMPhaseActuatorName        = "llvm_phase"
+	ScalarInputSensorName         = "scalar_input"
+	ScalarOutputActuatorName      = "scalar_output"
+	XORInputLeftSensorName        = "xor_input_left"
+	XORInputRightSensorName       = "xor_input_right"
+	XOROutputActuatorName         = "xor_output"
+	CartPolePositionSensorName    = "cart_pole_position"
+	CartPoleVelocitySensorName    = "cart_pole_velocity"
+	CartPoleForceActuatorName     = "cart_pole_force"
+	Pole2CartPositionSensorName   = "pole2_cart_position"
+	Pole2CartVelocitySensorName   = "pole2_cart_velocity"
+	Pole2Angle1SensorName         = "pole2_angle_1"
+	Pole2Velocity1SensorName      = "pole2_velocity_1"
+	Pole2Angle2SensorName         = "pole2_angle_2"
+	Pole2Velocity2SensorName      = "pole2_velocity_2"
+	Pole2RunProgressSensorName    = "pole2_run_progress"
+	Pole2StepProgressSensorName   = "pole2_step_progress"
+	Pole2FitnessSignalSensorName  = "pole2_fitness_signal"
+	Pole2PushActuatorName         = "pole2_push"
+	FlatlandDistanceSensorName    = "flatland_distance"
+	FlatlandEnergySensorName      = "flatland_energy"
+	FlatlandMoveActuatorName      = "flatland_move"
+	DTMRangeLeftSensorName        = "dtm_range_left"
+	DTMRangeFrontSensorName       = "dtm_range_front"
+	DTMRangeRightSensorName       = "dtm_range_right"
+	DTMRewardSensorName           = "dtm_reward"
+	DTMRunProgressSensorName      = "dtm_run_progress"
+	DTMStepProgressSensorName     = "dtm_step_progress"
+	DTMSwitchedSensorName         = "dtm_switched"
+	DTMMoveActuatorName           = "dtm_move"
+	GTSAInputSensorName           = "gtsa_input"
+	GTSADeltaSensorName           = "gtsa_delta"
+	GTSAWindowMeanSensorName      = "gtsa_window_mean"
+	GTSAProgressSensorName        = "gtsa_progress"
+	GTSAPredictActuatorName       = "gtsa_predict"
+	FXPriceSensorName             = "fx_price"
+	FXSignalSensorName            = "fx_signal"
+	FXMomentumSensorName          = "fx_momentum"
+	FXVolatilitySensorName        = "fx_volatility"
+	FXNAVSensorName               = "fx_nav"
+	FXDrawdownSensorName          = "fx_drawdown"
+	FXPositionSensorName          = "fx_position"
+	FXEntrySensorName             = "fx_entry"
+	FXPercentChangeSensorName     = "fx_percent_change"
+	FXPrevPercentChangeSensorName = "fx_prev_percentage_change"
+	FXProfitSensorName            = "fx_profit"
+	FXTradeActuatorName           = "fx_trade"
+	EpitopesSignalSensorName      = "epitopes_signal"
+	EpitopesMemorySensorName      = "epitopes_memory"
+	EpitopesTargetSensorName      = "epitopes_target"
+	EpitopesProgressSensorName    = "epitopes_progress"
+	EpitopesMarginSensorName      = "epitopes_margin"
+	EpitopesResponseActuatorName  = "epitopes_response"
+	LLVMComplexitySensorName      = "llvm_complexity"
+	LLVMPassIndexSensorName       = "llvm_pass_index"
+	LLVMAlignmentSensorName       = "llvm_alignment"
+	LLVMDiversitySensorName       = "llvm_diversity"
+	LLVMRuntimeGainSensorName     = "llvm_runtime_gain"
+	LLVMPhaseActuatorName         = "llvm_phase"
 )
 
 type ScalarInputSensor struct {
@@ -649,6 +650,21 @@ func initializeDefaultComponents() {
 	}
 	err = RegisterSensorWithSpec(SensorSpec{
 		Name:          FXPercentChangeSensorName,
+		Factory:       func() Sensor { return NewScalarInputSensor(0) },
+		SchemaVersion: SupportedSchemaVersion,
+		CodecVersion:  SupportedCodecVersion,
+		Compatible: func(scape string) error {
+			if scape != "fx" {
+				return fmt.Errorf("unsupported scape: %s", scape)
+			}
+			return nil
+		},
+	})
+	if err != nil {
+		panic(err)
+	}
+	err = RegisterSensorWithSpec(SensorSpec{
+		Name:          FXPrevPercentChangeSensorName,
 		Factory:       func() Sensor { return NewScalarInputSensor(0) },
 		SchemaVersion: SupportedSchemaVersion,
 		CodecVersion:  SupportedCodecVersion,

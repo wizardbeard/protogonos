@@ -208,13 +208,24 @@ func TestConstructSeedPopulationFX(t *testing.T) {
 	if len(seed.Genomes) != 2 {
 		t.Fatalf("expected 2 genomes, got %d", len(seed.Genomes))
 	}
-	if len(seed.InputNeuronIDs) != 10 || seed.InputNeuronIDs[0] != "p" || seed.InputNeuronIDs[1] != "s" || seed.InputNeuronIDs[2] != "m" || seed.InputNeuronIDs[3] != "v" || seed.InputNeuronIDs[4] != "n" || seed.InputNeuronIDs[5] != "d" || seed.InputNeuronIDs[6] != "q" || seed.InputNeuronIDs[7] != "e" || seed.InputNeuronIDs[8] != "pc" || seed.InputNeuronIDs[9] != "pr" {
+	if len(seed.InputNeuronIDs) != 11 ||
+		seed.InputNeuronIDs[0] != "p" ||
+		seed.InputNeuronIDs[1] != "s" ||
+		seed.InputNeuronIDs[2] != "m" ||
+		seed.InputNeuronIDs[3] != "v" ||
+		seed.InputNeuronIDs[4] != "n" ||
+		seed.InputNeuronIDs[5] != "d" ||
+		seed.InputNeuronIDs[6] != "q" ||
+		seed.InputNeuronIDs[7] != "e" ||
+		seed.InputNeuronIDs[8] != "pc" ||
+		seed.InputNeuronIDs[9] != "ppc" ||
+		seed.InputNeuronIDs[10] != "pr" {
 		t.Fatalf("unexpected input ids: %#v", seed.InputNeuronIDs)
 	}
 	if len(seed.OutputNeuronIDs) != 1 || seed.OutputNeuronIDs[0] != "t" {
 		t.Fatalf("unexpected output ids: %#v", seed.OutputNeuronIDs)
 	}
-	if len(seed.Genomes[0].SensorIDs) != 10 ||
+	if len(seed.Genomes[0].SensorIDs) != 11 ||
 		seed.Genomes[0].SensorIDs[0] != protoio.FXPriceSensorName ||
 		seed.Genomes[0].SensorIDs[1] != protoio.FXSignalSensorName ||
 		seed.Genomes[0].SensorIDs[2] != protoio.FXMomentumSensorName ||
@@ -224,7 +235,8 @@ func TestConstructSeedPopulationFX(t *testing.T) {
 		seed.Genomes[0].SensorIDs[6] != protoio.FXPositionSensorName ||
 		seed.Genomes[0].SensorIDs[7] != protoio.FXEntrySensorName ||
 		seed.Genomes[0].SensorIDs[8] != protoio.FXPercentChangeSensorName ||
-		seed.Genomes[0].SensorIDs[9] != protoio.FXProfitSensorName {
+		seed.Genomes[0].SensorIDs[9] != protoio.FXPrevPercentChangeSensorName ||
+		seed.Genomes[0].SensorIDs[10] != protoio.FXProfitSensorName {
 		t.Fatalf("unexpected fx sensor ids: %#v", seed.Genomes[0].SensorIDs)
 	}
 	if len(seed.Genomes[0].ActuatorIDs) != 1 || seed.Genomes[0].ActuatorIDs[0] != protoio.FXTradeActuatorName {
