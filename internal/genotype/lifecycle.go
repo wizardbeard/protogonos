@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"math/rand"
+	"strings"
 	"time"
 
 	protoio "protogonos/internal/io"
@@ -18,7 +19,22 @@ type SeedPopulation struct {
 	OutputNeuronIDs []string
 }
 
+type SeedPopulationOptions struct {
+	// FlatlandProfile controls the flatland seed scaffold.
+	// Supported values: "scanner" (default) and "classic".
+	FlatlandProfile string
+}
+
+const (
+	FlatlandSeedProfileScanner = "scanner"
+	FlatlandSeedProfileClassic = "classic"
+)
+
 func ConstructSeedPopulation(scapeName string, size int, seed int64) (SeedPopulation, error) {
+	return ConstructSeedPopulationWithOptions(scapeName, size, seed, SeedPopulationOptions{})
+}
+
+func ConstructSeedPopulationWithOptions(scapeName string, size int, seed int64, options SeedPopulationOptions) (SeedPopulation, error) {
 	scapeName = scapeid.Normalize(scapeName)
 	switch scapeName {
 	case "xor":
@@ -46,11 +62,7 @@ func ConstructSeedPopulation(scapeName string, size int, seed int64) (SeedPopula
 			OutputNeuronIDs: []string{"f"},
 		}, nil
 	case "flatland":
-		return SeedPopulation{
-			Genomes:         seedFlatlandPopulation(size, seed),
-			InputNeuronIDs:  flatlandSeedInputNeuronIDs(),
-			OutputNeuronIDs: flatlandSeedOutputNeuronIDs(),
-		}, nil
+		return constructFlatlandSeedPopulation(size, seed, options.FlatlandProfile)
 	case "dtm":
 		return SeedPopulation{
 			Genomes:         seedDTMPopulation(size, seed),
@@ -83,6 +95,38 @@ func ConstructSeedPopulation(scapeName string, size int, seed int64) (SeedPopula
 		}, nil
 	default:
 		return SeedPopulation{}, fmt.Errorf("unsupported scape: %s", scapeName)
+	}
+}
+
+func constructFlatlandSeedPopulation(size int, seed int64, profile string) (SeedPopulation, error) {
+	switch normalizeFlatlandSeedProfile(profile) {
+	case FlatlandSeedProfileClassic:
+		return SeedPopulation{
+			Genomes:         seedFlatlandClassicPopulation(size, seed),
+			InputNeuronIDs:  []string{"d", "e"},
+			OutputNeuronIDs: []string{"m"},
+		}, nil
+	case FlatlandSeedProfileScanner:
+		return SeedPopulation{
+			Genomes:         seedFlatlandScannerPopulation(size, seed),
+			InputNeuronIDs:  flatlandSeedInputNeuronIDs(),
+			OutputNeuronIDs: flatlandSeedOutputNeuronIDs(),
+		}, nil
+	default:
+		return SeedPopulation{}, fmt.Errorf("unsupported flatland seed profile: %s", profile)
+	}
+}
+
+func normalizeFlatlandSeedProfile(raw string) string {
+	profile := strings.ToLower(strings.TrimSpace(raw))
+	profile = strings.ReplaceAll(profile, "_", "-")
+	switch profile {
+	case "", "default", "scanner", "scan", "flatland-scanner", "flatland-prey", "prey":
+		return FlatlandSeedProfileScanner
+	case "classic", "legacy", "flatland-v1":
+		return FlatlandSeedProfileClassic
+	default:
+		return profile
 	}
 }
 
@@ -288,7 +332,30 @@ func seedPole2BalancingPopulation(size int, seed int64) []model.Genome {
 	return population
 }
 
-func seedFlatlandPopulation(size int, seed int64) []model.Genome {
+func seedFlatlandClassicPopulation(size int, seed int64) []model.Genome {
+	rng := rand.New(rand.NewSource(seed))
+	population := make([]model.Genome, 0, size)
+	for i := 0; i < size; i++ {
+		population = append(population, model.Genome{
+			VersionedRecord: model.VersionedRecord{SchemaVersion: storage.CurrentSchemaVersion, CodecVersion: storage.CurrentCodecVersion},
+			ID:              fmt.Sprintf("flatland-g0-%d", i),
+			SensorIDs:       []string{protoio.FlatlandDistanceSensorName, protoio.FlatlandEnergySensorName},
+			ActuatorIDs:     []string{protoio.FlatlandMoveActuatorName},
+			Neurons: []model.Neuron{
+				{ID: "d", Activation: "identity", Bias: 0},
+				{ID: "e", Activation: "identity", Bias: 0},
+				{ID: "m", Activation: "tanh", Bias: jitter(rng, 0.4)},
+			},
+			Synapses: []model.Synapse{
+				{ID: "s1", From: "d", To: "m", Weight: jitter(rng, 1.2), Enabled: true},
+				{ID: "s2", From: "e", To: "m", Weight: jitter(rng, 1.2), Enabled: true},
+			},
+		})
+	}
+	return population
+}
+
+func seedFlatlandScannerPopulation(size int, seed int64) []model.Genome {
 	rng := rand.New(rand.NewSource(seed))
 	population := make([]model.Genome, 0, size)
 	inputNeuronIDs := flatlandSeedInputNeuronIDs()

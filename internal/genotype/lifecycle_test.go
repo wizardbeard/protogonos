@@ -164,6 +164,63 @@ func TestConstructSeedPopulationFlatland(t *testing.T) {
 	}
 }
 
+func TestConstructSeedPopulationFlatlandClassicProfile(t *testing.T) {
+	seed, err := ConstructSeedPopulationWithOptions("flatland", 2, 19, SeedPopulationOptions{
+		FlatlandProfile: FlatlandSeedProfileClassic,
+	})
+	if err != nil {
+		t.Fatalf("construct flatland classic profile: %v", err)
+	}
+	if len(seed.Genomes) != 2 {
+		t.Fatalf("expected 2 genomes, got %d", len(seed.Genomes))
+	}
+	if len(seed.InputNeuronIDs) != 2 || seed.InputNeuronIDs[0] != "d" || seed.InputNeuronIDs[1] != "e" {
+		t.Fatalf("unexpected classic flatland input ids: %#v", seed.InputNeuronIDs)
+	}
+	if len(seed.OutputNeuronIDs) != 1 || seed.OutputNeuronIDs[0] != "m" {
+		t.Fatalf("unexpected classic flatland output ids: %#v", seed.OutputNeuronIDs)
+	}
+	if len(seed.Genomes[0].SensorIDs) != 2 ||
+		seed.Genomes[0].SensorIDs[0] != protoio.FlatlandDistanceSensorName ||
+		seed.Genomes[0].SensorIDs[1] != protoio.FlatlandEnergySensorName {
+		t.Fatalf("unexpected classic flatland sensor ids: %#v", seed.Genomes[0].SensorIDs)
+	}
+	if len(seed.Genomes[0].ActuatorIDs) != 1 || seed.Genomes[0].ActuatorIDs[0] != protoio.FlatlandMoveActuatorName {
+		t.Fatalf("unexpected classic flatland actuator ids: %#v", seed.Genomes[0].ActuatorIDs)
+	}
+	if len(seed.Genomes[0].Neurons) != 3 {
+		t.Fatalf("unexpected classic flatland neuron count: %d", len(seed.Genomes[0].Neurons))
+	}
+	if len(seed.Genomes[0].Synapses) != 2 {
+		t.Fatalf("unexpected classic flatland synapse count: %d", len(seed.Genomes[0].Synapses))
+	}
+}
+
+func TestConstructSeedPopulationFlatlandScannerProfileAlias(t *testing.T) {
+	seed, err := ConstructSeedPopulationWithOptions("flatland", 2, 19, SeedPopulationOptions{
+		FlatlandProfile: "flatland_prey",
+	})
+	if err != nil {
+		t.Fatalf("construct flatland scanner alias profile: %v", err)
+	}
+	wantInputs := flatlandSeedInputNeuronIDs()
+	if len(seed.InputNeuronIDs) != len(wantInputs) {
+		t.Fatalf("unexpected scanner profile input count: got=%d want=%d ids=%v", len(seed.InputNeuronIDs), len(wantInputs), seed.InputNeuronIDs)
+	}
+	if len(seed.Genomes[0].ActuatorIDs) != 1 || seed.Genomes[0].ActuatorIDs[0] != protoio.FlatlandTwoWheelsActuatorName {
+		t.Fatalf("unexpected scanner profile actuator ids: %v", seed.Genomes[0].ActuatorIDs)
+	}
+}
+
+func TestConstructSeedPopulationFlatlandUnsupportedProfile(t *testing.T) {
+	_, err := ConstructSeedPopulationWithOptions("flatland", 1, 19, SeedPopulationOptions{
+		FlatlandProfile: "invalid-profile",
+	})
+	if err == nil {
+		t.Fatal("expected unsupported flatland profile error")
+	}
+}
+
 func TestConstructSeedPopulationDTM(t *testing.T) {
 	seed, err := ConstructSeedPopulation("dtm", 2, 21)
 	if err != nil {
