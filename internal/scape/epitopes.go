@@ -2,9 +2,15 @@ package scape
 
 import (
 	"context"
+	"encoding/csv"
 	"fmt"
+	"io"
 	"math"
+	"os"
+	"path/filepath"
+	"strconv"
 	"strings"
+	"sync"
 
 	protoio "protogonos/internal/io"
 )
@@ -12,8 +18,64 @@ import (
 // EpitopesScape is a deterministic sequence classification proxy for epitopes:sim.
 type EpitopesScape struct{}
 
+type epitopesWindows struct {
+	gtStart         int
+	gtEnd           int
+	validationStart int
+	validationEnd   int
+	testStart       int
+	testEnd         int
+	benchmarkStart  int
+	benchmarkEnd    int
+}
+
+type epitopesSource struct {
+	table   epitopesTable
+	windows epitopesWindows
+}
+
+// EpitopesTableBounds configures mode windows for a loaded table.
+// Zero values use table-size-derived defaults.
+type EpitopesTableBounds struct {
+	GTStart         int
+	GTEnd           int
+	ValidationStart int
+	ValidationEnd   int
+	TestStart       int
+	TestEnd         int
+	BenchmarkStart  int
+	BenchmarkEnd    int
+}
+
+var (
+	epitopesSourceMu    sync.RWMutex
+	epitopesSourceState = defaultEpitopesSource()
+)
+
 func (EpitopesScape) Name() string {
 	return "epitopes"
+}
+
+// ResetEpitopesTableSource restores the deterministic built-in epitopes table.
+func ResetEpitopesTableSource() {
+	epitopesSourceMu.Lock()
+	defer epitopesSourceMu.Unlock()
+	epitopesSourceState = defaultEpitopesSource()
+}
+
+// LoadEpitopesTableCSV loads epitopes rows from CSV and makes the table active.
+// Expected columns per row:
+// signal,memory,classification[,residue0,residue1,...]
+func LoadEpitopesTableCSV(path string, bounds EpitopesTableBounds) error {
+	source, err := loadEpitopesSourceCSV(path, bounds)
+	if err != nil {
+		return err
+	}
+
+	epitopesSourceMu.Lock()
+	defer epitopesSourceMu.Unlock()
+	epitopesSourceState = source
+	return nil
 }
 
 func (EpitopesScape) Evaluate(ctx context.Context, agent Agent) (Fitness, Trace, error) {
@@ -21,7 +83,8 @@ func (EpitopesScape) Evaluate(ctx context.Context, agent Agent) (Fitness, Trace,
 }
 
 func (EpitopesScape) EvaluateMode(ctx context.Context, agent Agent, mode string) (Fitness, Trace, error) {
-	cfg, err := epitopesConfigForMode(mode)
+	source := currentEpitopesSource()
+	cfg, err := epitopesConfigForMode(mode, source)
 	if err != nil {
 		return 0, nil, err
 	}
@@ -90,7 +153,7 @@ func evaluateEpitopes(
 	cfg epitopesModeConfig,
 	chooseClassification func(context.Context, []float64) ([]float64, error),
 ) (Fitness, Trace, error) {
-	table := defaultEpitopesTable(cfg.table, cfg.sequenceLength)
+	table := cfg.table
 	session, err := newEpitopesSession(cfg, table)
 	if err != nil {
 		return 0, nil, err
@@ -157,7 +220,7 @@ func evaluateEpitopes(
 		"predictions":         predictions,
 		"mode":                cfg.mode,
 		"op_mode":             cfg.opMode,
-		"dataset":             cfg.table,
+		"dataset":             cfg.tableName,
 		"table_name":          table.name,
 		"start_index":         session.startIndex,
 		"end_index":           session.endIndex,
@@ -177,7 +240,8 @@ func evaluateEpitopes(
 type epitopesModeConfig struct {
 	mode           string
 	opMode         string
-	table          string
+	tableName      string
+	table          epitopesTable
 	startIndex     int
 	endIndex       int
 	startBench     int
@@ -186,55 +250,68 @@ type epitopesModeConfig struct {
 	sequenceLength int
 }
 
-func epitopesConfigForMode(mode string) (epitopesModeConfig, error) {
+func epitopesConfigForMode(mode string, source epitopesSource) (epitopesModeConfig, error) {
+	sequenceLength := source.table.sequenceLength
+	if sequenceLength <= 0 {
+		sequenceLength = 16
+	}
+	gtSamples := maxIntEpitopes(1, source.windows.gtEnd-source.windows.gtStart+1)
+	validationSamples := maxIntEpitopes(1, source.windows.validationEnd-source.windows.validationStart+1)
+	testSamples := maxIntEpitopes(1, source.windows.testEnd-source.windows.testStart+1)
+	benchmarkSamples := maxIntEpitopes(1, source.windows.benchmarkEnd-source.windows.benchmarkStart+1)
+
 	switch strings.TrimSpace(strings.ToLower(mode)) {
 	case "", "gt":
 		return epitopesModeConfig{
 			mode:           "gt",
 			opMode:         "gt",
-			table:          "abc_pred16",
-			startIndex:     1,
-			endIndex:       64,
-			startBench:     841,
-			endBench:       1120,
-			maxSamples:     64,
-			sequenceLength: 16,
+			tableName:      source.table.name,
+			table:          source.table,
+			startIndex:     source.windows.gtStart,
+			endIndex:       source.windows.gtEnd,
+			startBench:     source.windows.benchmarkStart,
+			endBench:       source.windows.benchmarkEnd,
+			maxSamples:     gtSamples,
+			sequenceLength: sequenceLength,
 		}, nil
 	case "validation":
 		return epitopesModeConfig{
 			mode:           "validation",
 			opMode:         "gt",
-			table:          "abc_pred16",
-			startIndex:     513,
-			endIndex:       544,
-			startBench:     841,
-			endBench:       1120,
-			maxSamples:     32,
-			sequenceLength: 16,
+			tableName:      source.table.name,
+			table:          source.table,
+			startIndex:     source.windows.validationStart,
+			endIndex:       source.windows.validationEnd,
+			startBench:     source.windows.benchmarkStart,
+			endBench:       source.windows.benchmarkEnd,
+			maxSamples:     validationSamples,
+			sequenceLength: sequenceLength,
 		}, nil
 	case "test":
 		return epitopesModeConfig{
 			mode:           "test",
 			opMode:         "gt",
-			table:          "abc_pred16",
-			startIndex:     1025,
-			endIndex:       1056,
-			startBench:     841,
-			endBench:       1120,
-			maxSamples:     32,
-			sequenceLength: 16,
+			tableName:      source.table.name,
+			table:          source.table,
+			startIndex:     source.windows.testStart,
+			endIndex:       source.windows.testEnd,
+			startBench:     source.windows.benchmarkStart,
+			endBench:       source.windows.benchmarkEnd,
+			maxSamples:     testSamples,
+			sequenceLength: sequenceLength,
 		}, nil
 	case "benchmark":
 		return epitopesModeConfig{
 			mode:           "benchmark",
 			opMode:         "benchmark",
-			table:          "abc_pred16",
-			startIndex:     1,
-			endIndex:       64,
-			startBench:     841,
-			endBench:       1120,
-			maxSamples:     280,
-			sequenceLength: 16,
+			tableName:      source.table.name,
+			table:          source.table,
+			startIndex:     source.windows.gtStart,
+			endIndex:       source.windows.gtEnd,
+			startBench:     source.windows.benchmarkStart,
+			endBench:       source.windows.benchmarkEnd,
+			maxSamples:     benchmarkSamples,
+			sequenceLength: sequenceLength,
 		}, nil
 	default:
 		return epitopesModeConfig{}, fmt.Errorf("unsupported epitopes mode: %s", mode)
@@ -249,9 +326,10 @@ type epitopesRow struct {
 }
 
 type epitopesTable struct {
-	name    string
-	rows    []epitopesRow // 1-based
-	modBase int
+	name           string
+	rows           []epitopesRow // 1-based
+	modBase        int
+	sequenceLength int
 }
 
 func defaultEpitopesTable(name string, sequenceLength int) epitopesTable {
@@ -280,10 +358,314 @@ func defaultEpitopesTable(name string, sequenceLength int) epitopesTable {
 	}
 
 	return epitopesTable{
-		name:    name,
-		rows:    rows,
-		modBase: totalRows + 1, // mirrors reference rem 1401 index wrap behavior.
+		name:           name,
+		rows:           rows,
+		modBase:        totalRows + 1, // mirrors reference rem 1401 index wrap behavior.
+		sequenceLength: sequenceLength,
 	}
+}
+
+func defaultEpitopesSource() epitopesSource {
+	table := defaultEpitopesTable("abc_pred16", 16)
+	return epitopesSource{
+		table: table,
+		windows: epitopesWindows{
+			gtStart:         1,
+			gtEnd:           64,
+			validationStart: 513,
+			validationEnd:   544,
+			testStart:       1025,
+			testEnd:         1056,
+			benchmarkStart:  841,
+			benchmarkEnd:    1120,
+		},
+	}
+}
+
+func currentEpitopesSource() epitopesSource {
+	epitopesSourceMu.RLock()
+	defer epitopesSourceMu.RUnlock()
+	return epitopesSourceState
+}
+
+func loadEpitopesSourceCSV(path string, bounds EpitopesTableBounds) (epitopesSource, error) {
+	path = strings.TrimSpace(path)
+	if path == "" {
+		return epitopesSource{}, fmt.Errorf("epitopes csv path is required")
+	}
+
+	f, err := os.Open(path)
+	if err != nil {
+		return epitopesSource{}, fmt.Errorf("open epitopes csv %s: %w", path, err)
+	}
+	defer f.Close()
+
+	reader := csv.NewReader(f)
+	reader.FieldsPerRecord = -1
+
+	rows := make([]epitopesRow, 0, 1024)
+	sequenceLength := 0
+	fileRow := 0
+	for {
+		record, err := reader.Read()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return epitopesSource{}, fmt.Errorf("read epitopes csv row %d: %w", fileRow+1, err)
+		}
+		fileRow++
+
+		parsed, ok, err := parseEpitopesCSVRow(record, fileRow)
+		if err != nil {
+			if len(rows) == 0 && fileRow == 1 {
+				// Allow a single header row.
+				continue
+			}
+			return epitopesSource{}, err
+		}
+		if !ok {
+			continue
+		}
+
+		if len(parsed.sequence) == 0 {
+			generatedLength := sequenceLength
+			if generatedLength <= 0 {
+				generatedLength = 16
+			}
+			parsed.sequence = epitopesSequence(len(rows), generatedLength)
+		}
+		if sequenceLength == 0 {
+			sequenceLength = len(parsed.sequence)
+		}
+		if len(parsed.sequence) != sequenceLength {
+			return epitopesSource{}, fmt.Errorf(
+				"inconsistent epitopes sequence length at file row %d: got=%d want=%d",
+				fileRow,
+				len(parsed.sequence),
+				sequenceLength,
+			)
+		}
+		rows = append(rows, parsed)
+	}
+
+	tableName := fmt.Sprintf("epitopes.csv.%s", filepath.Base(path))
+	table, err := buildEpitopesTable(tableName, rows)
+	if err != nil {
+		return epitopesSource{}, err
+	}
+	windows, err := buildEpitopesWindows(len(rows), bounds)
+	if err != nil {
+		return epitopesSource{}, err
+	}
+	return epitopesSource{table: table, windows: windows}, nil
+}
+
+func parseEpitopesCSVRow(record []string, fileRow int) (epitopesRow, bool, error) {
+	fields := make([]string, 0, len(record))
+	for _, field := range record {
+		trimmed := strings.TrimSpace(field)
+		if trimmed != "" {
+			fields = append(fields, trimmed)
+		}
+	}
+	if len(fields) == 0 {
+		return epitopesRow{}, false, nil
+	}
+	if len(fields) < 3 {
+		return epitopesRow{}, false, fmt.Errorf("epitopes csv row %d requires at least 3 columns", fileRow)
+	}
+
+	signal, err := strconv.ParseFloat(fields[0], 64)
+	if err != nil {
+		return epitopesRow{}, false, fmt.Errorf("parse epitopes signal row %d: %w", fileRow, err)
+	}
+	memory, err := strconv.ParseFloat(fields[1], 64)
+	if err != nil {
+		return epitopesRow{}, false, fmt.Errorf("parse epitopes memory row %d: %w", fileRow, err)
+	}
+	classification, err := parseEpitopesClassification(fields[2], fileRow)
+	if err != nil {
+		return epitopesRow{}, false, err
+	}
+
+	sequence := make([]int, 0, len(fields)-3)
+	for i := 3; i < len(fields); i++ {
+		residue, err := parseEpitopesResidue(fields[i], fileRow, i+1)
+		if err != nil {
+			return epitopesRow{}, false, err
+		}
+		sequence = append(sequence, residue)
+	}
+
+	return epitopesRow{
+		sequence:       sequence,
+		signal:         signal,
+		memory:         memory,
+		classification: classification,
+	}, true, nil
+}
+
+func parseEpitopesClassification(raw string, fileRow int) (int, error) {
+	switch strings.ToLower(strings.TrimSpace(raw)) {
+	case "0", "false", "f", "neg", "negative", "n", "no":
+		return 0, nil
+	case "1", "true", "t", "pos", "positive", "y", "yes":
+		return 1, nil
+	}
+	v, err := strconv.ParseFloat(raw, 64)
+	if err != nil {
+		return 0, fmt.Errorf("parse epitopes classification row %d: %w", fileRow, err)
+	}
+	if v > 0 {
+		return 1, nil
+	}
+	return 0, nil
+}
+
+func parseEpitopesResidue(raw string, fileRow, column int) (int, error) {
+	v, err := strconv.ParseFloat(strings.TrimSpace(raw), 64)
+	if err != nil {
+		return 0, fmt.Errorf("parse epitopes residue row %d column %d: %w", fileRow, column, err)
+	}
+	residue := int(math.Round(v))
+	if residue < 0 || residue >= epitopesAlphabetSize {
+		return 0, fmt.Errorf(
+			"epitopes residue out of range row %d column %d: %d",
+			fileRow,
+			column,
+			residue,
+		)
+	}
+	return residue, nil
+}
+
+func buildEpitopesTable(name string, rows []epitopesRow) (epitopesTable, error) {
+	if len(rows) == 0 {
+		return epitopesTable{}, fmt.Errorf("epitopes table %s has no data rows", name)
+	}
+
+	sequenceLength := len(rows[0].sequence)
+	if sequenceLength <= 0 {
+		return epitopesTable{}, fmt.Errorf("epitopes table %s has empty sequence rows", name)
+	}
+
+	total := len(rows)
+	tableRows := make([]epitopesRow, total+1)
+	for i, row := range rows {
+		index := i + 1
+		tableRows[index] = epitopesRow{
+			sequence:       append([]int(nil), row.sequence...),
+			signal:         row.signal,
+			memory:         row.memory,
+			classification: row.classification,
+		}
+	}
+
+	tableName := strings.TrimSpace(name)
+	if tableName == "" {
+		tableName = "epitopes.custom"
+	}
+	return epitopesTable{
+		name:           tableName,
+		rows:           tableRows,
+		modBase:        total + 1,
+		sequenceLength: sequenceLength,
+	}, nil
+}
+
+func buildEpitopesWindows(total int, bounds EpitopesTableBounds) (epitopesWindows, error) {
+	if total <= 0 {
+		return epitopesWindows{}, fmt.Errorf("epitopes table has no rows")
+	}
+
+	windows := epitopesWindows{}
+	if bounds.GTStart == 0 && bounds.GTEnd == 0 {
+		windows.gtStart = 1
+		windows.gtEnd = minIntEpitopes(64, total)
+	} else {
+		windows.gtStart = maxIntEpitopes(1, bounds.GTStart)
+		windows.gtEnd = bounds.GTEnd
+		if windows.gtEnd == 0 {
+			windows.gtEnd = total
+		}
+	}
+	if err := validateEpitopesWindow("gt", windows.gtStart, windows.gtEnd, total); err != nil {
+		return epitopesWindows{}, err
+	}
+
+	if bounds.ValidationStart == 0 && bounds.ValidationEnd == 0 {
+		windows.validationStart = minIntEpitopes(total, windows.gtEnd+1)
+		windows.validationEnd = minIntEpitopes(total, windows.validationStart+31)
+	} else {
+		windows.validationStart = bounds.ValidationStart
+		if windows.validationStart == 0 {
+			windows.validationStart = windows.gtEnd + 1
+		}
+		windows.validationEnd = bounds.ValidationEnd
+		if windows.validationEnd == 0 {
+			windows.validationEnd = total
+		}
+	}
+	if windows.validationStart > total {
+		windows.validationStart = total
+	}
+	if err := validateEpitopesWindow("validation", windows.validationStart, windows.validationEnd, total); err != nil {
+		return epitopesWindows{}, err
+	}
+
+	if bounds.TestStart == 0 && bounds.TestEnd == 0 {
+		windows.testStart = minIntEpitopes(total, windows.validationEnd+1)
+		windows.testEnd = minIntEpitopes(total, windows.testStart+31)
+	} else {
+		windows.testStart = bounds.TestStart
+		if windows.testStart == 0 {
+			windows.testStart = windows.validationEnd + 1
+		}
+		windows.testEnd = bounds.TestEnd
+		if windows.testEnd == 0 {
+			windows.testEnd = total
+		}
+	}
+	if windows.testStart > total {
+		windows.testStart = total
+	}
+	if err := validateEpitopesWindow("test", windows.testStart, windows.testEnd, total); err != nil {
+		return epitopesWindows{}, err
+	}
+
+	if bounds.BenchmarkStart == 0 && bounds.BenchmarkEnd == 0 {
+		windows.benchmarkStart = maxIntEpitopes(1, total-279)
+		windows.benchmarkEnd = total
+	} else {
+		windows.benchmarkStart = bounds.BenchmarkStart
+		if windows.benchmarkStart == 0 {
+			windows.benchmarkStart = 1
+		}
+		windows.benchmarkEnd = bounds.BenchmarkEnd
+		if windows.benchmarkEnd == 0 {
+			windows.benchmarkEnd = total
+		}
+	}
+	if err := validateEpitopesWindow("benchmark", windows.benchmarkStart, windows.benchmarkEnd, total); err != nil {
+		return epitopesWindows{}, err
+	}
+
+	return windows, nil
+}
+
+func validateEpitopesWindow(name string, start, end, total int) error {
+	switch {
+	case start <= 0:
+		return fmt.Errorf("invalid epitopes %s start=%d", name, start)
+	case start > total:
+		return fmt.Errorf("invalid epitopes %s start=%d total=%d", name, start, total)
+	case end < start:
+		return fmt.Errorf("invalid epitopes %s range start=%d end=%d", name, start, end)
+	case end > total:
+		return fmt.Errorf("invalid epitopes %s end=%d total=%d", name, end, total)
+	}
+	return nil
 }
 
 func (t epitopesTable) rowAt(index int) (epitopesRow, error) {
@@ -524,6 +906,13 @@ func clampIntEpitopes(v, lo, hi int) int {
 
 func maxIntEpitopes(a, b int) int {
 	if a > b {
+		return a
+	}
+	return b
+}
+
+func minIntEpitopes(a, b int) int {
+	if a < b {
 		return a
 	}
 	return b

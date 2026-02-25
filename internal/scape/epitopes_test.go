@@ -2,6 +2,11 @@ package scape
 
 import (
 	"context"
+	"fmt"
+	"math"
+	"os"
+	"path/filepath"
+	"strings"
 	"testing"
 
 	"protogonos/internal/agent"
@@ -171,5 +176,104 @@ func TestEpitopesScapeTraceIncludesTableWindowState(t *testing.T) {
 	}
 	if total, ok := trace["total"].(int); !ok || total <= 0 {
 		t.Fatalf("trace missing total sample count: %+v", trace)
+	}
+}
+
+func TestEpitopesScapeLoadTableCSV(t *testing.T) {
+	ResetEpitopesTableSource()
+	t.Cleanup(ResetEpitopesTableSource)
+
+	path := filepath.Join(t.TempDir(), "epitopes_custom.csv")
+	var builder strings.Builder
+	builder.WriteString("signal,memory,class\n")
+	for i := 0; i < 220; i++ {
+		signal := 0.7 * math.Sin(float64(i)*0.11)
+		memory := 0.5 * math.Sin(float64(i-1)*0.11)
+		classification := 0
+		if signal+0.7*memory >= 0 {
+			classification = 1
+		}
+		fmt.Fprintf(&builder, "%0.6f,%0.6f,%d\n", signal, memory, classification)
+	}
+	if err := os.WriteFile(path, []byte(builder.String()), 0o644); err != nil {
+		t.Fatalf("write epitopes csv: %v", err)
+	}
+
+	if err := LoadEpitopesTableCSV(path, EpitopesTableBounds{
+		GTStart:         1,
+		GTEnd:           64,
+		ValidationStart: 65,
+		ValidationEnd:   96,
+		TestStart:       97,
+		TestEnd:         128,
+		BenchmarkStart:  129,
+		BenchmarkEnd:    220,
+	}); err != nil {
+		t.Fatalf("load epitopes csv: %v", err)
+	}
+
+	scape := EpitopesScape{}
+	memoryAware := scriptedStepAgent{
+		id: "memory-aware",
+		fn: func(in []float64) []float64 {
+			if len(in) < 2 {
+				return []float64{0}
+			}
+			return []float64{in[0] + 0.7*in[1]}
+		},
+	}
+
+	fitness, trace, err := scape.EvaluateMode(context.Background(), memoryAware, "benchmark")
+	if err != nil {
+		t.Fatalf("evaluate benchmark mode: %v", err)
+	}
+	if fitness < 0.8 {
+		t.Fatalf("expected high fitness on loaded epitopes table, got %f", fitness)
+	}
+	table, ok := trace["table_name"].(string)
+	if !ok || !strings.Contains(table, "epitopes_custom.csv") {
+		t.Fatalf("expected loaded table in trace, got %+v", trace)
+	}
+	start, sok := trace["start_index"].(int)
+	end, eok := trace["end_index"].(int)
+	if !sok || !eok || start != 129 || end != 220 {
+		t.Fatalf("expected custom benchmark window 129..220, got %+v", trace)
+	}
+}
+
+func TestEpitopesScapeLoadTableCSVRejectsInvalidBounds(t *testing.T) {
+	ResetEpitopesTableSource()
+	t.Cleanup(ResetEpitopesTableSource)
+
+	path := filepath.Join(t.TempDir(), "epitopes_invalid.csv")
+	if err := os.WriteFile(path, []byte("0.1,0.0,1\n0.2,0.1,1\n0.3,0.2,1\n"), 0o644); err != nil {
+		t.Fatalf("write epitopes csv: %v", err)
+	}
+
+	err := LoadEpitopesTableCSV(path, EpitopesTableBounds{
+		GTStart: 4,
+		GTEnd:   3,
+	})
+	if err == nil {
+		t.Fatal("expected invalid bounds error")
+	}
+
+	scape := EpitopesScape{}
+	memoryAware := scriptedStepAgent{
+		id: "memory-aware",
+		fn: func(in []float64) []float64 {
+			if len(in) < 2 {
+				return []float64{0}
+			}
+			return []float64{in[0] + 0.7*in[1]}
+		},
+	}
+
+	_, trace, evalErr := scape.Evaluate(context.Background(), memoryAware)
+	if evalErr != nil {
+		t.Fatalf("evaluate default epitopes table: %v", evalErr)
+	}
+	if table, _ := trace["table_name"].(string); table != "abc_pred16" {
+		t.Fatalf("expected default epitopes table after rejected load, got %+v", trace)
 	}
 }
