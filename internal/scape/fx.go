@@ -115,7 +115,7 @@ func evaluateFX(
 	cfg fxModeConfig,
 	chooseTrade func(context.Context, []float64) (float64, error),
 ) (Fitness, Trace, error) {
-	series := currentFXSeries()
+	series := currentFXSeries(ctx)
 	account := newFXAccount()
 	ordersOpened := 0
 	ordersClosed := 0
@@ -579,7 +579,10 @@ func defaultFXSeries() fxSeries {
 	return fxSeries{name: "fx.synthetic.v2", values: values}
 }
 
-func currentFXSeries() fxSeries {
+func currentFXSeries(ctx context.Context) fxSeries {
+	if series, ok := fxSeriesFromContext(ctx); ok {
+		return series
+	}
 	fxSeriesSourceMu.RLock()
 	defer fxSeriesSourceMu.RUnlock()
 	return fxSeriesSource

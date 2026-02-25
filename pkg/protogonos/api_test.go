@@ -799,7 +799,7 @@ func TestClientRunRejectsInvalidScapeCSVSource(t *testing.T) {
 		Generations: 1,
 		FXCSVPath:   filepath.Join(base, "does-not-exist.csv"),
 	})
-	if err == nil || !strings.Contains(err.Error(), "load fx csv") {
+	if err == nil || !strings.Contains(err.Error(), "configure fx data source") {
 		t.Fatalf("expected fx csv load error, got %v", err)
 	}
 }

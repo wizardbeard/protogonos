@@ -310,11 +310,10 @@ func (c *Client) Run(ctx context.Context, req RunRequest) (RunSummary, error) {
 		return RunSummary{}, err
 	}
 	req = cfg.Request
-	cleanupScapeDataSources, err := applyScapeDataSources(req)
+	runCtx, err := applyScapeDataSources(ctx, req)
 	if err != nil {
 		return RunSummary{}, err
 	}
-	defer cleanupScapeDataSources()
 
 	p, err := c.ensurePolis(ctx)
 	if err != nil {
@@ -391,18 +390,18 @@ func (c *Client) Run(ctx context.Context, req RunRequest) (RunSummary, error) {
 					timer := time.NewTimer(req.AutoContinueAfter)
 					defer timer.Stop()
 					select {
-					case <-ctx.Done():
+					case <-runCtx.Done():
 						return
 					case <-timer.C:
 						select {
 						case controlCh <- evo.CommandContinue:
-						case <-ctx.Done():
+						case <-runCtx.Done():
 						}
 					}
 				}()
 			}
 		}
-		return p.RunEvolution(ctx, platform.EvolutionConfig{
+		return p.RunEvolution(runCtx, platform.EvolutionConfig{
 			RunID:                runID,
 			OpMode:               req.OpMode,
 			EvolutionType:        req.EvolutionType,
@@ -627,47 +626,33 @@ func (c *Client) Run(ctx context.Context, req RunRequest) (RunSummary, error) {
 	return summary, nil
 }
 
-func applyScapeDataSources(req RunRequest) (func(), error) {
-	reset := func() {
-		scape.ResetGTSATableSource()
-		scape.ResetFXSeriesSource()
-		scape.ResetEpitopesTableSource()
-	}
-
-	reset()
-	if strings.TrimSpace(req.GTSACSVPath) != "" {
-		if err := scape.LoadGTSATableCSV(req.GTSACSVPath, scape.GTSATableBounds{
-			TrainEnd:      req.GTSATrainEnd,
-			ValidationEnd: req.GTSAValidationEnd,
-			TestEnd:       req.GTSATestEnd,
-		}); err != nil {
-			reset()
-			return nil, fmt.Errorf("load gtsa csv: %w", err)
-		}
-	}
-	if strings.TrimSpace(req.FXCSVPath) != "" {
-		if err := scape.LoadFXSeriesCSV(req.FXCSVPath); err != nil {
-			reset()
-			return nil, fmt.Errorf("load fx csv: %w", err)
-		}
-	}
-	if strings.TrimSpace(req.EpitopesCSVPath) != "" {
-		if err := scape.LoadEpitopesTableCSV(req.EpitopesCSVPath, scape.EpitopesTableBounds{
-			GTStart:         req.EpitopesGTStart,
-			GTEnd:           req.EpitopesGTEnd,
-			ValidationStart: req.EpitopesValidationStart,
-			ValidationEnd:   req.EpitopesValidationEnd,
-			TestStart:       req.EpitopesTestStart,
-			TestEnd:         req.EpitopesTestEnd,
-			BenchmarkStart:  req.EpitopesBenchmarkStart,
-			BenchmarkEnd:    req.EpitopesBenchmarkEnd,
-		}); err != nil {
-			reset()
-			return nil, fmt.Errorf("load epitopes csv: %w", err)
-		}
-	}
-
-	return reset, nil
+func applyScapeDataSources(ctx context.Context, req RunRequest) (context.Context, error) {
+	return scape.WithDataSources(ctx, scape.DataSources{
+		GTSA: scape.GTSADataSource{
+			CSVPath: req.GTSACSVPath,
+			Bounds: scape.GTSATableBounds{
+				TrainEnd:      req.GTSATrainEnd,
+				ValidationEnd: req.GTSAValidationEnd,
+				TestEnd:       req.GTSATestEnd,
+			},
+		},
+		FX: scape.FXDataSource{
+			CSVPath: req.FXCSVPath,
+		},
+		Epitopes: scape.EpitopesDataSource{
+			CSVPath: req.EpitopesCSVPath,
+			Bounds: scape.EpitopesTableBounds{
+				GTStart:         req.EpitopesGTStart,
+				GTEnd:           req.EpitopesGTEnd,
+				ValidationStart: req.EpitopesValidationStart,
+				ValidationEnd:   req.EpitopesValidationEnd,
+				TestStart:       req.EpitopesTestStart,
+				TestEnd:         req.EpitopesTestEnd,
+				BenchmarkStart:  req.EpitopesBenchmarkStart,
+				BenchmarkEnd:    req.EpitopesBenchmarkEnd,
+			},
+		},
+	})
 }
 
 func (c *Client) Runs(_ context.Context, req RunsRequest) ([]RunItem, error) {

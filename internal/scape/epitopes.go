@@ -83,7 +83,7 @@ func (EpitopesScape) Evaluate(ctx context.Context, agent Agent) (Fitness, Trace,
 }
 
 func (EpitopesScape) EvaluateMode(ctx context.Context, agent Agent, mode string) (Fitness, Trace, error) {
-	source := currentEpitopesSource()
+	source := currentEpitopesSource(ctx)
 	cfg, err := epitopesConfigForMode(mode, source)
 	if err != nil {
 		return 0, nil, err
@@ -382,7 +382,10 @@ func defaultEpitopesSource() epitopesSource {
 	}
 }
 
-func currentEpitopesSource() epitopesSource {
+func currentEpitopesSource(ctx context.Context) epitopesSource {
+	if source, ok := epitopesSourceFromContext(ctx); ok {
+		return source
+	}
 	epitopesSourceMu.RLock()
 	defer epitopesSourceMu.RUnlock()
 	return epitopesSourceState

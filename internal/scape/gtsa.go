@@ -91,7 +91,7 @@ func evaluateGTSA(
 	cfg gtsaModeConfig,
 	predict func(context.Context, float64) (float64, error),
 ) (Fitness, Trace, error) {
-	table := currentGTSATable()
+	table := currentGTSATable(ctx)
 	state, err := newGTSAWindowState(cfg, table)
 	if err != nil {
 		return 0, nil, err
@@ -447,7 +447,10 @@ func buildGTSATable(name string, series []float64, bounds GTSATableBounds) (gtsa
 	}, nil
 }
 
-func currentGTSATable() gtsaTable {
+func currentGTSATable(ctx context.Context) gtsaTable {
+	if table, ok := gtsaTableFromContext(ctx); ok {
+		return table
+	}
 	gtsaTableSourceMu.RLock()
 	defer gtsaTableSourceMu.RUnlock()
 	return gtsaTableSource
