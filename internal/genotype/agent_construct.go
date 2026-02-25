@@ -5,6 +5,7 @@ import (
 	"math/rand"
 	"strings"
 
+	protoio "protogonos/internal/io"
 	"protogonos/internal/model"
 	"protogonos/internal/morphology"
 	"protogonos/internal/storage"
@@ -180,7 +181,7 @@ func ConstructCortex(
 	isSubstrateEncoding := strings.EqualFold(strings.TrimSpace(encodingType), "substrate")
 	seedSensors := append([]string(nil), sensors...)
 	seedActuators := append([]string(nil), actuators...)
-	seedActuatorVectorLengths := constraint.ActuatorVectorLengths
+	seedActuatorVectorLengths := mergeDefaultActuatorVectorLengths(seedActuators, constraint.ActuatorVectorLengths)
 	var substrateCPPIDs []string
 	var substrateCEPIDs []string
 	var substrateDensities []int
@@ -293,6 +294,8 @@ func resolveConstructMorphology(raw string) (morphology.Morphology, error) {
 		return morphology.Pole2BalancingMorphology{}, nil
 	case "flatland", "flatland-v1":
 		return morphology.FlatlandMorphology{}, nil
+	case "flatland-scanner", "flatland-scanner-v1", "flatland_scanner", "flatland_scanner_v1", "flatland-prey", "flatland-prey-v1", "flatland_prey", "flatland_prey_v1":
+		return morphology.FlatlandScannerMorphology{}, nil
 	case "dtm", "dtm-v1":
 		return morphology.DTMMorphology{}, nil
 	case "gtsa", "gtsa-v1":
@@ -346,6 +349,37 @@ func defaultSubstrateDensities(dimension int) []int {
 		densities = append(densities, 5)
 	}
 	return densities
+}
+
+func mergeDefaultActuatorVectorLengths(actuatorIDs []string, configured map[string]int) map[string]int {
+	out := make(map[string]int, len(configured))
+	for actuatorID, width := range configured {
+		if strings.TrimSpace(actuatorID) == "" || width <= 0 {
+			continue
+		}
+		out[actuatorID] = width
+	}
+	for _, actuatorID := range actuatorIDs {
+		if _, exists := out[actuatorID]; exists {
+			continue
+		}
+		if width := defaultActuatorVectorLength(actuatorID); width > 1 {
+			out[actuatorID] = width
+		}
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
+}
+
+func defaultActuatorVectorLength(actuatorID string) int {
+	switch actuatorID {
+	case protoio.FlatlandTwoWheelsActuatorName:
+		return 2
+	default:
+		return 1
+	}
 }
 
 func constructSubstrateEndpointIDs(dimensions, cppCount, cepCount int) ([]string, []string) {

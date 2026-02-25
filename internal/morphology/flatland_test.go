@@ -57,3 +57,34 @@ func TestFlatlandMorphologyIncludesExtendedSensors(t *testing.T) {
 		}
 	}
 }
+
+func TestFlatlandScannerMorphologyCompatibility(t *testing.T) {
+	m := FlatlandScannerMorphology{}
+	if !m.Compatible("flatland") {
+		t.Fatal("expected flatland scanner morphology to be compatible")
+	}
+	if m.Compatible("xor") {
+		t.Fatal("expected xor to be incompatible")
+	}
+}
+
+func TestFlatlandScannerMorphologySurface(t *testing.T) {
+	m := FlatlandScannerMorphology{}
+	sensors := m.Sensors()
+	if !slices.Contains(sensors, protoio.FlatlandEnergySensorName) {
+		t.Fatalf("expected scanner profile to include energy reader channel, got=%v", sensors)
+	}
+	if !slices.Contains(sensors, protoio.FlatlandDistanceScan0SensorName) ||
+		!slices.Contains(sensors, protoio.FlatlandDistanceScan4SensorName) ||
+		!slices.Contains(sensors, protoio.FlatlandColorScan0SensorName) ||
+		!slices.Contains(sensors, protoio.FlatlandEnergyScan4SensorName) {
+		t.Fatalf("expected scanner profile to include all scanner families, got=%v", sensors)
+	}
+	actuators := m.Actuators()
+	if len(actuators) != 1 || actuators[0] != protoio.FlatlandTwoWheelsActuatorName {
+		t.Fatalf("expected two_wheels actuator profile, got=%v", actuators)
+	}
+	if err := ValidateRegisteredComponents("flatland", m); err != nil {
+		t.Fatalf("validate scanner profile components: %v", err)
+	}
+}

@@ -3,6 +3,8 @@ package genotype
 import (
 	"math/rand"
 	"testing"
+
+	protoio "protogonos/internal/io"
 )
 
 func TestConstructCortexSupportsXORMimicAlias(t *testing.T) {
@@ -56,6 +58,41 @@ func TestConstructCortexSupportsPole2MorphologyAlias(t *testing.T) {
 	}
 	if len(out.InputNeuronIDs) != 9 || len(out.OutputNeuronIDs) != 1 {
 		t.Fatalf("unexpected pole2 input/output ids: in=%v out=%v", out.InputNeuronIDs, out.OutputNeuronIDs)
+	}
+}
+
+func TestConstructCortexSupportsFlatlandScannerMorphologyAlias(t *testing.T) {
+	constraint := DefaultConstructConstraint()
+	constraint.Morphology = "flatland_scanner_v1"
+
+	out, err := ConstructCortex(
+		"agent-flatland-scanner",
+		0,
+		constraint,
+		"neural",
+		"none",
+		"l2l_feedforward",
+		rand.New(rand.NewSource(23)),
+	)
+	if err != nil {
+		t.Fatalf("construct cortex: %v", err)
+	}
+	if len(out.Genome.SensorIDs) < 10 {
+		t.Fatalf("expected scanner-rich morphology sensor surface, got=%v", out.Genome.SensorIDs)
+	}
+	if len(out.Genome.ActuatorIDs) != 1 || out.Genome.ActuatorIDs[0] != protoio.FlatlandTwoWheelsActuatorName {
+		t.Fatalf("unexpected flatland scanner actuator ids: %v", out.Genome.ActuatorIDs)
+	}
+	if len(out.OutputNeuronIDs) != 2 {
+		t.Fatalf("expected default two-wheel actuator width=2 output neurons, got=%v", out.OutputNeuronIDs)
+	}
+	if len(out.Genome.NeuronActuatorLinks) != 2 {
+		t.Fatalf("expected two actuator links for two-wheel surface, got=%v", out.Genome.NeuronActuatorLinks)
+	}
+	for _, link := range out.Genome.NeuronActuatorLinks {
+		if link.ActuatorID != protoio.FlatlandTwoWheelsActuatorName {
+			t.Fatalf("expected two-wheel actuator links, got=%v", out.Genome.NeuronActuatorLinks)
+		}
 	}
 }
 

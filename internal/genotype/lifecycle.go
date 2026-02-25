@@ -48,8 +48,8 @@ func ConstructSeedPopulation(scapeName string, size int, seed int64) (SeedPopula
 	case "flatland":
 		return SeedPopulation{
 			Genomes:         seedFlatlandPopulation(size, seed),
-			InputNeuronIDs:  []string{"d", "e"},
-			OutputNeuronIDs: []string{"m"},
+			InputNeuronIDs:  flatlandSeedInputNeuronIDs(),
+			OutputNeuronIDs: flatlandSeedOutputNeuronIDs(),
 		}, nil
 	case "dtm":
 		return SeedPopulation{
@@ -291,24 +291,102 @@ func seedPole2BalancingPopulation(size int, seed int64) []model.Genome {
 func seedFlatlandPopulation(size int, seed int64) []model.Genome {
 	rng := rand.New(rand.NewSource(seed))
 	population := make([]model.Genome, 0, size)
+	inputNeuronIDs := flatlandSeedInputNeuronIDs()
+	sensorIDs := flatlandSeedSensorIDs()
 	for i := 0; i < size; i++ {
+		neurons := make([]model.Neuron, 0, len(inputNeuronIDs)+2)
+		for _, neuronID := range inputNeuronIDs {
+			neurons = append(neurons, model.Neuron{ID: neuronID, Activation: "identity", Bias: 0})
+		}
+		neurons = append(neurons,
+			model.Neuron{ID: "wl", Activation: "tanh", Bias: jitter(rng, 0.25)},
+			model.Neuron{ID: "wr", Activation: "tanh", Bias: jitter(rng, 0.25)},
+		)
+
+		synapses := make([]model.Synapse, 0, len(inputNeuronIDs)*2)
+		synapseIndex := 1
+		for idx, neuronID := range inputNeuronIDs {
+			leftWeight, rightWeight := flatlandSeedWheelWeights(idx)
+			synapses = append(synapses,
+				model.Synapse{
+					ID:      fmt.Sprintf("s%d", synapseIndex),
+					From:    neuronID,
+					To:      "wl",
+					Weight:  leftWeight + jitter(rng, 0.2),
+					Enabled: true,
+				},
+				model.Synapse{
+					ID:      fmt.Sprintf("s%d", synapseIndex+1),
+					From:    neuronID,
+					To:      "wr",
+					Weight:  rightWeight + jitter(rng, 0.2),
+					Enabled: true,
+				},
+			)
+			synapseIndex += 2
+		}
+
 		population = append(population, model.Genome{
 			VersionedRecord: model.VersionedRecord{SchemaVersion: storage.CurrentSchemaVersion, CodecVersion: storage.CurrentCodecVersion},
 			ID:              fmt.Sprintf("flatland-g0-%d", i),
-			SensorIDs:       []string{protoio.FlatlandDistanceSensorName, protoio.FlatlandEnergySensorName},
-			ActuatorIDs:     []string{protoio.FlatlandMoveActuatorName},
-			Neurons: []model.Neuron{
-				{ID: "d", Activation: "identity", Bias: 0},
-				{ID: "e", Activation: "identity", Bias: 0},
-				{ID: "m", Activation: "tanh", Bias: jitter(rng, 0.4)},
-			},
-			Synapses: []model.Synapse{
-				{ID: "s1", From: "d", To: "m", Weight: jitter(rng, 1.2), Enabled: true},
-				{ID: "s2", From: "e", To: "m", Weight: jitter(rng, 1.2), Enabled: true},
-			},
+			SensorIDs:       append([]string(nil), sensorIDs...),
+			ActuatorIDs:     []string{protoio.FlatlandTwoWheelsActuatorName},
+			Neurons:         neurons,
+			Synapses:        synapses,
 		})
 	}
 	return population
+}
+
+func flatlandSeedSensorIDs() []string {
+	return []string{
+		protoio.FlatlandDistanceScan0SensorName,
+		protoio.FlatlandDistanceScan1SensorName,
+		protoio.FlatlandDistanceScan2SensorName,
+		protoio.FlatlandDistanceScan3SensorName,
+		protoio.FlatlandDistanceScan4SensorName,
+		protoio.FlatlandColorScan0SensorName,
+		protoio.FlatlandColorScan1SensorName,
+		protoio.FlatlandColorScan2SensorName,
+		protoio.FlatlandColorScan3SensorName,
+		protoio.FlatlandColorScan4SensorName,
+		protoio.FlatlandEnergyScan0SensorName,
+		protoio.FlatlandEnergyScan1SensorName,
+		protoio.FlatlandEnergyScan2SensorName,
+		protoio.FlatlandEnergyScan3SensorName,
+		protoio.FlatlandEnergyScan4SensorName,
+		protoio.FlatlandEnergySensorName,
+	}
+}
+
+func flatlandSeedInputNeuronIDs() []string {
+	return []string{
+		"d0", "d1", "d2", "d3", "d4",
+		"c0", "c1", "c2", "c3", "c4",
+		"es0", "es1", "es2", "es3", "es4",
+		"e",
+	}
+}
+
+func flatlandSeedOutputNeuronIDs() []string {
+	return []string{"wl", "wr"}
+}
+
+func flatlandSeedWheelWeights(index int) (float64, float64) {
+	binProfile := []float64{-0.8, -0.4, 0, 0.4, 0.8}
+	switch {
+	case index >= 0 && index < 5:
+		base := binProfile[index]
+		return base, -base
+	case index >= 5 && index < 10:
+		base := 0.35 * binProfile[index-5]
+		return base, -base
+	case index >= 10 && index < 15:
+		base := 0.45 * binProfile[index-10]
+		return base, -base
+	default:
+		return 0.25, 0.25
+	}
 }
 
 func seedDTMPopulation(size int, seed int64) []model.Genome {

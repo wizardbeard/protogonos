@@ -3,13 +3,44 @@ package morphology
 import protoio "protogonos/internal/io"
 
 type FlatlandMorphology struct{}
+type FlatlandScannerMorphology struct{}
 
 func (FlatlandMorphology) Name() string {
 	return "flatland-v1"
 }
 
 func (FlatlandMorphology) Sensors() []string {
-	return []string{
+	return flatlandExtendedSensors()
+}
+
+func (FlatlandMorphology) Actuators() []string {
+	return []string{protoio.FlatlandMoveActuatorName}
+}
+
+func (FlatlandMorphology) Compatible(scape string) bool {
+	return scape == "flatland"
+}
+
+func (FlatlandScannerMorphology) Name() string {
+	return "flatland-scanner-v1"
+}
+
+func (FlatlandScannerMorphology) Sensors() []string {
+	// Mirrors reference-style scanner-heavy prey profile:
+	// distance/color/energy scanners + internal energy reader.
+	return append(flatlandScannerSensors(), protoio.FlatlandEnergySensorName)
+}
+
+func (FlatlandScannerMorphology) Actuators() []string {
+	return []string{protoio.FlatlandTwoWheelsActuatorName}
+}
+
+func (FlatlandScannerMorphology) Compatible(scape string) bool {
+	return scape == "flatland"
+}
+
+func flatlandExtendedSensors() []string {
+	base := []string{
 		protoio.FlatlandDistanceSensorName,
 		protoio.FlatlandEnergySensorName,
 		protoio.FlatlandPoisonSensorName,
@@ -18,6 +49,12 @@ func (FlatlandMorphology) Sensors() []string {
 		protoio.FlatlandPoisonProximitySensorName,
 		protoio.FlatlandWallProximitySensorName,
 		protoio.FlatlandResourceBalanceSensorName,
+	}
+	return append(base, flatlandScannerSensors()...)
+}
+
+func flatlandScannerSensors() []string {
+	return []string{
 		protoio.FlatlandDistanceScan0SensorName,
 		protoio.FlatlandDistanceScan1SensorName,
 		protoio.FlatlandDistanceScan2SensorName,
@@ -34,12 +71,4 @@ func (FlatlandMorphology) Sensors() []string {
 		protoio.FlatlandEnergyScan3SensorName,
 		protoio.FlatlandEnergyScan4SensorName,
 	}
-}
-
-func (FlatlandMorphology) Actuators() []string {
-	return []string{protoio.FlatlandMoveActuatorName}
-}
-
-func (FlatlandMorphology) Compatible(scape string) bool {
-	return scape == "flatland"
 }

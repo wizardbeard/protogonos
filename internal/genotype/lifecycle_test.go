@@ -124,17 +124,43 @@ func TestConstructSeedPopulationFlatland(t *testing.T) {
 	if len(seed.Genomes) != 2 {
 		t.Fatalf("expected 2 genomes, got %d", len(seed.Genomes))
 	}
-	if len(seed.InputNeuronIDs) != 2 || seed.InputNeuronIDs[0] != "d" || seed.InputNeuronIDs[1] != "e" {
-		t.Fatalf("unexpected input ids: %#v", seed.InputNeuronIDs)
+	wantInputs := flatlandSeedInputNeuronIDs()
+	if len(seed.InputNeuronIDs) != len(wantInputs) {
+		t.Fatalf("unexpected input count: got=%d want=%d ids=%#v", len(seed.InputNeuronIDs), len(wantInputs), seed.InputNeuronIDs)
 	}
-	if len(seed.OutputNeuronIDs) != 1 || seed.OutputNeuronIDs[0] != "m" {
-		t.Fatalf("unexpected output ids: %#v", seed.OutputNeuronIDs)
+	for i, want := range wantInputs {
+		if seed.InputNeuronIDs[i] != want {
+			t.Fatalf("unexpected input ids at index %d: got=%#v want=%#v", i, seed.InputNeuronIDs, wantInputs)
+		}
 	}
-	if len(seed.Genomes[0].SensorIDs) != 2 || seed.Genomes[0].SensorIDs[0] != protoio.FlatlandDistanceSensorName || seed.Genomes[0].SensorIDs[1] != protoio.FlatlandEnergySensorName {
-		t.Fatalf("unexpected flatland sensor ids: %#v", seed.Genomes[0].SensorIDs)
+
+	wantOutputs := flatlandSeedOutputNeuronIDs()
+	if len(seed.OutputNeuronIDs) != len(wantOutputs) {
+		t.Fatalf("unexpected output count: got=%d want=%d ids=%#v", len(seed.OutputNeuronIDs), len(wantOutputs), seed.OutputNeuronIDs)
 	}
-	if len(seed.Genomes[0].ActuatorIDs) != 1 || seed.Genomes[0].ActuatorIDs[0] != protoio.FlatlandMoveActuatorName {
+	for i, want := range wantOutputs {
+		if seed.OutputNeuronIDs[i] != want {
+			t.Fatalf("unexpected output ids at index %d: got=%#v want=%#v", i, seed.OutputNeuronIDs, wantOutputs)
+		}
+	}
+
+	wantSensors := flatlandSeedSensorIDs()
+	if len(seed.Genomes[0].SensorIDs) != len(wantSensors) {
+		t.Fatalf("unexpected flatland sensor count: got=%d want=%d ids=%#v", len(seed.Genomes[0].SensorIDs), len(wantSensors), seed.Genomes[0].SensorIDs)
+	}
+	for i, want := range wantSensors {
+		if seed.Genomes[0].SensorIDs[i] != want {
+			t.Fatalf("unexpected flatland sensor ids at index %d: got=%#v want=%#v", i, seed.Genomes[0].SensorIDs, wantSensors)
+		}
+	}
+	if len(seed.Genomes[0].ActuatorIDs) != 1 || seed.Genomes[0].ActuatorIDs[0] != protoio.FlatlandTwoWheelsActuatorName {
 		t.Fatalf("unexpected flatland actuator ids: %#v", seed.Genomes[0].ActuatorIDs)
+	}
+	if len(seed.Genomes[0].Neurons) != len(wantInputs)+len(wantOutputs) {
+		t.Fatalf("unexpected flatland seed neuron count: got=%d want=%d", len(seed.Genomes[0].Neurons), len(wantInputs)+len(wantOutputs))
+	}
+	if len(seed.Genomes[0].Synapses) != len(wantInputs)*len(wantOutputs) {
+		t.Fatalf("unexpected flatland seed synapse count: got=%d want=%d", len(seed.Genomes[0].Synapses), len(wantInputs)*len(wantOutputs))
 	}
 }
 
