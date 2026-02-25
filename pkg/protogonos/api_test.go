@@ -4,8 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -703,6 +705,102 @@ func TestMaterializeRunConfigFromRequestNormalizesReferenceScapeAlias(t *testing
 	}
 	if cfg.Request.Scape != "llvm-phase-ordering" {
 		t.Fatalf("expected normalized scape llvm-phase-ordering, got %s", cfg.Request.Scape)
+	}
+}
+
+func TestMaterializeRunConfigFromRequestValidatesScapeDatasetBounds(t *testing.T) {
+	_, err := materializeRunConfigFromRequest(RunRequest{
+		Scape:        "gtsa",
+		Population:   6,
+		Generations:  1,
+		GTSATrainEnd: -1,
+	})
+	if err == nil || !strings.Contains(err.Error(), "gtsa train end") {
+		t.Fatalf("expected gtsa train-end validation error, got %v", err)
+	}
+
+	_, err = materializeRunConfigFromRequest(RunRequest{
+		Scape:           "epitopes",
+		Population:      6,
+		Generations:     1,
+		EpitopesGTStart: -2,
+	})
+	if err == nil || !strings.Contains(err.Error(), "epitopes gt start") {
+		t.Fatalf("expected epitopes gt-start validation error, got %v", err)
+	}
+}
+
+func TestClientRunAppliesFXCSVSourceFromRunRequest(t *testing.T) {
+	base := t.TempDir()
+	client, err := New(Options{
+		StoreKind:     "memory",
+		BenchmarksDir: filepath.Join(base, "benchmarks"),
+		ExportsDir:    filepath.Join(base, "exports"),
+	})
+	if err != nil {
+		t.Fatalf("new client: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = client.Close()
+	})
+
+	fxCSV := filepath.Join(base, "fx_prices.csv")
+	var b strings.Builder
+	b.WriteString("t,close\n")
+	for i := 0; i < 400; i++ {
+		fmt.Fprintf(&b, "%d,%0.6f\n", i, 1.01+0.0003*float64(i))
+	}
+	if err := os.WriteFile(fxCSV, []byte(b.String()), 0o644); err != nil {
+		t.Fatalf("write fx csv: %v", err)
+	}
+
+	summary, err := client.Run(context.Background(), RunRequest{
+		Scape:       "fx",
+		Population:  8,
+		Generations: 1,
+		Seed:        11,
+		Workers:     2,
+		FXCSVPath:   fxCSV,
+	})
+	if err != nil {
+		t.Fatalf("run with fx csv source: %v", err)
+	}
+
+	var artifacts stats.RunArtifacts
+	configData, err := os.ReadFile(filepath.Join(summary.ArtifactsDir, "config.json"))
+	if err != nil {
+		t.Fatalf("read config artifact: %v", err)
+	}
+	if err := json.Unmarshal(configData, &artifacts.Config); err != nil {
+		t.Fatalf("decode config artifact: %v", err)
+	}
+	if artifacts.Config.FXCSVPath != fxCSV {
+		t.Fatalf("expected fx_csv_path in artifacts, got %+v", artifacts.Config)
+	}
+}
+
+func TestClientRunRejectsInvalidScapeCSVSource(t *testing.T) {
+	base := t.TempDir()
+	client, err := New(Options{
+		StoreKind:     "memory",
+		BenchmarksDir: filepath.Join(base, "benchmarks"),
+		ExportsDir:    filepath.Join(base, "exports"),
+	})
+	if err != nil {
+		t.Fatalf("new client: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = client.Close()
+	})
+
+	_, err = client.Run(context.Background(), RunRequest{
+		Scape:       "fx",
+		Population:  8,
+		Generations: 1,
+		FXCSVPath:   filepath.Join(base, "does-not-exist.csv"),
+	})
+	if err == nil || !strings.Contains(err.Error(), "load fx csv") {
+		t.Fatalf("expected fx csv load error, got %v", err)
 	}
 }
 

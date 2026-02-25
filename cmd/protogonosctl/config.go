@@ -35,6 +35,51 @@ func loadRunRequestFromConfig(path string) (protoapi.RunRequest, error) {
 	if v, ok := asString(raw["scape"]); ok {
 		req.Scape = v
 	}
+	if v, ok := asString(raw["gtsa_csv_path"]); ok {
+		req.GTSACSVPath = v
+	}
+	if v, ok := asInt(raw["gtsa_train_end"]); ok {
+		req.GTSATrainEnd = v
+	}
+	if v, ok := asInt(raw["gtsa_validation_end"]); ok {
+		req.GTSAValidationEnd = v
+	}
+	if v, ok := asInt(raw["gtsa_test_end"]); ok {
+		req.GTSATestEnd = v
+	}
+	if v, ok := asString(raw["fx_csv_path"]); ok {
+		req.FXCSVPath = v
+	}
+	if v, ok := asString(raw["epitopes_csv_path"]); ok {
+		req.EpitopesCSVPath = v
+	}
+	if v, ok := asInt(raw["epitopes_gt_start"]); ok {
+		req.EpitopesGTStart = v
+	}
+	if v, ok := asInt(raw["epitopes_gt_end"]); ok {
+		req.EpitopesGTEnd = v
+	}
+	if v, ok := asInt(raw["epitopes_validation_start"]); ok {
+		req.EpitopesValidationStart = v
+	}
+	if v, ok := asInt(raw["epitopes_validation_end"]); ok {
+		req.EpitopesValidationEnd = v
+	}
+	if v, ok := asInt(raw["epitopes_test_start"]); ok {
+		req.EpitopesTestStart = v
+	}
+	if v, ok := asInt(raw["epitopes_test_end"]); ok {
+		req.EpitopesTestEnd = v
+	}
+	if v, ok := asInt(raw["epitopes_benchmark_start"]); ok {
+		req.EpitopesBenchmarkStart = v
+	}
+	if v, ok := asInt(raw["epitopes_benchmark_end"]); ok {
+		req.EpitopesBenchmarkEnd = v
+	}
+	if scapeData, ok := raw["scape_data"].(map[string]any); ok {
+		applyScapeDataConfigFallbacks(&req, scapeData)
+	}
 	if v, ok := asString(raw["op_mode"]); ok {
 		req.OpMode = v
 	}
@@ -328,6 +373,87 @@ func joinStringSlice(values []any) (string, bool) {
 	return strings.Join(parts, ","), true
 }
 
+func applyScapeDataConfigFallbacks(req *protoapi.RunRequest, scapeData map[string]any) {
+	if gtsaData, ok := scapeData["gtsa"].(map[string]any); ok {
+		if req.GTSACSVPath == "" {
+			if v, ok := asString(gtsaData["csv_path"]); ok {
+				req.GTSACSVPath = v
+			}
+		}
+		if req.GTSATrainEnd == 0 {
+			if v, ok := asInt(gtsaData["train_end"]); ok {
+				req.GTSATrainEnd = v
+			}
+		}
+		if req.GTSAValidationEnd == 0 {
+			if v, ok := asInt(gtsaData["validation_end"]); ok {
+				req.GTSAValidationEnd = v
+			}
+		}
+		if req.GTSATestEnd == 0 {
+			if v, ok := asInt(gtsaData["test_end"]); ok {
+				req.GTSATestEnd = v
+			}
+		}
+	}
+
+	if fxData, ok := scapeData["fx"].(map[string]any); ok {
+		if req.FXCSVPath == "" {
+			if v, ok := asString(fxData["csv_path"]); ok {
+				req.FXCSVPath = v
+			}
+		}
+	}
+
+	if epitopesData, ok := scapeData["epitopes"].(map[string]any); ok {
+		if req.EpitopesCSVPath == "" {
+			if v, ok := asString(epitopesData["csv_path"]); ok {
+				req.EpitopesCSVPath = v
+			}
+		}
+		if req.EpitopesGTStart == 0 {
+			if v, ok := asInt(epitopesData["gt_start"]); ok {
+				req.EpitopesGTStart = v
+			}
+		}
+		if req.EpitopesGTEnd == 0 {
+			if v, ok := asInt(epitopesData["gt_end"]); ok {
+				req.EpitopesGTEnd = v
+			}
+		}
+		if req.EpitopesValidationStart == 0 {
+			if v, ok := asInt(epitopesData["validation_start"]); ok {
+				req.EpitopesValidationStart = v
+			}
+		}
+		if req.EpitopesValidationEnd == 0 {
+			if v, ok := asInt(epitopesData["validation_end"]); ok {
+				req.EpitopesValidationEnd = v
+			}
+		}
+		if req.EpitopesTestStart == 0 {
+			if v, ok := asInt(epitopesData["test_start"]); ok {
+				req.EpitopesTestStart = v
+			}
+		}
+		if req.EpitopesTestEnd == 0 {
+			if v, ok := asInt(epitopesData["test_end"]); ok {
+				req.EpitopesTestEnd = v
+			}
+		}
+		if req.EpitopesBenchmarkStart == 0 {
+			if v, ok := asInt(epitopesData["benchmark_start"]); ok {
+				req.EpitopesBenchmarkStart = v
+			}
+		}
+		if req.EpitopesBenchmarkEnd == 0 {
+			if v, ok := asInt(epitopesData["benchmark_end"]); ok {
+				req.EpitopesBenchmarkEnd = v
+			}
+		}
+	}
+}
+
 func overrideFromFlags(req *protoapi.RunRequest, set map[string]bool, flagValue map[string]any) error {
 	for name := range set {
 		v, ok := flagValue[name]
@@ -343,6 +469,34 @@ func overrideFromFlags(req *protoapi.RunRequest, set map[string]bool, flagValue 
 			req.SpecieIdentifier = v.(string)
 		case "scape":
 			req.Scape = v.(string)
+		case "gtsa-csv":
+			req.GTSACSVPath = v.(string)
+		case "gtsa-train-end":
+			req.GTSATrainEnd = v.(int)
+		case "gtsa-validation-end":
+			req.GTSAValidationEnd = v.(int)
+		case "gtsa-test-end":
+			req.GTSATestEnd = v.(int)
+		case "fx-csv":
+			req.FXCSVPath = v.(string)
+		case "epitopes-csv":
+			req.EpitopesCSVPath = v.(string)
+		case "epitopes-gt-start":
+			req.EpitopesGTStart = v.(int)
+		case "epitopes-gt-end":
+			req.EpitopesGTEnd = v.(int)
+		case "epitopes-validation-start":
+			req.EpitopesValidationStart = v.(int)
+		case "epitopes-validation-end":
+			req.EpitopesValidationEnd = v.(int)
+		case "epitopes-test-start":
+			req.EpitopesTestStart = v.(int)
+		case "epitopes-test-end":
+			req.EpitopesTestEnd = v.(int)
+		case "epitopes-benchmark-start":
+			req.EpitopesBenchmarkStart = v.(int)
+		case "epitopes-benchmark-end":
+			req.EpitopesBenchmarkEnd = v.(int)
 		case "op-mode":
 			req.OpMode = v.(string)
 		case "evolution-type":

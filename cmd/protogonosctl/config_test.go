@@ -150,6 +150,65 @@ func TestLoadRunRequestFromConfigUsesTopLevelTraceStepSizeOverride(t *testing.T)
 	}
 }
 
+func TestLoadRunRequestFromConfigParsesScapeDataSources(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "run_config_scape_data.json")
+	payload := map[string]any{
+		"gtsa_csv_path":       "top-gtsa.csv",
+		"gtsa_train_end":      120,
+		"gtsa_validation_end": 180,
+		"gtsa_test_end":       240,
+		"fx_csv_path":         "top-fx.csv",
+		"epitopes_csv_path":   "top-ep.csv",
+		"epitopes_gt_start":   5,
+		"epitopes_gt_end":     25,
+		"epitopes_test_start": 50,
+		"epitopes_test_end":   70,
+		"scape_data": map[string]any{
+			"gtsa": map[string]any{
+				"csv_path":       "nested-gtsa.csv",
+				"train_end":      90,
+				"validation_end": 140,
+				"test_end":       200,
+			},
+			"fx": map[string]any{
+				"csv_path": "nested-fx.csv",
+			},
+			"epitopes": map[string]any{
+				"csv_path":         "nested-ep.csv",
+				"validation_start": 30,
+				"validation_end":   40,
+				"benchmark_start":  80,
+				"benchmark_end":    110,
+			},
+		},
+	}
+	data, err := json.Marshal(payload)
+	if err != nil {
+		t.Fatalf("marshal payload: %v", err)
+	}
+	if err := os.WriteFile(path, data, 0o644); err != nil {
+		t.Fatalf("write config: %v", err)
+	}
+
+	req, err := loadRunRequestFromConfig(path)
+	if err != nil {
+		t.Fatalf("load run request: %v", err)
+	}
+	if req.GTSACSVPath != "top-gtsa.csv" || req.GTSATrainEnd != 120 || req.GTSAValidationEnd != 180 || req.GTSATestEnd != 240 {
+		t.Fatalf("unexpected gtsa source fields: %+v", req)
+	}
+	if req.FXCSVPath != "top-fx.csv" {
+		t.Fatalf("unexpected fx csv path: %+v", req)
+	}
+	if req.EpitopesCSVPath != "top-ep.csv" || req.EpitopesGTStart != 5 || req.EpitopesGTEnd != 25 || req.EpitopesTestStart != 50 || req.EpitopesTestEnd != 70 {
+		t.Fatalf("unexpected epitopes top-level fields: %+v", req)
+	}
+	// Nested scape_data fills remaining unset fields.
+	if req.EpitopesValidationStart != 30 || req.EpitopesValidationEnd != 40 || req.EpitopesBenchmarkStart != 80 || req.EpitopesBenchmarkEnd != 110 {
+		t.Fatalf("unexpected nested epitopes fallback fields: %+v", req)
+	}
+}
+
 func TestLoadRunRequestFromConfigMapsOpModeList(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "run_config_op_mode_list.json")
 	payload := map[string]any{

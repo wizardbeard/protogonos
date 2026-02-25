@@ -44,54 +44,68 @@ type Client struct {
 }
 
 type RunRequest struct {
-	RunID                 string
-	ContinuePopulationID  string
-	SpecieIdentifier      string
-	OpMode                string
-	EvolutionType         string
-	Scape                 string
-	Population            int
-	Generations           int
-	SurvivalPercentage    float64
-	SpecieSizeLimit       int
-	FitnessGoal           float64
-	EvaluationsLimit      int
-	TraceStepSize         int
-	StartPaused           bool
-	AutoContinueAfter     time.Duration
-	Seed                  int64
-	Workers               int
-	Selection             string
-	FitnessPostprocessor  string
-	TopologicalPolicy     string
-	TopologicalCount      int
-	TopologicalParam      float64
-	TopologicalMax        int
-	EnableTuning          bool
-	CompareTuning         bool
-	ValidationProbe       bool
-	TestProbe             bool
-	TuneSelection         string
-	TuneDurationPolicy    string
-	TuneDurationParam     float64
-	TuneAttempts          int
-	TuneSteps             int
-	TuneStepSize          float64
-	TunePerturbationRange float64
-	TuneAnnealingFactor   float64
-	TuneMinImprovement    float64
-	WeightPerturb         float64
-	WeightBias            float64
-	WeightRemoveBias      float64
-	WeightActivation      float64
-	WeightAggregator      float64
-	WeightAddSynapse      float64
-	WeightRemoveSynapse   float64
-	WeightAddNeuron       float64
-	WeightRemoveNeuron    float64
-	WeightPlasticityRule  float64
-	WeightPlasticity      float64
-	WeightSubstrate       float64
+	RunID                   string
+	ContinuePopulationID    string
+	SpecieIdentifier        string
+	OpMode                  string
+	EvolutionType           string
+	Scape                   string
+	GTSACSVPath             string
+	GTSATrainEnd            int
+	GTSAValidationEnd       int
+	GTSATestEnd             int
+	FXCSVPath               string
+	EpitopesCSVPath         string
+	EpitopesGTStart         int
+	EpitopesGTEnd           int
+	EpitopesValidationStart int
+	EpitopesValidationEnd   int
+	EpitopesTestStart       int
+	EpitopesTestEnd         int
+	EpitopesBenchmarkStart  int
+	EpitopesBenchmarkEnd    int
+	Population              int
+	Generations             int
+	SurvivalPercentage      float64
+	SpecieSizeLimit         int
+	FitnessGoal             float64
+	EvaluationsLimit        int
+	TraceStepSize           int
+	StartPaused             bool
+	AutoContinueAfter       time.Duration
+	Seed                    int64
+	Workers                 int
+	Selection               string
+	FitnessPostprocessor    string
+	TopologicalPolicy       string
+	TopologicalCount        int
+	TopologicalParam        float64
+	TopologicalMax          int
+	EnableTuning            bool
+	CompareTuning           bool
+	ValidationProbe         bool
+	TestProbe               bool
+	TuneSelection           string
+	TuneDurationPolicy      string
+	TuneDurationParam       float64
+	TuneAttempts            int
+	TuneSteps               int
+	TuneStepSize            float64
+	TunePerturbationRange   float64
+	TuneAnnealingFactor     float64
+	TuneMinImprovement      float64
+	WeightPerturb           float64
+	WeightBias              float64
+	WeightRemoveBias        float64
+	WeightActivation        float64
+	WeightAggregator        float64
+	WeightAddSynapse        float64
+	WeightRemoveSynapse     float64
+	WeightAddNeuron         float64
+	WeightRemoveNeuron      float64
+	WeightPlasticityRule    float64
+	WeightPlasticity        float64
+	WeightSubstrate         float64
 }
 
 type CompareSummary struct {
@@ -296,6 +310,11 @@ func (c *Client) Run(ctx context.Context, req RunRequest) (RunSummary, error) {
 		return RunSummary{}, err
 	}
 	req = cfg.Request
+	cleanupScapeDataSources, err := applyScapeDataSources(req)
+	if err != nil {
+		return RunSummary{}, err
+	}
+	defer cleanupScapeDataSources()
 
 	p, err := c.ensurePolis(ctx)
 	if err != nil {
@@ -497,55 +516,69 @@ func (c *Client) Run(ctx context.Context, req RunRequest) (RunSummary, error) {
 
 	runDir, err := stats.WriteRunArtifacts(c.benchmarksDir, stats.RunArtifacts{
 		Config: stats.RunConfig{
-			RunID:                 runID,
-			OpMode:                req.OpMode,
-			EvolutionType:         req.EvolutionType,
-			Scape:                 req.Scape,
-			ContinuePopulationID:  req.ContinuePopulationID,
-			SpecieIdentifier:      req.SpecieIdentifier,
-			InitialGeneration:     initialGeneration,
-			PopulationSize:        req.Population,
-			Generations:           req.Generations,
-			SurvivalPercentage:    req.SurvivalPercentage,
-			SpecieSizeLimit:       req.SpecieSizeLimit,
-			FitnessGoal:           req.FitnessGoal,
-			EvaluationsLimit:      req.EvaluationsLimit,
-			TraceStepSize:         req.TraceStepSize,
-			StartPaused:           req.StartPaused,
-			AutoContinueAfterMS:   req.AutoContinueAfter.Milliseconds(),
-			Seed:                  req.Seed,
-			Workers:               req.Workers,
-			EliteCount:            eliteCount,
-			Selection:             req.Selection,
-			FitnessPostprocessor:  req.FitnessPostprocessor,
-			TopologicalPolicy:     req.TopologicalPolicy,
-			TopologicalCount:      req.TopologicalCount,
-			TopologicalParam:      req.TopologicalParam,
-			TopologicalMax:        req.TopologicalMax,
-			TuningEnabled:         req.EnableTuning,
-			ValidationProbe:       req.ValidationProbe,
-			TestProbe:             req.TestProbe,
-			TuneSelection:         req.TuneSelection,
-			TuneDurationPolicy:    req.TuneDurationPolicy,
-			TuneDurationParam:     req.TuneDurationParam,
-			TuneAttempts:          req.TuneAttempts,
-			TuneSteps:             req.TuneSteps,
-			TuneStepSize:          req.TuneStepSize,
-			TunePerturbationRange: req.TunePerturbationRange,
-			TuneAnnealingFactor:   req.TuneAnnealingFactor,
-			TuneMinImprovement:    req.TuneMinImprovement,
-			WeightPerturb:         req.WeightPerturb,
-			WeightBias:            req.WeightBias,
-			WeightRemoveBias:      req.WeightRemoveBias,
-			WeightActivation:      req.WeightActivation,
-			WeightAggregator:      req.WeightAggregator,
-			WeightAddSynapse:      req.WeightAddSynapse,
-			WeightRemoveSynapse:   req.WeightRemoveSynapse,
-			WeightAddNeuron:       req.WeightAddNeuron,
-			WeightRemoveNeuron:    req.WeightRemoveNeuron,
-			WeightPlasticityRule:  req.WeightPlasticityRule,
-			WeightPlasticity:      req.WeightPlasticity,
-			WeightSubstrate:       req.WeightSubstrate,
+			RunID:                   runID,
+			OpMode:                  req.OpMode,
+			EvolutionType:           req.EvolutionType,
+			Scape:                   req.Scape,
+			GTSACSVPath:             req.GTSACSVPath,
+			GTSATrainEnd:            req.GTSATrainEnd,
+			GTSAValidationEnd:       req.GTSAValidationEnd,
+			GTSATestEnd:             req.GTSATestEnd,
+			FXCSVPath:               req.FXCSVPath,
+			EpitopesCSVPath:         req.EpitopesCSVPath,
+			EpitopesGTStart:         req.EpitopesGTStart,
+			EpitopesGTEnd:           req.EpitopesGTEnd,
+			EpitopesValidationStart: req.EpitopesValidationStart,
+			EpitopesValidationEnd:   req.EpitopesValidationEnd,
+			EpitopesTestStart:       req.EpitopesTestStart,
+			EpitopesTestEnd:         req.EpitopesTestEnd,
+			EpitopesBenchmarkStart:  req.EpitopesBenchmarkStart,
+			EpitopesBenchmarkEnd:    req.EpitopesBenchmarkEnd,
+			ContinuePopulationID:    req.ContinuePopulationID,
+			SpecieIdentifier:        req.SpecieIdentifier,
+			InitialGeneration:       initialGeneration,
+			PopulationSize:          req.Population,
+			Generations:             req.Generations,
+			SurvivalPercentage:      req.SurvivalPercentage,
+			SpecieSizeLimit:         req.SpecieSizeLimit,
+			FitnessGoal:             req.FitnessGoal,
+			EvaluationsLimit:        req.EvaluationsLimit,
+			TraceStepSize:           req.TraceStepSize,
+			StartPaused:             req.StartPaused,
+			AutoContinueAfterMS:     req.AutoContinueAfter.Milliseconds(),
+			Seed:                    req.Seed,
+			Workers:                 req.Workers,
+			EliteCount:              eliteCount,
+			Selection:               req.Selection,
+			FitnessPostprocessor:    req.FitnessPostprocessor,
+			TopologicalPolicy:       req.TopologicalPolicy,
+			TopologicalCount:        req.TopologicalCount,
+			TopologicalParam:        req.TopologicalParam,
+			TopologicalMax:          req.TopologicalMax,
+			TuningEnabled:           req.EnableTuning,
+			ValidationProbe:         req.ValidationProbe,
+			TestProbe:               req.TestProbe,
+			TuneSelection:           req.TuneSelection,
+			TuneDurationPolicy:      req.TuneDurationPolicy,
+			TuneDurationParam:       req.TuneDurationParam,
+			TuneAttempts:            req.TuneAttempts,
+			TuneSteps:               req.TuneSteps,
+			TuneStepSize:            req.TuneStepSize,
+			TunePerturbationRange:   req.TunePerturbationRange,
+			TuneAnnealingFactor:     req.TuneAnnealingFactor,
+			TuneMinImprovement:      req.TuneMinImprovement,
+			WeightPerturb:           req.WeightPerturb,
+			WeightBias:              req.WeightBias,
+			WeightRemoveBias:        req.WeightRemoveBias,
+			WeightActivation:        req.WeightActivation,
+			WeightAggregator:        req.WeightAggregator,
+			WeightAddSynapse:        req.WeightAddSynapse,
+			WeightRemoveSynapse:     req.WeightRemoveSynapse,
+			WeightAddNeuron:         req.WeightAddNeuron,
+			WeightRemoveNeuron:      req.WeightRemoveNeuron,
+			WeightPlasticityRule:    req.WeightPlasticityRule,
+			WeightPlasticity:        req.WeightPlasticity,
+			WeightSubstrate:         req.WeightSubstrate,
 		},
 		BestByGeneration:      result.BestByGeneration,
 		GenerationDiagnostics: result.GenerationDiagnostics,
@@ -592,6 +625,49 @@ func (c *Client) Run(ctx context.Context, req RunRequest) (RunSummary, error) {
 		}
 	}
 	return summary, nil
+}
+
+func applyScapeDataSources(req RunRequest) (func(), error) {
+	reset := func() {
+		scape.ResetGTSATableSource()
+		scape.ResetFXSeriesSource()
+		scape.ResetEpitopesTableSource()
+	}
+
+	reset()
+	if strings.TrimSpace(req.GTSACSVPath) != "" {
+		if err := scape.LoadGTSATableCSV(req.GTSACSVPath, scape.GTSATableBounds{
+			TrainEnd:      req.GTSATrainEnd,
+			ValidationEnd: req.GTSAValidationEnd,
+			TestEnd:       req.GTSATestEnd,
+		}); err != nil {
+			reset()
+			return nil, fmt.Errorf("load gtsa csv: %w", err)
+		}
+	}
+	if strings.TrimSpace(req.FXCSVPath) != "" {
+		if err := scape.LoadFXSeriesCSV(req.FXCSVPath); err != nil {
+			reset()
+			return nil, fmt.Errorf("load fx csv: %w", err)
+		}
+	}
+	if strings.TrimSpace(req.EpitopesCSVPath) != "" {
+		if err := scape.LoadEpitopesTableCSV(req.EpitopesCSVPath, scape.EpitopesTableBounds{
+			GTStart:         req.EpitopesGTStart,
+			GTEnd:           req.EpitopesGTEnd,
+			ValidationStart: req.EpitopesValidationStart,
+			ValidationEnd:   req.EpitopesValidationEnd,
+			TestStart:       req.EpitopesTestStart,
+			TestEnd:         req.EpitopesTestEnd,
+			BenchmarkStart:  req.EpitopesBenchmarkStart,
+			BenchmarkEnd:    req.EpitopesBenchmarkEnd,
+		}); err != nil {
+			reset()
+			return nil, fmt.Errorf("load epitopes csv: %w", err)
+		}
+	}
+
+	return reset, nil
 }
 
 func (c *Client) Runs(_ context.Context, req RunsRequest) ([]RunItem, error) {
@@ -1208,6 +1284,39 @@ func materializeRunConfigFromRequest(req RunRequest) (materializedRunConfig, err
 		req.Scape = "xor"
 	}
 	req.Scape = scapeid.Normalize(req.Scape)
+	if req.GTSATrainEnd < 0 {
+		return materializedRunConfig{}, errors.New("gtsa train end must be >= 0")
+	}
+	if req.GTSAValidationEnd < 0 {
+		return materializedRunConfig{}, errors.New("gtsa validation end must be >= 0")
+	}
+	if req.GTSATestEnd < 0 {
+		return materializedRunConfig{}, errors.New("gtsa test end must be >= 0")
+	}
+	if req.EpitopesGTStart < 0 {
+		return materializedRunConfig{}, errors.New("epitopes gt start must be >= 0")
+	}
+	if req.EpitopesGTEnd < 0 {
+		return materializedRunConfig{}, errors.New("epitopes gt end must be >= 0")
+	}
+	if req.EpitopesValidationStart < 0 {
+		return materializedRunConfig{}, errors.New("epitopes validation start must be >= 0")
+	}
+	if req.EpitopesValidationEnd < 0 {
+		return materializedRunConfig{}, errors.New("epitopes validation end must be >= 0")
+	}
+	if req.EpitopesTestStart < 0 {
+		return materializedRunConfig{}, errors.New("epitopes test start must be >= 0")
+	}
+	if req.EpitopesTestEnd < 0 {
+		return materializedRunConfig{}, errors.New("epitopes test end must be >= 0")
+	}
+	if req.EpitopesBenchmarkStart < 0 {
+		return materializedRunConfig{}, errors.New("epitopes benchmark start must be >= 0")
+	}
+	if req.EpitopesBenchmarkEnd < 0 {
+		return materializedRunConfig{}, errors.New("epitopes benchmark end must be >= 0")
+	}
 	if req.Population < 0 {
 		return materializedRunConfig{}, errors.New("population must be >= 0")
 	}
