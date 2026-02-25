@@ -49,6 +49,12 @@ type pole2State struct {
 	velocity2    float64
 }
 
+type pole2WorkflowSignal struct {
+	runProgress   float64
+	stepProgress  float64
+	fitnessSignal float64
+}
+
 type pole2ModeConfig struct {
 	mode       string
 	maxSteps   int
@@ -139,8 +145,14 @@ func evaluatePole2BalancingWithStep(ctx context.Context, runner StepAgent, cfg p
 		ctx,
 		cfg,
 		"step-agent",
-		func(ctx context.Context, state pole2State) (pole2Control, error) {
-			in := pole2Observation(state, cfg.angleLimit)
+		"derived",
+		func(ctx context.Context, state pole2State, workflow pole2WorkflowSignal) (pole2Control, error) {
+			in := append(
+				pole2Observation(state, cfg.angleLimit),
+				workflow.runProgress,
+				workflow.stepProgress,
+				workflow.fitnessSignal,
+			)
 			out, err := runner.RunStep(ctx, in)
 			if err != nil {
 				return pole2Control{}, err
@@ -163,7 +175,8 @@ func evaluatePole2BalancingWithTick(ctx context.Context, ticker TickAgent, cfg p
 		ctx,
 		cfg,
 		ioBindings.surface,
-		func(ctx context.Context, state pole2State) (pole2Control, error) {
+		ioBindings.workflowSurface,
+		func(ctx context.Context, state pole2State, workflow pole2WorkflowSignal) (pole2Control, error) {
 			if ioBindings.positionSetter != nil {
 				ioBindings.positionSetter.Set(scaleToUnit(state.cartPosition, 2.4, -2.4))
 			}
@@ -181,6 +194,15 @@ func evaluatePole2BalancingWithTick(ctx context.Context, ticker TickAgent, cfg p
 			}
 			if ioBindings.velocity2Setter != nil {
 				ioBindings.velocity2Setter.Set(state.velocity2)
+			}
+			if ioBindings.runProgressSetter != nil {
+				ioBindings.runProgressSetter.Set(workflow.runProgress)
+			}
+			if ioBindings.stepProgressSetter != nil {
+				ioBindings.stepProgressSetter.Set(workflow.stepProgress)
+			}
+			if ioBindings.fitnessSignalSetter != nil {
+				ioBindings.fitnessSignalSetter.Set(workflow.fitnessSignal)
 			}
 
 			out, err := ticker.Tick(ctx)
@@ -237,7 +259,8 @@ func evaluatePole2Balancing(
 	ctx context.Context,
 	cfg pole2ModeConfig,
 	sensorSurface string,
-	chooseControl func(context.Context, pole2State) (pole2Control, error),
+	workflowSurface string,
+	chooseControl func(context.Context, pole2State, pole2WorkflowSignal) (pole2Control, error),
 ) (Fitness, Trace, error) {
 	state := initialPole2State(cfg)
 	stepsSurvived := 0
@@ -248,16 +271,31 @@ func evaluatePole2Balancing(
 	vectorControlSteps := 0
 	dampingOffSteps := 0
 	singlePoleSteps := 0
+	lastStepFitness := 0.0
+	runProgressAcc := 0.0
+	stepProgressAcc := 0.0
+	fitnessSignalAcc := 0.0
+	controlDecisions := 0
 
 	for step := 0; step < cfg.maxSteps; step++ {
 		if err := ctx.Err(); err != nil {
 			return 0, nil, err
 		}
 
-		control, err := chooseControl(ctx, state)
+		workflow := pole2WorkflowSignal{
+			runProgress:   pole2RunProgress(stepsSurvived, cfg.goalSteps),
+			stepProgress:  pole2StepProgress(stepsSurvived, cfg.maxSteps),
+			fitnessSignal: lastStepFitness,
+		}
+		control, err := chooseControl(ctx, state, workflow)
 		if err != nil {
 			return 0, nil, err
 		}
+		runProgressAcc += workflow.runProgress
+		stepProgressAcc += workflow.stepProgress
+		fitnessSignalAcc += workflow.fitnessSignal
+		controlDecisions++
+
 		force := clampPole2(control.force, -1, 1)
 		if control.vector {
 			vectorControlSteps++
@@ -281,12 +319,23 @@ func evaluatePole2Balancing(
 		}
 
 		// Mirror the reference damping-oriented fitness accumulator while the run is active.
-		fitnessAcc += pole2StepFitness(stepsSurvived, state, control.damping)
+		stepFitness := pole2StepFitness(stepsSurvived, state, control.damping)
+		fitnessAcc += stepFitness
+		lastStepFitness = stepFitness
 	}
 
 	avgStepFitness := 0.0
 	if stepsSurvived > 0 {
 		avgStepFitness = fitnessAcc / float64(stepsSurvived)
+	}
+	meanRunProgress := 0.0
+	meanStepProgress := 0.0
+	meanFitnessSignal := 0.0
+	if controlDecisions > 0 {
+		denom := float64(controlDecisions)
+		meanRunProgress = runProgressAcc / denom
+		meanStepProgress = stepProgressAcc / denom
+		meanFitnessSignal = fitnessSignalAcc / denom
 	}
 	result := pole2EpisodeResult{
 		finalState:         state,
@@ -318,6 +367,7 @@ func evaluatePole2Balancing(
 		"velocity2":            state.velocity2,
 		"mode":                 cfg.mode,
 		"sensor_surface":       sensorSurface,
+		"workflow_surface":     workflowSurface,
 		"init_angle1":          cfg.initAngle1,
 		"init_angle2":          cfg.initAngle2,
 		"default_damping":      cfg.damping,
@@ -325,6 +375,13 @@ func evaluatePole2Balancing(
 		"vector_control_steps": result.vectorControlSteps,
 		"damping_off_steps":    result.dampingOffSteps,
 		"single_pole_steps":    result.singlePoleSteps,
+		"feature_width":        9,
+		"mean_run_progress":    meanRunProgress,
+		"mean_step_progress":   meanStepProgress,
+		"mean_fitness_signal":  meanFitnessSignal,
+		"last_run_progress":    pole2RunProgress(stepsSurvived, cfg.goalSteps),
+		"last_step_progress":   pole2StepProgress(stepsSurvived, cfg.maxSteps),
+		"last_fitness_signal":  lastStepFitness,
 	}, nil
 }
 
@@ -337,6 +394,20 @@ func pole2Observation(state pole2State, angleLimit float64) []float64 {
 		scaleToUnit(state.angle2, angleLimit, -angleLimit),
 		state.velocity2,
 	}
+}
+
+func pole2RunProgress(stepsSurvived, goalSteps int) float64 {
+	if goalSteps <= 0 {
+		return 0
+	}
+	return clampPole2(float64(stepsSurvived)/float64(goalSteps), 0, 1)
+}
+
+func pole2StepProgress(stepsSurvived, maxSteps int) float64 {
+	if maxSteps <= 0 {
+		return 0
+	}
+	return clampPole2(float64(stepsSurvived)/float64(maxSteps), 0, 1)
 }
 
 func pole2Termination(state pole2State, cfg pole2ModeConfig, stepsSurvived int, doublePole bool) (terminated bool, reason string, goalReached bool) {
@@ -454,14 +525,18 @@ func simulateDoublePole(force float64, state pole2State, steps int) pole2State {
 }
 
 type pole2IOBindings struct {
-	positionSetter  protoio.ScalarSensorSetter
-	velocitySetter  protoio.ScalarSensorSetter
-	angle1Setter    protoio.ScalarSensorSetter
-	velocity1Setter protoio.ScalarSensorSetter
-	angle2Setter    protoio.ScalarSensorSetter
-	velocity2Setter protoio.ScalarSensorSetter
-	forceOutput     protoio.SnapshotActuator
-	surface         string
+	positionSetter      protoio.ScalarSensorSetter
+	velocitySetter      protoio.ScalarSensorSetter
+	angle1Setter        protoio.ScalarSensorSetter
+	velocity1Setter     protoio.ScalarSensorSetter
+	angle2Setter        protoio.ScalarSensorSetter
+	velocity2Setter     protoio.ScalarSensorSetter
+	runProgressSetter   protoio.ScalarSensorSetter
+	stepProgressSetter  protoio.ScalarSensorSetter
+	fitnessSignalSetter protoio.ScalarSensorSetter
+	forceOutput         protoio.SnapshotActuator
+	surface             string
+	workflowSurface     string
 }
 
 func pole2BalancingIO(agent TickAgent) (pole2IOBindings, error) {
@@ -497,6 +572,18 @@ func pole2BalancingIO(agent TickAgent) (pole2IOBindings, error) {
 	if err != nil {
 		return pole2IOBindings{}, err
 	}
+	runProgressSetter, hasRunProgress, err := resolveOptionalPole2Setter(typed, protoio.Pole2RunProgressSensorName)
+	if err != nil {
+		return pole2IOBindings{}, err
+	}
+	stepProgressSetter, hasStepProgress, err := resolveOptionalPole2Setter(typed, protoio.Pole2StepProgressSensorName)
+	if err != nil {
+		return pole2IOBindings{}, err
+	}
+	fitnessSignalSetter, hasFitnessSignal, err := resolveOptionalPole2Setter(typed, protoio.Pole2FitnessSignalSensorName)
+	if err != nil {
+		return pole2IOBindings{}, err
+	}
 
 	surface, supported := classifyPole2SenseSurface(
 		hasPosition,
@@ -518,6 +605,7 @@ func pole2BalancingIO(agent TickAgent) (pole2IOBindings, error) {
 			hasVelocity2,
 		)
 	}
+	workflowSurface := classifyPole2WorkflowSurface(hasRunProgress, hasStepProgress, hasFitnessSignal)
 
 	actuator, ok := typed.RegisteredActuator(protoio.Pole2PushActuatorName)
 	if !ok {
@@ -529,14 +617,18 @@ func pole2BalancingIO(agent TickAgent) (pole2IOBindings, error) {
 	}
 
 	return pole2IOBindings{
-		positionSetter:  positionSetter,
-		velocitySetter:  velocitySetter,
-		angle1Setter:    angle1Setter,
-		velocity1Setter: velocity1Setter,
-		angle2Setter:    angle2Setter,
-		velocity2Setter: velocity2Setter,
-		forceOutput:     output,
-		surface:         surface,
+		positionSetter:      positionSetter,
+		velocitySetter:      velocitySetter,
+		angle1Setter:        angle1Setter,
+		velocity1Setter:     velocity1Setter,
+		angle2Setter:        angle2Setter,
+		velocity2Setter:     velocity2Setter,
+		runProgressSetter:   runProgressSetter,
+		stepProgressSetter:  stepProgressSetter,
+		fitnessSignalSetter: fitnessSignalSetter,
+		forceOutput:         output,
+		surface:             surface,
+		workflowSurface:     workflowSurface,
 	}, nil
 }
 
@@ -581,6 +673,27 @@ func classifyPole2SenseSurface(hasPosition, hasVelocity, hasAngle1, hasVelocity1
 		return "6", true
 	default:
 		return "", false
+	}
+}
+
+func classifyPole2WorkflowSurface(hasRunProgress, hasStepProgress, hasFitnessSignal bool) string {
+	switch {
+	case hasRunProgress && hasStepProgress && hasFitnessSignal:
+		return "all"
+	case hasRunProgress && hasStepProgress:
+		return "run_step"
+	case hasRunProgress && hasFitnessSignal:
+		return "run_fitness"
+	case hasStepProgress && hasFitnessSignal:
+		return "step_fitness"
+	case hasRunProgress:
+		return "run"
+	case hasStepProgress:
+		return "step"
+	case hasFitnessSignal:
+		return "fitness"
+	default:
+		return "none"
 	}
 }
 

@@ -54,6 +54,9 @@ func TestPole2BalancingScapeEvaluateWithIOComponents(t *testing.T) {
 			protoio.Pole2Velocity1SensorName,
 			protoio.Pole2Angle2SensorName,
 			protoio.Pole2Velocity2SensorName,
+			protoio.Pole2RunProgressSensorName,
+			protoio.Pole2StepProgressSensorName,
+			protoio.Pole2FitnessSignalSensorName,
 		},
 		ActuatorIDs: []string{protoio.Pole2PushActuatorName},
 		Neurons: []model.Neuron{
@@ -63,6 +66,9 @@ func TestPole2BalancingScapeEvaluateWithIOComponents(t *testing.T) {
 			{ID: "w1", Activation: "identity"},
 			{ID: "a2", Activation: "identity"},
 			{ID: "w2", Activation: "identity"},
+			{ID: "rp", Activation: "identity"},
+			{ID: "sp", Activation: "identity"},
+			{ID: "fs", Activation: "identity"},
 			{ID: "f", Activation: "tanh"},
 		},
 		Synapses: []model.Synapse{
@@ -72,16 +78,22 @@ func TestPole2BalancingScapeEvaluateWithIOComponents(t *testing.T) {
 			{From: "w1", To: "f", Weight: -0.9, Enabled: true},
 			{From: "a2", To: "f", Weight: -6.0, Enabled: true},
 			{From: "w2", To: "f", Weight: -1.1, Enabled: true},
+			{From: "rp", To: "f", Weight: 0.2, Enabled: true},
+			{From: "sp", To: "f", Weight: 0.15, Enabled: true},
+			{From: "fs", To: "f", Weight: 0.25, Enabled: true},
 		},
 	}
 
 	sensors := map[string]protoio.Sensor{
-		protoio.Pole2CartPositionSensorName: protoio.NewScalarInputSensor(0),
-		protoio.Pole2CartVelocitySensorName: protoio.NewScalarInputSensor(0),
-		protoio.Pole2Angle1SensorName:       protoio.NewScalarInputSensor(0),
-		protoio.Pole2Velocity1SensorName:    protoio.NewScalarInputSensor(0),
-		protoio.Pole2Angle2SensorName:       protoio.NewScalarInputSensor(0),
-		protoio.Pole2Velocity2SensorName:    protoio.NewScalarInputSensor(0),
+		protoio.Pole2CartPositionSensorName:  protoio.NewScalarInputSensor(0),
+		protoio.Pole2CartVelocitySensorName:  protoio.NewScalarInputSensor(0),
+		protoio.Pole2Angle1SensorName:        protoio.NewScalarInputSensor(0),
+		protoio.Pole2Velocity1SensorName:     protoio.NewScalarInputSensor(0),
+		protoio.Pole2Angle2SensorName:        protoio.NewScalarInputSensor(0),
+		protoio.Pole2Velocity2SensorName:     protoio.NewScalarInputSensor(0),
+		protoio.Pole2RunProgressSensorName:   protoio.NewScalarInputSensor(0),
+		protoio.Pole2StepProgressSensorName:  protoio.NewScalarInputSensor(0),
+		protoio.Pole2FitnessSignalSensorName: protoio.NewScalarInputSensor(0),
 	}
 	actuators := map[string]protoio.Actuator{
 		protoio.Pole2PushActuatorName: protoio.NewScalarOutputActuator(),
@@ -92,7 +104,7 @@ func TestPole2BalancingScapeEvaluateWithIOComponents(t *testing.T) {
 		genome,
 		sensors,
 		actuators,
-		[]string{"x", "v", "a1", "w1", "a2", "w2"},
+		[]string{"x", "v", "a1", "w1", "a2", "w2", "rp", "sp", "fs"},
 		[]string{"f"},
 		nil,
 	)
@@ -113,6 +125,18 @@ func TestPole2BalancingScapeEvaluateWithIOComponents(t *testing.T) {
 	}
 	if surface, ok := trace["sensor_surface"].(string); !ok || surface != "6" {
 		t.Fatalf("expected full pole2 sensor_surface=6, got %+v", trace)
+	}
+	if surface, ok := trace["workflow_surface"].(string); !ok || surface != "all" {
+		t.Fatalf("expected pole2 workflow_surface=all, got %+v", trace)
+	}
+	if _, ok := trace["mean_run_progress"].(float64); !ok {
+		t.Fatalf("expected mean_run_progress in trace, got %+v", trace)
+	}
+	if _, ok := trace["mean_step_progress"].(float64); !ok {
+		t.Fatalf("expected mean_step_progress in trace, got %+v", trace)
+	}
+	if _, ok := trace["mean_fitness_signal"].(float64); !ok {
+		t.Fatalf("expected mean_fitness_signal in trace, got %+v", trace)
 	}
 }
 
@@ -169,6 +193,9 @@ func TestPole2BalancingScapeEvaluateWithReducedIOComponents(t *testing.T) {
 	}
 	if surface, ok := trace["sensor_surface"].(string); !ok || surface != "3" {
 		t.Fatalf("expected reduced pole2 sensor_surface=3, got %+v", trace)
+	}
+	if surface, ok := trace["workflow_surface"].(string); !ok || surface != "none" {
+		t.Fatalf("expected reduced pole2 workflow_surface=none, got %+v", trace)
 	}
 }
 
@@ -253,6 +280,27 @@ func TestPole2BalancingScapeTraceIncludesTerminationAccounting(t *testing.T) {
 	}
 	if _, ok := trace["single_pole_steps"].(int); !ok {
 		t.Fatalf("trace missing single_pole_steps: %+v", trace)
+	}
+	if _, ok := trace["feature_width"].(int); !ok {
+		t.Fatalf("trace missing feature_width: %+v", trace)
+	}
+	if _, ok := trace["mean_run_progress"].(float64); !ok {
+		t.Fatalf("trace missing mean_run_progress: %+v", trace)
+	}
+	if _, ok := trace["mean_step_progress"].(float64); !ok {
+		t.Fatalf("trace missing mean_step_progress: %+v", trace)
+	}
+	if _, ok := trace["mean_fitness_signal"].(float64); !ok {
+		t.Fatalf("trace missing mean_fitness_signal: %+v", trace)
+	}
+	if _, ok := trace["last_run_progress"].(float64); !ok {
+		t.Fatalf("trace missing last_run_progress: %+v", trace)
+	}
+	if _, ok := trace["last_step_progress"].(float64); !ok {
+		t.Fatalf("trace missing last_step_progress: %+v", trace)
+	}
+	if _, ok := trace["last_fitness_signal"].(float64); !ok {
+		t.Fatalf("trace missing last_fitness_signal: %+v", trace)
 	}
 }
 

@@ -42,7 +42,7 @@ func ConstructSeedPopulation(scapeName string, size int, seed int64) (SeedPopula
 	case "pole2-balancing":
 		return SeedPopulation{
 			Genomes:         seedPole2BalancingPopulation(size, seed),
-			InputNeuronIDs:  []string{"x", "v", "a1", "w1", "a2", "w2"},
+			InputNeuronIDs:  []string{"x", "v", "a1", "w1", "a2", "w2", "rp", "sp", "fs"},
 			OutputNeuronIDs: []string{"f"},
 		}, nil
 	case "flatland":
@@ -255,6 +255,9 @@ func seedPole2BalancingPopulation(size int, seed int64) []model.Genome {
 				protoio.Pole2Velocity1SensorName,
 				protoio.Pole2Angle2SensorName,
 				protoio.Pole2Velocity2SensorName,
+				protoio.Pole2RunProgressSensorName,
+				protoio.Pole2StepProgressSensorName,
+				protoio.Pole2FitnessSignalSensorName,
 			},
 			ActuatorIDs: []string{protoio.Pole2PushActuatorName},
 			Neurons: []model.Neuron{
@@ -264,6 +267,9 @@ func seedPole2BalancingPopulation(size int, seed int64) []model.Genome {
 				{ID: "w1", Activation: "identity", Bias: 0},
 				{ID: "a2", Activation: "identity", Bias: 0},
 				{ID: "w2", Activation: "identity", Bias: 0},
+				{ID: "rp", Activation: "identity", Bias: 0},
+				{ID: "sp", Activation: "identity", Bias: 0},
+				{ID: "fs", Activation: "identity", Bias: 0},
 				{ID: "f", Activation: "tanh", Bias: jitter(rng, 0.2)},
 			},
 			Synapses: []model.Synapse{
@@ -273,6 +279,9 @@ func seedPole2BalancingPopulation(size int, seed int64) []model.Genome {
 				{ID: "s4", From: "w1", To: "f", Weight: -0.8 + jitter(rng, 0.2), Enabled: true},
 				{ID: "s5", From: "a2", To: "f", Weight: -5.0 + jitter(rng, 0.3), Enabled: true},
 				{ID: "s6", From: "w2", To: "f", Weight: -1.0 + jitter(rng, 0.2), Enabled: true},
+				{ID: "s7", From: "rp", To: "f", Weight: 0.25 + jitter(rng, 0.15), Enabled: true},
+				{ID: "s8", From: "sp", To: "f", Weight: 0.2 + jitter(rng, 0.15), Enabled: true},
+				{ID: "s9", From: "fs", To: "f", Weight: 0.3 + jitter(rng, 0.15), Enabled: true},
 			},
 		})
 	}

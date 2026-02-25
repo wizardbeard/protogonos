@@ -84,13 +84,31 @@ func TestConstructSeedPopulationPole2Balancing(t *testing.T) {
 	if len(seed.Genomes) != 2 {
 		t.Fatalf("expected 2 genomes, got %d", len(seed.Genomes))
 	}
-	if len(seed.InputNeuronIDs) != 6 {
+	if len(seed.InputNeuronIDs) != 9 ||
+		seed.InputNeuronIDs[0] != "x" ||
+		seed.InputNeuronIDs[1] != "v" ||
+		seed.InputNeuronIDs[2] != "a1" ||
+		seed.InputNeuronIDs[3] != "w1" ||
+		seed.InputNeuronIDs[4] != "a2" ||
+		seed.InputNeuronIDs[5] != "w2" ||
+		seed.InputNeuronIDs[6] != "rp" ||
+		seed.InputNeuronIDs[7] != "sp" ||
+		seed.InputNeuronIDs[8] != "fs" {
 		t.Fatalf("unexpected input ids: %#v", seed.InputNeuronIDs)
 	}
 	if len(seed.OutputNeuronIDs) != 1 || seed.OutputNeuronIDs[0] != "f" {
 		t.Fatalf("unexpected output ids: %#v", seed.OutputNeuronIDs)
 	}
-	if len(seed.Genomes[0].SensorIDs) != 6 || seed.Genomes[0].SensorIDs[0] != protoio.Pole2CartPositionSensorName {
+	if len(seed.Genomes[0].SensorIDs) != 9 ||
+		seed.Genomes[0].SensorIDs[0] != protoio.Pole2CartPositionSensorName ||
+		seed.Genomes[0].SensorIDs[1] != protoio.Pole2CartVelocitySensorName ||
+		seed.Genomes[0].SensorIDs[2] != protoio.Pole2Angle1SensorName ||
+		seed.Genomes[0].SensorIDs[3] != protoio.Pole2Velocity1SensorName ||
+		seed.Genomes[0].SensorIDs[4] != protoio.Pole2Angle2SensorName ||
+		seed.Genomes[0].SensorIDs[5] != protoio.Pole2Velocity2SensorName ||
+		seed.Genomes[0].SensorIDs[6] != protoio.Pole2RunProgressSensorName ||
+		seed.Genomes[0].SensorIDs[7] != protoio.Pole2StepProgressSensorName ||
+		seed.Genomes[0].SensorIDs[8] != protoio.Pole2FitnessSignalSensorName {
 		t.Fatalf("unexpected pole2 sensor ids: %#v", seed.Genomes[0].SensorIDs)
 	}
 	if len(seed.Genomes[0].ActuatorIDs) != 1 || seed.Genomes[0].ActuatorIDs[0] != protoio.Pole2PushActuatorName {

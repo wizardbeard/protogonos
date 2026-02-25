@@ -51,10 +51,10 @@ func TestConstructCortexSupportsPole2MorphologyAlias(t *testing.T) {
 	if err != nil {
 		t.Fatalf("construct cortex: %v", err)
 	}
-	if len(out.Genome.SensorIDs) != 6 || len(out.Genome.ActuatorIDs) != 1 {
+	if len(out.Genome.SensorIDs) != 9 || len(out.Genome.ActuatorIDs) != 1 {
 		t.Fatalf("unexpected pole2 io scaffold: sensors=%v actuators=%v", out.Genome.SensorIDs, out.Genome.ActuatorIDs)
 	}
-	if len(out.InputNeuronIDs) != 6 || len(out.OutputNeuronIDs) != 1 {
+	if len(out.InputNeuronIDs) != 9 || len(out.OutputNeuronIDs) != 1 {
 		t.Fatalf("unexpected pole2 input/output ids: in=%v out=%v", out.InputNeuronIDs, out.OutputNeuronIDs)
 	}
 }

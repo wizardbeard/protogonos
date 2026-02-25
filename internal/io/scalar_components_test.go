@@ -142,6 +142,27 @@ func TestScalarComponentsRegistered(t *testing.T) {
 	if pole2Velocity2.Name() != ScalarInputSensorName {
 		t.Fatalf("unexpected pole2 velocity2 sensor name: %s", pole2Velocity2.Name())
 	}
+	pole2RunProgress, err := ResolveSensor(Pole2RunProgressSensorName, "pole2-balancing")
+	if err != nil {
+		t.Fatalf("resolve pole2 run-progress sensor: %v", err)
+	}
+	if pole2RunProgress.Name() != ScalarInputSensorName {
+		t.Fatalf("unexpected pole2 run-progress sensor name: %s", pole2RunProgress.Name())
+	}
+	pole2StepProgress, err := ResolveSensor(Pole2StepProgressSensorName, "pole2-balancing")
+	if err != nil {
+		t.Fatalf("resolve pole2 step-progress sensor: %v", err)
+	}
+	if pole2StepProgress.Name() != ScalarInputSensorName {
+		t.Fatalf("unexpected pole2 step-progress sensor name: %s", pole2StepProgress.Name())
+	}
+	pole2FitnessSignal, err := ResolveSensor(Pole2FitnessSignalSensorName, "pole2-balancing")
+	if err != nil {
+		t.Fatalf("resolve pole2 fitness-signal sensor: %v", err)
+	}
+	if pole2FitnessSignal.Name() != ScalarInputSensorName {
+		t.Fatalf("unexpected pole2 fitness-signal sensor name: %s", pole2FitnessSignal.Name())
+	}
 
 	pole2Push, err := ResolveActuator(Pole2PushActuatorName, "pole2-balancing")
 	if err != nil {

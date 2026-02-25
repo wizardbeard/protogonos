@@ -16,6 +16,9 @@ func (Pole2BalancingMorphology) Sensors() []string {
 		protoio.Pole2Velocity1SensorName,
 		protoio.Pole2Angle2SensorName,
 		protoio.Pole2Velocity2SensorName,
+		protoio.Pole2RunProgressSensorName,
+		protoio.Pole2StepProgressSensorName,
+		protoio.Pole2FitnessSignalSensorName,
 	}
 }
 
