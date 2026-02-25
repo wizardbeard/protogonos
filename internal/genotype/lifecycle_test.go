@@ -128,13 +128,27 @@ func TestConstructSeedPopulationDTM(t *testing.T) {
 	if len(seed.Genomes) != 2 {
 		t.Fatalf("expected 2 genomes, got %d", len(seed.Genomes))
 	}
-	if len(seed.InputNeuronIDs) != 4 || seed.InputNeuronIDs[0] != "rl" || seed.InputNeuronIDs[1] != "rf" || seed.InputNeuronIDs[2] != "rr" || seed.InputNeuronIDs[3] != "r" {
+	if len(seed.InputNeuronIDs) != 7 ||
+		seed.InputNeuronIDs[0] != "rl" ||
+		seed.InputNeuronIDs[1] != "rf" ||
+		seed.InputNeuronIDs[2] != "rr" ||
+		seed.InputNeuronIDs[3] != "r" ||
+		seed.InputNeuronIDs[4] != "rp" ||
+		seed.InputNeuronIDs[5] != "sp" ||
+		seed.InputNeuronIDs[6] != "sw" {
 		t.Fatalf("unexpected input ids: %#v", seed.InputNeuronIDs)
 	}
 	if len(seed.OutputNeuronIDs) != 1 || seed.OutputNeuronIDs[0] != "m" {
 		t.Fatalf("unexpected output ids: %#v", seed.OutputNeuronIDs)
 	}
-	if len(seed.Genomes[0].SensorIDs) != 4 || seed.Genomes[0].SensorIDs[0] != protoio.DTMRangeLeftSensorName || seed.Genomes[0].SensorIDs[1] != protoio.DTMRangeFrontSensorName || seed.Genomes[0].SensorIDs[2] != protoio.DTMRangeRightSensorName || seed.Genomes[0].SensorIDs[3] != protoio.DTMRewardSensorName {
+	if len(seed.Genomes[0].SensorIDs) != 7 ||
+		seed.Genomes[0].SensorIDs[0] != protoio.DTMRangeLeftSensorName ||
+		seed.Genomes[0].SensorIDs[1] != protoio.DTMRangeFrontSensorName ||
+		seed.Genomes[0].SensorIDs[2] != protoio.DTMRangeRightSensorName ||
+		seed.Genomes[0].SensorIDs[3] != protoio.DTMRewardSensorName ||
+		seed.Genomes[0].SensorIDs[4] != protoio.DTMRunProgressSensorName ||
+		seed.Genomes[0].SensorIDs[5] != protoio.DTMStepProgressSensorName ||
+		seed.Genomes[0].SensorIDs[6] != protoio.DTMSwitchedSensorName {
 		t.Fatalf("unexpected dtm sensor ids: %#v", seed.Genomes[0].SensorIDs)
 	}
 	if len(seed.Genomes[0].ActuatorIDs) != 1 || seed.Genomes[0].ActuatorIDs[0] != protoio.DTMMoveActuatorName {

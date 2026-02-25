@@ -96,6 +96,79 @@ func TestDTMScapeEvaluateWithIOComponents(t *testing.T) {
 	}
 }
 
+func TestDTMScapeEvaluateWithExtendedIOComponents(t *testing.T) {
+	genome := model.Genome{
+		SensorIDs: []string{
+			protoio.DTMRangeLeftSensorName,
+			protoio.DTMRangeFrontSensorName,
+			protoio.DTMRangeRightSensorName,
+			protoio.DTMRewardSensorName,
+			protoio.DTMRunProgressSensorName,
+			protoio.DTMStepProgressSensorName,
+			protoio.DTMSwitchedSensorName,
+		},
+		ActuatorIDs: []string{protoio.DTMMoveActuatorName},
+		Neurons: []model.Neuron{
+			{ID: "rl", Activation: "identity"},
+			{ID: "rf", Activation: "identity"},
+			{ID: "rr", Activation: "identity"},
+			{ID: "r", Activation: "identity"},
+			{ID: "rp", Activation: "identity"},
+			{ID: "sp", Activation: "identity"},
+			{ID: "sw", Activation: "identity"},
+			{ID: "m", Activation: "tanh"},
+		},
+		Synapses: []model.Synapse{
+			{From: "rl", To: "m", Weight: 0.8, Enabled: true},
+			{From: "rr", To: "m", Weight: 0.8, Enabled: true},
+			{From: "rp", To: "m", Weight: 0.2, Enabled: true},
+			{From: "sp", To: "m", Weight: 0.1, Enabled: true},
+			{From: "sw", To: "m", Weight: -0.1, Enabled: true},
+		},
+	}
+
+	sensors := map[string]protoio.Sensor{
+		protoio.DTMRangeLeftSensorName:    protoio.NewScalarInputSensor(0),
+		protoio.DTMRangeFrontSensorName:   protoio.NewScalarInputSensor(0),
+		protoio.DTMRangeRightSensorName:   protoio.NewScalarInputSensor(0),
+		protoio.DTMRewardSensorName:       protoio.NewScalarInputSensor(0),
+		protoio.DTMRunProgressSensorName:  protoio.NewScalarInputSensor(0),
+		protoio.DTMStepProgressSensorName: protoio.NewScalarInputSensor(0),
+		protoio.DTMSwitchedSensorName:     protoio.NewScalarInputSensor(0),
+	}
+	actuators := map[string]protoio.Actuator{
+		protoio.DTMMoveActuatorName: protoio.NewScalarOutputActuator(),
+	}
+
+	cortex, err := agent.NewCortex(
+		"dtm-agent-extended-io",
+		genome,
+		sensors,
+		actuators,
+		[]string{"rl", "rf", "rr", "r", "rp", "sp", "sw"},
+		[]string{"m"},
+		nil,
+	)
+	if err != nil {
+		t.Fatalf("new cortex: %v", err)
+	}
+
+	scape := DTMScape{}
+	fitness, trace, err := scape.Evaluate(context.Background(), cortex)
+	if err != nil {
+		t.Fatalf("evaluate: %v", err)
+	}
+	if fitness <= 0 {
+		t.Fatalf("expected positive fitness, got %f", fitness)
+	}
+	if _, ok := trace["mean_run_progress"].(float64); !ok {
+		t.Fatalf("trace missing mean_run_progress: %+v", trace)
+	}
+	if _, ok := trace["mean_step_progress"].(float64); !ok {
+		t.Fatalf("trace missing mean_step_progress: %+v", trace)
+	}
+}
+
 func TestDTMScapeEvaluateWithRangeOnlyIOComponents(t *testing.T) {
 	genome := model.Genome{
 		SensorIDs: []string{
@@ -252,6 +325,12 @@ func TestDTMScapeTraceIncludesRunDiagnostics(t *testing.T) {
 	}
 	if _, ok := trace["fitness_delta"].(float64); !ok {
 		t.Fatalf("trace missing fitness_delta: %+v", trace)
+	}
+	if _, ok := trace["mean_switched_signal"].(float64); !ok {
+		t.Fatalf("trace missing mean_switched_signal: %+v", trace)
+	}
+	if width, ok := trace["feature_width"].(int); !ok || width != 7 {
+		t.Fatalf("expected feature_width=7, got %+v", trace)
 	}
 	if _, ok := trace["switch_triggered_at"].(int); !ok {
 		t.Fatalf("trace missing switch_triggered_at: %+v", trace)

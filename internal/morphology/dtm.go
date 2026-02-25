@@ -14,6 +14,9 @@ func (DTMMorphology) Sensors() []string {
 		protoio.DTMRangeFrontSensorName,
 		protoio.DTMRangeRightSensorName,
 		protoio.DTMRewardSensorName,
+		protoio.DTMRunProgressSensorName,
+		protoio.DTMStepProgressSensorName,
+		protoio.DTMSwitchedSensorName,
 	}
 }
 

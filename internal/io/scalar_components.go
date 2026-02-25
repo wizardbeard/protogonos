@@ -29,6 +29,9 @@ const (
 	DTMRangeFrontSensorName      = "dtm_range_front"
 	DTMRangeRightSensorName      = "dtm_range_right"
 	DTMRewardSensorName          = "dtm_reward"
+	DTMRunProgressSensorName     = "dtm_run_progress"
+	DTMStepProgressSensorName    = "dtm_step_progress"
+	DTMSwitchedSensorName        = "dtm_switched"
 	DTMMoveActuatorName          = "dtm_move"
 	GTSAInputSensorName          = "gtsa_input"
 	GTSADeltaSensorName          = "gtsa_delta"
@@ -343,6 +346,51 @@ func initializeDefaultComponents() {
 	}
 	err = RegisterSensorWithSpec(SensorSpec{
 		Name:          DTMRewardSensorName,
+		Factory:       func() Sensor { return NewScalarInputSensor(0) },
+		SchemaVersion: SupportedSchemaVersion,
+		CodecVersion:  SupportedCodecVersion,
+		Compatible: func(scape string) error {
+			if scape != "dtm" {
+				return fmt.Errorf("unsupported scape: %s", scape)
+			}
+			return nil
+		},
+	})
+	if err != nil {
+		panic(err)
+	}
+	err = RegisterSensorWithSpec(SensorSpec{
+		Name:          DTMRunProgressSensorName,
+		Factory:       func() Sensor { return NewScalarInputSensor(0) },
+		SchemaVersion: SupportedSchemaVersion,
+		CodecVersion:  SupportedCodecVersion,
+		Compatible: func(scape string) error {
+			if scape != "dtm" {
+				return fmt.Errorf("unsupported scape: %s", scape)
+			}
+			return nil
+		},
+	})
+	if err != nil {
+		panic(err)
+	}
+	err = RegisterSensorWithSpec(SensorSpec{
+		Name:          DTMStepProgressSensorName,
+		Factory:       func() Sensor { return NewScalarInputSensor(0) },
+		SchemaVersion: SupportedSchemaVersion,
+		CodecVersion:  SupportedCodecVersion,
+		Compatible: func(scape string) error {
+			if scape != "dtm" {
+				return fmt.Errorf("unsupported scape: %s", scape)
+			}
+			return nil
+		},
+	})
+	if err != nil {
+		panic(err)
+	}
+	err = RegisterSensorWithSpec(SensorSpec{
+		Name:          DTMSwitchedSensorName,
 		Factory:       func() Sensor { return NewScalarInputSensor(0) },
 		SchemaVersion: SupportedSchemaVersion,
 		CodecVersion:  SupportedCodecVersion,

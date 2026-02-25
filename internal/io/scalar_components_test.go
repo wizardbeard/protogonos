@@ -202,6 +202,27 @@ func TestScalarComponentsRegistered(t *testing.T) {
 	if dtmReward.Name() != ScalarInputSensorName {
 		t.Fatalf("unexpected dtm reward sensor name: %s", dtmReward.Name())
 	}
+	dtmRunProgress, err := ResolveSensor(DTMRunProgressSensorName, "dtm")
+	if err != nil {
+		t.Fatalf("resolve dtm run-progress sensor: %v", err)
+	}
+	if dtmRunProgress.Name() != ScalarInputSensorName {
+		t.Fatalf("unexpected dtm run-progress sensor name: %s", dtmRunProgress.Name())
+	}
+	dtmStepProgress, err := ResolveSensor(DTMStepProgressSensorName, "dtm")
+	if err != nil {
+		t.Fatalf("resolve dtm step-progress sensor: %v", err)
+	}
+	if dtmStepProgress.Name() != ScalarInputSensorName {
+		t.Fatalf("unexpected dtm step-progress sensor name: %s", dtmStepProgress.Name())
+	}
+	dtmSwitched, err := ResolveSensor(DTMSwitchedSensorName, "dtm")
+	if err != nil {
+		t.Fatalf("resolve dtm switched sensor: %v", err)
+	}
+	if dtmSwitched.Name() != ScalarInputSensorName {
+		t.Fatalf("unexpected dtm switched sensor name: %s", dtmSwitched.Name())
+	}
 
 	dtmMove, err := ResolveActuator(DTMMoveActuatorName, "dtm")
 	if err != nil {
@@ -421,6 +442,9 @@ func TestScalarComponentsRegistered(t *testing.T) {
 	}
 	if _, err := ResolveSensor(DTMRangeFrontSensorName, "dtm_sim"); err != nil {
 		t.Fatalf("resolve dtm alias sensor dtm_sim: %v", err)
+	}
+	if _, err := ResolveSensor(DTMRunProgressSensorName, "dtm_sim"); err != nil {
+		t.Fatalf("resolve dtm run-progress alias sensor dtm_sim: %v", err)
 	}
 	if _, err := ResolveSensor(GTSAInputSensorName, "scape_GTSA"); err != nil {
 		t.Fatalf("resolve gtsa alias sensor scape_GTSA: %v", err)

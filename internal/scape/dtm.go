@@ -122,8 +122,8 @@ func evaluateDTMWithStep(ctx context.Context, runner StepAgent, cfg dtmModeConfi
 		ctx,
 		runner.ID(),
 		cfg,
-		func(ctx context.Context, sense []float64) (float64, error) {
-			out, err := runner.RunStep(ctx, sense)
+		func(ctx context.Context, sense dtmSenseInput) (float64, error) {
+			out, err := runner.RunStep(ctx, sense.vector)
 			if err != nil {
 				return 0, err
 			}
@@ -145,18 +145,27 @@ func evaluateDTMWithTick(ctx context.Context, ticker TickAgent, cfg dtmModeConfi
 		ctx,
 		ticker.ID(),
 		cfg,
-		func(ctx context.Context, sense []float64) (float64, error) {
+		func(ctx context.Context, sense dtmSenseInput) (float64, error) {
 			if ioBindings.leftSetter != nil {
-				ioBindings.leftSetter.Set(sense[0])
+				ioBindings.leftSetter.Set(sense.left)
 			}
 			if ioBindings.frontSetter != nil {
-				ioBindings.frontSetter.Set(sense[1])
+				ioBindings.frontSetter.Set(sense.front)
 			}
 			if ioBindings.rightSetter != nil {
-				ioBindings.rightSetter.Set(sense[2])
+				ioBindings.rightSetter.Set(sense.right)
 			}
 			if ioBindings.rewardSetter != nil {
-				ioBindings.rewardSetter.Set(sense[3])
+				ioBindings.rewardSetter.Set(sense.reward)
+			}
+			if ioBindings.runProgressSetter != nil {
+				ioBindings.runProgressSetter.Set(sense.runProgress)
+			}
+			if ioBindings.stepProgressSetter != nil {
+				ioBindings.stepProgressSetter.Set(sense.stepProgress)
+			}
+			if ioBindings.switchedSetter != nil {
+				ioBindings.switchedSetter.Set(sense.switched)
 			}
 
 			out, err := ticker.Tick(ctx)
@@ -180,7 +189,7 @@ func evaluateDTM(
 	ctx context.Context,
 	agentID string,
 	cfg dtmModeConfig,
-	chooseMove func(context.Context, []float64) (float64, error),
+	chooseMove func(context.Context, dtmSenseInput) (float64, error),
 ) (Fitness, Trace, error) {
 	episode := newDTMEpisode(agentID, cfg)
 	terminalRuns := 0
@@ -190,6 +199,9 @@ func evaluateDTM(
 	runStepsAcc := 0
 	maxRunStepIndex := 0
 	terminalRewardTotal := 0.0
+	runProgressAcc := 0.0
+	stepProgressAcc := 0.0
+	switchedSignalAcc := 0.0
 	leftTerminalRuns := 0
 	rightTerminalRuns := 0
 	switchTriggeredAt := -1
@@ -220,15 +232,34 @@ func evaluateDTM(
 				break
 			}
 
-			sense, err := episode.sense()
+			baseSense, err := episode.sense()
 			if err != nil {
 				return 0, nil, err
+			}
+			runProgress := dtmRunProgress(episode.runIndex, episode.totalRuns)
+			stepProgress := dtmStepProgress(episode.stepIndex)
+			switchedSignal := 0.0
+			if episode.switched {
+				switchedSignal = 1
+			}
+			sense := dtmSenseInput{
+				vector:       append(append([]float64{}, baseSense...), runProgress, stepProgress, switchedSignal),
+				left:         baseSense[0],
+				front:        baseSense[1],
+				right:        baseSense[2],
+				reward:       baseSense[3],
+				runProgress:  runProgress,
+				stepProgress: stepProgress,
+				switched:     switchedSignal,
 			}
 
 			move, err := chooseMove(ctx, sense)
 			if err != nil {
 				return 0, nil, err
 			}
+			runProgressAcc += runProgress
+			stepProgressAcc += stepProgress
+			switchedSignalAcc += switchedSignal
 
 			done, crashed, reachedTerminal, reward, terminalPosition, err := episode.applyMove(move)
 			if err != nil {
@@ -266,6 +297,15 @@ func evaluateDTM(
 	}
 	fitnessStart := 50.0
 	fitnessDelta := episode.fitnessAcc - fitnessStart
+	meanRunProgress := 0.0
+	meanStepProgress := 0.0
+	meanSwitchedSignal := 0.0
+	if steps > 0 {
+		denom := float64(steps)
+		meanRunProgress = runProgressAcc / denom
+		meanStepProgress = stepProgressAcc / denom
+		meanSwitchedSignal = switchedSignalAcc / denom
+	}
 
 	return Fitness(episode.fitnessAcc), Trace{
 		"fitness_acc":            episode.fitnessAcc,
@@ -290,7 +330,22 @@ func evaluateDTM(
 		"last_step_index":        episode.stepIndex,
 		"switch_spread_floor":    cfg.switchFloor,
 		"switch_spread_interval": cfg.switchSpread,
+		"feature_width":          7,
+		"mean_run_progress":      meanRunProgress,
+		"mean_step_progress":     meanStepProgress,
+		"mean_switched_signal":   meanSwitchedSignal,
 	}, nil
+}
+
+type dtmSenseInput struct {
+	vector       []float64
+	left         float64
+	front        float64
+	right        float64
+	reward       float64
+	runProgress  float64
+	stepProgress float64
+	switched     float64
 }
 
 func newDTMEpisode(agentID string, cfg dtmModeConfig) dtmEpisode {
@@ -455,11 +510,14 @@ func (e *dtmEpisode) resetRun() {
 }
 
 type dtmIOBindings struct {
-	leftSetter   protoio.ScalarSensorSetter
-	frontSetter  protoio.ScalarSensorSetter
-	rightSetter  protoio.ScalarSensorSetter
-	rewardSetter protoio.ScalarSensorSetter
-	moveOutput   protoio.SnapshotActuator
+	leftSetter         protoio.ScalarSensorSetter
+	frontSetter        protoio.ScalarSensorSetter
+	rightSetter        protoio.ScalarSensorSetter
+	rewardSetter       protoio.ScalarSensorSetter
+	runProgressSetter  protoio.ScalarSensorSetter
+	stepProgressSetter protoio.ScalarSensorSetter
+	switchedSetter     protoio.ScalarSensorSetter
+	moveOutput         protoio.SnapshotActuator
 }
 
 func dtmIO(agent TickAgent) (dtmIOBindings, error) {
@@ -505,6 +563,18 @@ func dtmIO(agent TickAgent) (dtmIOBindings, error) {
 	if err != nil {
 		return dtmIOBindings{}, err
 	}
+	runProgressSetter, _, err := resolveOptionalDTMSetter(typed, protoio.DTMRunProgressSensorName)
+	if err != nil {
+		return dtmIOBindings{}, err
+	}
+	stepProgressSetter, _, err := resolveOptionalDTMSetter(typed, protoio.DTMStepProgressSensorName)
+	if err != nil {
+		return dtmIOBindings{}, err
+	}
+	switchedSetter, _, err := resolveOptionalDTMSetter(typed, protoio.DTMSwitchedSensorName)
+	if err != nil {
+		return dtmIOBindings{}, err
+	}
 	if rangeCount == 0 && !hasReward {
 		return dtmIOBindings{}, fmt.Errorf("agent %s missing dtm sensing surface: expected range_sense and/or reward sensor", agent.ID())
 	}
@@ -519,11 +589,14 @@ func dtmIO(agent TickAgent) (dtmIOBindings, error) {
 	}
 
 	return dtmIOBindings{
-		leftSetter:   leftSetter,
-		frontSetter:  frontSetter,
-		rightSetter:  rightSetter,
-		rewardSetter: rewardSetter,
-		moveOutput:   output,
+		leftSetter:         leftSetter,
+		frontSetter:        frontSetter,
+		rightSetter:        rightSetter,
+		rewardSetter:       rewardSetter,
+		runProgressSetter:  runProgressSetter,
+		stepProgressSetter: stepProgressSetter,
+		switchedSetter:     switchedSetter,
+		moveOutput:         output,
 	}, nil
 }
 
@@ -542,4 +615,26 @@ func resolveOptionalDTMSetter(
 		return nil, false, fmt.Errorf("sensor %s does not support scalar set", sensorID)
 	}
 	return setter, true, nil
+}
+
+func dtmRunProgress(runIndex, totalRuns int) float64 {
+	if totalRuns <= 1 {
+		return 1
+	}
+	return clampDTM(float64(runIndex)/float64(totalRuns-1), 0, 1)
+}
+
+func dtmStepProgress(stepIndex int) float64 {
+	// Delayed T-maze episodes are typically short; keep a stable bounded signal.
+	return clampDTM(float64(stepIndex)/3.0, 0, 1)
+}
+
+func clampDTM(v, lo, hi float64) float64 {
+	if v < lo {
+		return lo
+	}
+	if v > hi {
+		return hi
+	}
+	return v
 }

@@ -54,7 +54,7 @@ func ConstructSeedPopulation(scapeName string, size int, seed int64) (SeedPopula
 	case "dtm":
 		return SeedPopulation{
 			Genomes:         seedDTMPopulation(size, seed),
-			InputNeuronIDs:  []string{"rl", "rf", "rr", "r"},
+			InputNeuronIDs:  []string{"rl", "rf", "rr", "r", "rp", "sp", "sw"},
 			OutputNeuronIDs: []string{"m"},
 		}, nil
 	case "gtsa":
@@ -314,6 +314,9 @@ func seedDTMPopulation(size int, seed int64) []model.Genome {
 				protoio.DTMRangeFrontSensorName,
 				protoio.DTMRangeRightSensorName,
 				protoio.DTMRewardSensorName,
+				protoio.DTMRunProgressSensorName,
+				protoio.DTMStepProgressSensorName,
+				protoio.DTMSwitchedSensorName,
 			},
 			ActuatorIDs: []string{protoio.DTMMoveActuatorName},
 			Neurons: []model.Neuron{
@@ -321,6 +324,9 @@ func seedDTMPopulation(size int, seed int64) []model.Genome {
 				{ID: "rf", Activation: "identity", Bias: 0},
 				{ID: "rr", Activation: "identity", Bias: 0},
 				{ID: "r", Activation: "identity", Bias: 0},
+				{ID: "rp", Activation: "identity", Bias: 0},
+				{ID: "sp", Activation: "identity", Bias: 0},
+				{ID: "sw", Activation: "identity", Bias: 0},
 				{ID: "m", Activation: "tanh", Bias: jitter(rng, 0.35)},
 			},
 			Synapses: []model.Synapse{
@@ -328,6 +334,9 @@ func seedDTMPopulation(size int, seed int64) []model.Genome {
 				{ID: "s2", From: "rf", To: "m", Weight: -0.4 + jitter(rng, 0.25), Enabled: true},
 				{ID: "s3", From: "rr", To: "m", Weight: 0.9 + jitter(rng, 0.25), Enabled: true},
 				{ID: "s4", From: "r", To: "m", Weight: 0.2 + jitter(rng, 0.15), Enabled: true},
+				{ID: "s5", From: "rp", To: "m", Weight: 0.3 + jitter(rng, 0.15), Enabled: true},
+				{ID: "s6", From: "sp", To: "m", Weight: -0.1 + jitter(rng, 0.15), Enabled: true},
+				{ID: "s7", From: "sw", To: "m", Weight: 0.2 + jitter(rng, 0.15), Enabled: true},
 			},
 		})
 	}
