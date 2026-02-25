@@ -489,7 +489,7 @@ func TestFlatlandScapeBenchmarkModeUsesDeterministicLayoutVariant(t *testing.T) 
 	if err != nil {
 		t.Fatalf("flatland benchmark config: %v", err)
 	}
-	wantVariant, wantShift := flatlandLayoutVariant(cfg, agentID)
+	wantVariant, wantShift, _ := flatlandLayoutVariant(cfg, agentID)
 	wantHeading := flatlandLayoutHeading(wantVariant)
 
 	_, traceA, err := scape.EvaluateMode(context.Background(), forager, "benchmark")
@@ -542,7 +542,7 @@ func TestFlatlandLayoutVariantRespondsToAgentIDOnlyInBenchmarkMode(t *testing.T)
 	if err != nil {
 		t.Fatalf("flatland gt config: %v", err)
 	}
-	if variant, shift := flatlandLayoutVariant(gtCfg, "agent-0"); variant != 0 || shift != 0 {
+	if variant, shift, _ := flatlandLayoutVariant(gtCfg, "agent-0"); variant != 0 || shift != 0 {
 		t.Fatalf("expected gt mode to keep fixed layout, got variant=%d shift=%d", variant, shift)
 	}
 
@@ -550,11 +550,11 @@ func TestFlatlandLayoutVariantRespondsToAgentIDOnlyInBenchmarkMode(t *testing.T)
 	if err != nil {
 		t.Fatalf("flatland benchmark config: %v", err)
 	}
-	baseline, _ := flatlandLayoutVariant(benchmarkCfg, "agent-0")
+	baseline, _, _ := flatlandLayoutVariant(benchmarkCfg, "agent-0")
 	foundDifferent := false
 	for i := 1; i < 64; i++ {
 		id := fmt.Sprintf("agent-%d", i)
-		candidate, _ := flatlandLayoutVariant(benchmarkCfg, id)
+		candidate, _, _ := flatlandLayoutVariant(benchmarkCfg, id)
 		if candidate != baseline {
 			foundDifferent = true
 			break

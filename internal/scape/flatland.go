@@ -25,6 +25,12 @@ func (FlatlandScape) EvaluateMode(ctx context.Context, agent Agent, mode string)
 	if err != nil {
 		return 0, nil, err
 	}
+	if overrides, ok := flatlandOverridesFromContext(ctx); ok {
+		cfg, err = applyFlatlandOverrides(cfg, overrides)
+		if err != nil {
+			return 0, nil, err
+		}
+	}
 
 	if ticker, ok := agent.(TickAgent); ok {
 		fitness, trace, err := evaluateFlatlandWithTick(ctx, ticker, cfg)
@@ -52,6 +58,8 @@ type flatlandModeConfig struct {
 	scannerProfile  string
 	randomizeLayout bool
 	layoutVariants  int
+	hasForcedLayout bool
+	forcedLayout    int
 }
 
 func flatlandConfigForMode(mode string) (flatlandModeConfig, error) {
@@ -332,6 +340,8 @@ func evaluateFlatland(
 		"scanner_profile_weights": flatlandScanSlice(episode.scannerWeights),
 		"layout_variant":          episode.layoutVariant,
 		"layout_shift":            episode.layoutShift,
+		"layout_forced":           episode.layoutForced,
+		"layout_variants":         max(cfg.layoutVariants, 1),
 		"mode":                    cfg.mode,
 	}, nil
 }
@@ -441,6 +451,7 @@ type flatlandEpisode struct {
 	scannerWeights   [flatlandScannerDensity]float64
 	layoutVariant    int
 	layoutShift      int
+	layoutForced     bool
 }
 
 func newFlatlandEpisode(cfg flatlandModeConfig) *flatlandEpisode {
@@ -469,7 +480,7 @@ func newFlatlandEpisodeForAgent(cfg flatlandModeConfig, agentID string) *flatlan
 	if len(wallPositions) == 0 {
 		wallPositions = []int{8, 16, 24, 32, 40}
 	}
-	layoutVariant, layoutShift := flatlandLayoutVariant(cfg, agentID)
+	layoutVariant, layoutShift, layoutForced := flatlandLayoutVariant(cfg, agentID)
 	if layoutShift != 0 {
 		foodPositions = shiftFlatlandPositions(foodPositions, layoutShift)
 		poisonPositions = shiftFlatlandPositions(poisonPositions, layoutShift)
@@ -524,16 +535,25 @@ func newFlatlandEpisodeForAgent(cfg flatlandModeConfig, agentID string) *flatlan
 		scannerWeights: scannerWeights,
 		layoutVariant:  layoutVariant,
 		layoutShift:    layoutShift,
+		layoutForced:   layoutForced,
 	}
 }
 
-func flatlandLayoutVariant(cfg flatlandModeConfig, agentID string) (variant int, shift int) {
+func flatlandLayoutVariant(cfg flatlandModeConfig, agentID string) (variant int, shift int, forced bool) {
+	if cfg.hasForcedLayout {
+		variants := cfg.layoutVariants
+		if variants <= 0 {
+			variants = 1
+		}
+		variant = positiveMod(cfg.forcedLayout, variants)
+		return variant, wrapFlatlandPosition(variant * flatlandRespawnStride), true
+	}
 	if !cfg.randomizeLayout {
-		return 0, 0
+		return 0, 0, false
 	}
 	variants := cfg.layoutVariants
 	if variants < 2 {
-		return 0, 0
+		return 0, 0, false
 	}
 	key := cfg.mode + ":" + strings.TrimSpace(agentID)
 	if key == cfg.mode+":" {
@@ -542,7 +562,7 @@ func flatlandLayoutVariant(cfg flatlandModeConfig, agentID string) (variant int,
 	hash := fnv.New32a()
 	_, _ = hash.Write([]byte(key))
 	variant = int(hash.Sum32() % uint32(variants))
-	return variant, wrapFlatlandPosition(variant * flatlandRespawnStride)
+	return variant, wrapFlatlandPosition(variant * flatlandRespawnStride), false
 }
 
 func flatlandLayoutHeading(variant int) int {
@@ -777,6 +797,21 @@ func normalizeFlatlandScannerProfile(raw string) string {
 		return flatlandScannerProfileForward
 	default:
 		return flatlandScannerProfileBalanced
+	}
+}
+
+func resolveFlatlandScannerProfile(raw string) (string, error) {
+	profile := strings.ToLower(strings.TrimSpace(raw))
+	profile = strings.ReplaceAll(profile, "_", "-")
+	switch profile {
+	case "", "default", "balanced", "balanced5", "full":
+		return flatlandScannerProfileBalanced, nil
+	case "core", "core3", "focused":
+		return flatlandScannerProfileCore, nil
+	case "forward", "forward5", "directional":
+		return flatlandScannerProfileForward, nil
+	default:
+		return "", fmt.Errorf("unsupported flatland scanner profile: %s", raw)
 	}
 }
 
@@ -1322,4 +1357,15 @@ func clamp(v, lo, hi float64) float64 {
 		return hi
 	}
 	return v
+}
+
+func positiveMod(value, modulus int) int {
+	if modulus <= 0 {
+		return 0
+	}
+	remainder := value % modulus
+	if remainder < 0 {
+		remainder += modulus
+	}
+	return remainder
 }
