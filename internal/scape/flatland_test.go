@@ -20,6 +20,19 @@ func (a scriptedStepAgent) RunStep(_ context.Context, input []float64) ([]float6
 	return a.fn(input), nil
 }
 
+func flatlandGreedyForager(input []float64) []float64 {
+	if len(input) == 0 {
+		return []float64{0}
+	}
+	if input[0] > 0 {
+		return []float64{1}
+	}
+	if input[0] < 0 {
+		return []float64{-1}
+	}
+	return []float64{0}
+}
+
 func TestFlatlandScapeForagingCollectsResources(t *testing.T) {
 	scape := FlatlandScape{}
 	stationary := scriptedStepAgent{
@@ -28,18 +41,7 @@ func TestFlatlandScapeForagingCollectsResources(t *testing.T) {
 	}
 	forager := scriptedStepAgent{
 		id: "forager",
-		fn: func(input []float64) []float64 {
-			if len(input) == 0 {
-				return []float64{0}
-			}
-			if input[0] > 0 {
-				return []float64{1}
-			}
-			if input[0] < 0 {
-				return []float64{-1}
-			}
-			return []float64{0}
-		},
+		fn: flatlandGreedyForager,
 	}
 
 	stationaryFitness, stationaryTrace, err := scape.Evaluate(context.Background(), stationary)
@@ -128,18 +130,7 @@ func TestFlatlandScapeTraceCapturesMetabolicsAndCollisions(t *testing.T) {
 	scape := FlatlandScape{}
 	forager := scriptedStepAgent{
 		id: "forager",
-		fn: func(input []float64) []float64 {
-			if len(input) < 2 {
-				return []float64{0}
-			}
-			if input[0] > 0 {
-				return []float64{1}
-			}
-			if input[0] < 0 {
-				return []float64{-1}
-			}
-			return []float64{0}
-		},
+		fn: flatlandGreedyForager,
 	}
 
 	_, trace, err := scape.Evaluate(context.Background(), forager)
@@ -155,6 +146,12 @@ func TestFlatlandScapeTraceCapturesMetabolicsAndCollisions(t *testing.T) {
 	if _, ok := trace["poison_hits"].(int); !ok {
 		t.Fatalf("trace missing poison_hits: %+v", trace)
 	}
+	if _, ok := trace["wall_collisions"].(int); !ok {
+		t.Fatalf("trace missing wall_collisions: %+v", trace)
+	}
+	if _, ok := trace["resource_respawns"].(int); !ok {
+		t.Fatalf("trace missing resource_respawns: %+v", trace)
+	}
 	if reason, ok := trace["terminal_reason"].(string); !ok || reason == "" {
 		t.Fatalf("trace missing terminal_reason: %+v", trace)
 	}
@@ -164,18 +161,7 @@ func TestFlatlandScapeEvaluateModeAnnotatesMode(t *testing.T) {
 	scape := FlatlandScape{}
 	forager := scriptedStepAgent{
 		id: "forager",
-		fn: func(input []float64) []float64 {
-			if len(input) == 0 {
-				return []float64{0}
-			}
-			if input[0] > 0 {
-				return []float64{1}
-			}
-			if input[0] < 0 {
-				return []float64{-1}
-			}
-			return []float64{0}
-		},
+		fn: flatlandGreedyForager,
 	}
 
 	_, validationTrace, err := scape.EvaluateMode(context.Background(), forager, "validation")
@@ -192,5 +178,67 @@ func TestFlatlandScapeEvaluateModeAnnotatesMode(t *testing.T) {
 	}
 	if mode, _ := testTrace["mode"].(string); mode != "test" {
 		t.Fatalf("expected test mode trace marker, got %+v", testTrace)
+	}
+}
+
+func TestFlatlandEpisodeWallCollisionPenalizesAndTracks(t *testing.T) {
+	episode := newFlatlandEpisode(flatlandModeConfig{
+		mode:            "test",
+		maxAge:          16,
+		forageGoal:      10,
+		foodPositions:   []int{7},
+		poisonPositions: []int{18},
+		wallPositions:   []int{1},
+	})
+
+	startEnergy := episode.energy
+	moveStep, hitFood, hitPoison, wallCollision, _ := episode.step(1)
+	if moveStep != 1 {
+		t.Fatalf("expected move step to record attempted right move, got %d", moveStep)
+	}
+	if hitFood || hitPoison {
+		t.Fatalf("expected wall collision step without resource collision, got food=%t poison=%t", hitFood, hitPoison)
+	}
+	if !wallCollision {
+		t.Fatalf("expected wall collision signal")
+	}
+	if episode.wallCollisions != 1 {
+		t.Fatalf("expected wall collision count=1, got %d", episode.wallCollisions)
+	}
+	if episode.energy >= startEnergy {
+		t.Fatalf("expected wall collision to reduce energy, before=%f after=%f", startEnergy, episode.energy)
+	}
+}
+
+func TestFlatlandEpisodeRespawnsFoodAwayFromConsumedCell(t *testing.T) {
+	episode := newFlatlandEpisode(flatlandModeConfig{
+		mode:            "test",
+		maxAge:          64,
+		forageGoal:      10,
+		foodPositions:   []int{1},
+		poisonPositions: []int{},
+		wallPositions:   []int{2},
+	})
+
+	if len(episode.food) == 0 {
+		t.Fatal("expected at least one food resource")
+	}
+	consumedPosition := episode.food[0].position
+	_, hitFood, _, _, _ := episode.step(1)
+	if !hitFood {
+		t.Fatalf("expected food collision on first move, episode=%+v", episode)
+	}
+
+	for i := 0; i < flatlandFoodRespawn; i++ {
+		episode.advanceRespawns()
+	}
+	if episode.food[0].cooldown != 0 {
+		t.Fatalf("expected respawned food cooldown=0, got %d", episode.food[0].cooldown)
+	}
+	if episode.food[0].position == consumedPosition {
+		t.Fatalf("expected respawned food to relocate from %d, got %d", consumedPosition, episode.food[0].position)
+	}
+	if episode.resourceRespawns == 0 {
+		t.Fatalf("expected respawn counter to increase, got %d", episode.resourceRespawns)
 	}
 }
