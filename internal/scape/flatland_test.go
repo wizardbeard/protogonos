@@ -2,6 +2,7 @@ package scape
 
 import (
 	"context"
+	"fmt"
 	"testing"
 
 	"protogonos/internal/agent"
@@ -406,11 +407,20 @@ func TestFlatlandScapeTraceCapturesMetabolicsAndCollisions(t *testing.T) {
 	if _, ok := trace["scanner_heading"].(int); !ok {
 		t.Fatalf("trace missing scanner_heading: %+v", trace)
 	}
+	if _, ok := trace["initial_heading"].(int); !ok {
+		t.Fatalf("trace missing initial_heading: %+v", trace)
+	}
 	if profile, ok := trace["scanner_profile"].(string); !ok || profile == "" {
 		t.Fatalf("trace missing scanner_profile: %+v", trace)
 	}
 	if weights, ok := trace["scanner_profile_weights"].([]float64); !ok || len(weights) != flatlandScannerDensity {
 		t.Fatalf("trace missing scanner_profile_weights len=%d: %+v", flatlandScannerDensity, trace)
+	}
+	if _, ok := trace["layout_variant"].(int); !ok {
+		t.Fatalf("trace missing layout_variant: %+v", trace)
+	}
+	if _, ok := trace["layout_shift"].(int); !ok {
+		t.Fatalf("trace missing layout_shift: %+v", trace)
 	}
 	if _, ok := trace["last_control_width"].(int); !ok {
 		t.Fatalf("trace missing last_control_width: %+v", trace)
@@ -447,6 +457,111 @@ func TestFlatlandScapeEvaluateModeAnnotatesMode(t *testing.T) {
 	}
 	if profile, _ := testTrace["scanner_profile"].(string); profile != flatlandScannerProfileBalanced {
 		t.Fatalf("expected test scanner profile %q, trace=%+v", flatlandScannerProfileBalanced, testTrace)
+	}
+
+	_, benchmarkTrace, err := scape.EvaluateMode(context.Background(), forager, "benchmark")
+	if err != nil {
+		t.Fatalf("evaluate benchmark mode: %v", err)
+	}
+	if mode, _ := benchmarkTrace["mode"].(string); mode != "benchmark" {
+		t.Fatalf("expected benchmark mode trace marker, got %+v", benchmarkTrace)
+	}
+	if profile, _ := benchmarkTrace["scanner_profile"].(string); profile != flatlandScannerProfileCore {
+		t.Fatalf("expected benchmark scanner profile %q, trace=%+v", flatlandScannerProfileCore, benchmarkTrace)
+	}
+	if _, ok := benchmarkTrace["layout_variant"].(int); !ok {
+		t.Fatalf("expected benchmark layout_variant trace marker, got %+v", benchmarkTrace)
+	}
+	if _, ok := benchmarkTrace["layout_shift"].(int); !ok {
+		t.Fatalf("expected benchmark layout_shift trace marker, got %+v", benchmarkTrace)
+	}
+}
+
+func TestFlatlandScapeBenchmarkModeUsesDeterministicLayoutVariant(t *testing.T) {
+	scape := FlatlandScape{}
+	agentID := "flatland-benchmark-agent"
+	forager := scriptedStepAgent{
+		id: agentID,
+		fn: flatlandGreedyForager,
+	}
+
+	cfg, err := flatlandConfigForMode("benchmark")
+	if err != nil {
+		t.Fatalf("flatland benchmark config: %v", err)
+	}
+	wantVariant, wantShift := flatlandLayoutVariant(cfg, agentID)
+	wantHeading := flatlandLayoutHeading(wantVariant)
+
+	_, traceA, err := scape.EvaluateMode(context.Background(), forager, "benchmark")
+	if err != nil {
+		t.Fatalf("evaluate benchmark mode first run: %v", err)
+	}
+	_, traceB, err := scape.EvaluateMode(context.Background(), forager, "benchmark")
+	if err != nil {
+		t.Fatalf("evaluate benchmark mode second run: %v", err)
+	}
+
+	variantA, ok := traceA["layout_variant"].(int)
+	if !ok {
+		t.Fatalf("missing layout_variant on first run: %+v", traceA)
+	}
+	shiftA, ok := traceA["layout_shift"].(int)
+	if !ok {
+		t.Fatalf("missing layout_shift on first run: %+v", traceA)
+	}
+	initialHeadingA, ok := traceA["initial_heading"].(int)
+	if !ok {
+		t.Fatalf("missing initial_heading on first run: %+v", traceA)
+	}
+	if variantA != wantVariant || shiftA != wantShift || initialHeadingA != wantHeading {
+		t.Fatalf(
+			"unexpected deterministic layout metadata first run: got variant=%d shift=%d heading=%d want variant=%d shift=%d heading=%d",
+			variantA,
+			shiftA,
+			initialHeadingA,
+			wantVariant,
+			wantShift,
+			wantHeading,
+		)
+	}
+
+	variantB, _ := traceB["layout_variant"].(int)
+	shiftB, _ := traceB["layout_shift"].(int)
+	initialHeadingB, _ := traceB["initial_heading"].(int)
+	if variantA != variantB || shiftA != shiftB || initialHeadingA != initialHeadingB {
+		t.Fatalf(
+			"expected deterministic benchmark layout metadata across runs, first=%+v second=%+v",
+			traceA,
+			traceB,
+		)
+	}
+}
+
+func TestFlatlandLayoutVariantRespondsToAgentIDOnlyInBenchmarkMode(t *testing.T) {
+	gtCfg, err := flatlandConfigForMode("gt")
+	if err != nil {
+		t.Fatalf("flatland gt config: %v", err)
+	}
+	if variant, shift := flatlandLayoutVariant(gtCfg, "agent-0"); variant != 0 || shift != 0 {
+		t.Fatalf("expected gt mode to keep fixed layout, got variant=%d shift=%d", variant, shift)
+	}
+
+	benchmarkCfg, err := flatlandConfigForMode("benchmark")
+	if err != nil {
+		t.Fatalf("flatland benchmark config: %v", err)
+	}
+	baseline, _ := flatlandLayoutVariant(benchmarkCfg, "agent-0")
+	foundDifferent := false
+	for i := 1; i < 64; i++ {
+		id := fmt.Sprintf("agent-%d", i)
+		candidate, _ := flatlandLayoutVariant(benchmarkCfg, id)
+		if candidate != baseline {
+			foundDifferent = true
+			break
+		}
+	}
+	if !foundDifferent {
+		t.Fatalf("expected benchmark layout variants to respond to agent id, baseline=%d", baseline)
 	}
 }
 

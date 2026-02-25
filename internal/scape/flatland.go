@@ -3,6 +3,7 @@ package scape
 import (
 	"context"
 	"fmt"
+	"hash/fnv"
 	"math"
 	"strings"
 
@@ -49,6 +50,8 @@ type flatlandModeConfig struct {
 	scannerSpread   float64
 	scannerOffset   float64
 	scannerProfile  string
+	randomizeLayout bool
+	layoutVariants  int
 }
 
 func flatlandConfigForMode(mode string) (flatlandModeConfig, error) {
@@ -100,6 +103,8 @@ func flatlandConfigForMode(mode string) (flatlandModeConfig, error) {
 			scannerSpread:   0.2,
 			scannerOffset:   -0.05,
 			scannerProfile:  flatlandScannerProfileCore,
+			randomizeLayout: true,
+			layoutVariants:  7,
 		}, nil
 	default:
 		return flatlandModeConfig{}, fmt.Errorf("unsupported flatland mode: %s", mode)
@@ -107,7 +112,7 @@ func flatlandConfigForMode(mode string) (flatlandModeConfig, error) {
 }
 
 func evaluateFlatlandWithStep(ctx context.Context, runner StepAgent, cfg flatlandModeConfig) (Fitness, Trace, error) {
-	fitness, trace, err := evaluateFlatland(ctx, cfg, func(ctx context.Context, sense flatlandSenseInput) (flatlandControl, error) {
+	fitness, trace, err := evaluateFlatland(ctx, runner.ID(), cfg, func(ctx context.Context, sense flatlandSenseInput) (flatlandControl, error) {
 		// Preserve manual StepAgent compatibility with the original 2-channel flatland input.
 		out, err := runner.RunStep(ctx, []float64{sense.distance, sense.energy})
 		if err != nil {
@@ -128,7 +133,7 @@ func evaluateFlatlandWithTick(ctx context.Context, ticker TickAgent, cfg flatlan
 		return 0, nil, err
 	}
 
-	fitness, trace, err := evaluateFlatland(ctx, cfg, func(ctx context.Context, sense flatlandSenseInput) (flatlandControl, error) {
+	fitness, trace, err := evaluateFlatland(ctx, ticker.ID(), cfg, func(ctx context.Context, sense flatlandSenseInput) (flatlandControl, error) {
 		if ioBindings.distanceSetter != nil {
 			ioBindings.distanceSetter.Set(sense.distance)
 		}
@@ -187,10 +192,11 @@ func evaluateFlatlandWithTick(ctx context.Context, ticker TickAgent, cfg flatlan
 
 func evaluateFlatland(
 	ctx context.Context,
+	agentID string,
 	cfg flatlandModeConfig,
 	chooseMove func(context.Context, flatlandSenseInput) (flatlandControl, error),
 ) (Fitness, Trace, error) {
-	episode := newFlatlandEpisode(cfg)
+	episode := newFlatlandEpisodeForAgent(cfg, agentID)
 	movementSteps := 0
 	foodCollisions := 0
 	poisonCollisions := 0
@@ -321,8 +327,11 @@ func evaluateFlatland(
 		"scanner_spread":          episode.scannerSpread,
 		"scanner_offset":          episode.scannerOffset,
 		"scanner_heading":         episode.heading,
+		"initial_heading":         episode.initialHeading,
 		"scanner_profile":         episode.scannerProfile,
 		"scanner_profile_weights": flatlandScanSlice(episode.scannerWeights),
+		"layout_variant":          episode.layoutVariant,
+		"layout_shift":            episode.layoutShift,
 		"mode":                    cfg.mode,
 	}, nil
 }
@@ -412,6 +421,7 @@ type flatlandControl struct {
 type flatlandEpisode struct {
 	position         int
 	heading          int
+	initialHeading   int
 	energy           float64
 	age              int
 	maxAge           int
@@ -429,9 +439,15 @@ type flatlandEpisode struct {
 	scannerOffset    float64
 	scannerProfile   string
 	scannerWeights   [flatlandScannerDensity]float64
+	layoutVariant    int
+	layoutShift      int
 }
 
 func newFlatlandEpisode(cfg flatlandModeConfig) *flatlandEpisode {
+	return newFlatlandEpisodeForAgent(cfg, "")
+}
+
+func newFlatlandEpisodeForAgent(cfg flatlandModeConfig, agentID string) *flatlandEpisode {
 	maxAge := cfg.maxAge
 	if maxAge <= 0 {
 		maxAge = flatlandDefaultMaxAge
@@ -441,17 +457,23 @@ func newFlatlandEpisode(cfg flatlandModeConfig) *flatlandEpisode {
 		forageGoal = flatlandDefaultForageGoal
 	}
 
-	foodPositions := cfg.foodPositions
+	foodPositions := append([]int(nil), cfg.foodPositions...)
 	if len(foodPositions) == 0 {
 		foodPositions = []int{5, 11, 19, 27, 35, 43}
 	}
-	poisonPositions := cfg.poisonPositions
+	poisonPositions := append([]int(nil), cfg.poisonPositions...)
 	if len(poisonPositions) == 0 {
 		poisonPositions = []int{14, 30}
 	}
-	wallPositions := cfg.wallPositions
+	wallPositions := append([]int(nil), cfg.wallPositions...)
 	if len(wallPositions) == 0 {
 		wallPositions = []int{8, 16, 24, 32, 40}
+	}
+	layoutVariant, layoutShift := flatlandLayoutVariant(cfg, agentID)
+	if layoutShift != 0 {
+		foodPositions = shiftFlatlandPositions(foodPositions, layoutShift)
+		poisonPositions = shiftFlatlandPositions(poisonPositions, layoutShift)
+		wallPositions = shiftFlatlandPositions(wallPositions, layoutShift)
 	}
 	scannerSpread := cfg.scannerSpread
 	if scannerSpread <= 0 {
@@ -484,9 +506,11 @@ func newFlatlandEpisode(cfg flatlandModeConfig) *flatlandEpisode {
 		break
 	}
 
+	initialHeading := flatlandLayoutHeading(layoutVariant)
 	return &flatlandEpisode{
 		position:       start,
-		heading:        1,
+		heading:        initialHeading,
+		initialHeading: initialHeading,
 		energy:         flatlandInitialEnergy,
 		maxAge:         maxAge,
 		forageGoal:     forageGoal,
@@ -498,7 +522,48 @@ func newFlatlandEpisode(cfg flatlandModeConfig) *flatlandEpisode {
 		scannerOffset:  scannerOffset,
 		scannerProfile: scannerProfile,
 		scannerWeights: scannerWeights,
+		layoutVariant:  layoutVariant,
+		layoutShift:    layoutShift,
 	}
+}
+
+func flatlandLayoutVariant(cfg flatlandModeConfig, agentID string) (variant int, shift int) {
+	if !cfg.randomizeLayout {
+		return 0, 0
+	}
+	variants := cfg.layoutVariants
+	if variants < 2 {
+		return 0, 0
+	}
+	key := cfg.mode + ":" + strings.TrimSpace(agentID)
+	if key == cfg.mode+":" {
+		key = cfg.mode + ":anon"
+	}
+	hash := fnv.New32a()
+	_, _ = hash.Write([]byte(key))
+	variant = int(hash.Sum32() % uint32(variants))
+	return variant, wrapFlatlandPosition(variant * flatlandRespawnStride)
+}
+
+func flatlandLayoutHeading(variant int) int {
+	if variant%2 == 0 {
+		return 1
+	}
+	return -1
+}
+
+func shiftFlatlandPositions(positions []int, shift int) []int {
+	if len(positions) == 0 {
+		return nil
+	}
+	if shift == 0 {
+		return append([]int(nil), positions...)
+	}
+	shifted := make([]int, len(positions))
+	for i, pos := range positions {
+		shifted[i] = wrapFlatlandPosition(pos + shift)
+	}
+	return shifted
 }
 
 func buildFlatlandResources(
