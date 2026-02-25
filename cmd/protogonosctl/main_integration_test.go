@@ -165,10 +165,21 @@ func TestRunCommandSQLiteConfigLoadsMap2RecAndAllowsFlagOverrides(t *testing.T) 
 	})
 
 	configPath := filepath.Join(workdir, "run_config.json")
+	llvmConfigPath := filepath.Join(workdir, "llvm_config_workflow.json")
+	llvmOverridePath := filepath.Join(workdir, "llvm_override_workflow.json")
+	workflowData := []byte(`{"name":"llvm.integration.v1","optimizations":["done","instcombine"],"modes":{"gt":{"program":"integration","max_phases":8,"initial_complexity":1.1,"target_complexity":0.5,"base_runtime":1.0}}}`)
+	if err := os.WriteFile(llvmConfigPath, workflowData, 0o644); err != nil {
+		t.Fatalf("write llvm config workflow: %v", err)
+	}
+	if err := os.WriteFile(llvmOverridePath, workflowData, 0o644); err != nil {
+		t.Fatalf("write llvm override workflow: %v", err)
+	}
+
 	cfg := map[string]any{
 		"scape":                   "xor",
 		"seed":                    71,
 		"enable_tuning":           true,
+		"llvm_workflow_json":      llvmConfigPath,
 		"validation_probe":        true,
 		"test_probe":              true,
 		"tune_perturbation_range": 1.6,
@@ -226,6 +237,7 @@ func TestRunCommandSQLiteConfigLoadsMap2RecAndAllowsFlagOverrides(t *testing.T) 
 		"--trace-step-size", "444",
 		"--start-paused",
 		"--auto-continue-ms", "5",
+		"--llvm-workflow-json", llvmOverridePath,
 	}
 	if err := run(context.Background(), args); err != nil {
 		t.Fatalf("run command with config: %v", err)
@@ -287,6 +299,9 @@ func TestRunCommandSQLiteConfigLoadsMap2RecAndAllowsFlagOverrides(t *testing.T) 
 	}
 	if runCfg.TunePerturbationRange != 1.6 || runCfg.TuneAnnealingFactor != 0.9 {
 		t.Fatalf("expected tune spread params from config range=1.6 annealing=0.9, got range=%f annealing=%f", runCfg.TunePerturbationRange, runCfg.TuneAnnealingFactor)
+	}
+	if runCfg.LLVMWorkflowJSONPath != llvmOverridePath {
+		t.Fatalf("expected llvm workflow flag override %q, got %q", llvmOverridePath, runCfg.LLVMWorkflowJSONPath)
 	}
 }
 
@@ -1011,10 +1026,21 @@ func TestBenchmarkCommandConfigLoadsMap2RecAndAllowsFlagOverrides(t *testing.T) 
 	})
 
 	configPath := filepath.Join(workdir, "benchmark_config.json")
+	llvmConfigPath := filepath.Join(workdir, "llvm_benchmark_config_workflow.json")
+	llvmOverridePath := filepath.Join(workdir, "llvm_benchmark_override_workflow.json")
+	workflowData := []byte(`{"name":"llvm.benchmark.integration.v1","optimizations":["done","licm"],"modes":{"gt":{"program":"integration-bench","max_phases":8,"initial_complexity":1.1,"target_complexity":0.5,"base_runtime":1.0}}}`)
+	if err := os.WriteFile(llvmConfigPath, workflowData, 0o644); err != nil {
+		t.Fatalf("write llvm config workflow: %v", err)
+	}
+	if err := os.WriteFile(llvmOverridePath, workflowData, 0o644); err != nil {
+		t.Fatalf("write llvm override workflow: %v", err)
+	}
+
 	cfg := map[string]any{
-		"scape":         "xor",
-		"seed":          515,
-		"enable_tuning": true,
+		"scape":              "xor",
+		"seed":               515,
+		"enable_tuning":      true,
+		"llvm_workflow_json": llvmConfigPath,
 		"pmp": map[string]any{
 			"init_specie_size": 9,
 			"generation_limit": 6,
@@ -1046,6 +1072,7 @@ func TestBenchmarkCommandConfigLoadsMap2RecAndAllowsFlagOverrides(t *testing.T) 
 		"--config", configPath,
 		"--gens", "2",
 		"--min-improvement", "-0.2",
+		"--llvm-workflow-json", llvmOverridePath,
 	}
 	if err := run(context.Background(), args); err != nil {
 		t.Fatalf("benchmark command with config: %v", err)
@@ -1063,6 +1090,17 @@ func TestBenchmarkCommandConfigLoadsMap2RecAndAllowsFlagOverrides(t *testing.T) 
 	}
 	if entries[0].Generations != 2 {
 		t.Fatalf("expected --gens override to 2, got %d", entries[0].Generations)
+	}
+	configData, err := os.ReadFile(filepath.Join("benchmarks", entries[0].RunID, "config.json"))
+	if err != nil {
+		t.Fatalf("read benchmark config artifact: %v", err)
+	}
+	var runCfg stats.RunConfig
+	if err := json.Unmarshal(configData, &runCfg); err != nil {
+		t.Fatalf("decode benchmark config artifact: %v", err)
+	}
+	if runCfg.LLVMWorkflowJSONPath != llvmOverridePath {
+		t.Fatalf("expected llvm workflow flag override %q, got %q", llvmOverridePath, runCfg.LLVMWorkflowJSONPath)
 	}
 }
 
