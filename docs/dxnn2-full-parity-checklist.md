@@ -42,7 +42,7 @@ Status keys:
 | `substrate_cpp.erl` | `partial` | CPP registry/runtime hooks implemented in baseline form. |
 | `substrate_cep.erl` | `partial` | CEP registry/runtime hooks implemented in baseline form. |
 | `benchmarker.erl` | `partial` | CLI benchmark workflow + run artifacts + parity profile loader implemented, with benchmark summary series stats (`best_mean`/`best_std`/`best_min`/`best_max`) persisted alongside initial/final improvement checks; full report/stat format parity pending. |
-| `data_extractor.erl` | `todo` | No dedicated ingestion utility module yet. |
+| `data_extractor.erl` | `partial` | Added `protogonosctl data-extract` plus reusable extraction helpers (`internal/dataextract`) for GTSA/FX/Epitopes canonical CSV generation (column selection + normalization); broader reference utility workflow breadth remains pending. |
 | `epitopes.erl` | `partial` | Epitopes scape now uses deterministic table-driven sense/classify sequencing with reference-style mode windows (`gt`/`benchmark` index surfaces) plus one-hot sequence feature windows and class-balance/margin diagnostics, and supports optional external CSV-backed table loading (`LoadEpitopesTableCSV`/`ResetEpitopesTableSource`) with configurable mode windows; full ETS utility workflow parity remains pending. |
 | `dxnn2_app.erl` | `n/a` | OTP app boot parity intentionally replaced by CLI/API runtime model. |
 | `visor.erl` | `n/a` | Visualization loop currently out of scope. |
@@ -285,6 +285,7 @@ Status keys:
 - Added optional epitopes CSV table ingestion (`LoadEpitopesTableCSV`) with configurable `gt`/`validation`/`test`/`benchmark` windows and deterministic fallback (`ResetEpitopesTableSource`) while preserving table-driven sense/classify session semantics.
 - Exposed scape dataset-source configuration through run surfaces (API `RunRequest`, CLI flags, config-file fields, and artifact persistence) so GTSA/FX/Epitopes CSV sources and bounds can be set per run invocation.
 - Added context-scoped dataset binding (`scape.WithDataSources`) and routed API runs through context overrides so GTSA/FX/Epitopes source selection is run-scoped instead of relying on global mutable source state.
+- Added a baseline `data_extractor` workflow via `protogonosctl data-extract` and `internal/dataextract` helpers, enabling canonical GTSA/FX/Epitopes CSV emission from raw CSV sources.
 - Shifted epitopes evaluation from pure surrogate sampling to a table-driven sense/classify session with explicit index-window state (`start_index`/`end_index`/`index_current`), benchmark-window routing, and binary classification rewards aligned to reference classify-step semantics.
 - Deepened `epitopes` and `scape_LLVMPhaseOrdering` surrogate behavior with sequence-derived epitopes feature windows (including one-hot extension + class diagnostics) and LLVM vector optimization-surface handling (`done` + reference pass list) with expanded runtime/selection telemetry.
 - Added cross-scape `benchmark` mode alias support (`gt`/`validation`/`test`/`benchmark`) across all mode-aware scapes, with regression coverage that enforces trace-mode materialization consistency.

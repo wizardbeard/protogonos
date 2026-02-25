@@ -74,6 +74,8 @@ func run(ctx context.Context, args []string) error {
 		return runScapeSummary(ctx, args[1:])
 	case "export":
 		return runExport(ctx, args[1:])
+	case "data-extract":
+		return runDataExtract(ctx, args[1:])
 	default:
 		return usageError(fmt.Sprintf("unknown command: %s", args[0]))
 	}
