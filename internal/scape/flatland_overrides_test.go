@@ -2,6 +2,7 @@ package scape
 
 import (
 	"context"
+	"math"
 	"strings"
 	"testing"
 )
@@ -154,6 +155,13 @@ func TestWithFlatlandOverridesRejectsInvalidValues(t *testing.T) {
 			},
 			wantErr: "layout variants",
 		},
+		{
+			name: "invalid benchmark trials",
+			input: FlatlandOverrides{
+				BenchmarkTrials: flatlandIntPtr(0),
+			},
+			wantErr: "benchmark trials",
+		},
 	}
 
 	for _, tt := range tests {
@@ -166,6 +174,72 @@ func TestWithFlatlandOverridesRejectsInvalidValues(t *testing.T) {
 				t.Fatalf("expected error containing %q, got %v", tt.wantErr, err)
 			}
 		})
+	}
+}
+
+func TestWithFlatlandOverridesAggregatesBenchmarkTrials(t *testing.T) {
+	scape := FlatlandScape{}
+	trials := 4
+	ctx, err := WithFlatlandOverrides(context.Background(), FlatlandOverrides{
+		BenchmarkTrials: &trials,
+	})
+	if err != nil {
+		t.Fatalf("with flatland overrides: %v", err)
+	}
+
+	forager := scriptedStepAgent{
+		id: "flatland-benchmark-trials-agent",
+		fn: flatlandGreedyForager,
+	}
+
+	fitness, trace, err := scape.EvaluateMode(ctx, forager, "benchmark")
+	if err != nil {
+		t.Fatalf("evaluate benchmark with trial aggregation: %v", err)
+	}
+	if aggregated, _ := trace["benchmark_aggregated"].(bool); !aggregated {
+		t.Fatalf("expected benchmark_aggregated=true, trace=%+v", trace)
+	}
+	if gotTrials, _ := trace["benchmark_trials"].(int); gotTrials != trials {
+		t.Fatalf("expected benchmark_trials=%d, trace=%+v", trials, trace)
+	}
+
+	fitnesses, ok := trace["benchmark_trial_fitnesses"].([]float64)
+	if !ok || len(fitnesses) != trials {
+		t.Fatalf("expected benchmark_trial_fitnesses len=%d, trace=%+v", trials, trace)
+	}
+	layoutVariants, ok := trace["benchmark_layout_variants"].([]int)
+	if !ok || len(layoutVariants) != trials {
+		t.Fatalf("expected benchmark_layout_variants len=%d, trace=%+v", trials, trace)
+	}
+	layoutShifts, ok := trace["benchmark_layout_shifts"].([]int)
+	if !ok || len(layoutShifts) != trials {
+		t.Fatalf("expected benchmark_layout_shifts len=%d, trace=%+v", trials, trace)
+	}
+
+	mean, ok := trace["benchmark_fitness_mean"].(float64)
+	if !ok {
+		t.Fatalf("expected benchmark_fitness_mean, trace=%+v", trace)
+	}
+	stddev, ok := trace["benchmark_fitness_stddev"].(float64)
+	if !ok {
+		t.Fatalf("expected benchmark_fitness_stddev, trace=%+v", trace)
+	}
+	minFitness, ok := trace["benchmark_fitness_min"].(float64)
+	if !ok {
+		t.Fatalf("expected benchmark_fitness_min, trace=%+v", trace)
+	}
+	maxFitness, ok := trace["benchmark_fitness_max"].(float64)
+	if !ok {
+		t.Fatalf("expected benchmark_fitness_max, trace=%+v", trace)
+	}
+	if math.Abs(float64(fitness)-mean) > 1e-9 {
+		t.Fatalf("expected returned fitness=%f to match benchmark mean=%f", fitness, mean)
+	}
+	if minFitness > maxFitness {
+		t.Fatalf("expected benchmark min <= max, got min=%f max=%f", minFitness, maxFitness)
+	}
+	if stddev < 0 {
+		t.Fatalf("expected non-negative stddev, got=%f", stddev)
 	}
 }
 

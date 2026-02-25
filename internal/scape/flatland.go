@@ -60,6 +60,7 @@ type flatlandModeConfig struct {
 	layoutVariants  int
 	hasForcedLayout bool
 	forcedLayout    int
+	benchmarkTrials int
 }
 
 func flatlandConfigForMode(mode string) (flatlandModeConfig, error) {
@@ -75,6 +76,7 @@ func flatlandConfigForMode(mode string) (flatlandModeConfig, error) {
 			scannerSpread:   flatlandScannerSpreadDefault,
 			scannerOffset:   0,
 			scannerProfile:  flatlandScannerProfileBalanced,
+			benchmarkTrials: 1,
 		}, nil
 	case "validation":
 		return flatlandModeConfig{
@@ -87,6 +89,7 @@ func flatlandConfigForMode(mode string) (flatlandModeConfig, error) {
 			scannerSpread:   0.16,
 			scannerOffset:   0.05,
 			scannerProfile:  flatlandScannerProfileForward,
+			benchmarkTrials: 1,
 		}, nil
 	case "test":
 		return flatlandModeConfig{
@@ -99,6 +102,7 @@ func flatlandConfigForMode(mode string) (flatlandModeConfig, error) {
 			scannerSpread:   flatlandScannerSpreadDefault,
 			scannerOffset:   0,
 			scannerProfile:  flatlandScannerProfileBalanced,
+			benchmarkTrials: 1,
 		}, nil
 	case "benchmark":
 		return flatlandModeConfig{
@@ -113,6 +117,7 @@ func flatlandConfigForMode(mode string) (flatlandModeConfig, error) {
 			scannerProfile:  flatlandScannerProfileCore,
 			randomizeLayout: true,
 			layoutVariants:  7,
+			benchmarkTrials: 1,
 		}, nil
 	default:
 		return flatlandModeConfig{}, fmt.Errorf("unsupported flatland mode: %s", mode)
@@ -120,7 +125,7 @@ func flatlandConfigForMode(mode string) (flatlandModeConfig, error) {
 }
 
 func evaluateFlatlandWithStep(ctx context.Context, runner StepAgent, cfg flatlandModeConfig) (Fitness, Trace, error) {
-	fitness, trace, err := evaluateFlatland(ctx, runner.ID(), cfg, func(ctx context.Context, sense flatlandSenseInput) (flatlandControl, error) {
+	fitness, trace, err := evaluateFlatlandWithAggregation(ctx, runner.ID(), cfg, func(ctx context.Context, sense flatlandSenseInput) (flatlandControl, error) {
 		// Preserve manual StepAgent compatibility with the original 2-channel flatland input.
 		out, err := runner.RunStep(ctx, []float64{sense.distance, sense.energy})
 		if err != nil {
@@ -141,7 +146,7 @@ func evaluateFlatlandWithTick(ctx context.Context, ticker TickAgent, cfg flatlan
 		return 0, nil, err
 	}
 
-	fitness, trace, err := evaluateFlatland(ctx, ticker.ID(), cfg, func(ctx context.Context, sense flatlandSenseInput) (flatlandControl, error) {
+	fitness, trace, err := evaluateFlatlandWithAggregation(ctx, ticker.ID(), cfg, func(ctx context.Context, sense flatlandSenseInput) (flatlandControl, error) {
 		if ioBindings.distanceSetter != nil {
 			ioBindings.distanceSetter.Set(sense.distance)
 		}
@@ -196,6 +201,58 @@ func evaluateFlatlandWithTick(ctx context.Context, ticker TickAgent, cfg flatlan
 	}
 	trace["control_surface"] = ioBindings.controlSurface
 	return fitness, trace, nil
+}
+
+func evaluateFlatlandWithAggregation(
+	ctx context.Context,
+	agentID string,
+	cfg flatlandModeConfig,
+	chooseMove func(context.Context, flatlandSenseInput) (flatlandControl, error),
+) (Fitness, Trace, error) {
+	trials := flatlandBenchmarkTrialCount(cfg)
+	if cfg.mode != "benchmark" || trials <= 1 {
+		fitness, trace, err := evaluateFlatland(ctx, agentID, cfg, chooseMove)
+		if err != nil {
+			return 0, nil, err
+		}
+		trace["benchmark_trials"] = 1
+		trace["benchmark_aggregated"] = false
+		return fitness, trace, nil
+	}
+
+	trialFitness := make([]float64, 0, trials)
+	layoutVariants := make([]int, 0, trials)
+	layoutShifts := make([]int, 0, trials)
+	var representative Trace
+	for i := 0; i < trials; i++ {
+		trialAgentID := flatlandTrialAgentID(agentID, i)
+		fitness, trace, err := evaluateFlatland(ctx, trialAgentID, cfg, chooseMove)
+		if err != nil {
+			return 0, nil, err
+		}
+		if i == 0 {
+			representative = trace
+		}
+		trialFitness = append(trialFitness, float64(fitness))
+		if variant, ok := trace["layout_variant"].(int); ok {
+			layoutVariants = append(layoutVariants, variant)
+		}
+		if shift, ok := trace["layout_shift"].(int); ok {
+			layoutShifts = append(layoutShifts, shift)
+		}
+	}
+
+	meanFitness, stddevFitness, minFitness, maxFitness := summarizeFlatlandTrials(trialFitness)
+	representative["benchmark_trials"] = trials
+	representative["benchmark_aggregated"] = true
+	representative["benchmark_trial_fitnesses"] = append([]float64(nil), trialFitness...)
+	representative["benchmark_layout_variants"] = append([]int(nil), layoutVariants...)
+	representative["benchmark_layout_shifts"] = append([]int(nil), layoutShifts...)
+	representative["benchmark_fitness_mean"] = meanFitness
+	representative["benchmark_fitness_stddev"] = stddevFitness
+	representative["benchmark_fitness_min"] = minFitness
+	representative["benchmark_fitness_max"] = maxFitness
+	return Fitness(meanFitness), representative, nil
 }
 
 func evaluateFlatland(
@@ -584,6 +641,47 @@ func shiftFlatlandPositions(positions []int, shift int) []int {
 		shifted[i] = wrapFlatlandPosition(pos + shift)
 	}
 	return shifted
+}
+
+func flatlandBenchmarkTrialCount(cfg flatlandModeConfig) int {
+	if cfg.benchmarkTrials <= 0 {
+		return 1
+	}
+	return cfg.benchmarkTrials
+}
+
+func flatlandTrialAgentID(agentID string, trial int) string {
+	base := strings.TrimSpace(agentID)
+	if base == "" {
+		base = "flatland-anon"
+	}
+	return fmt.Sprintf("%s#trial-%d", base, trial)
+}
+
+func summarizeFlatlandTrials(values []float64) (mean float64, stddev float64, min float64, max float64) {
+	if len(values) == 0 {
+		return 0, 0, 0, 0
+	}
+	sum := 0.0
+	min = values[0]
+	max = values[0]
+	for _, value := range values {
+		sum += value
+		if value < min {
+			min = value
+		}
+		if value > max {
+			max = value
+		}
+	}
+	mean = sum / float64(len(values))
+	variance := 0.0
+	for _, value := range values {
+		delta := value - mean
+		variance += delta * delta
+	}
+	stddev = math.Sqrt(variance / float64(len(values)))
+	return mean, stddev, min, max
 }
 
 func buildFlatlandResources(

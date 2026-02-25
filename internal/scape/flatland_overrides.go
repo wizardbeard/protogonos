@@ -16,6 +16,7 @@ type FlatlandOverrides struct {
 	RandomizeLayout    *bool
 	LayoutVariants     *int
 	ForceLayoutVariant *int
+	BenchmarkTrials    *int
 }
 
 type flatlandOverrides struct {
@@ -31,6 +32,8 @@ type flatlandOverrides struct {
 	hasLayoutVariants  bool
 	forcedLayout       int
 	hasForcedLayout    bool
+	benchmarkTrials    int
+	hasBenchmarkTrials bool
 }
 
 type flatlandOverridesContextKey struct{}
@@ -112,6 +115,14 @@ func normalizeFlatlandOverrides(raw FlatlandOverrides) (flatlandOverrides, error
 		normalized.forcedLayout = *raw.ForceLayoutVariant
 		normalized.hasForcedLayout = true
 	}
+	if raw.BenchmarkTrials != nil {
+		trials := *raw.BenchmarkTrials
+		if trials <= 0 {
+			return flatlandOverrides{}, fmt.Errorf("flatland benchmark trials must be > 0, got %d", trials)
+		}
+		normalized.benchmarkTrials = trials
+		normalized.hasBenchmarkTrials = true
+	}
 
 	return normalized, nil
 }
@@ -135,6 +146,9 @@ func applyFlatlandOverrides(cfg flatlandModeConfig, overrides flatlandOverrides)
 	if overrides.hasForcedLayout {
 		cfg.hasForcedLayout = true
 		cfg.forcedLayout = overrides.forcedLayout
+	}
+	if overrides.hasBenchmarkTrials {
+		cfg.benchmarkTrials = overrides.benchmarkTrials
 	}
 	if cfg.layoutVariants <= 0 {
 		cfg.layoutVariants = 1
