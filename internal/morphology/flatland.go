@@ -12,6 +12,12 @@ func (FlatlandMorphology) Sensors() []string {
 	return []string{
 		protoio.FlatlandDistanceSensorName,
 		protoio.FlatlandEnergySensorName,
+		protoio.FlatlandPoisonSensorName,
+		protoio.FlatlandWallSensorName,
+		protoio.FlatlandFoodProximitySensorName,
+		protoio.FlatlandPoisonProximitySensorName,
+		protoio.FlatlandWallProximitySensorName,
+		protoio.FlatlandResourceBalanceSensorName,
 	}
 }
 

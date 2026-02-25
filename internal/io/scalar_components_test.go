@@ -187,6 +187,48 @@ func TestScalarComponentsRegistered(t *testing.T) {
 	if flatEnergy.Name() != ScalarInputSensorName {
 		t.Fatalf("unexpected flatland energy sensor name: %s", flatEnergy.Name())
 	}
+	flatPoison, err := ResolveSensor(FlatlandPoisonSensorName, "flatland")
+	if err != nil {
+		t.Fatalf("resolve flatland poison sensor: %v", err)
+	}
+	if flatPoison.Name() != ScalarInputSensorName {
+		t.Fatalf("unexpected flatland poison sensor name: %s", flatPoison.Name())
+	}
+	flatWall, err := ResolveSensor(FlatlandWallSensorName, "flatland")
+	if err != nil {
+		t.Fatalf("resolve flatland wall sensor: %v", err)
+	}
+	if flatWall.Name() != ScalarInputSensorName {
+		t.Fatalf("unexpected flatland wall sensor name: %s", flatWall.Name())
+	}
+	flatFoodProximity, err := ResolveSensor(FlatlandFoodProximitySensorName, "flatland")
+	if err != nil {
+		t.Fatalf("resolve flatland food proximity sensor: %v", err)
+	}
+	if flatFoodProximity.Name() != ScalarInputSensorName {
+		t.Fatalf("unexpected flatland food proximity sensor name: %s", flatFoodProximity.Name())
+	}
+	flatPoisonProximity, err := ResolveSensor(FlatlandPoisonProximitySensorName, "flatland")
+	if err != nil {
+		t.Fatalf("resolve flatland poison proximity sensor: %v", err)
+	}
+	if flatPoisonProximity.Name() != ScalarInputSensorName {
+		t.Fatalf("unexpected flatland poison proximity sensor name: %s", flatPoisonProximity.Name())
+	}
+	flatWallProximity, err := ResolveSensor(FlatlandWallProximitySensorName, "flatland")
+	if err != nil {
+		t.Fatalf("resolve flatland wall proximity sensor: %v", err)
+	}
+	if flatWallProximity.Name() != ScalarInputSensorName {
+		t.Fatalf("unexpected flatland wall proximity sensor name: %s", flatWallProximity.Name())
+	}
+	flatResourceBalance, err := ResolveSensor(FlatlandResourceBalanceSensorName, "flatland")
+	if err != nil {
+		t.Fatalf("resolve flatland resource balance sensor: %v", err)
+	}
+	if flatResourceBalance.Name() != ScalarInputSensorName {
+		t.Fatalf("unexpected flatland resource balance sensor name: %s", flatResourceBalance.Name())
+	}
 
 	flatMove, err := ResolveActuator(FlatlandMoveActuatorName, "flatland")
 	if err != nil {

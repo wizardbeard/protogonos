@@ -126,6 +126,74 @@ func TestFlatlandScapeEvaluateWithIOComponents(t *testing.T) {
 	}
 }
 
+func TestFlatlandScapeEvaluateWithExtendedIOComponents(t *testing.T) {
+	genome := model.Genome{
+		SensorIDs: []string{
+			protoio.FlatlandPoisonSensorName,
+			protoio.FlatlandWallSensorName,
+			protoio.FlatlandFoodProximitySensorName,
+			protoio.FlatlandPoisonProximitySensorName,
+			protoio.FlatlandWallProximitySensorName,
+			protoio.FlatlandResourceBalanceSensorName,
+		},
+		ActuatorIDs: []string{protoio.FlatlandMoveActuatorName},
+		Neurons: []model.Neuron{
+			{ID: "poison", Activation: "identity"},
+			{ID: "wall", Activation: "identity"},
+			{ID: "food_prox", Activation: "identity"},
+			{ID: "poison_prox", Activation: "identity"},
+			{ID: "wall_prox", Activation: "identity"},
+			{ID: "balance", Activation: "identity"},
+			{ID: "move", Activation: "tanh"},
+		},
+		Synapses: []model.Synapse{
+			{From: "poison", To: "move", Weight: -0.8, Enabled: true},
+			{From: "wall", To: "move", Weight: -0.6, Enabled: true},
+			{From: "food_prox", To: "move", Weight: 0.9, Enabled: true},
+			{From: "poison_prox", To: "move", Weight: -0.7, Enabled: true},
+			{From: "wall_prox", To: "move", Weight: -0.5, Enabled: true},
+			{From: "balance", To: "move", Weight: 0.4, Enabled: true},
+		},
+	}
+
+	sensors := map[string]protoio.Sensor{
+		protoio.FlatlandPoisonSensorName:          protoio.NewScalarInputSensor(0),
+		protoio.FlatlandWallSensorName:            protoio.NewScalarInputSensor(0),
+		protoio.FlatlandFoodProximitySensorName:   protoio.NewScalarInputSensor(0),
+		protoio.FlatlandPoisonProximitySensorName: protoio.NewScalarInputSensor(0),
+		protoio.FlatlandWallProximitySensorName:   protoio.NewScalarInputSensor(0),
+		protoio.FlatlandResourceBalanceSensorName: protoio.NewScalarInputSensor(0),
+	}
+	actuators := map[string]protoio.Actuator{
+		protoio.FlatlandMoveActuatorName: protoio.NewScalarOutputActuator(),
+	}
+
+	cortex, err := agent.NewCortex(
+		"flatland-agent-io-extended",
+		genome,
+		sensors,
+		actuators,
+		[]string{"poison", "wall", "food_prox", "poison_prox", "wall_prox", "balance"},
+		[]string{"move"},
+		nil,
+	)
+	if err != nil {
+		t.Fatalf("new cortex: %v", err)
+	}
+
+	scape := FlatlandScape{}
+	fitness, trace, err := scape.Evaluate(context.Background(), cortex)
+	if err != nil {
+		t.Fatalf("evaluate: %v", err)
+	}
+	if fitness <= 0 {
+		t.Fatalf("expected positive fitness, got %f", fitness)
+	}
+	if width, ok := trace["feature_width"].(int); !ok || width != 8 {
+		t.Fatalf("expected extended feature width marker, trace=%+v", trace)
+	}
+}
+
 func TestFlatlandScapeTraceCapturesMetabolicsAndCollisions(t *testing.T) {
 	scape := FlatlandScape{}
 	forager := scriptedStepAgent{
@@ -154,6 +222,24 @@ func TestFlatlandScapeTraceCapturesMetabolicsAndCollisions(t *testing.T) {
 	}
 	if reason, ok := trace["terminal_reason"].(string); !ok || reason == "" {
 		t.Fatalf("trace missing terminal_reason: %+v", trace)
+	}
+	if _, ok := trace["last_poison_signal"].(float64); !ok {
+		t.Fatalf("trace missing last_poison_signal: %+v", trace)
+	}
+	if _, ok := trace["last_wall_signal"].(float64); !ok {
+		t.Fatalf("trace missing last_wall_signal: %+v", trace)
+	}
+	if _, ok := trace["last_food_proximity"].(float64); !ok {
+		t.Fatalf("trace missing last_food_proximity: %+v", trace)
+	}
+	if _, ok := trace["last_poison_proximity"].(float64); !ok {
+		t.Fatalf("trace missing last_poison_proximity: %+v", trace)
+	}
+	if _, ok := trace["last_wall_proximity"].(float64); !ok {
+		t.Fatalf("trace missing last_wall_proximity: %+v", trace)
+	}
+	if _, ok := trace["last_resource_balance"].(float64); !ok {
+		t.Fatalf("trace missing last_resource_balance: %+v", trace)
 	}
 }
 
