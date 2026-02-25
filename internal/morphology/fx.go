@@ -17,6 +17,9 @@ func (FXMorphology) Sensors() []string {
 		protoio.FXNAVSensorName,
 		protoio.FXDrawdownSensorName,
 		protoio.FXPositionSensorName,
+		protoio.FXEntrySensorName,
+		protoio.FXPercentChangeSensorName,
+		protoio.FXProfitSensorName,
 	}
 }
 

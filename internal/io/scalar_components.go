@@ -39,6 +39,9 @@ const (
 	FXNAVSensorName              = "fx_nav"
 	FXDrawdownSensorName         = "fx_drawdown"
 	FXPositionSensorName         = "fx_position"
+	FXEntrySensorName            = "fx_entry"
+	FXPercentChangeSensorName    = "fx_percent_change"
+	FXProfitSensorName           = "fx_profit"
 	FXTradeActuatorName          = "fx_trade"
 	EpitopesSignalSensorName     = "epitopes_signal"
 	EpitopesMemorySensorName     = "epitopes_memory"
@@ -466,6 +469,51 @@ func initializeDefaultComponents() {
 	}
 	err = RegisterSensorWithSpec(SensorSpec{
 		Name:          FXPositionSensorName,
+		Factory:       func() Sensor { return NewScalarInputSensor(0) },
+		SchemaVersion: SupportedSchemaVersion,
+		CodecVersion:  SupportedCodecVersion,
+		Compatible: func(scape string) error {
+			if scape != "fx" {
+				return fmt.Errorf("unsupported scape: %s", scape)
+			}
+			return nil
+		},
+	})
+	if err != nil {
+		panic(err)
+	}
+	err = RegisterSensorWithSpec(SensorSpec{
+		Name:          FXEntrySensorName,
+		Factory:       func() Sensor { return NewScalarInputSensor(0) },
+		SchemaVersion: SupportedSchemaVersion,
+		CodecVersion:  SupportedCodecVersion,
+		Compatible: func(scape string) error {
+			if scape != "fx" {
+				return fmt.Errorf("unsupported scape: %s", scape)
+			}
+			return nil
+		},
+	})
+	if err != nil {
+		panic(err)
+	}
+	err = RegisterSensorWithSpec(SensorSpec{
+		Name:          FXPercentChangeSensorName,
+		Factory:       func() Sensor { return NewScalarInputSensor(0) },
+		SchemaVersion: SupportedSchemaVersion,
+		CodecVersion:  SupportedCodecVersion,
+		Compatible: func(scape string) error {
+			if scape != "fx" {
+				return fmt.Errorf("unsupported scape: %s", scape)
+			}
+			return nil
+		},
+	})
+	if err != nil {
+		panic(err)
+	}
+	err = RegisterSensorWithSpec(SensorSpec{
+		Name:          FXProfitSensorName,
 		Factory:       func() Sensor { return NewScalarInputSensor(0) },
 		SchemaVersion: SupportedSchemaVersion,
 		CodecVersion:  SupportedCodecVersion,

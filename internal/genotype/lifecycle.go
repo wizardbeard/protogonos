@@ -66,7 +66,7 @@ func ConstructSeedPopulation(scapeName string, size int, seed int64) (SeedPopula
 	case "fx":
 		return SeedPopulation{
 			Genomes:         seedFXPopulation(size, seed),
-			InputNeuronIDs:  []string{"p", "s", "m", "v", "n", "d", "q"},
+			InputNeuronIDs:  []string{"p", "s", "m", "v", "n", "d", "q", "e", "pc", "pr"},
 			OutputNeuronIDs: []string{"t"},
 		}, nil
 	case "epitopes":
@@ -370,6 +370,9 @@ func seedFXPopulation(size int, seed int64) []model.Genome {
 				protoio.FXNAVSensorName,
 				protoio.FXDrawdownSensorName,
 				protoio.FXPositionSensorName,
+				protoio.FXEntrySensorName,
+				protoio.FXPercentChangeSensorName,
+				protoio.FXProfitSensorName,
 			},
 			ActuatorIDs: []string{protoio.FXTradeActuatorName},
 			Neurons: []model.Neuron{
@@ -380,6 +383,9 @@ func seedFXPopulation(size int, seed int64) []model.Genome {
 				{ID: "n", Activation: "identity", Bias: 0},
 				{ID: "d", Activation: "identity", Bias: 0},
 				{ID: "q", Activation: "identity", Bias: 0},
+				{ID: "e", Activation: "identity", Bias: 0},
+				{ID: "pc", Activation: "identity", Bias: 0},
+				{ID: "pr", Activation: "identity", Bias: 0},
 				{ID: "t", Activation: "tanh", Bias: jitter(rng, 0.25)},
 			},
 			Synapses: []model.Synapse{
@@ -390,6 +396,9 @@ func seedFXPopulation(size int, seed int64) []model.Genome {
 				{ID: "s5", From: "n", To: "t", Weight: 0.25 + jitter(rng, 0.15), Enabled: true},
 				{ID: "s6", From: "d", To: "t", Weight: -0.65 + jitter(rng, 0.15), Enabled: true},
 				{ID: "s7", From: "q", To: "t", Weight: 0.15 + jitter(rng, 0.15), Enabled: true},
+				{ID: "s8", From: "e", To: "t", Weight: -0.20 + jitter(rng, 0.10), Enabled: true},
+				{ID: "s9", From: "pc", To: "t", Weight: 0.45 + jitter(rng, 0.10), Enabled: true},
+				{ID: "s10", From: "pr", To: "t", Weight: 0.35 + jitter(rng, 0.10), Enabled: true},
 			},
 		})
 	}

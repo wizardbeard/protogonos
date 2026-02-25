@@ -277,6 +277,27 @@ func TestScalarComponentsRegistered(t *testing.T) {
 	if fxPosition.Name() != ScalarInputSensorName {
 		t.Fatalf("unexpected fx position sensor name: %s", fxPosition.Name())
 	}
+	fxEntry, err := ResolveSensor(FXEntrySensorName, "fx")
+	if err != nil {
+		t.Fatalf("resolve fx entry sensor: %v", err)
+	}
+	if fxEntry.Name() != ScalarInputSensorName {
+		t.Fatalf("unexpected fx entry sensor name: %s", fxEntry.Name())
+	}
+	fxPercentChange, err := ResolveSensor(FXPercentChangeSensorName, "fx")
+	if err != nil {
+		t.Fatalf("resolve fx percent-change sensor: %v", err)
+	}
+	if fxPercentChange.Name() != ScalarInputSensorName {
+		t.Fatalf("unexpected fx percent-change sensor name: %s", fxPercentChange.Name())
+	}
+	fxProfit, err := ResolveSensor(FXProfitSensorName, "fx")
+	if err != nil {
+		t.Fatalf("resolve fx profit sensor: %v", err)
+	}
+	if fxProfit.Name() != ScalarInputSensorName {
+		t.Fatalf("unexpected fx profit sensor name: %s", fxProfit.Name())
+	}
 
 	fxTrade, err := ResolveActuator(FXTradeActuatorName, "fx")
 	if err != nil {

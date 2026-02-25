@@ -122,6 +122,9 @@ func TestFXScapeEvaluateWithExtendedIOComponents(t *testing.T) {
 			protoio.FXNAVSensorName,
 			protoio.FXDrawdownSensorName,
 			protoio.FXPositionSensorName,
+			protoio.FXEntrySensorName,
+			protoio.FXPercentChangeSensorName,
+			protoio.FXProfitSensorName,
 		},
 		ActuatorIDs: []string{protoio.FXTradeActuatorName},
 		Neurons: []model.Neuron{
@@ -132,6 +135,9 @@ func TestFXScapeEvaluateWithExtendedIOComponents(t *testing.T) {
 			{ID: "nav", Activation: "identity"},
 			{ID: "dd", Activation: "identity"},
 			{ID: "pos", Activation: "identity"},
+			{ID: "entry", Activation: "identity"},
+			{ID: "pc", Activation: "identity"},
+			{ID: "profit", Activation: "identity"},
 			{ID: "trade", Activation: "tanh"},
 		},
 		Synapses: []model.Synapse{
@@ -141,18 +147,24 @@ func TestFXScapeEvaluateWithExtendedIOComponents(t *testing.T) {
 			{From: "nav", To: "trade", Weight: 0.25, Enabled: true},
 			{From: "dd", To: "trade", Weight: -0.6, Enabled: true},
 			{From: "pos", To: "trade", Weight: 0.15, Enabled: true},
+			{From: "entry", To: "trade", Weight: -0.2, Enabled: true},
+			{From: "pc", To: "trade", Weight: 0.45, Enabled: true},
+			{From: "profit", To: "trade", Weight: 0.35, Enabled: true},
 			{From: "price", To: "trade", Weight: 0.2, Enabled: true},
 		},
 	}
 
 	sensors := map[string]protoio.Sensor{
-		protoio.FXPriceSensorName:      protoio.NewScalarInputSensor(0),
-		protoio.FXSignalSensorName:     protoio.NewScalarInputSensor(0),
-		protoio.FXMomentumSensorName:   protoio.NewScalarInputSensor(0),
-		protoio.FXVolatilitySensorName: protoio.NewScalarInputSensor(0),
-		protoio.FXNAVSensorName:        protoio.NewScalarInputSensor(0),
-		protoio.FXDrawdownSensorName:   protoio.NewScalarInputSensor(0),
-		protoio.FXPositionSensorName:   protoio.NewScalarInputSensor(0),
+		protoio.FXPriceSensorName:         protoio.NewScalarInputSensor(0),
+		protoio.FXSignalSensorName:        protoio.NewScalarInputSensor(0),
+		protoio.FXMomentumSensorName:      protoio.NewScalarInputSensor(0),
+		protoio.FXVolatilitySensorName:    protoio.NewScalarInputSensor(0),
+		protoio.FXNAVSensorName:           protoio.NewScalarInputSensor(0),
+		protoio.FXDrawdownSensorName:      protoio.NewScalarInputSensor(0),
+		protoio.FXPositionSensorName:      protoio.NewScalarInputSensor(0),
+		protoio.FXEntrySensorName:         protoio.NewScalarInputSensor(0),
+		protoio.FXPercentChangeSensorName: protoio.NewScalarInputSensor(0),
+		protoio.FXProfitSensorName:        protoio.NewScalarInputSensor(0),
 	}
 	actuators := map[string]protoio.Actuator{
 		protoio.FXTradeActuatorName: protoio.NewScalarOutputActuator(),
@@ -163,7 +175,7 @@ func TestFXScapeEvaluateWithExtendedIOComponents(t *testing.T) {
 		genome,
 		sensors,
 		actuators,
-		[]string{"price", "signal", "mom", "vol", "nav", "dd", "pos"},
+		[]string{"price", "signal", "mom", "vol", "nav", "dd", "pos", "entry", "pc", "profit"},
 		[]string{"trade"},
 		nil,
 	)
@@ -206,6 +218,12 @@ func TestFXScapeTraceIncludesAccountLifecycle(t *testing.T) {
 	}
 	if _, ok := trace["margin_call"].(bool); !ok {
 		t.Fatalf("trace missing margin_call flag: %+v", trace)
+	}
+	if _, ok := trace["percentage_change"].(float64); !ok {
+		t.Fatalf("trace missing percentage_change: %+v", trace)
+	}
+	if _, ok := trace["profit"].(float64); !ok {
+		t.Fatalf("trace missing profit: %+v", trace)
 	}
 }
 
