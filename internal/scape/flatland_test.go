@@ -397,6 +397,15 @@ func TestFlatlandScapeTraceCapturesMetabolicsAndCollisions(t *testing.T) {
 	if bins, ok := trace["last_energy_scan_bins"].([]float64); !ok || len(bins) != 5 {
 		t.Fatalf("trace missing last_energy_scan_bins len=5: %+v", trace)
 	}
+	if _, ok := trace["scanner_spread"].(float64); !ok {
+		t.Fatalf("trace missing scanner_spread: %+v", trace)
+	}
+	if _, ok := trace["scanner_offset"].(float64); !ok {
+		t.Fatalf("trace missing scanner_offset: %+v", trace)
+	}
+	if _, ok := trace["scanner_heading"].(int); !ok {
+		t.Fatalf("trace missing scanner_heading: %+v", trace)
+	}
 	if _, ok := trace["last_control_width"].(int); !ok {
 		t.Fatalf("trace missing last_control_width: %+v", trace)
 	}
@@ -488,5 +497,35 @@ func TestFlatlandEpisodeRespawnsFoodAwayFromConsumedCell(t *testing.T) {
 	}
 	if episode.resourceRespawns == 0 {
 		t.Fatalf("expected respawn counter to increase, got %d", episode.resourceRespawns)
+	}
+}
+
+func TestFlatlandEpisodeScannerProbeOffsetsRespectHeadingAndOffset(t *testing.T) {
+	episode := newFlatlandEpisode(flatlandModeConfig{
+		mode:            "test",
+		maxAge:          64,
+		forageGoal:      6,
+		foodPositions:   []int{6, 12, 20, 28, 36, 44},
+		poisonPositions: []int{15, 31},
+		wallPositions:   []int{9, 17, 25, 33, 41},
+		scannerSpread:   0.2,
+		scannerOffset:   0,
+	})
+
+	episode.heading = 1
+	forward := episode.scannerProbeOffsets()
+	episode.heading = -1
+	reverse := episode.scannerProbeOffsets()
+	for i := range forward {
+		if forward[i] != -reverse[i] {
+			t.Fatalf("expected mirrored offsets at index %d, forward=%v reverse=%v", i, forward, reverse)
+		}
+	}
+
+	episode.heading = 1
+	episode.scannerOffset = 0.6
+	shifted := episode.scannerProbeOffsets()
+	if shifted[flatlandScannerDensity/2] <= forward[flatlandScannerDensity/2] {
+		t.Fatalf("expected positive scanner offset to shift center probe forward, baseline=%v shifted=%v", forward, shifted)
 	}
 }
