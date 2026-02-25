@@ -34,6 +34,7 @@ const (
 	FlatlandWallProximitySensorName   = "flatland_wall_proximity"
 	FlatlandResourceBalanceSensorName = "flatland_resource_balance"
 	FlatlandMoveActuatorName          = "flatland_move"
+	FlatlandTwoWheelsActuatorName     = "flatland_two_wheels"
 	DTMRangeLeftSensorName            = "dtm_range_left"
 	DTMRangeFrontSensorName           = "dtm_range_front"
 	DTMRangeRightSensorName           = "dtm_range_right"
@@ -1002,6 +1003,21 @@ func initializeDefaultComponents() {
 	}
 	err = RegisterActuatorWithSpec(ActuatorSpec{
 		Name:          FlatlandMoveActuatorName,
+		Factory:       func() Actuator { return NewScalarOutputActuator() },
+		SchemaVersion: SupportedSchemaVersion,
+		CodecVersion:  SupportedCodecVersion,
+		Compatible: func(scape string) error {
+			if scape != "flatland" {
+				return fmt.Errorf("unsupported scape: %s", scape)
+			}
+			return nil
+		},
+	})
+	if err != nil {
+		panic(err)
+	}
+	err = RegisterActuatorWithSpec(ActuatorSpec{
+		Name:          FlatlandTwoWheelsActuatorName,
 		Factory:       func() Actuator { return NewScalarOutputActuator() },
 		SchemaVersion: SupportedSchemaVersion,
 		CodecVersion:  SupportedCodecVersion,

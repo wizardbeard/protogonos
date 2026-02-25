@@ -124,6 +124,12 @@ func TestFlatlandScapeEvaluateWithIOComponents(t *testing.T) {
 	if _, ok := trace["energy"].(float64); !ok {
 		t.Fatalf("trace missing energy: %+v", trace)
 	}
+	if surface, _ := trace["control_surface"].(string); surface != protoio.FlatlandMoveActuatorName {
+		t.Fatalf("expected flatland_move control surface, trace=%+v", trace)
+	}
+	if width, ok := trace["last_control_width"].(int); !ok || width != 1 {
+		t.Fatalf("expected single-channel control width, trace=%+v", trace)
+	}
 }
 
 func TestFlatlandScapeEvaluateWithExtendedIOComponents(t *testing.T) {
@@ -194,6 +200,64 @@ func TestFlatlandScapeEvaluateWithExtendedIOComponents(t *testing.T) {
 	}
 }
 
+func TestFlatlandScapeEvaluateWithTwoWheelsActuator(t *testing.T) {
+	genome := model.Genome{
+		SensorIDs: []string{
+			protoio.FlatlandDistanceSensorName,
+			protoio.FlatlandEnergySensorName,
+		},
+		ActuatorIDs: []string{protoio.FlatlandTwoWheelsActuatorName},
+		Neurons: []model.Neuron{
+			{ID: "distance", Activation: "identity"},
+			{ID: "energy", Activation: "identity"},
+			{ID: "left", Activation: "tanh"},
+			{ID: "right", Activation: "tanh"},
+		},
+		Synapses: []model.Synapse{
+			{From: "distance", To: "left", Weight: -0.8, Enabled: true},
+			{From: "energy", To: "left", Weight: 0.25, Enabled: true},
+			{From: "distance", To: "right", Weight: 0.8, Enabled: true},
+			{From: "energy", To: "right", Weight: 0.25, Enabled: true},
+		},
+	}
+
+	sensors := map[string]protoio.Sensor{
+		protoio.FlatlandDistanceSensorName: protoio.NewScalarInputSensor(0),
+		protoio.FlatlandEnergySensorName:   protoio.NewScalarInputSensor(0),
+	}
+	actuators := map[string]protoio.Actuator{
+		protoio.FlatlandTwoWheelsActuatorName: protoio.NewScalarOutputActuator(),
+	}
+
+	cortex, err := agent.NewCortex(
+		"flatland-agent-two-wheels",
+		genome,
+		sensors,
+		actuators,
+		[]string{"distance", "energy"},
+		[]string{"left", "right"},
+		nil,
+	)
+	if err != nil {
+		t.Fatalf("new cortex: %v", err)
+	}
+
+	scape := FlatlandScape{}
+	fitness, trace, err := scape.Evaluate(context.Background(), cortex)
+	if err != nil {
+		t.Fatalf("evaluate: %v", err)
+	}
+	if fitness <= 0 {
+		t.Fatalf("expected positive fitness, got %f", fitness)
+	}
+	if surface, _ := trace["control_surface"].(string); surface != protoio.FlatlandTwoWheelsActuatorName {
+		t.Fatalf("expected flatland_two_wheels control surface, trace=%+v", trace)
+	}
+	if width, ok := trace["last_control_width"].(int); !ok || width != 2 {
+		t.Fatalf("expected two-channel control width, trace=%+v", trace)
+	}
+}
+
 func TestFlatlandScapeTraceCapturesMetabolicsAndCollisions(t *testing.T) {
 	scape := FlatlandScape{}
 	forager := scriptedStepAgent{
@@ -240,6 +304,12 @@ func TestFlatlandScapeTraceCapturesMetabolicsAndCollisions(t *testing.T) {
 	}
 	if _, ok := trace["last_resource_balance"].(float64); !ok {
 		t.Fatalf("trace missing last_resource_balance: %+v", trace)
+	}
+	if _, ok := trace["last_control_width"].(int); !ok {
+		t.Fatalf("trace missing last_control_width: %+v", trace)
+	}
+	if surface, ok := trace["control_surface"].(string); !ok || surface == "" {
+		t.Fatalf("trace missing control_surface: %+v", trace)
 	}
 }
 

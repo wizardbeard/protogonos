@@ -237,6 +237,13 @@ func TestScalarComponentsRegistered(t *testing.T) {
 	if flatMove.Name() != ScalarOutputActuatorName {
 		t.Fatalf("unexpected flatland move actuator name: %s", flatMove.Name())
 	}
+	flatTwoWheels, err := ResolveActuator(FlatlandTwoWheelsActuatorName, "flatland")
+	if err != nil {
+		t.Fatalf("resolve flatland two_wheels actuator: %v", err)
+	}
+	if flatTwoWheels.Name() != ScalarOutputActuatorName {
+		t.Fatalf("unexpected flatland two_wheels actuator name: %s", flatTwoWheels.Name())
+	}
 	dtmRangeLeft, err := ResolveSensor(DTMRangeLeftSensorName, "dtm")
 	if err != nil {
 		t.Fatalf("resolve dtm range-left sensor: %v", err)

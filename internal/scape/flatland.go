@@ -92,17 +92,19 @@ func flatlandConfigForMode(mode string) (flatlandModeConfig, error) {
 }
 
 func evaluateFlatlandWithStep(ctx context.Context, runner StepAgent, cfg flatlandModeConfig) (Fitness, Trace, error) {
-	return evaluateFlatland(ctx, cfg, func(ctx context.Context, sense flatlandSenseInput) (float64, error) {
+	fitness, trace, err := evaluateFlatland(ctx, cfg, func(ctx context.Context, sense flatlandSenseInput) (flatlandControl, error) {
 		// Preserve manual StepAgent compatibility with the original 2-channel flatland input.
 		out, err := runner.RunStep(ctx, []float64{sense.distance, sense.energy})
 		if err != nil {
-			return 0, err
+			return flatlandControl{}, err
 		}
-		if len(out) != 1 {
-			return 0, fmt.Errorf("flatland requires one output, got %d", len(out))
-		}
-		return out[0], nil
+		return flatlandControlFromOutput(out)
 	})
+	if err != nil {
+		return 0, nil, err
+	}
+	trace["control_surface"] = "step_output"
+	return fitness, trace, nil
 }
 
 func evaluateFlatlandWithTick(ctx context.Context, ticker TickAgent, cfg flatlandModeConfig) (Fitness, Trace, error) {
@@ -111,7 +113,7 @@ func evaluateFlatlandWithTick(ctx context.Context, ticker TickAgent, cfg flatlan
 		return 0, nil, err
 	}
 
-	return evaluateFlatland(ctx, cfg, func(ctx context.Context, sense flatlandSenseInput) (float64, error) {
+	fitness, trace, err := evaluateFlatland(ctx, cfg, func(ctx context.Context, sense flatlandSenseInput) (flatlandControl, error) {
 		if ioBindings.distanceSetter != nil {
 			ioBindings.distanceSetter.Set(sense.distance)
 		}
@@ -138,23 +140,25 @@ func evaluateFlatlandWithTick(ctx context.Context, ticker TickAgent, cfg flatlan
 		}
 		out, err := ticker.Tick(ctx)
 		if err != nil {
-			return 0, err
+			return flatlandControl{}, err
 		}
-		last := ioBindings.moveOutput.Last()
-		if len(last) > 0 {
-			return last[0], nil
+		values := ioBindings.moveOutput.Last()
+		if len(values) == 0 {
+			values = out
 		}
-		if len(out) > 0 {
-			return out[0], nil
-		}
-		return 0, nil
+		return flatlandControlFromOutput(values)
 	})
+	if err != nil {
+		return 0, nil, err
+	}
+	trace["control_surface"] = ioBindings.controlSurface
+	return fitness, trace, nil
 }
 
 func evaluateFlatland(
 	ctx context.Context,
 	cfg flatlandModeConfig,
-	chooseMove func(context.Context, flatlandSenseInput) (float64, error),
+	chooseMove func(context.Context, flatlandSenseInput) (flatlandControl, error),
 ) (Fitness, Trace, error) {
 	episode := newFlatlandEpisode(cfg)
 	movementSteps := 0
@@ -167,6 +171,7 @@ func evaluateFlatland(
 	lastPoisonProximity := 0.0
 	lastWallProximity := 0.0
 	lastResourceBalance := 0.0
+	lastControlWidth := 0
 	terminalReason := "age_limit"
 
 	for episode.age < cfg.maxAge && episode.energy > 0 {
@@ -184,12 +189,13 @@ func evaluateFlatland(
 		lastWallProximity = sense.wallProximity
 		lastResourceBalance = sense.resourceBalance
 
-		move, err := chooseMove(ctx, sense)
+		control, err := chooseMove(ctx, sense)
 		if err != nil {
 			return 0, nil, err
 		}
+		lastControlWidth = control.width
 
-		moveStep, hitFood, hitPoison, _, reason := episode.step(move)
+		moveStep, hitFood, hitPoison, _, reason := episode.step(control.move)
 		if moveStep != 0 {
 			movementSteps++
 		}
@@ -260,6 +266,7 @@ func evaluateFlatland(
 		"last_poison_proximity": lastPoisonProximity,
 		"last_wall_proximity":   lastWallProximity,
 		"last_resource_balance": lastResourceBalance,
+		"last_control_width":    lastControlWidth,
 		"feature_width":         8,
 		"mode":                  cfg.mode,
 	}, nil
@@ -307,6 +314,11 @@ type flatlandSenseInput struct {
 	poisonProximity float64
 	wallProximity   float64
 	resourceBalance float64
+}
+
+type flatlandControl struct {
+	move  float64
+	width int
 }
 
 type flatlandEpisode struct {
@@ -760,6 +772,7 @@ type flatlandIOBindings struct {
 	wallProximitySetter   protoio.ScalarSensorSetter
 	resourceBalanceSetter protoio.ScalarSensorSetter
 	moveOutput            protoio.SnapshotActuator
+	controlSurface        string
 }
 
 func flatlandIO(agent TickAgent) (flatlandIOBindings, error) {
@@ -817,13 +830,23 @@ func flatlandIO(agent TickAgent) (flatlandIOBindings, error) {
 		)
 	}
 
-	actuator, ok := typed.RegisteredActuator(protoio.FlatlandMoveActuatorName)
+	actuatorName := protoio.FlatlandTwoWheelsActuatorName
+	actuator, ok := typed.RegisteredActuator(actuatorName)
 	if !ok {
-		return flatlandIOBindings{}, fmt.Errorf("agent %s missing actuator %s", agent.ID(), protoio.FlatlandMoveActuatorName)
+		actuatorName = protoio.FlatlandMoveActuatorName
+		actuator, ok = typed.RegisteredActuator(actuatorName)
+		if !ok {
+			return flatlandIOBindings{}, fmt.Errorf(
+				"agent %s missing flatland actuator surface; expected %s or %s",
+				agent.ID(),
+				protoio.FlatlandTwoWheelsActuatorName,
+				protoio.FlatlandMoveActuatorName,
+			)
+		}
 	}
 	moveOutput, ok := actuator.(protoio.SnapshotActuator)
 	if !ok {
-		return flatlandIOBindings{}, fmt.Errorf("actuator %s does not support output snapshot", protoio.FlatlandMoveActuatorName)
+		return flatlandIOBindings{}, fmt.Errorf("actuator %s does not support output snapshot", actuatorName)
 	}
 
 	return flatlandIOBindings{
@@ -836,6 +859,7 @@ func flatlandIO(agent TickAgent) (flatlandIOBindings, error) {
 		wallProximitySetter:   wallProximitySetter,
 		resourceBalanceSetter: resourceBalanceSetter,
 		moveOutput:            moveOutput,
+		controlSurface:        actuatorName,
 	}, nil
 }
 
@@ -854,6 +878,29 @@ func resolveOptionalFlatlandSetter(
 		return nil, false, fmt.Errorf("sensor %s does not support scalar set", sensorID)
 	}
 	return setter, true, nil
+}
+
+func flatlandControlFromOutput(values []float64) (flatlandControl, error) {
+	switch len(values) {
+	case 0:
+		return flatlandControl{}, fmt.Errorf("flatland requires at least one control output, got 0")
+	case 1:
+		return flatlandControl{
+			move:  clamp(values[0], -1, 1),
+			width: 1,
+		}, nil
+	default:
+		left := clamp(values[0], -1, 1)
+		right := clamp(values[1], -1, 1)
+		avgDrive := 0.5 * (left + right)
+		differential := right - left
+		// Blend average drive with differential intent for stable 1D surrogate control.
+		move := clamp(0.65*avgDrive+0.35*differential, -1, 1)
+		return flatlandControl{
+			move:  move,
+			width: 2,
+		}, nil
+	}
 }
 
 func clamp(v, lo, hi float64) float64 {
