@@ -218,6 +218,27 @@ func TestScalarComponentsRegistered(t *testing.T) {
 	if gtsaInput.Name() != ScalarInputSensorName {
 		t.Fatalf("unexpected gtsa input sensor name: %s", gtsaInput.Name())
 	}
+	gtsaDelta, err := ResolveSensor(GTSADeltaSensorName, "gtsa")
+	if err != nil {
+		t.Fatalf("resolve gtsa delta sensor: %v", err)
+	}
+	if gtsaDelta.Name() != ScalarInputSensorName {
+		t.Fatalf("unexpected gtsa delta sensor name: %s", gtsaDelta.Name())
+	}
+	gtsaWindowMean, err := ResolveSensor(GTSAWindowMeanSensorName, "gtsa")
+	if err != nil {
+		t.Fatalf("resolve gtsa window-mean sensor: %v", err)
+	}
+	if gtsaWindowMean.Name() != ScalarInputSensorName {
+		t.Fatalf("unexpected gtsa window-mean sensor name: %s", gtsaWindowMean.Name())
+	}
+	gtsaProgress, err := ResolveSensor(GTSAProgressSensorName, "gtsa")
+	if err != nil {
+		t.Fatalf("resolve gtsa progress sensor: %v", err)
+	}
+	if gtsaProgress.Name() != ScalarInputSensorName {
+		t.Fatalf("unexpected gtsa progress sensor name: %s", gtsaProgress.Name())
+	}
 
 	gtsaPredict, err := ResolveActuator(GTSAPredictActuatorName, "gtsa")
 	if err != nil {
@@ -361,6 +382,9 @@ func TestScalarComponentsRegistered(t *testing.T) {
 	}
 	if _, err := ResolveSensor(GTSAInputSensorName, "scape_GTSA"); err != nil {
 		t.Fatalf("resolve gtsa alias sensor scape_GTSA: %v", err)
+	}
+	if _, err := ResolveSensor(GTSADeltaSensorName, "scape_GTSA"); err != nil {
+		t.Fatalf("resolve gtsa delta alias sensor scape_GTSA: %v", err)
 	}
 	if _, err := ResolveActuator(LLVMPhaseActuatorName, "scape_LLVMPhaseOrdering"); err != nil {
 		t.Fatalf("resolve llvm alias actuator scape_LLVMPhaseOrdering: %v", err)

@@ -31,6 +31,9 @@ const (
 	DTMRewardSensorName          = "dtm_reward"
 	DTMMoveActuatorName          = "dtm_move"
 	GTSAInputSensorName          = "gtsa_input"
+	GTSADeltaSensorName          = "gtsa_delta"
+	GTSAWindowMeanSensorName     = "gtsa_window_mean"
+	GTSAProgressSensorName       = "gtsa_progress"
 	GTSAPredictActuatorName      = "gtsa_predict"
 	FXPriceSensorName            = "fx_price"
 	FXSignalSensorName           = "fx_signal"
@@ -364,6 +367,51 @@ func initializeDefaultComponents() {
 	}
 	err = RegisterSensorWithSpec(SensorSpec{
 		Name:          GTSAInputSensorName,
+		Factory:       func() Sensor { return NewScalarInputSensor(0) },
+		SchemaVersion: SupportedSchemaVersion,
+		CodecVersion:  SupportedCodecVersion,
+		Compatible: func(scape string) error {
+			if scape != "gtsa" {
+				return fmt.Errorf("unsupported scape: %s", scape)
+			}
+			return nil
+		},
+	})
+	if err != nil {
+		panic(err)
+	}
+	err = RegisterSensorWithSpec(SensorSpec{
+		Name:          GTSADeltaSensorName,
+		Factory:       func() Sensor { return NewScalarInputSensor(0) },
+		SchemaVersion: SupportedSchemaVersion,
+		CodecVersion:  SupportedCodecVersion,
+		Compatible: func(scape string) error {
+			if scape != "gtsa" {
+				return fmt.Errorf("unsupported scape: %s", scape)
+			}
+			return nil
+		},
+	})
+	if err != nil {
+		panic(err)
+	}
+	err = RegisterSensorWithSpec(SensorSpec{
+		Name:          GTSAWindowMeanSensorName,
+		Factory:       func() Sensor { return NewScalarInputSensor(0) },
+		SchemaVersion: SupportedSchemaVersion,
+		CodecVersion:  SupportedCodecVersion,
+		Compatible: func(scape string) error {
+			if scape != "gtsa" {
+				return fmt.Errorf("unsupported scape: %s", scape)
+			}
+			return nil
+		},
+	})
+	if err != nil {
+		panic(err)
+	}
+	err = RegisterSensorWithSpec(SensorSpec{
+		Name:          GTSAProgressSensorName,
 		Factory:       func() Sensor { return NewScalarInputSensor(0) },
 		SchemaVersion: SupportedSchemaVersion,
 		CodecVersion:  SupportedCodecVersion,

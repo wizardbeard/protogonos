@@ -113,6 +113,69 @@ func TestGTSAScapeEvaluateWithIOComponents(t *testing.T) {
 	}
 }
 
+func TestGTSAScapeEvaluateWithExtendedIOComponents(t *testing.T) {
+	genome := model.Genome{
+		SensorIDs: []string{
+			protoio.GTSAInputSensorName,
+			protoio.GTSADeltaSensorName,
+			protoio.GTSAWindowMeanSensorName,
+			protoio.GTSAProgressSensorName,
+		},
+		ActuatorIDs: []string{protoio.GTSAPredictActuatorName},
+		Neurons: []model.Neuron{
+			{ID: "input", Activation: "identity"},
+			{ID: "delta", Activation: "identity"},
+			{ID: "mean", Activation: "identity"},
+			{ID: "progress", Activation: "identity"},
+			{ID: "predict", Activation: "identity"},
+		},
+		Synapses: []model.Synapse{
+			{From: "input", To: "predict", Weight: 0.7, Enabled: true},
+			{From: "delta", To: "predict", Weight: 0.2, Enabled: true},
+			{From: "mean", To: "predict", Weight: 0.2, Enabled: true},
+			{From: "progress", To: "predict", Weight: -0.1, Enabled: true},
+		},
+	}
+
+	sensors := map[string]protoio.Sensor{
+		protoio.GTSAInputSensorName:      protoio.NewScalarInputSensor(0),
+		protoio.GTSADeltaSensorName:      protoio.NewScalarInputSensor(0),
+		protoio.GTSAWindowMeanSensorName: protoio.NewScalarInputSensor(0),
+		protoio.GTSAProgressSensorName:   protoio.NewScalarInputSensor(0),
+	}
+	actuators := map[string]protoio.Actuator{
+		protoio.GTSAPredictActuatorName: protoio.NewScalarOutputActuator(),
+	}
+
+	cortex, err := agent.NewCortex(
+		"gtsa-agent-extended-io",
+		genome,
+		sensors,
+		actuators,
+		[]string{"input", "delta", "mean", "progress"},
+		[]string{"predict"},
+		nil,
+	)
+	if err != nil {
+		t.Fatalf("new cortex: %v", err)
+	}
+
+	scape := GTSAScape{}
+	fitness, trace, err := scape.Evaluate(context.Background(), cortex)
+	if err != nil {
+		t.Fatalf("evaluate: %v", err)
+	}
+	if fitness <= 0 {
+		t.Fatalf("expected positive fitness, got %f", fitness)
+	}
+	if _, ok := trace["mean_abs_delta"].(float64); !ok {
+		t.Fatalf("trace missing mean_abs_delta: %+v", trace)
+	}
+	if _, ok := trace["last_progress"].(float64); !ok {
+		t.Fatalf("trace missing last_progress: %+v", trace)
+	}
+}
+
 func TestGTSAScapeTraceIncludesPredictionDiagnostics(t *testing.T) {
 	scape := GTSAScape{}
 	copyInput := scriptedStepAgent{
@@ -159,6 +222,9 @@ func TestGTSAScapeTraceIncludesTableWindowState(t *testing.T) {
 	}
 	if length, ok := trace["window_length"].(int); !ok || length <= 0 {
 		t.Fatalf("trace missing window_length: %+v", trace)
+	}
+	if width, ok := trace["feature_width"].(int); !ok || width <= 0 {
+		t.Fatalf("trace missing feature_width: %+v", trace)
 	}
 	start, sok := trace["index_start"].(int)
 	current, cok := trace["index_current"].(int)

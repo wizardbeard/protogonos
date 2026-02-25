@@ -60,7 +60,7 @@ func ConstructSeedPopulation(scapeName string, size int, seed int64) (SeedPopula
 	case "gtsa":
 		return SeedPopulation{
 			Genomes:         seedGTSAPopulation(size, seed),
-			InputNeuronIDs:  []string{"x"},
+			InputNeuronIDs:  []string{"x", "d", "w", "p"},
 			OutputNeuronIDs: []string{"y"},
 		}, nil
 	case "fx":
@@ -341,14 +341,25 @@ func seedGTSAPopulation(size int, seed int64) []model.Genome {
 		population = append(population, model.Genome{
 			VersionedRecord: model.VersionedRecord{SchemaVersion: storage.CurrentSchemaVersion, CodecVersion: storage.CurrentCodecVersion},
 			ID:              fmt.Sprintf("gtsa-g0-%d", i),
-			SensorIDs:       []string{protoio.GTSAInputSensorName},
-			ActuatorIDs:     []string{protoio.GTSAPredictActuatorName},
+			SensorIDs: []string{
+				protoio.GTSAInputSensorName,
+				protoio.GTSADeltaSensorName,
+				protoio.GTSAWindowMeanSensorName,
+				protoio.GTSAProgressSensorName,
+			},
+			ActuatorIDs: []string{protoio.GTSAPredictActuatorName},
 			Neurons: []model.Neuron{
 				{ID: "x", Activation: "identity", Bias: 0},
+				{ID: "d", Activation: "identity", Bias: 0},
+				{ID: "w", Activation: "identity", Bias: 0},
+				{ID: "p", Activation: "identity", Bias: 0},
 				{ID: "y", Activation: "identity", Bias: jitter(rng, 0.3)},
 			},
 			Synapses: []model.Synapse{
 				{ID: "s1", From: "x", To: "y", Weight: jitter(rng, 1.0), Enabled: true},
+				{ID: "s2", From: "d", To: "y", Weight: jitter(rng, 0.7), Enabled: true},
+				{ID: "s3", From: "w", To: "y", Weight: jitter(rng, 0.7), Enabled: true},
+				{ID: "s4", From: "p", To: "y", Weight: jitter(rng, 0.5), Enabled: true},
 			},
 		})
 	}

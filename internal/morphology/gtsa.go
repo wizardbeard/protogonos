@@ -9,7 +9,12 @@ func (GTSAMorphology) Name() string {
 }
 
 func (GTSAMorphology) Sensors() []string {
-	return []string{protoio.GTSAInputSensorName}
+	return []string{
+		protoio.GTSAInputSensorName,
+		protoio.GTSADeltaSensorName,
+		protoio.GTSAWindowMeanSensorName,
+		protoio.GTSAProgressSensorName,
+	}
 }
 
 func (GTSAMorphology) Actuators() []string {

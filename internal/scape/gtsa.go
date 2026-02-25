@@ -51,8 +51,8 @@ func (GTSAScape) EvaluateMode(ctx context.Context, agent Agent, mode string) (Fi
 }
 
 func evaluateGTSAWithStep(ctx context.Context, runner StepAgent, cfg gtsaModeConfig) (Fitness, Trace, error) {
-	return evaluateGTSA(ctx, cfg, func(ctx context.Context, current float64) (float64, error) {
-		out, err := runner.RunStep(ctx, []float64{current})
+	return evaluateGTSA(ctx, cfg, func(ctx context.Context, percept gtsaPercept) (float64, error) {
+		out, err := runner.RunStep(ctx, percept.vector)
 		if err != nil {
 			return 0, err
 		}
@@ -64,18 +64,27 @@ func evaluateGTSAWithStep(ctx context.Context, runner StepAgent, cfg gtsaModeCon
 }
 
 func evaluateGTSAWithTick(ctx context.Context, ticker TickAgent, cfg gtsaModeConfig) (Fitness, Trace, error) {
-	inputSetter, predictOutput, err := gtsaIO(ticker)
+	io, err := gtsaIO(ticker)
 	if err != nil {
 		return 0, nil, err
 	}
 
-	return evaluateGTSA(ctx, cfg, func(ctx context.Context, current float64) (float64, error) {
-		inputSetter.Set(current)
+	return evaluateGTSA(ctx, cfg, func(ctx context.Context, percept gtsaPercept) (float64, error) {
+		io.input.Set(percept.current)
+		if io.delta != nil {
+			io.delta.Set(percept.delta)
+		}
+		if io.windowMean != nil {
+			io.windowMean.Set(percept.windowMean)
+		}
+		if io.progress != nil {
+			io.progress.Set(percept.progress)
+		}
 		out, err := ticker.Tick(ctx)
 		if err != nil {
 			return 0, err
 		}
-		lastOutput := predictOutput.Last()
+		lastOutput := io.predictOutput.Last()
 		if len(lastOutput) > 0 {
 			return lastOutput[0], nil
 		}
@@ -89,7 +98,7 @@ func evaluateGTSAWithTick(ctx context.Context, ticker TickAgent, cfg gtsaModeCon
 func evaluateGTSA(
 	ctx context.Context,
 	cfg gtsaModeConfig,
-	predict func(context.Context, float64) (float64, error),
+	predict func(context.Context, gtsaPercept) (float64, error),
 ) (Fitness, Trace, error) {
 	table := currentGTSATable(ctx)
 	state, err := newGTSAWindowState(cfg, table)
@@ -103,11 +112,11 @@ func evaluateGTSA(
 			return 0, nil, err
 		}
 
-		current, err := state.getPercept()
+		percept, err := state.getPercept()
 		if err != nil {
 			return 0, nil, err
 		}
-		if _, err := predict(ctx, current); err != nil {
+		if _, err := predict(ctx, percept); err != nil {
 			return 0, nil, err
 		}
 
@@ -135,10 +144,14 @@ func evaluateGTSA(
 			"window":             warmupSteps,
 			"window_length":      state.windowLength,
 			"window_rows":        state.totRows,
+			"feature_width":      state.windowLength,
 			"table_name":         state.info.name,
 			"index_start":        state.indexStart,
 			"index_current":      state.indexCurrent,
 			"index_end":          state.indexEnd,
+			"mean_abs_delta":     0.0,
+			"mean_window_value":  0.0,
+			"last_progress":      0.0,
 		}, nil
 	}
 
@@ -146,6 +159,9 @@ func evaluateGTSA(
 	absErr := 0.0
 	directionalCorrect := 0
 	predictionJitter := 0.0
+	absDeltaAcc := 0.0
+	windowMeanAcc := 0.0
+	lastProgress := 0.0
 	prevPrediction := 0.0
 	hasPrevPrediction := false
 	scoredSteps := 0
@@ -155,12 +171,12 @@ func evaluateGTSA(
 			return 0, nil, err
 		}
 
-		current, err := state.getPercept()
+		percept, err := state.getPercept()
 		if err != nil {
 			return 0, nil, err
 		}
 
-		predicted, err := predict(ctx, current)
+		predicted, err := predict(ctx, percept)
 		if err != nil {
 			return 0, nil, err
 		}
@@ -177,12 +193,15 @@ func evaluateGTSA(
 		squaredErr += delta * delta
 		absErr += math.Abs(delta)
 
-		if gtsaDirectionalMatch(current, predicted, expected) {
+		if gtsaDirectionalMatch(percept.current, predicted, expected) {
 			directionalCorrect++
 		}
 		if hasPrevPrediction {
 			predictionJitter += math.Abs(predicted - prevPrediction)
 		}
+		absDeltaAcc += math.Abs(percept.delta)
+		windowMeanAcc += percept.windowMean
+		lastProgress = percept.progress
 		prevPrediction = predicted
 		hasPrevPrediction = true
 		scoredSteps++
@@ -202,10 +221,14 @@ func evaluateGTSA(
 			"window":             warmupSteps,
 			"window_length":      state.windowLength,
 			"window_rows":        state.totRows,
+			"feature_width":      state.windowLength,
 			"table_name":         state.info.name,
 			"index_start":        state.indexStart,
 			"index_current":      state.indexCurrent,
 			"index_end":          state.indexEnd,
+			"mean_abs_delta":     0.0,
+			"mean_window_value":  0.0,
+			"last_progress":      0.0,
 		}, nil
 	}
 
@@ -216,6 +239,8 @@ func evaluateGTSA(
 	if scoredSteps > 1 {
 		avgJitter = predictionJitter / float64(scoredSteps-1)
 	}
+	meanAbsDelta := absDeltaAcc / float64(scoredSteps)
+	meanWindowValue := windowMeanAcc / float64(scoredSteps)
 
 	base := 1.0 / (1.0 + mae + 0.5*mse)
 	directionTerm := 0.75 + 0.25*directionAccuracy
@@ -235,10 +260,14 @@ func evaluateGTSA(
 		"window":             warmupSteps + scoredSteps,
 		"window_length":      state.windowLength,
 		"window_rows":        state.totRows,
+		"feature_width":      state.windowLength,
 		"table_name":         state.info.name,
 		"index_start":        state.indexStart,
 		"index_current":      state.indexCurrent,
 		"index_end":          state.indexEnd,
+		"mean_abs_delta":     meanAbsDelta,
+		"mean_window_value":  meanWindowValue,
+		"last_progress":      lastProgress,
 	}, nil
 }
 
@@ -274,33 +303,84 @@ func gtsaSeries(index int) float64 {
 	return trend + seasonal + regime + shock
 }
 
-func gtsaIO(agent TickAgent) (protoio.ScalarSensorSetter, protoio.SnapshotActuator, error) {
+type gtsaIOBindings struct {
+	input         protoio.ScalarSensorSetter
+	delta         protoio.ScalarSensorSetter
+	windowMean    protoio.ScalarSensorSetter
+	progress      protoio.ScalarSensorSetter
+	predictOutput protoio.SnapshotActuator
+}
+
+type gtsaPercept struct {
+	vector     []float64
+	current    float64
+	delta      float64
+	windowMean float64
+	progress   float64
+}
+
+func gtsaIO(agent TickAgent) (gtsaIOBindings, error) {
 	typed, ok := agent.(interface {
 		RegisteredSensor(id string) (protoio.Sensor, bool)
 		RegisteredActuator(id string) (protoio.Actuator, bool)
 	})
 	if !ok {
-		return nil, nil, fmt.Errorf("agent %s does not expose IO registry access", agent.ID())
+		return gtsaIOBindings{}, fmt.Errorf("agent %s does not expose IO registry access", agent.ID())
 	}
 
 	input, ok := typed.RegisteredSensor(protoio.GTSAInputSensorName)
 	if !ok {
-		return nil, nil, fmt.Errorf("agent %s missing sensor %s", agent.ID(), protoio.GTSAInputSensorName)
+		return gtsaIOBindings{}, fmt.Errorf("agent %s missing sensor %s", agent.ID(), protoio.GTSAInputSensorName)
 	}
 	inputSetter, ok := input.(protoio.ScalarSensorSetter)
 	if !ok {
-		return nil, nil, fmt.Errorf("sensor %s does not support scalar set", protoio.GTSAInputSensorName)
+		return gtsaIOBindings{}, fmt.Errorf("sensor %s does not support scalar set", protoio.GTSAInputSensorName)
+	}
+	deltaSetter, err := optionalGTSASensorSetter(typed, protoio.GTSADeltaSensorName)
+	if err != nil {
+		return gtsaIOBindings{}, err
+	}
+	windowMeanSetter, err := optionalGTSASensorSetter(typed, protoio.GTSAWindowMeanSensorName)
+	if err != nil {
+		return gtsaIOBindings{}, err
+	}
+	progressSetter, err := optionalGTSASensorSetter(typed, protoio.GTSAProgressSensorName)
+	if err != nil {
+		return gtsaIOBindings{}, err
 	}
 
 	actuator, ok := typed.RegisteredActuator(protoio.GTSAPredictActuatorName)
 	if !ok {
-		return nil, nil, fmt.Errorf("agent %s missing actuator %s", agent.ID(), protoio.GTSAPredictActuatorName)
+		return gtsaIOBindings{}, fmt.Errorf("agent %s missing actuator %s", agent.ID(), protoio.GTSAPredictActuatorName)
 	}
 	predictOutput, ok := actuator.(protoio.SnapshotActuator)
 	if !ok {
-		return nil, nil, fmt.Errorf("actuator %s does not support output snapshot", protoio.GTSAPredictActuatorName)
+		return gtsaIOBindings{}, fmt.Errorf("actuator %s does not support output snapshot", protoio.GTSAPredictActuatorName)
 	}
-	return inputSetter, predictOutput, nil
+	return gtsaIOBindings{
+		input:         inputSetter,
+		delta:         deltaSetter,
+		windowMean:    windowMeanSetter,
+		progress:      progressSetter,
+		predictOutput: predictOutput,
+	}, nil
+}
+
+func optionalGTSASensorSetter(
+	typed interface {
+		RegisteredSensor(id string) (protoio.Sensor, bool)
+	},
+	sensorID string,
+) (protoio.ScalarSensorSetter, error) {
+	sensor, ok := typed.RegisteredSensor(sensorID)
+	if !ok {
+		return nil, nil
+	}
+	setter, ok := sensor.(protoio.ScalarSensorSetter)
+	if !ok {
+		return nil, fmt.Errorf("sensor %s does not support scalar set", sensorID)
+	}
+	return setter, nil
 }
 
 type gtsaModeConfig struct {
@@ -575,16 +655,40 @@ func gtsaBoundsForMode(mode string, info gtsaInfo) (start int, end int, err erro
 	return start, end, nil
 }
 
-func (s *gtsaWindowState) getPercept() (float64, error) {
+func (s *gtsaWindowState) getPercept() (gtsaPercept, error) {
 	if s.indexCurrent <= 0 || s.indexCurrent >= len(s.values) {
-		return 0, fmt.Errorf("gtsa index out of range: %d", s.indexCurrent)
+		return gtsaPercept{}, fmt.Errorf("gtsa index out of range: %d", s.indexCurrent)
 	}
 	value := s.values[s.indexCurrent]
 	s.window = append([]float64{value}, s.window...)
 	if len(s.window) > s.windowLength {
 		s.window = s.window[:s.windowLength]
 	}
-	return value, nil
+	vector := make([]float64, s.windowLength)
+	copy(vector, s.window)
+
+	prev := value
+	if len(s.window) > 1 {
+		prev = s.window[1]
+	}
+	windowMean := 0.0
+	for _, v := range s.window {
+		windowMean += v
+	}
+	if len(s.window) > 0 {
+		windowMean /= float64(len(s.window))
+	}
+	progressDenom := maxGTSA(1, s.indexEnd-s.indexStart)
+	progress := float64(s.indexCurrent-s.indexStart) / float64(progressDenom)
+	progress = clampGTSA(progress, 0, 1)
+
+	return gtsaPercept{
+		vector:     vector,
+		current:    value,
+		delta:      value - prev,
+		windowMean: windowMean,
+		progress:   progress,
+	}, nil
 }
 
 func (s *gtsaWindowState) applyPrediction() (expected float64, done bool, err error) {

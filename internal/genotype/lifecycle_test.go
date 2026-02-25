@@ -150,13 +150,17 @@ func TestConstructSeedPopulationGTSA(t *testing.T) {
 	if len(seed.Genomes) != 2 {
 		t.Fatalf("expected 2 genomes, got %d", len(seed.Genomes))
 	}
-	if len(seed.InputNeuronIDs) != 1 || seed.InputNeuronIDs[0] != "x" {
+	if len(seed.InputNeuronIDs) != 4 || seed.InputNeuronIDs[0] != "x" || seed.InputNeuronIDs[1] != "d" || seed.InputNeuronIDs[2] != "w" || seed.InputNeuronIDs[3] != "p" {
 		t.Fatalf("unexpected input ids: %#v", seed.InputNeuronIDs)
 	}
 	if len(seed.OutputNeuronIDs) != 1 || seed.OutputNeuronIDs[0] != "y" {
 		t.Fatalf("unexpected output ids: %#v", seed.OutputNeuronIDs)
 	}
-	if len(seed.Genomes[0].SensorIDs) != 1 || seed.Genomes[0].SensorIDs[0] != protoio.GTSAInputSensorName {
+	if len(seed.Genomes[0].SensorIDs) != 4 ||
+		seed.Genomes[0].SensorIDs[0] != protoio.GTSAInputSensorName ||
+		seed.Genomes[0].SensorIDs[1] != protoio.GTSADeltaSensorName ||
+		seed.Genomes[0].SensorIDs[2] != protoio.GTSAWindowMeanSensorName ||
+		seed.Genomes[0].SensorIDs[3] != protoio.GTSAProgressSensorName {
 		t.Fatalf("unexpected gtsa sensor ids: %#v", seed.Genomes[0].SensorIDs)
 	}
 	if len(seed.Genomes[0].ActuatorIDs) != 1 || seed.Genomes[0].ActuatorIDs[0] != protoio.GTSAPredictActuatorName {
