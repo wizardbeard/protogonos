@@ -92,6 +92,76 @@ func TestEpitopesScapeEvaluateWithIOComponents(t *testing.T) {
 	}
 }
 
+func TestEpitopesScapeEvaluateWithExtendedIOComponents(t *testing.T) {
+	genome := model.Genome{
+		SensorIDs: []string{
+			protoio.EpitopesSignalSensorName,
+			protoio.EpitopesMemorySensorName,
+			protoio.EpitopesTargetSensorName,
+			protoio.EpitopesProgressSensorName,
+			protoio.EpitopesMarginSensorName,
+		},
+		ActuatorIDs: []string{protoio.EpitopesResponseActuatorName},
+		Neurons: []model.Neuron{
+			{ID: "s", Activation: "identity"},
+			{ID: "m", Activation: "identity"},
+			{ID: "t", Activation: "identity"},
+			{ID: "p", Activation: "identity"},
+			{ID: "g", Activation: "identity"},
+			{ID: "r", Activation: "tanh"},
+		},
+		Synapses: []model.Synapse{
+			{From: "s", To: "r", Weight: 0.2, Enabled: true},
+			{From: "m", To: "r", Weight: 0.2, Enabled: true},
+			{From: "t", To: "r", Weight: 1.2, Enabled: true},
+			{From: "p", To: "r", Weight: 0.05, Enabled: true},
+			{From: "g", To: "r", Weight: 0.1, Enabled: true},
+		},
+	}
+
+	sensors := map[string]protoio.Sensor{
+		protoio.EpitopesSignalSensorName:   protoio.NewScalarInputSensor(0),
+		protoio.EpitopesMemorySensorName:   protoio.NewScalarInputSensor(0),
+		protoio.EpitopesTargetSensorName:   protoio.NewScalarInputSensor(0),
+		protoio.EpitopesProgressSensorName: protoio.NewScalarInputSensor(0),
+		protoio.EpitopesMarginSensorName:   protoio.NewScalarInputSensor(0),
+	}
+	actuators := map[string]protoio.Actuator{
+		protoio.EpitopesResponseActuatorName: protoio.NewScalarOutputActuator(),
+	}
+
+	cortex, err := agent.NewCortex(
+		"epitopes-agent-extended-io",
+		genome,
+		sensors,
+		actuators,
+		[]string{"s", "m", "t", "p", "g"},
+		[]string{"r"},
+		nil,
+	)
+	if err != nil {
+		t.Fatalf("new cortex: %v", err)
+	}
+
+	scape := EpitopesScape{}
+	fitness, trace, err := scape.Evaluate(context.Background(), cortex)
+	if err != nil {
+		t.Fatalf("evaluate: %v", err)
+	}
+	if fitness < 0.9 {
+		t.Fatalf("expected high fitness with target-aware channels, got %f", fitness)
+	}
+	if _, ok := trace["mean_target"].(float64); !ok {
+		t.Fatalf("trace missing mean_target: %+v", trace)
+	}
+	if _, ok := trace["mean_progress"].(float64); !ok {
+		t.Fatalf("trace missing mean_progress: %+v", trace)
+	}
+	if _, ok := trace["mean_decision_margin"].(float64); !ok {
+		t.Fatalf("trace missing mean_decision_margin: %+v", trace)
+	}
+}
+
 func TestEpitopesScapeEvaluateModeAnnotatesMode(t *testing.T) {
 	scape := EpitopesScape{}
 	memoryAware := scriptedStepAgent{
@@ -176,6 +246,9 @@ func TestEpitopesScapeTraceIncludesTableWindowState(t *testing.T) {
 	}
 	if total, ok := trace["total"].(int); !ok || total <= 0 {
 		t.Fatalf("trace missing total sample count: %+v", trace)
+	}
+	if progress, ok := trace["mean_progress"].(float64); !ok || progress < 0 || progress > 1 {
+		t.Fatalf("trace missing mean_progress in [0,1]: %+v", trace)
 	}
 }
 

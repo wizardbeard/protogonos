@@ -342,6 +342,27 @@ func TestScalarComponentsRegistered(t *testing.T) {
 	if epitopesMemory.Name() != ScalarInputSensorName {
 		t.Fatalf("unexpected epitopes memory sensor name: %s", epitopesMemory.Name())
 	}
+	epitopesTarget, err := ResolveSensor(EpitopesTargetSensorName, "epitopes")
+	if err != nil {
+		t.Fatalf("resolve epitopes target sensor: %v", err)
+	}
+	if epitopesTarget.Name() != ScalarInputSensorName {
+		t.Fatalf("unexpected epitopes target sensor name: %s", epitopesTarget.Name())
+	}
+	epitopesProgress, err := ResolveSensor(EpitopesProgressSensorName, "epitopes")
+	if err != nil {
+		t.Fatalf("resolve epitopes progress sensor: %v", err)
+	}
+	if epitopesProgress.Name() != ScalarInputSensorName {
+		t.Fatalf("unexpected epitopes progress sensor name: %s", epitopesProgress.Name())
+	}
+	epitopesMargin, err := ResolveSensor(EpitopesMarginSensorName, "epitopes")
+	if err != nil {
+		t.Fatalf("resolve epitopes margin sensor: %v", err)
+	}
+	if epitopesMargin.Name() != ScalarInputSensorName {
+		t.Fatalf("unexpected epitopes margin sensor name: %s", epitopesMargin.Name())
+	}
 
 	epitopesResponse, err := ResolveActuator(EpitopesResponseActuatorName, "epitopes")
 	if err != nil {

@@ -208,13 +208,18 @@ func TestConstructSeedPopulationEpitopes(t *testing.T) {
 	if len(seed.Genomes) != 2 {
 		t.Fatalf("expected 2 genomes, got %d", len(seed.Genomes))
 	}
-	if len(seed.InputNeuronIDs) != 2 || seed.InputNeuronIDs[0] != "s" || seed.InputNeuronIDs[1] != "m" {
+	if len(seed.InputNeuronIDs) != 5 || seed.InputNeuronIDs[0] != "s" || seed.InputNeuronIDs[1] != "m" || seed.InputNeuronIDs[2] != "t" || seed.InputNeuronIDs[3] != "p" || seed.InputNeuronIDs[4] != "g" {
 		t.Fatalf("unexpected input ids: %#v", seed.InputNeuronIDs)
 	}
 	if len(seed.OutputNeuronIDs) != 1 || seed.OutputNeuronIDs[0] != "r" {
 		t.Fatalf("unexpected output ids: %#v", seed.OutputNeuronIDs)
 	}
-	if len(seed.Genomes[0].SensorIDs) != 2 || seed.Genomes[0].SensorIDs[0] != protoio.EpitopesSignalSensorName || seed.Genomes[0].SensorIDs[1] != protoio.EpitopesMemorySensorName {
+	if len(seed.Genomes[0].SensorIDs) != 5 ||
+		seed.Genomes[0].SensorIDs[0] != protoio.EpitopesSignalSensorName ||
+		seed.Genomes[0].SensorIDs[1] != protoio.EpitopesMemorySensorName ||
+		seed.Genomes[0].SensorIDs[2] != protoio.EpitopesTargetSensorName ||
+		seed.Genomes[0].SensorIDs[3] != protoio.EpitopesProgressSensorName ||
+		seed.Genomes[0].SensorIDs[4] != protoio.EpitopesMarginSensorName {
 		t.Fatalf("unexpected epitopes sensor ids: %#v", seed.Genomes[0].SensorIDs)
 	}
 	if len(seed.Genomes[0].ActuatorIDs) != 1 || seed.Genomes[0].ActuatorIDs[0] != protoio.EpitopesResponseActuatorName {

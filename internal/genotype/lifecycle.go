@@ -72,7 +72,7 @@ func ConstructSeedPopulation(scapeName string, size int, seed int64) (SeedPopula
 	case "epitopes":
 		return SeedPopulation{
 			Genomes:         seedEpitopesPopulation(size, seed),
-			InputNeuronIDs:  []string{"s", "m"},
+			InputNeuronIDs:  []string{"s", "m", "t", "p", "g"},
 			OutputNeuronIDs: []string{"r"},
 		}, nil
 	case "llvm-phase-ordering":
@@ -423,16 +423,28 @@ func seedEpitopesPopulation(size int, seed int64) []model.Genome {
 		population = append(population, model.Genome{
 			VersionedRecord: model.VersionedRecord{SchemaVersion: storage.CurrentSchemaVersion, CodecVersion: storage.CurrentCodecVersion},
 			ID:              fmt.Sprintf("epitopes-g0-%d", i),
-			SensorIDs:       []string{protoio.EpitopesSignalSensorName, protoio.EpitopesMemorySensorName},
-			ActuatorIDs:     []string{protoio.EpitopesResponseActuatorName},
+			SensorIDs: []string{
+				protoio.EpitopesSignalSensorName,
+				protoio.EpitopesMemorySensorName,
+				protoio.EpitopesTargetSensorName,
+				protoio.EpitopesProgressSensorName,
+				protoio.EpitopesMarginSensorName,
+			},
+			ActuatorIDs: []string{protoio.EpitopesResponseActuatorName},
 			Neurons: []model.Neuron{
 				{ID: "s", Activation: "identity", Bias: 0},
 				{ID: "m", Activation: "identity", Bias: 0},
+				{ID: "t", Activation: "identity", Bias: 0},
+				{ID: "p", Activation: "identity", Bias: 0},
+				{ID: "g", Activation: "identity", Bias: 0},
 				{ID: "r", Activation: "tanh", Bias: jitter(rng, 0.25)},
 			},
 			Synapses: []model.Synapse{
 				{ID: "s1", From: "s", To: "r", Weight: 0.9 + jitter(rng, 0.2), Enabled: true},
 				{ID: "s2", From: "m", To: "r", Weight: 0.7 + jitter(rng, 0.2), Enabled: true},
+				{ID: "s3", From: "t", To: "r", Weight: 0.5 + jitter(rng, 0.2), Enabled: true},
+				{ID: "s4", From: "p", To: "r", Weight: 0.3 + jitter(rng, 0.2), Enabled: true},
+				{ID: "s5", From: "g", To: "r", Weight: 0.4 + jitter(rng, 0.2), Enabled: true},
 			},
 		})
 	}

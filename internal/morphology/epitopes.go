@@ -12,6 +12,9 @@ func (EpitopesMorphology) Sensors() []string {
 	return []string{
 		protoio.EpitopesSignalSensorName,
 		protoio.EpitopesMemorySensorName,
+		protoio.EpitopesTargetSensorName,
+		protoio.EpitopesProgressSensorName,
+		protoio.EpitopesMarginSensorName,
 	}
 }
 

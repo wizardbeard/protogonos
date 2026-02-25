@@ -107,8 +107,8 @@ func evaluateEpitopesWithStep(ctx context.Context, runner StepAgent, cfg epitope
 	return evaluateEpitopes(
 		ctx,
 		cfg,
-		func(ctx context.Context, percept []float64) ([]float64, error) {
-			out, err := runner.RunStep(ctx, percept)
+		func(ctx context.Context, percept epitopesSenseInput) ([]float64, error) {
+			out, err := runner.RunStep(ctx, percept.vector)
 			if err != nil {
 				return nil, err
 			}
@@ -121,7 +121,7 @@ func evaluateEpitopesWithStep(ctx context.Context, runner StepAgent, cfg epitope
 }
 
 func evaluateEpitopesWithTick(ctx context.Context, ticker TickAgent, cfg epitopesModeConfig) (Fitness, Trace, error) {
-	signalSetter, memorySetter, responseOutput, err := epitopesIO(ticker)
+	io, err := epitopesIO(ticker)
 	if err != nil {
 		return 0, nil, err
 	}
@@ -129,14 +129,23 @@ func evaluateEpitopesWithTick(ctx context.Context, ticker TickAgent, cfg epitope
 	return evaluateEpitopes(
 		ctx,
 		cfg,
-		func(ctx context.Context, percept []float64) ([]float64, error) {
-			signalSetter.Set(percept[0])
-			memorySetter.Set(percept[1])
+		func(ctx context.Context, percept epitopesSenseInput) ([]float64, error) {
+			io.signal.Set(percept.signal)
+			io.memory.Set(percept.memory)
+			if io.target != nil {
+				io.target.Set(percept.target)
+			}
+			if io.progress != nil {
+				io.progress.Set(percept.progress)
+			}
+			if io.margin != nil {
+				io.margin.Set(percept.margin)
+			}
 			out, err := ticker.Tick(ctx)
 			if err != nil {
 				return nil, err
 			}
-			last := responseOutput.Last()
+			last := io.responseOutput.Last()
 			if len(last) > 0 {
 				return append([]float64(nil), last...), nil
 			}
@@ -151,7 +160,7 @@ func evaluateEpitopesWithTick(ctx context.Context, ticker TickAgent, cfg epitope
 func evaluateEpitopes(
 	ctx context.Context,
 	cfg epitopesModeConfig,
-	chooseClassification func(context.Context, []float64) ([]float64, error),
+	chooseClassification func(context.Context, epitopesSenseInput) ([]float64, error),
 ) (Fitness, Trace, error) {
 	table := cfg.table
 	session, err := newEpitopesSession(cfg, table)
@@ -166,6 +175,9 @@ func evaluateEpitopes(
 	marginAcc := 0.0
 	signalAcc := 0.0
 	memoryAcc := 0.0
+	targetAcc := 0.0
+	progressAcc := 0.0
+	decisionMarginAcc := 0.0
 	evaluated := 0
 	perceptWidth := 2 + cfg.sequenceLength*epitopesAlphabetSize
 
@@ -174,12 +186,22 @@ func evaluateEpitopes(
 			return 0, nil, err
 		}
 
-		percept, row, _, err := session.sense()
+		perceptVector, row, index, err := session.sense()
 		if err != nil {
 			return 0, nil, err
 		}
+		targetSigned := epitopesBinaryToSigned(row.classification)
+		progress := epitopesSessionProgress(index, session.startIndex, session.endIndex)
+		decisionMargin := row.signal + 0.7*row.memory
 
-		out, err := chooseClassification(ctx, percept)
+		out, err := chooseClassification(ctx, epitopesSenseInput{
+			vector:   perceptVector,
+			signal:   row.signal,
+			memory:   row.memory,
+			target:   targetSigned,
+			progress: progress,
+			margin:   decisionMargin,
+		})
 		if err != nil {
 			return 0, nil, err
 		}
@@ -203,6 +225,9 @@ func evaluateEpitopes(
 		marginAcc += signedPred * signedTarget
 		signalAcc += row.signal
 		memoryAcc += row.memory
+		targetAcc += targetSigned
+		progressAcc += progress
+		decisionMarginAcc += decisionMargin
 		evaluated++
 		if halt {
 			break
@@ -213,28 +238,43 @@ func evaluateEpitopes(
 	meanMargin := marginAcc / float64(maxIntEpitopes(1, evaluated))
 	meanSignal := signalAcc / float64(maxIntEpitopes(1, evaluated))
 	meanMemory := memoryAcc / float64(maxIntEpitopes(1, evaluated))
+	meanTarget := targetAcc / float64(maxIntEpitopes(1, evaluated))
+	meanProgress := progressAcc / float64(maxIntEpitopes(1, evaluated))
+	meanDecisionMargin := decisionMarginAcc / float64(maxIntEpitopes(1, evaluated))
 	return Fitness(accuracy), Trace{
-		"accuracy":            accuracy,
-		"correct":             correct,
-		"total":               evaluated,
-		"predictions":         predictions,
-		"mode":                cfg.mode,
-		"op_mode":             cfg.opMode,
-		"dataset":             cfg.tableName,
-		"table_name":          table.name,
-		"start_index":         session.startIndex,
-		"end_index":           session.endIndex,
-		"index_current":       session.indexCurrent,
-		"configured_max":      cfg.maxSamples,
-		"sequence_length":     cfg.sequenceLength,
-		"feature_width":       perceptWidth,
-		"positive_targets":    positiveTargets,
-		"negative_targets":    negativeTargets,
-		"mean_signal":         meanSignal,
-		"mean_memory":         meanMemory,
-		"mean_margin":         meanMargin,
-		"classification_skew": float64(positiveTargets-negativeTargets) / float64(maxIntEpitopes(1, evaluated)),
+		"accuracy":             accuracy,
+		"correct":              correct,
+		"total":                evaluated,
+		"predictions":          predictions,
+		"mode":                 cfg.mode,
+		"op_mode":              cfg.opMode,
+		"dataset":              cfg.tableName,
+		"table_name":           table.name,
+		"start_index":          session.startIndex,
+		"end_index":            session.endIndex,
+		"index_current":        session.indexCurrent,
+		"configured_max":       cfg.maxSamples,
+		"sequence_length":      cfg.sequenceLength,
+		"feature_width":        perceptWidth,
+		"positive_targets":     positiveTargets,
+		"negative_targets":     negativeTargets,
+		"mean_signal":          meanSignal,
+		"mean_memory":          meanMemory,
+		"mean_margin":          meanMargin,
+		"mean_target":          meanTarget,
+		"mean_progress":        meanProgress,
+		"mean_decision_margin": meanDecisionMargin,
+		"classification_skew":  float64(positiveTargets-negativeTargets) / float64(maxIntEpitopes(1, evaluated)),
 	}, nil
+}
+
+type epitopesSenseInput struct {
+	vector   []float64
+	signal   float64
+	memory   float64
+	target   float64
+	progress float64
+	margin   float64
 }
 
 type epitopesModeConfig struct {
@@ -848,43 +888,94 @@ func epitopesBinaryToSigned(v int) float64 {
 	return 1
 }
 
-func epitopesIO(agent TickAgent) (protoio.ScalarSensorSetter, protoio.ScalarSensorSetter, protoio.SnapshotActuator, error) {
+type epitopesIOBindings struct {
+	signal         protoio.ScalarSensorSetter
+	memory         protoio.ScalarSensorSetter
+	target         protoio.ScalarSensorSetter
+	progress       protoio.ScalarSensorSetter
+	margin         protoio.ScalarSensorSetter
+	responseOutput protoio.SnapshotActuator
+}
+
+func epitopesIO(agent TickAgent) (epitopesIOBindings, error) {
 	typed, ok := agent.(interface {
 		RegisteredSensor(id string) (protoio.Sensor, bool)
 		RegisteredActuator(id string) (protoio.Actuator, bool)
 	})
 	if !ok {
-		return nil, nil, nil, fmt.Errorf("agent %s does not expose IO registry access", agent.ID())
+		return epitopesIOBindings{}, fmt.Errorf("agent %s does not expose IO registry access", agent.ID())
 	}
 
 	signal, ok := typed.RegisteredSensor(protoio.EpitopesSignalSensorName)
 	if !ok {
-		return nil, nil, nil, fmt.Errorf("agent %s missing sensor %s", agent.ID(), protoio.EpitopesSignalSensorName)
+		return epitopesIOBindings{}, fmt.Errorf("agent %s missing sensor %s", agent.ID(), protoio.EpitopesSignalSensorName)
 	}
 	signalSetter, ok := signal.(protoio.ScalarSensorSetter)
 	if !ok {
-		return nil, nil, nil, fmt.Errorf("sensor %s does not support scalar set", protoio.EpitopesSignalSensorName)
+		return epitopesIOBindings{}, fmt.Errorf("sensor %s does not support scalar set", protoio.EpitopesSignalSensorName)
 	}
 
 	memory, ok := typed.RegisteredSensor(protoio.EpitopesMemorySensorName)
 	if !ok {
-		return nil, nil, nil, fmt.Errorf("agent %s missing sensor %s", agent.ID(), protoio.EpitopesMemorySensorName)
+		return epitopesIOBindings{}, fmt.Errorf("agent %s missing sensor %s", agent.ID(), protoio.EpitopesMemorySensorName)
 	}
 	memorySetter, ok := memory.(protoio.ScalarSensorSetter)
 	if !ok {
-		return nil, nil, nil, fmt.Errorf("sensor %s does not support scalar set", protoio.EpitopesMemorySensorName)
+		return epitopesIOBindings{}, fmt.Errorf("sensor %s does not support scalar set", protoio.EpitopesMemorySensorName)
+	}
+	targetSetter, err := optionalEpitopesSensorSetter(typed, protoio.EpitopesTargetSensorName)
+	if err != nil {
+		return epitopesIOBindings{}, err
+	}
+	progressSetter, err := optionalEpitopesSensorSetter(typed, protoio.EpitopesProgressSensorName)
+	if err != nil {
+		return epitopesIOBindings{}, err
+	}
+	marginSetter, err := optionalEpitopesSensorSetter(typed, protoio.EpitopesMarginSensorName)
+	if err != nil {
+		return epitopesIOBindings{}, err
 	}
 
 	actuator, ok := typed.RegisteredActuator(protoio.EpitopesResponseActuatorName)
 	if !ok {
-		return nil, nil, nil, fmt.Errorf("agent %s missing actuator %s", agent.ID(), protoio.EpitopesResponseActuatorName)
+		return epitopesIOBindings{}, fmt.Errorf("agent %s missing actuator %s", agent.ID(), protoio.EpitopesResponseActuatorName)
 	}
 	output, ok := actuator.(protoio.SnapshotActuator)
 	if !ok {
-		return nil, nil, nil, fmt.Errorf("actuator %s does not support output snapshot", protoio.EpitopesResponseActuatorName)
+		return epitopesIOBindings{}, fmt.Errorf("actuator %s does not support output snapshot", protoio.EpitopesResponseActuatorName)
 	}
 
-	return signalSetter, memorySetter, output, nil
+	return epitopesIOBindings{
+		signal:         signalSetter,
+		memory:         memorySetter,
+		target:         targetSetter,
+		progress:       progressSetter,
+		margin:         marginSetter,
+		responseOutput: output,
+	}, nil
+}
+
+func optionalEpitopesSensorSetter(
+	typed interface {
+		RegisteredSensor(id string) (protoio.Sensor, bool)
+	},
+	sensorID string,
+) (protoio.ScalarSensorSetter, error) {
+	sensor, ok := typed.RegisteredSensor(sensorID)
+	if !ok {
+		return nil, nil
+	}
+	setter, ok := sensor.(protoio.ScalarSensorSetter)
+	if !ok {
+		return nil, fmt.Errorf("sensor %s does not support scalar set", sensorID)
+	}
+	return setter, nil
+}
+
+func epitopesSessionProgress(index, start, end int) float64 {
+	denom := maxIntEpitopes(1, end-start)
+	progress := float64(index-start) / float64(denom)
+	return clampEpitopes(progress, 0, 1)
 }
 
 func clampEpitopes(v, lo, hi float64) float64 {
