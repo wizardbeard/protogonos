@@ -54,6 +54,9 @@ const (
 	EpitopesResponseActuatorName = "epitopes_response"
 	LLVMComplexitySensorName     = "llvm_complexity"
 	LLVMPassIndexSensorName      = "llvm_pass_index"
+	LLVMAlignmentSensorName      = "llvm_alignment"
+	LLVMDiversitySensorName      = "llvm_diversity"
+	LLVMRuntimeGainSensorName    = "llvm_runtime_gain"
 	LLVMPhaseActuatorName        = "llvm_phase"
 )
 
@@ -670,6 +673,51 @@ func initializeDefaultComponents() {
 	}
 	err = RegisterSensorWithSpec(SensorSpec{
 		Name:          LLVMPassIndexSensorName,
+		Factory:       func() Sensor { return NewScalarInputSensor(0) },
+		SchemaVersion: SupportedSchemaVersion,
+		CodecVersion:  SupportedCodecVersion,
+		Compatible: func(scape string) error {
+			if scape != "llvm-phase-ordering" {
+				return fmt.Errorf("unsupported scape: %s", scape)
+			}
+			return nil
+		},
+	})
+	if err != nil {
+		panic(err)
+	}
+	err = RegisterSensorWithSpec(SensorSpec{
+		Name:          LLVMAlignmentSensorName,
+		Factory:       func() Sensor { return NewScalarInputSensor(0) },
+		SchemaVersion: SupportedSchemaVersion,
+		CodecVersion:  SupportedCodecVersion,
+		Compatible: func(scape string) error {
+			if scape != "llvm-phase-ordering" {
+				return fmt.Errorf("unsupported scape: %s", scape)
+			}
+			return nil
+		},
+	})
+	if err != nil {
+		panic(err)
+	}
+	err = RegisterSensorWithSpec(SensorSpec{
+		Name:          LLVMDiversitySensorName,
+		Factory:       func() Sensor { return NewScalarInputSensor(0) },
+		SchemaVersion: SupportedSchemaVersion,
+		CodecVersion:  SupportedCodecVersion,
+		Compatible: func(scape string) error {
+			if scape != "llvm-phase-ordering" {
+				return fmt.Errorf("unsupported scape: %s", scape)
+			}
+			return nil
+		},
+	})
+	if err != nil {
+		panic(err)
+	}
+	err = RegisterSensorWithSpec(SensorSpec{
+		Name:          LLVMRuntimeGainSensorName,
 		Factory:       func() Sensor { return NewScalarInputSensor(0) },
 		SchemaVersion: SupportedSchemaVersion,
 		CodecVersion:  SupportedCodecVersion,

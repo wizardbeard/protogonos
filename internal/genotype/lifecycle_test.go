@@ -235,23 +235,28 @@ func TestConstructSeedPopulationLLVMPhaseOrdering(t *testing.T) {
 	if len(seed.Genomes) != 2 {
 		t.Fatalf("expected 2 genomes, got %d", len(seed.Genomes))
 	}
-	if len(seed.InputNeuronIDs) != 2 || seed.InputNeuronIDs[0] != "c" || seed.InputNeuronIDs[1] != "p" {
+	if len(seed.InputNeuronIDs) != 5 || seed.InputNeuronIDs[0] != "c" || seed.InputNeuronIDs[1] != "p" || seed.InputNeuronIDs[2] != "a" || seed.InputNeuronIDs[3] != "d" || seed.InputNeuronIDs[4] != "r" {
 		t.Fatalf("unexpected input ids: %#v", seed.InputNeuronIDs)
 	}
 	if len(seed.OutputNeuronIDs) != 55 || seed.OutputNeuronIDs[0] != "o00" || seed.OutputNeuronIDs[54] != "o54" {
 		t.Fatalf("unexpected output ids: %#v", seed.OutputNeuronIDs)
 	}
-	if len(seed.Genomes[0].SensorIDs) != 2 || seed.Genomes[0].SensorIDs[0] != protoio.LLVMComplexitySensorName || seed.Genomes[0].SensorIDs[1] != protoio.LLVMPassIndexSensorName {
+	if len(seed.Genomes[0].SensorIDs) != 5 ||
+		seed.Genomes[0].SensorIDs[0] != protoio.LLVMComplexitySensorName ||
+		seed.Genomes[0].SensorIDs[1] != protoio.LLVMPassIndexSensorName ||
+		seed.Genomes[0].SensorIDs[2] != protoio.LLVMAlignmentSensorName ||
+		seed.Genomes[0].SensorIDs[3] != protoio.LLVMDiversitySensorName ||
+		seed.Genomes[0].SensorIDs[4] != protoio.LLVMRuntimeGainSensorName {
 		t.Fatalf("unexpected llvm sensor ids: %#v", seed.Genomes[0].SensorIDs)
 	}
 	if len(seed.Genomes[0].ActuatorIDs) != 1 || seed.Genomes[0].ActuatorIDs[0] != protoio.LLVMPhaseActuatorName {
 		t.Fatalf("unexpected llvm actuator ids: %#v", seed.Genomes[0].ActuatorIDs)
 	}
-	if len(seed.Genomes[0].Neurons) != 57 {
-		t.Fatalf("expected 57 llvm neurons (2 inputs + 55 outputs), got %d", len(seed.Genomes[0].Neurons))
+	if len(seed.Genomes[0].Neurons) != 60 {
+		t.Fatalf("expected 60 llvm neurons (5 inputs + 55 outputs), got %d", len(seed.Genomes[0].Neurons))
 	}
-	if len(seed.Genomes[0].Synapses) != 110 {
-		t.Fatalf("expected 110 llvm synapses (2 per output), got %d", len(seed.Genomes[0].Synapses))
+	if len(seed.Genomes[0].Synapses) != 275 {
+		t.Fatalf("expected 275 llvm synapses (5 per output), got %d", len(seed.Genomes[0].Synapses))
 	}
 }
 

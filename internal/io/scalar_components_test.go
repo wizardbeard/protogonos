@@ -386,6 +386,27 @@ func TestScalarComponentsRegistered(t *testing.T) {
 	if llvmPassIndex.Name() != ScalarInputSensorName {
 		t.Fatalf("unexpected llvm pass-index sensor name: %s", llvmPassIndex.Name())
 	}
+	llvmAlignment, err := ResolveSensor(LLVMAlignmentSensorName, "llvm-phase-ordering")
+	if err != nil {
+		t.Fatalf("resolve llvm alignment sensor: %v", err)
+	}
+	if llvmAlignment.Name() != ScalarInputSensorName {
+		t.Fatalf("unexpected llvm alignment sensor name: %s", llvmAlignment.Name())
+	}
+	llvmDiversity, err := ResolveSensor(LLVMDiversitySensorName, "llvm-phase-ordering")
+	if err != nil {
+		t.Fatalf("resolve llvm diversity sensor: %v", err)
+	}
+	if llvmDiversity.Name() != ScalarInputSensorName {
+		t.Fatalf("unexpected llvm diversity sensor name: %s", llvmDiversity.Name())
+	}
+	llvmRuntimeGain, err := ResolveSensor(LLVMRuntimeGainSensorName, "llvm-phase-ordering")
+	if err != nil {
+		t.Fatalf("resolve llvm runtime-gain sensor: %v", err)
+	}
+	if llvmRuntimeGain.Name() != ScalarInputSensorName {
+		t.Fatalf("unexpected llvm runtime-gain sensor name: %s", llvmRuntimeGain.Name())
+	}
 
 	llvmPhase, err := ResolveActuator(LLVMPhaseActuatorName, "llvm-phase-ordering")
 	if err != nil {
@@ -409,5 +430,8 @@ func TestScalarComponentsRegistered(t *testing.T) {
 	}
 	if _, err := ResolveActuator(LLVMPhaseActuatorName, "scape_LLVMPhaseOrdering"); err != nil {
 		t.Fatalf("resolve llvm alias actuator scape_LLVMPhaseOrdering: %v", err)
+	}
+	if _, err := ResolveSensor(LLVMDiversitySensorName, "scape_LLVMPhaseOrdering"); err != nil {
+		t.Fatalf("resolve llvm alias sensor scape_LLVMPhaseOrdering: %v", err)
 	}
 }

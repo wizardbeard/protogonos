@@ -12,6 +12,9 @@ func (LLVMPhaseOrderingMorphology) Sensors() []string {
 	return []string{
 		protoio.LLVMComplexitySensorName,
 		protoio.LLVMPassIndexSensorName,
+		protoio.LLVMAlignmentSensorName,
+		protoio.LLVMDiversitySensorName,
+		protoio.LLVMRuntimeGainSensorName,
 	}
 }
 

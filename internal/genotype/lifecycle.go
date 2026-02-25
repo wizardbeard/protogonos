@@ -78,7 +78,7 @@ func ConstructSeedPopulation(scapeName string, size int, seed int64) (SeedPopula
 	case "llvm-phase-ordering":
 		return SeedPopulation{
 			Genomes:         seedLLVMPhaseOrderingPopulation(size, seed),
-			InputNeuronIDs:  []string{"c", "p"},
+			InputNeuronIDs:  []string{"c", "p", "a", "d", "r"},
 			OutputNeuronIDs: llvmSeedOutputNeuronIDs(),
 		}, nil
 	default:
@@ -461,12 +461,15 @@ func seedLLVMPhaseOrderingPopulation(size int, seed int64) []model.Genome {
 	}
 
 	for i := 0; i < size; i++ {
-		neurons := make([]model.Neuron, 0, 2+surfaceSize)
+		neurons := make([]model.Neuron, 0, 5+surfaceSize)
 		neurons = append(neurons,
 			model.Neuron{ID: "c", Activation: "identity", Bias: 0},
 			model.Neuron{ID: "p", Activation: "identity", Bias: 0},
+			model.Neuron{ID: "a", Activation: "identity", Bias: 0},
+			model.Neuron{ID: "d", Activation: "identity", Bias: 0},
+			model.Neuron{ID: "r", Activation: "identity", Bias: 0},
 		)
-		synapses := make([]model.Synapse, 0, surfaceSize*2)
+		synapses := make([]model.Synapse, 0, surfaceSize*5)
 		for idx, outputID := range outputIDs {
 			progress := float64(idx) / float64(maxIntLifecycle(1, surfaceSize-1))
 			neurons = append(neurons, model.Neuron{
@@ -489,16 +492,43 @@ func seedLLVMPhaseOrderingPopulation(size int, seed int64) []model.Genome {
 					Weight:  -0.35 + jitter(rng, 0.1),
 					Enabled: true,
 				},
+				model.Synapse{
+					ID:      fmt.Sprintf("s%d:a", idx),
+					From:    "a",
+					To:      outputID,
+					Weight:  0.20 + jitter(rng, 0.08),
+					Enabled: true,
+				},
+				model.Synapse{
+					ID:      fmt.Sprintf("s%d:d", idx),
+					From:    "d",
+					To:      outputID,
+					Weight:  0.25 + jitter(rng, 0.08),
+					Enabled: true,
+				},
+				model.Synapse{
+					ID:      fmt.Sprintf("s%d:r", idx),
+					From:    "r",
+					To:      outputID,
+					Weight:  0.18 + jitter(rng, 0.08),
+					Enabled: true,
+				},
 			)
 		}
 
 		population = append(population, model.Genome{
 			VersionedRecord: model.VersionedRecord{SchemaVersion: storage.CurrentSchemaVersion, CodecVersion: storage.CurrentCodecVersion},
 			ID:              fmt.Sprintf("llvm-g0-%d", i),
-			SensorIDs:       []string{protoio.LLVMComplexitySensorName, protoio.LLVMPassIndexSensorName},
-			ActuatorIDs:     []string{protoio.LLVMPhaseActuatorName},
-			Neurons:         neurons,
-			Synapses:        synapses,
+			SensorIDs: []string{
+				protoio.LLVMComplexitySensorName,
+				protoio.LLVMPassIndexSensorName,
+				protoio.LLVMAlignmentSensorName,
+				protoio.LLVMDiversitySensorName,
+				protoio.LLVMRuntimeGainSensorName,
+			},
+			ActuatorIDs: []string{protoio.LLVMPhaseActuatorName},
+			Neurons:     neurons,
+			Synapses:    synapses,
 		})
 	}
 	return population

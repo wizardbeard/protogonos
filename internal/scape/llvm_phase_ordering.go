@@ -96,8 +96,8 @@ func evaluateLLVMPhaseOrderingWithStep(ctx context.Context, runner StepAgent, cf
 	return evaluateLLVMPhaseOrdering(
 		ctx,
 		cfg,
-		func(ctx context.Context, in []float64) ([]float64, error) {
-			out, err := runner.RunStep(ctx, in)
+		func(ctx context.Context, in llvmSenseInput) ([]float64, error) {
+			out, err := runner.RunStep(ctx, in.vector)
 			if err != nil {
 				return nil, err
 			}
@@ -110,7 +110,7 @@ func evaluateLLVMPhaseOrderingWithStep(ctx context.Context, runner StepAgent, cf
 }
 
 func evaluateLLVMPhaseOrderingWithTick(ctx context.Context, ticker TickAgent, cfg llvmPhaseOrderingConfig) (Fitness, Trace, error) {
-	complexitySetter, passSetter, phaseOutput, err := llvmPhaseOrderingIO(ticker)
+	io, err := llvmPhaseOrderingIO(ticker)
 	if err != nil {
 		return 0, nil, err
 	}
@@ -118,16 +118,25 @@ func evaluateLLVMPhaseOrderingWithTick(ctx context.Context, ticker TickAgent, cf
 	return evaluateLLVMPhaseOrdering(
 		ctx,
 		cfg,
-		func(ctx context.Context, in []float64) ([]float64, error) {
-			complexitySetter.Set(in[0])
-			passSetter.Set(in[1])
+		func(ctx context.Context, in llvmSenseInput) ([]float64, error) {
+			io.complexity.Set(in.complexity)
+			io.pass.Set(in.passNorm)
+			if io.alignment != nil {
+				io.alignment.Set(in.alignment)
+			}
+			if io.diversity != nil {
+				io.diversity.Set(in.diversity)
+			}
+			if io.runtimeGain != nil {
+				io.runtimeGain.Set(in.runtimeGain)
+			}
 
 			out, err := ticker.Tick(ctx)
 			if err != nil {
 				return nil, err
 			}
 
-			last := phaseOutput.Last()
+			last := io.phaseOutput.Last()
 			if len(last) > 0 {
 				return append([]float64(nil), last...), nil
 			}
@@ -142,11 +151,15 @@ func evaluateLLVMPhaseOrderingWithTick(ctx context.Context, ticker TickAgent, cf
 func evaluateLLVMPhaseOrdering(
 	ctx context.Context,
 	cfg llvmPhaseOrderingConfig,
-	choosePhase func(context.Context, []float64) ([]float64, error),
+	choosePhase func(context.Context, llvmSenseInput) ([]float64, error),
 ) (Fitness, Trace, error) {
 	complexity := cfg.initialComplexity
 	bestComplexity := complexity
 	alignmentAcc := 0.0
+	alignmentSignalAcc := 0.0
+	diversityAcc := 0.0
+	runtimeGainAcc := 0.0
+	lastAlignment := 0.0
 	phasesUsed := 0
 	done := false
 	terminationReason := "max_phases"
@@ -165,8 +178,31 @@ func evaluateLLVMPhaseOrdering(
 		if cfg.maxPhases > 1 {
 			passNorm = float64(phase-1) / float64(cfg.maxPhases-1)
 		}
-		percept := llvmPerceptVector(cfg.program, phase, cfg.maxPhases, complexity, passNorm, optimizationHistory)
-		output, err := choosePhase(ctx, percept)
+		diversity := float64(len(uniqueOpts)) / float64(maxIntLLVM(1, len(optimizationHistory)))
+		runtimeCurrent := llvmRuntimeEstimate(cfg, complexity, phasesUsed, diversity, false)
+		runtimeGain := 0.0
+		if runtimeBaseline > 0 {
+			runtimeGain = (runtimeBaseline - runtimeCurrent) / runtimeBaseline
+		}
+		percept := llvmPerceptVector(
+			cfg.program,
+			phase,
+			cfg.maxPhases,
+			complexity,
+			passNorm,
+			lastAlignment,
+			diversity,
+			runtimeGain,
+			optimizationHistory,
+		)
+		output, err := choosePhase(ctx, llvmSenseInput{
+			vector:      percept,
+			complexity:  complexity,
+			passNorm:    passNorm,
+			alignment:   lastAlignment,
+			diversity:   diversity,
+			runtimeGain: runtimeGain,
+		})
 		if err != nil {
 			return 0, nil, err
 		}
@@ -181,7 +217,11 @@ func evaluateLLVMPhaseOrdering(
 			vectorDecisions++
 		}
 		alignmentAcc += decision.alignment
+		alignmentSignalAcc += lastAlignment
+		diversityAcc += diversity
+		runtimeGainAcc += runtimeGain
 		phasesUsed++
+		lastAlignment = decision.alignment
 
 		if decision.done {
 			done = true
@@ -208,7 +248,9 @@ func evaluateLLVMPhaseOrdering(
 	}
 
 	alignmentAvg := alignmentAcc / float64(phasesUsed)
+	alignmentSignalAvg := alignmentSignalAcc / float64(phasesUsed)
 	diversity := float64(len(uniqueOpts)) / float64(maxIntLLVM(1, len(optimizationHistory)))
+	diversityAvg := diversityAcc / float64(phasesUsed)
 	runtimeEstimate := llvmRuntimeEstimate(cfg, complexity, phasesUsed, diversity, done)
 	runtimeScore := 1.0 / (1.0 + runtimeEstimate)
 	fitness := 0.56*runtimeScore + 0.24*alignmentAvg + 0.20*diversity
@@ -220,6 +262,7 @@ func evaluateLLVMPhaseOrdering(
 	if runtimeBaseline > 0 {
 		improvement = (runtimeBaseline - runtimeEstimate) / runtimeBaseline
 	}
+	runtimeGainAvg := runtimeGainAcc / float64(phasesUsed)
 
 	return Fitness(fitness), Trace{
 		"fitness":                fitness,
@@ -242,7 +285,20 @@ func evaluateLLVMPhaseOrdering(
 		"unique_optimizations":   len(uniqueOpts),
 		"scalar_decisions":       scalarDecisions,
 		"vector_decisions":       vectorDecisions,
+		"mean_alignment_signal":  alignmentSignalAvg,
+		"mean_diversity":         diversityAvg,
+		"mean_runtime_gain":      runtimeGainAvg,
+		"last_alignment":         lastAlignment,
 	}, nil
+}
+
+type llvmSenseInput struct {
+	vector      []float64
+	complexity  float64
+	passNorm    float64
+	alignment   float64
+	diversity   float64
+	runtimeGain float64
 }
 
 type llvmPhaseOrderingConfig struct {
@@ -508,14 +564,21 @@ func decodeLLVMDecision(output []float64, passNorm float64, optimizations []stri
 	}
 }
 
-func llvmPerceptVector(program string, phaseIndex, maxPhases int, complexity, passNorm float64, history []string) []float64 {
+func llvmPerceptVector(
+	program string,
+	phaseIndex, maxPhases int,
+	complexity, passNorm, alignment, diversity, runtimeGain float64,
+	history []string,
+) []float64 {
 	percept := make([]float64, llvmPerceptWidth)
 	// Keep the first two dimensions backward-compatible with existing scalar policies.
 	percept[0] = clampLLVM(complexity, 0, 2.5)
 	percept[1] = clampLLVM(passNorm, 0, 1)
-
+	percept[2] = clampLLVM(alignment, 0, 1)
+	percept[3] = clampLLVM(diversity, 0, 1)
+	percept[4] = clampLLVM(runtimeGain, -1, 1)
 	inversePhase := 1.0 / float64(maxIntLLVM(1, phaseIndex))
-	for i := 2; i < llvmPerceptWidth; i++ {
+	for i := 5; i < llvmPerceptWidth; i++ {
 		base := math.Sin(float64(i)*0.37 + float64(phaseIndex)*0.21)
 		trend := math.Cos(float64(i)*0.11 + complexity*1.7)
 		historyBias := llvmHistorySignal(history, i)
@@ -623,43 +686,88 @@ func llvmTargetPhase(passNorm float64) float64 {
 	return clampLLVM(1.0-2.0*passNorm, -1, 1)
 }
 
-func llvmPhaseOrderingIO(agent TickAgent) (protoio.ScalarSensorSetter, protoio.ScalarSensorSetter, protoio.SnapshotActuator, error) {
+type llvmIOBindings struct {
+	complexity  protoio.ScalarSensorSetter
+	pass        protoio.ScalarSensorSetter
+	alignment   protoio.ScalarSensorSetter
+	diversity   protoio.ScalarSensorSetter
+	runtimeGain protoio.ScalarSensorSetter
+	phaseOutput protoio.SnapshotActuator
+}
+
+func llvmPhaseOrderingIO(agent TickAgent) (llvmIOBindings, error) {
 	typed, ok := agent.(interface {
 		RegisteredSensor(id string) (protoio.Sensor, bool)
 		RegisteredActuator(id string) (protoio.Actuator, bool)
 	})
 	if !ok {
-		return nil, nil, nil, fmt.Errorf("agent %s does not expose IO registry access", agent.ID())
+		return llvmIOBindings{}, fmt.Errorf("agent %s does not expose IO registry access", agent.ID())
 	}
 
 	complexity, ok := typed.RegisteredSensor(protoio.LLVMComplexitySensorName)
 	if !ok {
-		return nil, nil, nil, fmt.Errorf("agent %s missing sensor %s", agent.ID(), protoio.LLVMComplexitySensorName)
+		return llvmIOBindings{}, fmt.Errorf("agent %s missing sensor %s", agent.ID(), protoio.LLVMComplexitySensorName)
 	}
 	complexitySetter, ok := complexity.(protoio.ScalarSensorSetter)
 	if !ok {
-		return nil, nil, nil, fmt.Errorf("sensor %s does not support scalar set", protoio.LLVMComplexitySensorName)
+		return llvmIOBindings{}, fmt.Errorf("sensor %s does not support scalar set", protoio.LLVMComplexitySensorName)
 	}
 
 	passIndex, ok := typed.RegisteredSensor(protoio.LLVMPassIndexSensorName)
 	if !ok {
-		return nil, nil, nil, fmt.Errorf("agent %s missing sensor %s", agent.ID(), protoio.LLVMPassIndexSensorName)
+		return llvmIOBindings{}, fmt.Errorf("agent %s missing sensor %s", agent.ID(), protoio.LLVMPassIndexSensorName)
 	}
 	passSetter, ok := passIndex.(protoio.ScalarSensorSetter)
 	if !ok {
-		return nil, nil, nil, fmt.Errorf("sensor %s does not support scalar set", protoio.LLVMPassIndexSensorName)
+		return llvmIOBindings{}, fmt.Errorf("sensor %s does not support scalar set", protoio.LLVMPassIndexSensorName)
+	}
+	alignmentSetter, err := optionalLLVMSensorSetter(typed, protoio.LLVMAlignmentSensorName)
+	if err != nil {
+		return llvmIOBindings{}, err
+	}
+	diversitySetter, err := optionalLLVMSensorSetter(typed, protoio.LLVMDiversitySensorName)
+	if err != nil {
+		return llvmIOBindings{}, err
+	}
+	runtimeGainSetter, err := optionalLLVMSensorSetter(typed, protoio.LLVMRuntimeGainSensorName)
+	if err != nil {
+		return llvmIOBindings{}, err
 	}
 
 	actuator, ok := typed.RegisteredActuator(protoio.LLVMPhaseActuatorName)
 	if !ok {
-		return nil, nil, nil, fmt.Errorf("agent %s missing actuator %s", agent.ID(), protoio.LLVMPhaseActuatorName)
+		return llvmIOBindings{}, fmt.Errorf("agent %s missing actuator %s", agent.ID(), protoio.LLVMPhaseActuatorName)
 	}
 	output, ok := actuator.(protoio.SnapshotActuator)
 	if !ok {
-		return nil, nil, nil, fmt.Errorf("actuator %s does not support output snapshot", protoio.LLVMPhaseActuatorName)
+		return llvmIOBindings{}, fmt.Errorf("actuator %s does not support output snapshot", protoio.LLVMPhaseActuatorName)
 	}
 
-	return complexitySetter, passSetter, output, nil
+	return llvmIOBindings{
+		complexity:  complexitySetter,
+		pass:        passSetter,
+		alignment:   alignmentSetter,
+		diversity:   diversitySetter,
+		runtimeGain: runtimeGainSetter,
+		phaseOutput: output,
+	}, nil
+}
+
+func optionalLLVMSensorSetter(
+	typed interface {
+		RegisteredSensor(id string) (protoio.Sensor, bool)
+	},
+	sensorID string,
+) (protoio.ScalarSensorSetter, error) {
+	sensor, ok := typed.RegisteredSensor(sensorID)
+	if !ok {
+		return nil, nil
+	}
+	setter, ok := sensor.(protoio.ScalarSensorSetter)
+	if !ok {
+		return nil, fmt.Errorf("sensor %s does not support scalar set", sensorID)
+	}
+	return setter, nil
 }
 
 func argmax(values []float64) int {

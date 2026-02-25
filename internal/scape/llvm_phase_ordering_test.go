@@ -86,6 +86,73 @@ func TestLLVMPhaseOrderingScapeEvaluateWithIOComponents(t *testing.T) {
 	}
 }
 
+func TestLLVMPhaseOrderingScapeEvaluateWithExtendedIOComponents(t *testing.T) {
+	genome := model.Genome{
+		SensorIDs: []string{
+			protoio.LLVMComplexitySensorName,
+			protoio.LLVMPassIndexSensorName,
+			protoio.LLVMAlignmentSensorName,
+			protoio.LLVMDiversitySensorName,
+			protoio.LLVMRuntimeGainSensorName,
+		},
+		ActuatorIDs: []string{protoio.LLVMPhaseActuatorName},
+		Neurons: []model.Neuron{
+			{ID: "c", Activation: "identity"},
+			{ID: "p", Activation: "identity"},
+			{ID: "a", Activation: "identity"},
+			{ID: "d", Activation: "identity"},
+			{ID: "r", Activation: "identity"},
+			{ID: "o", Activation: "identity", Bias: 0.2},
+		},
+		Synapses: []model.Synapse{
+			{From: "c", To: "o", Weight: -0.6, Enabled: true},
+			{From: "p", To: "o", Weight: -1.2, Enabled: true},
+			{From: "a", To: "o", Weight: 0.5, Enabled: true},
+			{From: "d", To: "o", Weight: 0.4, Enabled: true},
+			{From: "r", To: "o", Weight: 0.3, Enabled: true},
+		},
+	}
+
+	sensors := map[string]protoio.Sensor{
+		protoio.LLVMComplexitySensorName:  protoio.NewScalarInputSensor(0),
+		protoio.LLVMPassIndexSensorName:   protoio.NewScalarInputSensor(0),
+		protoio.LLVMAlignmentSensorName:   protoio.NewScalarInputSensor(0),
+		protoio.LLVMDiversitySensorName:   protoio.NewScalarInputSensor(0),
+		protoio.LLVMRuntimeGainSensorName: protoio.NewScalarInputSensor(0),
+	}
+	actuators := map[string]protoio.Actuator{
+		protoio.LLVMPhaseActuatorName: protoio.NewScalarOutputActuator(),
+	}
+
+	cortex, err := agent.NewCortex(
+		"llvm-agent-extended-io",
+		genome,
+		sensors,
+		actuators,
+		[]string{"c", "p", "a", "d", "r"},
+		[]string{"o"},
+		nil,
+	)
+	if err != nil {
+		t.Fatalf("new cortex: %v", err)
+	}
+
+	scape := LLVMPhaseOrderingScape{}
+	fitness, trace, err := scape.Evaluate(context.Background(), cortex)
+	if err != nil {
+		t.Fatalf("evaluate: %v", err)
+	}
+	if fitness <= 0 {
+		t.Fatalf("expected positive fitness, got %f", fitness)
+	}
+	if _, ok := trace["mean_diversity"].(float64); !ok {
+		t.Fatalf("trace missing mean_diversity: %+v", trace)
+	}
+	if _, ok := trace["mean_runtime_gain"].(float64); !ok {
+		t.Fatalf("trace missing mean_runtime_gain: %+v", trace)
+	}
+}
+
 func TestLLVMPhaseOrderingScapeEvaluateModeAnnotatesMode(t *testing.T) {
 	scape := LLVMPhaseOrderingScape{}
 	phaseAware := scriptedStepAgent{
@@ -166,8 +233,11 @@ func TestLLVMPhaseOrderingScapeEvaluateWithSeedVectorCortex(t *testing.T) {
 	genome := seed.Genomes[0]
 
 	sensors := map[string]protoio.Sensor{
-		protoio.LLVMComplexitySensorName: protoio.NewScalarInputSensor(0),
-		protoio.LLVMPassIndexSensorName:  protoio.NewScalarInputSensor(0),
+		protoio.LLVMComplexitySensorName:  protoio.NewScalarInputSensor(0),
+		protoio.LLVMPassIndexSensorName:   protoio.NewScalarInputSensor(0),
+		protoio.LLVMAlignmentSensorName:   protoio.NewScalarInputSensor(0),
+		protoio.LLVMDiversitySensorName:   protoio.NewScalarInputSensor(0),
+		protoio.LLVMRuntimeGainSensorName: protoio.NewScalarInputSensor(0),
 	}
 	actuators := map[string]protoio.Actuator{
 		protoio.LLVMPhaseActuatorName: protoio.NewScalarOutputActuator(),
@@ -188,6 +258,9 @@ func TestLLVMPhaseOrderingScapeEvaluateWithSeedVectorCortex(t *testing.T) {
 	}
 	if surface, ok := trace["optimization_surface"].(int); !ok || surface != len(defaultLLVMOptimizations) {
 		t.Fatalf("expected optimization surface=%d, got %+v", len(defaultLLVMOptimizations), trace)
+	}
+	if alignment, ok := trace["last_alignment"].(float64); !ok || alignment < 0 || alignment > 1 {
+		t.Fatalf("expected last_alignment in [0,1], got %+v", trace)
 	}
 }
 

@@ -1,6 +1,10 @@
 package morphology
 
-import "testing"
+import (
+	"testing"
+
+	protoio "protogonos/internal/io"
+)
 
 func TestLLVMPhaseOrderingMorphologyCompatibility(t *testing.T) {
 	m := LLVMPhaseOrderingMorphology{}
@@ -15,5 +19,20 @@ func TestLLVMPhaseOrderingMorphologyCompatibility(t *testing.T) {
 func TestEnsureScapeCompatibilityLLVMPhaseOrdering(t *testing.T) {
 	if err := EnsureScapeCompatibility("llvm-phase-ordering"); err != nil {
 		t.Fatalf("ensure compatibility: %v", err)
+	}
+}
+
+func TestLLVMPhaseOrderingMorphologyDefaultSensors(t *testing.T) {
+	m := LLVMPhaseOrderingMorphology{}
+	sensors := m.Sensors()
+	if len(sensors) != 5 {
+		t.Fatalf("expected 5 llvm sensors, got %d: %#v", len(sensors), sensors)
+	}
+	if sensors[0] != protoio.LLVMComplexitySensorName ||
+		sensors[1] != protoio.LLVMPassIndexSensorName ||
+		sensors[2] != protoio.LLVMAlignmentSensorName ||
+		sensors[3] != protoio.LLVMDiversitySensorName ||
+		sensors[4] != protoio.LLVMRuntimeGainSensorName {
+		t.Fatalf("unexpected llvm sensor order: %#v", sensors)
 	}
 }
