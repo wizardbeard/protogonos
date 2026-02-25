@@ -212,6 +212,56 @@ func TestConstructSeedPopulationFlatlandScannerProfileAlias(t *testing.T) {
 	}
 }
 
+func TestConstructSeedPopulationFlatlandScannerDensityProfileCoreMasksEdgeWeights(t *testing.T) {
+	balancedSeed, err := ConstructSeedPopulationWithOptions("flatland", 1, 19, SeedPopulationOptions{
+		FlatlandProfile:        FlatlandSeedProfileScanner,
+		FlatlandScannerProfile: FlatlandScannerSeedProfileBalanced5,
+	})
+	if err != nil {
+		t.Fatalf("construct balanced scanner profile: %v", err)
+	}
+	coreSeed, err := ConstructSeedPopulationWithOptions("flatland", 1, 19, SeedPopulationOptions{
+		FlatlandProfile:        FlatlandSeedProfileScanner,
+		FlatlandScannerProfile: FlatlandScannerSeedProfileCore3,
+	})
+	if err != nil {
+		t.Fatalf("construct core scanner profile: %v", err)
+	}
+
+	balancedLeft, ok := findSynapseWeight(balancedSeed.Genomes[0], "d0", "wl")
+	if !ok {
+		t.Fatalf("missing d0->wl synapse in balanced scanner profile")
+	}
+	coreLeft, ok := findSynapseWeight(coreSeed.Genomes[0], "d0", "wl")
+	if !ok {
+		t.Fatalf("missing d0->wl synapse in core scanner profile")
+	}
+	if balancedLeft == 0 {
+		t.Fatalf("expected balanced edge weight to remain active, got %f", balancedLeft)
+	}
+	if coreLeft != 0 {
+		t.Fatalf("expected core edge weight to be masked to 0, got %f", coreLeft)
+	}
+
+	coreCenter, ok := findSynapseWeight(coreSeed.Genomes[0], "d2", "wl")
+	if !ok {
+		t.Fatalf("missing d2->wl synapse in core scanner profile")
+	}
+	if coreCenter == 0 {
+		t.Fatalf("expected core center weight to remain active, got %f", coreCenter)
+	}
+}
+
+func TestConstructSeedPopulationFlatlandUnsupportedScannerProfile(t *testing.T) {
+	_, err := ConstructSeedPopulationWithOptions("flatland", 1, 19, SeedPopulationOptions{
+		FlatlandProfile:        FlatlandSeedProfileScanner,
+		FlatlandScannerProfile: "invalid-density-profile",
+	})
+	if err == nil {
+		t.Fatal("expected unsupported flatland scanner profile error")
+	}
+}
+
 func TestConstructSeedPopulationFlatlandUnsupportedProfile(t *testing.T) {
 	_, err := ConstructSeedPopulationWithOptions("flatland", 1, 19, SeedPopulationOptions{
 		FlatlandProfile: "invalid-profile",
@@ -219,6 +269,15 @@ func TestConstructSeedPopulationFlatlandUnsupportedProfile(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected unsupported flatland profile error")
 	}
+}
+
+func findSynapseWeight(genome model.Genome, from string, to string) (float64, bool) {
+	for _, synapse := range genome.Synapses {
+		if synapse.From == from && synapse.To == to {
+			return synapse.Weight, true
+		}
+	}
+	return 0, false
 }
 
 func TestConstructSeedPopulationDTM(t *testing.T) {

@@ -406,6 +406,12 @@ func TestFlatlandScapeTraceCapturesMetabolicsAndCollisions(t *testing.T) {
 	if _, ok := trace["scanner_heading"].(int); !ok {
 		t.Fatalf("trace missing scanner_heading: %+v", trace)
 	}
+	if profile, ok := trace["scanner_profile"].(string); !ok || profile == "" {
+		t.Fatalf("trace missing scanner_profile: %+v", trace)
+	}
+	if weights, ok := trace["scanner_profile_weights"].([]float64); !ok || len(weights) != flatlandScannerDensity {
+		t.Fatalf("trace missing scanner_profile_weights len=%d: %+v", flatlandScannerDensity, trace)
+	}
 	if _, ok := trace["last_control_width"].(int); !ok {
 		t.Fatalf("trace missing last_control_width: %+v", trace)
 	}
@@ -428,6 +434,9 @@ func TestFlatlandScapeEvaluateModeAnnotatesMode(t *testing.T) {
 	if mode, _ := validationTrace["mode"].(string); mode != "validation" {
 		t.Fatalf("expected validation mode trace marker, got %+v", validationTrace)
 	}
+	if profile, _ := validationTrace["scanner_profile"].(string); profile != flatlandScannerProfileForward {
+		t.Fatalf("expected validation scanner profile %q, trace=%+v", flatlandScannerProfileForward, validationTrace)
+	}
 
 	_, testTrace, err := scape.EvaluateMode(context.Background(), forager, "test")
 	if err != nil {
@@ -435,6 +444,9 @@ func TestFlatlandScapeEvaluateModeAnnotatesMode(t *testing.T) {
 	}
 	if mode, _ := testTrace["mode"].(string); mode != "test" {
 		t.Fatalf("expected test mode trace marker, got %+v", testTrace)
+	}
+	if profile, _ := testTrace["scanner_profile"].(string); profile != flatlandScannerProfileBalanced {
+		t.Fatalf("expected test scanner profile %q, trace=%+v", flatlandScannerProfileBalanced, testTrace)
 	}
 }
 
@@ -527,5 +539,67 @@ func TestFlatlandEpisodeScannerProbeOffsetsRespectHeadingAndOffset(t *testing.T)
 	shifted := episode.scannerProbeOffsets()
 	if shifted[flatlandScannerDensity/2] <= forward[flatlandScannerDensity/2] {
 		t.Fatalf("expected positive scanner offset to shift center probe forward, baseline=%v shifted=%v", forward, shifted)
+	}
+}
+
+func TestFlatlandEpisodeScannerProfileCoreMasksEdgeBins(t *testing.T) {
+	probes := []flatlandResource{
+		{position: 43, potency: flatlandFoodEnergyMax},
+		{position: 46, potency: flatlandFoodEnergyMax},
+		{position: 0, potency: flatlandFoodEnergyMax},
+		{position: 2, potency: flatlandFoodEnergyMax},
+		{position: 5, potency: flatlandFoodEnergyMax},
+	}
+
+	balanced := newFlatlandEpisode(flatlandModeConfig{
+		mode:            "test",
+		maxAge:          64,
+		forageGoal:      6,
+		foodPositions:   []int{6, 12, 20, 28, 36, 44},
+		poisonPositions: []int{15, 31},
+		wallPositions:   []int{9, 17, 25, 33, 41},
+		scannerSpread:   0.2,
+		scannerOffset:   0,
+		scannerProfile:  flatlandScannerProfileBalanced,
+	})
+	balanced.position = 0
+	balanced.heading = 1
+	balanced.food = append([]flatlandResource(nil), probes...)
+	balanced.poison = nil
+	balanced.walls = map[int]struct{}{}
+
+	core := newFlatlandEpisode(flatlandModeConfig{
+		mode:            "test",
+		maxAge:          64,
+		forageGoal:      6,
+		foodPositions:   []int{6, 12, 20, 28, 36, 44},
+		poisonPositions: []int{15, 31},
+		wallPositions:   []int{9, 17, 25, 33, 41},
+		scannerSpread:   0.2,
+		scannerOffset:   0,
+		scannerProfile:  flatlandScannerProfileCore,
+	})
+	core.position = 0
+	core.heading = 1
+	core.food = append([]flatlandResource(nil), probes...)
+	core.poison = nil
+	core.walls = map[int]struct{}{}
+
+	balancedDistance, _, _ := balanced.senseScannerVectors()
+	coreDistance, coreColor, coreEnergy := core.senseScannerVectors()
+	if balancedDistance[0] <= 0 || balancedDistance[flatlandScannerDensity-1] <= 0 {
+		t.Fatalf("expected balanced profile to preserve edge scan energy, got=%v", balancedDistance)
+	}
+	if coreDistance[0] != 0 || coreDistance[flatlandScannerDensity-1] != 0 {
+		t.Fatalf("expected core profile to mask edge distance bins, got=%v", coreDistance)
+	}
+	if coreColor[0] != 0 || coreColor[flatlandScannerDensity-1] != 0 {
+		t.Fatalf("expected core profile to mask edge color bins, got=%v", coreColor)
+	}
+	if coreEnergy[0] != 0 || coreEnergy[flatlandScannerDensity-1] != 0 {
+		t.Fatalf("expected core profile to mask edge energy bins, got=%v", coreEnergy)
+	}
+	if coreDistance[flatlandScannerDensity/2] <= 0 {
+		t.Fatalf("expected core profile center bin to remain active, got=%v", coreDistance)
 	}
 }

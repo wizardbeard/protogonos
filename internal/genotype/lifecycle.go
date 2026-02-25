@@ -23,11 +23,19 @@ type SeedPopulationOptions struct {
 	// FlatlandProfile controls the flatland seed scaffold.
 	// Supported values: "scanner" (default) and "classic".
 	FlatlandProfile string
+
+	// FlatlandScannerProfile controls scanner-bin emphasis when FlatlandProfile
+	// resolves to "scanner". Supported values: "balanced5" (default),
+	// "core3", and "forward5".
+	FlatlandScannerProfile string
 }
 
 const (
-	FlatlandSeedProfileScanner = "scanner"
-	FlatlandSeedProfileClassic = "classic"
+	FlatlandSeedProfileScanner          = "scanner"
+	FlatlandSeedProfileClassic          = "classic"
+	FlatlandScannerSeedProfileBalanced5 = "balanced5"
+	FlatlandScannerSeedProfileCore3     = "core3"
+	FlatlandScannerSeedProfileForward5  = "forward5"
 )
 
 func ConstructSeedPopulation(scapeName string, size int, seed int64) (SeedPopulation, error) {
@@ -62,7 +70,7 @@ func ConstructSeedPopulationWithOptions(scapeName string, size int, seed int64, 
 			OutputNeuronIDs: []string{"f"},
 		}, nil
 	case "flatland":
-		return constructFlatlandSeedPopulation(size, seed, options.FlatlandProfile)
+		return constructFlatlandSeedPopulation(size, seed, options)
 	case "dtm":
 		return SeedPopulation{
 			Genomes:         seedDTMPopulation(size, seed),
@@ -98,8 +106,8 @@ func ConstructSeedPopulationWithOptions(scapeName string, size int, seed int64, 
 	}
 }
 
-func constructFlatlandSeedPopulation(size int, seed int64, profile string) (SeedPopulation, error) {
-	switch normalizeFlatlandSeedProfile(profile) {
+func constructFlatlandSeedPopulation(size int, seed int64, options SeedPopulationOptions) (SeedPopulation, error) {
+	switch normalizeFlatlandSeedProfile(options.FlatlandProfile) {
 	case FlatlandSeedProfileClassic:
 		return SeedPopulation{
 			Genomes:         seedFlatlandClassicPopulation(size, seed),
@@ -107,13 +115,17 @@ func constructFlatlandSeedPopulation(size int, seed int64, profile string) (Seed
 			OutputNeuronIDs: []string{"m"},
 		}, nil
 	case FlatlandSeedProfileScanner:
+		scannerProfile, err := resolveFlatlandScannerSeedProfile(options.FlatlandScannerProfile)
+		if err != nil {
+			return SeedPopulation{}, err
+		}
 		return SeedPopulation{
-			Genomes:         seedFlatlandScannerPopulation(size, seed),
+			Genomes:         seedFlatlandScannerPopulation(size, seed, scannerProfile),
 			InputNeuronIDs:  flatlandSeedInputNeuronIDs(),
 			OutputNeuronIDs: flatlandSeedOutputNeuronIDs(),
 		}, nil
 	default:
-		return SeedPopulation{}, fmt.Errorf("unsupported flatland seed profile: %s", profile)
+		return SeedPopulation{}, fmt.Errorf("unsupported flatland seed profile: %s", options.FlatlandProfile)
 	}
 }
 
@@ -127,6 +139,31 @@ func normalizeFlatlandSeedProfile(raw string) string {
 		return FlatlandSeedProfileClassic
 	default:
 		return profile
+	}
+}
+
+func normalizeFlatlandScannerSeedProfile(raw string) string {
+	profile := strings.ToLower(strings.TrimSpace(raw))
+	profile = strings.ReplaceAll(profile, "_", "-")
+	switch profile {
+	case "", "default", "balanced", "balanced5", "scanner":
+		return FlatlandScannerSeedProfileBalanced5
+	case "core", "core3", "focused":
+		return FlatlandScannerSeedProfileCore3
+	case "forward", "forward5", "directional":
+		return FlatlandScannerSeedProfileForward5
+	default:
+		return profile
+	}
+}
+
+func resolveFlatlandScannerSeedProfile(raw string) (string, error) {
+	profile := normalizeFlatlandScannerSeedProfile(raw)
+	switch profile {
+	case FlatlandScannerSeedProfileBalanced5, FlatlandScannerSeedProfileCore3, FlatlandScannerSeedProfileForward5:
+		return profile, nil
+	default:
+		return "", fmt.Errorf("unsupported flatland scanner profile: %s", raw)
 	}
 }
 
@@ -355,11 +392,12 @@ func seedFlatlandClassicPopulation(size int, seed int64) []model.Genome {
 	return population
 }
 
-func seedFlatlandScannerPopulation(size int, seed int64) []model.Genome {
+func seedFlatlandScannerPopulation(size int, seed int64, scannerProfile string) []model.Genome {
 	rng := rand.New(rand.NewSource(seed))
 	population := make([]model.Genome, 0, size)
 	inputNeuronIDs := flatlandSeedInputNeuronIDs()
 	sensorIDs := flatlandSeedSensorIDs()
+	profileWeights := flatlandSeedScannerProfileWeights(scannerProfile)
 	for i := 0; i < size; i++ {
 		neurons := make([]model.Neuron, 0, len(inputNeuronIDs)+2)
 		for _, neuronID := range inputNeuronIDs {
@@ -373,20 +411,21 @@ func seedFlatlandScannerPopulation(size int, seed int64) []model.Genome {
 		synapses := make([]model.Synapse, 0, len(inputNeuronIDs)*2)
 		synapseIndex := 1
 		for idx, neuronID := range inputNeuronIDs {
+			scale := flatlandSeedInputProfileScale(idx, profileWeights)
 			leftWeight, rightWeight := flatlandSeedWheelWeights(idx)
 			synapses = append(synapses,
 				model.Synapse{
 					ID:      fmt.Sprintf("s%d", synapseIndex),
 					From:    neuronID,
 					To:      "wl",
-					Weight:  leftWeight + jitter(rng, 0.2),
+					Weight:  (leftWeight + jitter(rng, 0.2)) * scale,
 					Enabled: true,
 				},
 				model.Synapse{
 					ID:      fmt.Sprintf("s%d", synapseIndex+1),
 					From:    neuronID,
 					To:      "wr",
-					Weight:  rightWeight + jitter(rng, 0.2),
+					Weight:  (rightWeight + jitter(rng, 0.2)) * scale,
 					Enabled: true,
 				},
 			)
@@ -403,6 +442,30 @@ func seedFlatlandScannerPopulation(size int, seed int64) []model.Genome {
 		})
 	}
 	return population
+}
+
+func flatlandSeedScannerProfileWeights(profile string) [5]float64 {
+	switch normalizeFlatlandScannerSeedProfile(profile) {
+	case FlatlandScannerSeedProfileCore3:
+		return [5]float64{0, 1, 1, 1, 0}
+	case FlatlandScannerSeedProfileForward5:
+		return [5]float64{0.25, 0.55, 0.85, 1, 1}
+	default:
+		return [5]float64{1, 1, 1, 1, 1}
+	}
+}
+
+func flatlandSeedInputProfileScale(index int, binWeights [5]float64) float64 {
+	switch {
+	case index >= 0 && index < 5:
+		return binWeights[index]
+	case index >= 5 && index < 10:
+		return binWeights[index-5]
+	case index >= 10 && index < 15:
+		return binWeights[index-10]
+	default:
+		return 1
+	}
 }
 
 func flatlandSeedSensorIDs() []string {

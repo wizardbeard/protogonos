@@ -48,6 +48,7 @@ type flatlandModeConfig struct {
 	wallPositions   []int
 	scannerSpread   float64
 	scannerOffset   float64
+	scannerProfile  string
 }
 
 func flatlandConfigForMode(mode string) (flatlandModeConfig, error) {
@@ -62,6 +63,7 @@ func flatlandConfigForMode(mode string) (flatlandModeConfig, error) {
 			wallPositions:   []int{8, 16, 24, 32, 40},
 			scannerSpread:   flatlandScannerSpreadDefault,
 			scannerOffset:   0,
+			scannerProfile:  flatlandScannerProfileBalanced,
 		}, nil
 	case "validation":
 		return flatlandModeConfig{
@@ -73,6 +75,7 @@ func flatlandConfigForMode(mode string) (flatlandModeConfig, error) {
 			wallPositions:   []int{7, 15, 23, 31, 39},
 			scannerSpread:   0.16,
 			scannerOffset:   0.05,
+			scannerProfile:  flatlandScannerProfileForward,
 		}, nil
 	case "test":
 		return flatlandModeConfig{
@@ -84,6 +87,7 @@ func flatlandConfigForMode(mode string) (flatlandModeConfig, error) {
 			wallPositions:   []int{9, 17, 25, 33, 41},
 			scannerSpread:   flatlandScannerSpreadDefault,
 			scannerOffset:   0,
+			scannerProfile:  flatlandScannerProfileBalanced,
 		}, nil
 	case "benchmark":
 		return flatlandModeConfig{
@@ -95,6 +99,7 @@ func flatlandConfigForMode(mode string) (flatlandModeConfig, error) {
 			wallPositions:   []int{9, 17, 25, 33, 41},
 			scannerSpread:   0.2,
 			scannerOffset:   -0.05,
+			scannerProfile:  flatlandScannerProfileCore,
 		}, nil
 	default:
 		return flatlandModeConfig{}, fmt.Errorf("unsupported flatland mode: %s", mode)
@@ -316,38 +321,43 @@ func evaluateFlatland(
 		"scanner_spread":          episode.scannerSpread,
 		"scanner_offset":          episode.scannerOffset,
 		"scanner_heading":         episode.heading,
+		"scanner_profile":         episode.scannerProfile,
+		"scanner_profile_weights": flatlandScanSlice(episode.scannerWeights),
 		"mode":                    cfg.mode,
 	}, nil
 }
 
 const (
-	flatlandWorldSize            = 48
-	flatlandDefaultMaxAge        = 220
-	flatlandInitialEnergy        = 1.2
-	flatlandEnergyCap            = 2.0
-	flatlandBaseMetabolic        = 0.012
-	flatlandIdleMetabolic        = 0.004
-	flatlandMoveMetabolic        = 0.018
-	flatlandWallEnergyPenalty    = 0.035
-	flatlandFoodEnergyMin        = 0.20
-	flatlandFoodEnergyMax        = 0.38
-	flatlandFoodGrowth           = 0.012
-	flatlandPoisonDamageMin      = 0.30
-	flatlandPoisonDamageMax      = 0.44
-	flatlandPoisonDrift          = 0.006
-	flatlandSurvivalReward       = 0.01
-	flatlandFoodReward           = 0.25
-	flatlandPoisonPenalty        = 0.30
-	flatlandWallPenalty          = 0.07
-	flatlandFoodRespawn          = 12
-	flatlandPoisonRespawn        = 16
-	flatlandDefaultForageGoal    = 8
-	flatlandSensorDistanceLo     = -1.0
-	flatlandSensorDistanceHi     = 1.0
-	flatlandRespawnStride        = 7
-	flatlandScannerDensity       = 5
-	flatlandScannerWidth         = flatlandScannerDensity * 3
-	flatlandScannerSpreadDefault = 0.18
+	flatlandWorldSize              = 48
+	flatlandDefaultMaxAge          = 220
+	flatlandInitialEnergy          = 1.2
+	flatlandEnergyCap              = 2.0
+	flatlandBaseMetabolic          = 0.012
+	flatlandIdleMetabolic          = 0.004
+	flatlandMoveMetabolic          = 0.018
+	flatlandWallEnergyPenalty      = 0.035
+	flatlandFoodEnergyMin          = 0.20
+	flatlandFoodEnergyMax          = 0.38
+	flatlandFoodGrowth             = 0.012
+	flatlandPoisonDamageMin        = 0.30
+	flatlandPoisonDamageMax        = 0.44
+	flatlandPoisonDrift            = 0.006
+	flatlandSurvivalReward         = 0.01
+	flatlandFoodReward             = 0.25
+	flatlandPoisonPenalty          = 0.30
+	flatlandWallPenalty            = 0.07
+	flatlandFoodRespawn            = 12
+	flatlandPoisonRespawn          = 16
+	flatlandDefaultForageGoal      = 8
+	flatlandSensorDistanceLo       = -1.0
+	flatlandSensorDistanceHi       = 1.0
+	flatlandRespawnStride          = 7
+	flatlandScannerDensity         = 5
+	flatlandScannerWidth           = flatlandScannerDensity * 3
+	flatlandScannerSpreadDefault   = 0.18
+	flatlandScannerProfileBalanced = "balanced5"
+	flatlandScannerProfileCore     = "core3"
+	flatlandScannerProfileForward  = "forward5"
 )
 
 var flatlandDistanceScannerSensors = [flatlandScannerDensity]string{
@@ -417,6 +427,8 @@ type flatlandEpisode struct {
 	respawnCursor    int
 	scannerSpread    float64
 	scannerOffset    float64
+	scannerProfile   string
+	scannerWeights   [flatlandScannerDensity]float64
 }
 
 func newFlatlandEpisode(cfg flatlandModeConfig) *flatlandEpisode {
@@ -447,6 +459,8 @@ func newFlatlandEpisode(cfg flatlandModeConfig) *flatlandEpisode {
 	}
 	scannerSpread = clamp(scannerSpread, 0.05, 1)
 	scannerOffset := clamp(cfg.scannerOffset, -1, 1)
+	scannerProfile := normalizeFlatlandScannerProfile(cfg.scannerProfile)
+	scannerWeights := flatlandScannerProfileWeights(scannerProfile)
 
 	walls := make(map[int]struct{}, len(wallPositions))
 	for _, position := range wallPositions {
@@ -471,17 +485,19 @@ func newFlatlandEpisode(cfg flatlandModeConfig) *flatlandEpisode {
 	}
 
 	return &flatlandEpisode{
-		position:      start,
-		heading:       1,
-		energy:        flatlandInitialEnergy,
-		maxAge:        maxAge,
-		forageGoal:    forageGoal,
-		food:          food,
-		poison:        poison,
-		walls:         walls,
-		respawnCursor: wrapFlatlandPosition(start + 3),
-		scannerSpread: scannerSpread,
-		scannerOffset: scannerOffset,
+		position:       start,
+		heading:        1,
+		energy:         flatlandInitialEnergy,
+		maxAge:         maxAge,
+		forageGoal:     forageGoal,
+		food:           food,
+		poison:         poison,
+		walls:          walls,
+		respawnCursor:  wrapFlatlandPosition(start + 3),
+		scannerSpread:  scannerSpread,
+		scannerOffset:  scannerOffset,
+		scannerProfile: scannerProfile,
+		scannerWeights: scannerWeights,
 	}
 }
 
@@ -628,6 +644,11 @@ func (e *flatlandEpisode) senseScannerVectors() (
 
 	offsets := e.scannerProbeOffsets()
 	for i, offset := range offsets {
+		weight := clamp(e.scannerWeights[i], 0, 1)
+		if weight <= 0 {
+			continue
+		}
+
 		probe := wrapFlatlandPosition(e.position + offset)
 		kind, distance, potency, ok := e.nearestEntityFrom(probe)
 		if !ok {
@@ -645,6 +666,9 @@ func (e *flatlandEpisode) senseScannerVectors() (
 			colorScan[i] = 0.35
 			energyScan[i] = -flatlandWallPenalty
 		}
+		distanceScan[i] *= weight
+		colorScan[i] *= weight
+		energyScan[i] *= weight
 	}
 
 	return distanceScan, colorScan, energyScan
@@ -674,6 +698,32 @@ func (e *flatlandEpisode) scannerProbeOffsets() [flatlandScannerDensity]int {
 		offsets[i] = heading * (centerShift + radial)
 	}
 	return offsets
+}
+
+func normalizeFlatlandScannerProfile(raw string) string {
+	profile := strings.ToLower(strings.TrimSpace(raw))
+	profile = strings.ReplaceAll(profile, "_", "-")
+	switch profile {
+	case "", "default", "balanced", "balanced5", "full":
+		return flatlandScannerProfileBalanced
+	case "core", "core3", "focused":
+		return flatlandScannerProfileCore
+	case "forward", "forward5", "directional":
+		return flatlandScannerProfileForward
+	default:
+		return flatlandScannerProfileBalanced
+	}
+}
+
+func flatlandScannerProfileWeights(profile string) [flatlandScannerDensity]float64 {
+	switch normalizeFlatlandScannerProfile(profile) {
+	case flatlandScannerProfileCore:
+		return [flatlandScannerDensity]float64{0, 1, 1, 1, 0}
+	case flatlandScannerProfileForward:
+		return [flatlandScannerDensity]float64{0.25, 0.55, 0.85, 1.0, 1.0}
+	default:
+		return [flatlandScannerDensity]float64{1, 1, 1, 1, 1}
+	}
 }
 
 func (e *flatlandEpisode) nearestEntityFrom(origin int) (flatlandScannerEntityKind, int, float64, bool) {
