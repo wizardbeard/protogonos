@@ -268,6 +268,10 @@ func TestFlatlandScapeEvaluateWithScannerIOComponents(t *testing.T) {
 	if _, ok := trace["last_distance_scan_mean"].(float64); !ok {
 		t.Fatalf("expected last_distance_scan_mean trace marker, trace=%+v", trace)
 	}
+	distanceBins, ok := trace["last_distance_scan_bins"].([]float64)
+	if !ok || len(distanceBins) != 5 {
+		t.Fatalf("expected distance scanner bins len=5, trace=%+v", trace)
+	}
 }
 
 func TestFlatlandScapeEvaluateWithTwoWheelsActuator(t *testing.T) {
@@ -383,6 +387,15 @@ func TestFlatlandScapeTraceCapturesMetabolicsAndCollisions(t *testing.T) {
 	}
 	if _, ok := trace["last_energy_scan_mean"].(float64); !ok {
 		t.Fatalf("trace missing last_energy_scan_mean: %+v", trace)
+	}
+	if bins, ok := trace["last_distance_scan_bins"].([]float64); !ok || len(bins) != 5 {
+		t.Fatalf("trace missing last_distance_scan_bins len=5: %+v", trace)
+	}
+	if bins, ok := trace["last_color_scan_bins"].([]float64); !ok || len(bins) != 5 {
+		t.Fatalf("trace missing last_color_scan_bins len=5: %+v", trace)
+	}
+	if bins, ok := trace["last_energy_scan_bins"].([]float64); !ok || len(bins) != 5 {
+		t.Fatalf("trace missing last_energy_scan_bins len=5: %+v", trace)
 	}
 	if _, ok := trace["last_control_width"].(int); !ok {
 		t.Fatalf("trace missing last_control_width: %+v", trace)

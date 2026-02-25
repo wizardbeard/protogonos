@@ -186,6 +186,9 @@ func evaluateFlatland(
 	lastPoisonProximity := 0.0
 	lastWallProximity := 0.0
 	lastResourceBalance := 0.0
+	var lastDistanceScan [flatlandScannerDensity]float64
+	var lastColorScan [flatlandScannerDensity]float64
+	var lastEnergyScan [flatlandScannerDensity]float64
 	lastDistanceScanMean := 0.0
 	lastColorScanMean := 0.0
 	lastEnergyScanMean := 0.0
@@ -206,9 +209,12 @@ func evaluateFlatland(
 		lastPoisonProximity = sense.poisonProximity
 		lastWallProximity = sense.wallProximity
 		lastResourceBalance = sense.resourceBalance
-		lastDistanceScanMean = meanFlatlandScan(sense.distanceScan)
-		lastColorScanMean = meanFlatlandScan(sense.colorScan)
-		lastEnergyScanMean = meanFlatlandScan(sense.energyScan)
+		lastDistanceScan = sense.distanceScan
+		lastColorScan = sense.colorScan
+		lastEnergyScan = sense.energyScan
+		lastDistanceScanMean = meanFlatlandScan(lastDistanceScan)
+		lastColorScanMean = meanFlatlandScan(lastColorScan)
+		lastEnergyScanMean = meanFlatlandScan(lastEnergyScan)
 
 		control, err := chooseMove(ctx, sense)
 		if err != nil {
@@ -287,6 +293,9 @@ func evaluateFlatland(
 		"last_poison_proximity":   lastPoisonProximity,
 		"last_wall_proximity":     lastWallProximity,
 		"last_resource_balance":   lastResourceBalance,
+		"last_distance_scan_bins": flatlandScanSlice(lastDistanceScan),
+		"last_color_scan_bins":    flatlandScanSlice(lastColorScan),
+		"last_energy_scan_bins":   flatlandScanSlice(lastEnergyScan),
 		"last_distance_scan_mean": lastDistanceScanMean,
 		"last_color_scan_mean":    lastColorScanMean,
 		"last_energy_scan_mean":   lastEnergyScanMean,
@@ -1126,6 +1135,14 @@ func meanFlatlandScan(values [flatlandScannerDensity]float64) float64 {
 		sum += value
 	}
 	return sum / float64(flatlandScannerDensity)
+}
+
+func flatlandScanSlice(values [flatlandScannerDensity]float64) []float64 {
+	out := make([]float64, flatlandScannerDensity)
+	for i := range values {
+		out[i] = values[i]
+	}
+	return out
 }
 
 func clamp(v, lo, hi float64) float64 {
