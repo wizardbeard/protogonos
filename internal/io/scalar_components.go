@@ -21,6 +21,9 @@ const (
 	Pole2Velocity1SensorName     = "pole2_velocity_1"
 	Pole2Angle2SensorName        = "pole2_angle_2"
 	Pole2Velocity2SensorName     = "pole2_velocity_2"
+	Pole2RunProgressSensorName   = "pole2_run_progress"
+	Pole2StepProgressSensorName  = "pole2_step_progress"
+	Pole2FitnessSignalSensorName = "pole2_fitness_signal"
 	Pole2PushActuatorName        = "pole2_push"
 	FlatlandDistanceSensorName   = "flatland_distance"
 	FlatlandEnergySensorName     = "flatland_energy"
@@ -241,6 +244,51 @@ func initializeDefaultComponents() {
 	}
 	err = RegisterSensorWithSpec(SensorSpec{
 		Name:          Pole2Velocity2SensorName,
+		Factory:       func() Sensor { return NewScalarInputSensor(0) },
+		SchemaVersion: SupportedSchemaVersion,
+		CodecVersion:  SupportedCodecVersion,
+		Compatible: func(scape string) error {
+			if scape != "pole2-balancing" {
+				return fmt.Errorf("unsupported scape: %s", scape)
+			}
+			return nil
+		},
+	})
+	if err != nil {
+		panic(err)
+	}
+	err = RegisterSensorWithSpec(SensorSpec{
+		Name:          Pole2RunProgressSensorName,
+		Factory:       func() Sensor { return NewScalarInputSensor(0) },
+		SchemaVersion: SupportedSchemaVersion,
+		CodecVersion:  SupportedCodecVersion,
+		Compatible: func(scape string) error {
+			if scape != "pole2-balancing" {
+				return fmt.Errorf("unsupported scape: %s", scape)
+			}
+			return nil
+		},
+	})
+	if err != nil {
+		panic(err)
+	}
+	err = RegisterSensorWithSpec(SensorSpec{
+		Name:          Pole2StepProgressSensorName,
+		Factory:       func() Sensor { return NewScalarInputSensor(0) },
+		SchemaVersion: SupportedSchemaVersion,
+		CodecVersion:  SupportedCodecVersion,
+		Compatible: func(scape string) error {
+			if scape != "pole2-balancing" {
+				return fmt.Errorf("unsupported scape: %s", scape)
+			}
+			return nil
+		},
+	})
+	if err != nil {
+		panic(err)
+	}
+	err = RegisterSensorWithSpec(SensorSpec{
+		Name:          Pole2FitnessSignalSensorName,
 		Factory:       func() Sensor { return NewScalarInputSensor(0) },
 		SchemaVersion: SupportedSchemaVersion,
 		CodecVersion:  SupportedCodecVersion,
