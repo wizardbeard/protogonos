@@ -229,6 +229,32 @@ func TestScalarComponentsRegistered(t *testing.T) {
 	if flatResourceBalance.Name() != ScalarInputSensorName {
 		t.Fatalf("unexpected flatland resource balance sensor name: %s", flatResourceBalance.Name())
 	}
+	flatlandScans := []string{
+		FlatlandDistanceScan0SensorName,
+		FlatlandDistanceScan1SensorName,
+		FlatlandDistanceScan2SensorName,
+		FlatlandDistanceScan3SensorName,
+		FlatlandDistanceScan4SensorName,
+		FlatlandColorScan0SensorName,
+		FlatlandColorScan1SensorName,
+		FlatlandColorScan2SensorName,
+		FlatlandColorScan3SensorName,
+		FlatlandColorScan4SensorName,
+		FlatlandEnergyScan0SensorName,
+		FlatlandEnergyScan1SensorName,
+		FlatlandEnergyScan2SensorName,
+		FlatlandEnergyScan3SensorName,
+		FlatlandEnergyScan4SensorName,
+	}
+	for _, sensorName := range flatlandScans {
+		scan, err := ResolveSensor(sensorName, "flatland")
+		if err != nil {
+			t.Fatalf("resolve flatland scanner sensor %s: %v", sensorName, err)
+		}
+		if scan.Name() != ScalarInputSensorName {
+			t.Fatalf("unexpected flatland scanner sensor name for %s: %s", sensorName, scan.Name())
+		}
+	}
 
 	flatMove, err := ResolveActuator(FlatlandMoveActuatorName, "flatland")
 	if err != nil {

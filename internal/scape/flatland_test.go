@@ -198,6 +198,76 @@ func TestFlatlandScapeEvaluateWithExtendedIOComponents(t *testing.T) {
 	if width, ok := trace["feature_width"].(int); !ok || width != 8 {
 		t.Fatalf("expected extended feature width marker, trace=%+v", trace)
 	}
+	if width, ok := trace["scanner_feature_width"].(int); !ok || width != 15 {
+		t.Fatalf("expected scanner feature width marker, trace=%+v", trace)
+	}
+}
+
+func TestFlatlandScapeEvaluateWithScannerIOComponents(t *testing.T) {
+	genome := model.Genome{
+		SensorIDs: []string{
+			protoio.FlatlandDistanceScan0SensorName,
+			protoio.FlatlandDistanceScan1SensorName,
+			protoio.FlatlandDistanceScan2SensorName,
+			protoio.FlatlandDistanceScan3SensorName,
+			protoio.FlatlandDistanceScan4SensorName,
+		},
+		ActuatorIDs: []string{protoio.FlatlandMoveActuatorName},
+		Neurons: []model.Neuron{
+			{ID: "d0", Activation: "identity"},
+			{ID: "d1", Activation: "identity"},
+			{ID: "d2", Activation: "identity"},
+			{ID: "d3", Activation: "identity"},
+			{ID: "d4", Activation: "identity"},
+			{ID: "move", Activation: "tanh"},
+		},
+		Synapses: []model.Synapse{
+			{From: "d0", To: "move", Weight: -0.8, Enabled: true},
+			{From: "d1", To: "move", Weight: -0.4, Enabled: true},
+			{From: "d2", To: "move", Weight: 0.0, Enabled: true},
+			{From: "d3", To: "move", Weight: 0.4, Enabled: true},
+			{From: "d4", To: "move", Weight: 0.8, Enabled: true},
+		},
+	}
+
+	sensors := map[string]protoio.Sensor{
+		protoio.FlatlandDistanceScan0SensorName: protoio.NewScalarInputSensor(0),
+		protoio.FlatlandDistanceScan1SensorName: protoio.NewScalarInputSensor(0),
+		protoio.FlatlandDistanceScan2SensorName: protoio.NewScalarInputSensor(0),
+		protoio.FlatlandDistanceScan3SensorName: protoio.NewScalarInputSensor(0),
+		protoio.FlatlandDistanceScan4SensorName: protoio.NewScalarInputSensor(0),
+	}
+	actuators := map[string]protoio.Actuator{
+		protoio.FlatlandMoveActuatorName: protoio.NewScalarOutputActuator(),
+	}
+
+	cortex, err := agent.NewCortex(
+		"flatland-agent-io-scanner",
+		genome,
+		sensors,
+		actuators,
+		[]string{"d0", "d1", "d2", "d3", "d4"},
+		[]string{"move"},
+		nil,
+	)
+	if err != nil {
+		t.Fatalf("new cortex: %v", err)
+	}
+
+	scape := FlatlandScape{}
+	fitness, trace, err := scape.Evaluate(context.Background(), cortex)
+	if err != nil {
+		t.Fatalf("evaluate: %v", err)
+	}
+	if fitness <= 0 {
+		t.Fatalf("expected positive fitness, got %f", fitness)
+	}
+	if density, ok := trace["scanner_density"].(int); !ok || density != 5 {
+		t.Fatalf("expected scanner density marker, trace=%+v", trace)
+	}
+	if _, ok := trace["last_distance_scan_mean"].(float64); !ok {
+		t.Fatalf("expected last_distance_scan_mean trace marker, trace=%+v", trace)
+	}
 }
 
 func TestFlatlandScapeEvaluateWithTwoWheelsActuator(t *testing.T) {
@@ -304,6 +374,15 @@ func TestFlatlandScapeTraceCapturesMetabolicsAndCollisions(t *testing.T) {
 	}
 	if _, ok := trace["last_resource_balance"].(float64); !ok {
 		t.Fatalf("trace missing last_resource_balance: %+v", trace)
+	}
+	if _, ok := trace["last_distance_scan_mean"].(float64); !ok {
+		t.Fatalf("trace missing last_distance_scan_mean: %+v", trace)
+	}
+	if _, ok := trace["last_color_scan_mean"].(float64); !ok {
+		t.Fatalf("trace missing last_color_scan_mean: %+v", trace)
+	}
+	if _, ok := trace["last_energy_scan_mean"].(float64); !ok {
+		t.Fatalf("trace missing last_energy_scan_mean: %+v", trace)
 	}
 	if _, ok := trace["last_control_width"].(int); !ok {
 		t.Fatalf("trace missing last_control_width: %+v", trace)

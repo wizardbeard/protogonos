@@ -33,6 +33,21 @@ const (
 	FlatlandPoisonProximitySensorName = "flatland_poison_proximity"
 	FlatlandWallProximitySensorName   = "flatland_wall_proximity"
 	FlatlandResourceBalanceSensorName = "flatland_resource_balance"
+	FlatlandDistanceScan0SensorName   = "flatland_distance_scan_0"
+	FlatlandDistanceScan1SensorName   = "flatland_distance_scan_1"
+	FlatlandDistanceScan2SensorName   = "flatland_distance_scan_2"
+	FlatlandDistanceScan3SensorName   = "flatland_distance_scan_3"
+	FlatlandDistanceScan4SensorName   = "flatland_distance_scan_4"
+	FlatlandColorScan0SensorName      = "flatland_color_scan_0"
+	FlatlandColorScan1SensorName      = "flatland_color_scan_1"
+	FlatlandColorScan2SensorName      = "flatland_color_scan_2"
+	FlatlandColorScan3SensorName      = "flatland_color_scan_3"
+	FlatlandColorScan4SensorName      = "flatland_color_scan_4"
+	FlatlandEnergyScan0SensorName     = "flatland_energy_scan_0"
+	FlatlandEnergyScan1SensorName     = "flatland_energy_scan_1"
+	FlatlandEnergyScan2SensorName     = "flatland_energy_scan_2"
+	FlatlandEnergyScan3SensorName     = "flatland_energy_scan_3"
+	FlatlandEnergyScan4SensorName     = "flatland_energy_scan_4"
 	FlatlandMoveActuatorName          = "flatland_move"
 	FlatlandTwoWheelsActuatorName     = "flatland_two_wheels"
 	DTMRangeLeftSensorName            = "dtm_range_left"
@@ -459,6 +474,40 @@ func initializeDefaultComponents() {
 	})
 	if err != nil {
 		panic(err)
+	}
+	flatlandScannerSensors := []string{
+		FlatlandDistanceScan0SensorName,
+		FlatlandDistanceScan1SensorName,
+		FlatlandDistanceScan2SensorName,
+		FlatlandDistanceScan3SensorName,
+		FlatlandDistanceScan4SensorName,
+		FlatlandColorScan0SensorName,
+		FlatlandColorScan1SensorName,
+		FlatlandColorScan2SensorName,
+		FlatlandColorScan3SensorName,
+		FlatlandColorScan4SensorName,
+		FlatlandEnergyScan0SensorName,
+		FlatlandEnergyScan1SensorName,
+		FlatlandEnergyScan2SensorName,
+		FlatlandEnergyScan3SensorName,
+		FlatlandEnergyScan4SensorName,
+	}
+	for _, name := range flatlandScannerSensors {
+		err = RegisterSensorWithSpec(SensorSpec{
+			Name:          name,
+			Factory:       func() Sensor { return NewScalarInputSensor(0) },
+			SchemaVersion: SupportedSchemaVersion,
+			CodecVersion:  SupportedCodecVersion,
+			Compatible: func(scape string) error {
+				if scape != "flatland" {
+					return fmt.Errorf("unsupported scape: %s", scape)
+				}
+				return nil
+			},
+		})
+		if err != nil {
+			panic(err)
+		}
 	}
 	err = RegisterSensorWithSpec(SensorSpec{
 		Name:          DTMRangeLeftSensorName,
