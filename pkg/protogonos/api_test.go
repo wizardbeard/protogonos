@@ -804,6 +804,88 @@ func TestClientRunRejectsInvalidScapeCSVSource(t *testing.T) {
 	}
 }
 
+func TestClientRunAppliesLLVMWorkflowJSONSourceFromRunRequest(t *testing.T) {
+	base := t.TempDir()
+	client, err := New(Options{
+		StoreKind:     "memory",
+		BenchmarksDir: filepath.Join(base, "benchmarks"),
+		ExportsDir:    filepath.Join(base, "exports"),
+	})
+	if err != nil {
+		t.Fatalf("new client: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = client.Close()
+	})
+
+	workflowJSON := filepath.Join(base, "llvm_workflow.json")
+	workflowData := `{
+  "name": "llvm.run.v1",
+  "optimizations": ["done", "instcombine", "gvn"],
+  "modes": {
+    "gt": {
+      "program": "llvm-test",
+      "max_phases": 10,
+      "initial_complexity": 1.2,
+      "target_complexity": 0.5,
+      "base_runtime": 1.0
+    }
+  }
+}`
+	if err := os.WriteFile(workflowJSON, []byte(workflowData), 0o644); err != nil {
+		t.Fatalf("write workflow json: %v", err)
+	}
+
+	summary, err := client.Run(context.Background(), RunRequest{
+		Scape:                "llvm-phase-ordering",
+		Population:           8,
+		Generations:          1,
+		Seed:                 13,
+		Workers:              2,
+		LLVMWorkflowJSONPath: workflowJSON,
+	})
+	if err != nil {
+		t.Fatalf("run with llvm workflow source: %v", err)
+	}
+
+	var artifacts stats.RunArtifacts
+	configData, err := os.ReadFile(filepath.Join(summary.ArtifactsDir, "config.json"))
+	if err != nil {
+		t.Fatalf("read config artifact: %v", err)
+	}
+	if err := json.Unmarshal(configData, &artifacts.Config); err != nil {
+		t.Fatalf("decode config artifact: %v", err)
+	}
+	if artifacts.Config.LLVMWorkflowJSONPath != workflowJSON {
+		t.Fatalf("expected llvm workflow source in artifacts, got %+v", artifacts.Config)
+	}
+}
+
+func TestClientRunRejectsInvalidLLVMWorkflowSource(t *testing.T) {
+	base := t.TempDir()
+	client, err := New(Options{
+		StoreKind:     "memory",
+		BenchmarksDir: filepath.Join(base, "benchmarks"),
+		ExportsDir:    filepath.Join(base, "exports"),
+	})
+	if err != nil {
+		t.Fatalf("new client: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = client.Close()
+	})
+
+	_, err = client.Run(context.Background(), RunRequest{
+		Scape:                "llvm-phase-ordering",
+		Population:           8,
+		Generations:          1,
+		LLVMWorkflowJSONPath: filepath.Join(base, "missing_workflow.json"),
+	})
+	if err == nil || !strings.Contains(err.Error(), "configure llvm workflow source") {
+		t.Fatalf("expected llvm workflow load error, got %v", err)
+	}
+}
+
 func TestClientRunValidationOpModeSkipsEvolutionAndTuning(t *testing.T) {
 	base := t.TempDir()
 	client, err := New(Options{

@@ -27,6 +27,7 @@ type RunConfig struct {
 	GTSATestEnd             int     `json:"gtsa_test_end,omitempty"`
 	FXCSVPath               string  `json:"fx_csv_path,omitempty"`
 	EpitopesCSVPath         string  `json:"epitopes_csv_path,omitempty"`
+	LLVMWorkflowJSONPath    string  `json:"llvm_workflow_json_path,omitempty"`
 	EpitopesGTStart         int     `json:"epitopes_gt_start,omitempty"`
 	EpitopesGTEnd           int     `json:"epitopes_gt_end,omitempty"`
 	EpitopesValidationStart int     `json:"epitopes_validation_start,omitempty"`

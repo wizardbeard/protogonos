@@ -56,6 +56,7 @@ type RunRequest struct {
 	GTSATestEnd             int
 	FXCSVPath               string
 	EpitopesCSVPath         string
+	LLVMWorkflowJSONPath    string
 	EpitopesGTStart         int
 	EpitopesGTEnd           int
 	EpitopesValidationStart int
@@ -525,6 +526,7 @@ func (c *Client) Run(ctx context.Context, req RunRequest) (RunSummary, error) {
 			GTSATestEnd:             req.GTSATestEnd,
 			FXCSVPath:               req.FXCSVPath,
 			EpitopesCSVPath:         req.EpitopesCSVPath,
+			LLVMWorkflowJSONPath:    req.LLVMWorkflowJSONPath,
 			EpitopesGTStart:         req.EpitopesGTStart,
 			EpitopesGTEnd:           req.EpitopesGTEnd,
 			EpitopesValidationStart: req.EpitopesValidationStart,
@@ -651,6 +653,9 @@ func applyScapeDataSources(ctx context.Context, req RunRequest) (context.Context
 				BenchmarkStart:  req.EpitopesBenchmarkStart,
 				BenchmarkEnd:    req.EpitopesBenchmarkEnd,
 			},
+		},
+		LLVM: scape.LLVMDataSource{
+			WorkflowJSONPath: req.LLVMWorkflowJSONPath,
 		},
 	})
 }

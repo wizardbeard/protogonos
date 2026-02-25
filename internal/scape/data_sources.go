@@ -12,6 +12,7 @@ type DataSources struct {
 	GTSA     GTSADataSource
 	FX       FXDataSource
 	Epitopes EpitopesDataSource
+	LLVM     LLVMDataSource
 }
 
 // GTSADataSource configures an optional GTSA CSV table and bounds.
@@ -29,6 +30,11 @@ type FXDataSource struct {
 type EpitopesDataSource struct {
 	CSVPath string
 	Bounds  EpitopesTableBounds
+}
+
+// LLVMDataSource configures an optional LLVM workflow JSON file.
+type LLVMDataSource struct {
+	WorkflowJSONPath string
 }
 
 // WithDataSources returns a context carrying optional per-run dataset overrides.
@@ -59,6 +65,13 @@ func WithDataSources(ctx context.Context, sources DataSources) (context.Context,
 			return nil, fmt.Errorf("configure epitopes data source: %w", err)
 		}
 		ctx = context.WithValue(ctx, epitopesDataSourceContextKey{}, source)
+	}
+	if strings.TrimSpace(sources.LLVM.WorkflowJSONPath) != "" {
+		workflow, err := loadLLVMWorkflowJSON(sources.LLVM.WorkflowJSONPath)
+		if err != nil {
+			return nil, fmt.Errorf("configure llvm workflow source: %w", err)
+		}
+		ctx = context.WithValue(ctx, llvmDataSourceContextKey{}, workflow)
 	}
 
 	return ctx, nil
@@ -101,4 +114,17 @@ func epitopesSourceFromContext(ctx context.Context) (epitopesSource, bool) {
 		return epitopesSource{}, false
 	}
 	return source, true
+}
+
+type llvmDataSourceContextKey struct{}
+
+func llvmWorkflowFromContext(ctx context.Context) (llvmWorkflow, bool) {
+	if ctx == nil {
+		return llvmWorkflow{}, false
+	}
+	workflow, ok := ctx.Value(llvmDataSourceContextKey{}).(llvmWorkflow)
+	if !ok || len(workflow.optimizations) == 0 {
+		return llvmWorkflow{}, false
+	}
+	return workflow, true
 }

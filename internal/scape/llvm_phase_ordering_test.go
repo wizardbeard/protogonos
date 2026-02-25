@@ -2,6 +2,9 @@ package scape
 
 import (
 	"context"
+	"os"
+	"path/filepath"
+	"strings"
 	"testing"
 
 	"protogonos/internal/agent"
@@ -117,7 +120,7 @@ func TestLLVMPhaseOrderingScapeSupportsVectorOptimizationSurface(t *testing.T) {
 	vectorPolicy := scriptedStepAgent{
 		id: "vector-policy",
 		fn: func(in []float64) []float64 {
-			out := make([]float64, len(llvmOptimizationList))
+			out := make([]float64, len(defaultLLVMOptimizations))
 			passNorm := 0.0
 			if len(in) > 1 {
 				passNorm = in[1]
@@ -140,8 +143,8 @@ func TestLLVMPhaseOrderingScapeSupportsVectorOptimizationSurface(t *testing.T) {
 	if err != nil {
 		t.Fatalf("evaluate vector policy: %v", err)
 	}
-	if surface, ok := trace["optimization_surface"].(int); !ok || surface != len(llvmOptimizationList) {
-		t.Fatalf("expected optimization surface width=%d, got %+v", len(llvmOptimizationList), trace)
+	if surface, ok := trace["optimization_surface"].(int); !ok || surface != len(defaultLLVMOptimizations) {
+		t.Fatalf("expected optimization surface width=%d, got %+v", len(defaultLLVMOptimizations), trace)
 	}
 	if vectors, ok := trace["vector_decisions"].(int); !ok || vectors <= 0 {
 		t.Fatalf("expected positive vector_decisions, got %+v", trace)
@@ -183,7 +186,99 @@ func TestLLVMPhaseOrderingScapeEvaluateWithSeedVectorCortex(t *testing.T) {
 	if vectors, ok := trace["vector_decisions"].(int); !ok || vectors <= 0 {
 		t.Fatalf("expected vector decisions from seed cortex, got %+v", trace)
 	}
-	if surface, ok := trace["optimization_surface"].(int); !ok || surface != 55 {
-		t.Fatalf("expected optimization surface=55, got %+v", trace)
+	if surface, ok := trace["optimization_surface"].(int); !ok || surface != len(defaultLLVMOptimizations) {
+		t.Fatalf("expected optimization surface=%d, got %+v", len(defaultLLVMOptimizations), trace)
+	}
+}
+
+func TestLLVMPhaseOrderingScapeLoadWorkflowJSON(t *testing.T) {
+	ResetLLVMWorkflowSource()
+	t.Cleanup(ResetLLVMWorkflowSource)
+
+	path := filepath.Join(t.TempDir(), "llvm_workflow.json")
+	data := `{
+  "name": "llvm.custom.v1",
+  "optimizations": ["done", "instcombine", "licm", "gvn"],
+  "modes": {
+    "gt": {
+      "program": "custom-prog",
+      "max_phases": 12,
+      "initial_complexity": 1.1,
+      "target_complexity": 0.4,
+      "base_runtime": 0.9
+    }
+  }
+}`
+	if err := os.WriteFile(path, []byte(data), 0o644); err != nil {
+		t.Fatalf("write workflow json: %v", err)
+	}
+	if err := LoadLLVMWorkflowJSON(path); err != nil {
+		t.Fatalf("load workflow: %v", err)
+	}
+
+	scape := LLVMPhaseOrderingScape{}
+	flat := scriptedStepAgent{
+		id: "flat",
+		fn: func(_ []float64) []float64 { return []float64{0} },
+	}
+	_, trace, err := scape.Evaluate(context.Background(), flat)
+	if err != nil {
+		t.Fatalf("evaluate with loaded workflow: %v", err)
+	}
+	if name, ok := trace["workflow_name"].(string); !ok || name != "llvm.custom.v1" {
+		t.Fatalf("expected custom workflow name in trace, got %+v", trace)
+	}
+	if surface, ok := trace["optimization_surface"].(int); !ok || surface != 4 {
+		t.Fatalf("expected custom optimization surface=4, got %+v", trace)
+	}
+}
+
+func TestLLVMPhaseOrderingScapeContextWorkflowOverride(t *testing.T) {
+	ResetLLVMWorkflowSource()
+	t.Cleanup(ResetLLVMWorkflowSource)
+
+	path := filepath.Join(t.TempDir(), "llvm_ctx_workflow.json")
+	data := `{
+  "name": "llvm.ctx.v1",
+  "optimizations": ["done", "adce", "instcombine"],
+  "modes": {
+    "gt": {
+      "program": "ctx-prog",
+      "max_phases": 8,
+      "initial_complexity": 1.0,
+      "target_complexity": 0.5,
+      "base_runtime": 1.0
+    }
+  }
+}`
+	if err := os.WriteFile(path, []byte(data), 0o644); err != nil {
+		t.Fatalf("write workflow json: %v", err)
+	}
+
+	ctx, err := WithDataSources(context.Background(), DataSources{
+		LLVM: LLVMDataSource{WorkflowJSONPath: path},
+	})
+	if err != nil {
+		t.Fatalf("with data sources: %v", err)
+	}
+
+	scape := LLVMPhaseOrderingScape{}
+	flat := scriptedStepAgent{
+		id: "flat",
+		fn: func(_ []float64) []float64 { return []float64{0} },
+	}
+	_, scopedTrace, err := scape.Evaluate(ctx, flat)
+	if err != nil {
+		t.Fatalf("evaluate scoped workflow: %v", err)
+	}
+	_, defaultTrace, err := scape.Evaluate(context.Background(), flat)
+	if err != nil {
+		t.Fatalf("evaluate default workflow: %v", err)
+	}
+	if name, _ := scopedTrace["workflow_name"].(string); !strings.Contains(name, "llvm.ctx.v1") {
+		t.Fatalf("expected scoped workflow name, got %+v", scopedTrace)
+	}
+	if name, _ := defaultTrace["workflow_name"].(string); name != "llvm.synthetic.v1" {
+		t.Fatalf("expected default workflow name, got %+v", defaultTrace)
 	}
 }

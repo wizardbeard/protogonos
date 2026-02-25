@@ -174,6 +174,7 @@ func runRun(ctx context.Context, args []string) error {
 	gtsaTestEnd := fs.Int("gtsa-test-end", 0, "optional GTSA test_end cutoff for loaded CSV")
 	fxCSV := fs.String("fx-csv", "", "optional FX CSV price-series path")
 	epitopesCSV := fs.String("epitopes-csv", "", "optional epitopes CSV table path")
+	llvmWorkflowJSON := fs.String("llvm-workflow-json", "", "optional LLVM workflow JSON path")
 	epitopesGTStart := fs.Int("epitopes-gt-start", 0, "optional epitopes GT start index for loaded CSV")
 	epitopesGTEnd := fs.Int("epitopes-gt-end", 0, "optional epitopes GT end index for loaded CSV")
 	epitopesValidationStart := fs.Int("epitopes-validation-start", 0, "optional epitopes validation start index for loaded CSV")
@@ -248,6 +249,7 @@ func runRun(ctx context.Context, args []string) error {
 			GTSATestEnd:             *gtsaTestEnd,
 			FXCSVPath:               *fxCSV,
 			EpitopesCSVPath:         *epitopesCSV,
+			LLVMWorkflowJSONPath:    *llvmWorkflowJSON,
 			EpitopesGTStart:         *epitopesGTStart,
 			EpitopesGTEnd:           *epitopesGTEnd,
 			EpitopesValidationStart: *epitopesValidationStart,
@@ -313,6 +315,7 @@ func runRun(ctx context.Context, args []string) error {
 			"gtsa-test-end":             *gtsaTestEnd,
 			"fx-csv":                    *fxCSV,
 			"epitopes-csv":              *epitopesCSV,
+			"llvm-workflow-json":        *llvmWorkflowJSON,
 			"epitopes-gt-start":         *epitopesGTStart,
 			"epitopes-gt-end":           *epitopesGTEnd,
 			"epitopes-validation-start": *epitopesValidationStart,
@@ -1020,6 +1023,7 @@ func runBenchmark(ctx context.Context, args []string) error {
 	gtsaTestEnd := fs.Int("gtsa-test-end", 0, "optional GTSA test_end cutoff for loaded CSV")
 	fxCSV := fs.String("fx-csv", "", "optional FX CSV price-series path")
 	epitopesCSV := fs.String("epitopes-csv", "", "optional epitopes CSV table path")
+	llvmWorkflowJSON := fs.String("llvm-workflow-json", "", "optional LLVM workflow JSON path")
 	epitopesGTStart := fs.Int("epitopes-gt-start", 0, "optional epitopes GT start index for loaded CSV")
 	epitopesGTEnd := fs.Int("epitopes-gt-end", 0, "optional epitopes GT end index for loaded CSV")
 	epitopesValidationStart := fs.Int("epitopes-validation-start", 0, "optional epitopes validation start index for loaded CSV")
@@ -1094,6 +1098,7 @@ func runBenchmark(ctx context.Context, args []string) error {
 			GTSATestEnd:             *gtsaTestEnd,
 			FXCSVPath:               *fxCSV,
 			EpitopesCSVPath:         *epitopesCSV,
+			LLVMWorkflowJSONPath:    *llvmWorkflowJSON,
 			EpitopesGTStart:         *epitopesGTStart,
 			EpitopesGTEnd:           *epitopesGTEnd,
 			EpitopesValidationStart: *epitopesValidationStart,
@@ -1158,6 +1163,7 @@ func runBenchmark(ctx context.Context, args []string) error {
 			"gtsa-test-end":             *gtsaTestEnd,
 			"fx-csv":                    *fxCSV,
 			"epitopes-csv":              *epitopesCSV,
+			"llvm-workflow-json":        *llvmWorkflowJSON,
 			"epitopes-gt-start":         *epitopesGTStart,
 			"epitopes-gt-end":           *epitopesGTEnd,
 			"epitopes-validation-start": *epitopesValidationStart,

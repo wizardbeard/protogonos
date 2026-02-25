@@ -159,6 +159,7 @@ func TestLoadRunRequestFromConfigParsesScapeDataSources(t *testing.T) {
 		"gtsa_test_end":       240,
 		"fx_csv_path":         "top-fx.csv",
 		"epitopes_csv_path":   "top-ep.csv",
+		"llvm_workflow_json":  "top-llvm.json",
 		"epitopes_gt_start":   5,
 		"epitopes_gt_end":     25,
 		"epitopes_test_start": 50,
@@ -179,6 +180,9 @@ func TestLoadRunRequestFromConfigParsesScapeDataSources(t *testing.T) {
 				"validation_end":   40,
 				"benchmark_start":  80,
 				"benchmark_end":    110,
+			},
+			"llvm": map[string]any{
+				"workflow_json_path": "nested-llvm.json",
 			},
 		},
 	}
@@ -203,9 +207,38 @@ func TestLoadRunRequestFromConfigParsesScapeDataSources(t *testing.T) {
 	if req.EpitopesCSVPath != "top-ep.csv" || req.EpitopesGTStart != 5 || req.EpitopesGTEnd != 25 || req.EpitopesTestStart != 50 || req.EpitopesTestEnd != 70 {
 		t.Fatalf("unexpected epitopes top-level fields: %+v", req)
 	}
+	if req.LLVMWorkflowJSONPath != "top-llvm.json" {
+		t.Fatalf("unexpected llvm workflow source: %+v", req)
+	}
 	// Nested scape_data fills remaining unset fields.
 	if req.EpitopesValidationStart != 30 || req.EpitopesValidationEnd != 40 || req.EpitopesBenchmarkStart != 80 || req.EpitopesBenchmarkEnd != 110 {
 		t.Fatalf("unexpected nested epitopes fallback fields: %+v", req)
+	}
+}
+
+func TestLoadRunRequestFromConfigParsesNestedLLVMWorkflowSourceFallback(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "run_config_scape_data_llvm.json")
+	payload := map[string]any{
+		"scape_data": map[string]any{
+			"llvm": map[string]any{
+				"workflow_json": "nested-llvm.json",
+			},
+		},
+	}
+	data, err := json.Marshal(payload)
+	if err != nil {
+		t.Fatalf("marshal payload: %v", err)
+	}
+	if err := os.WriteFile(path, data, 0o644); err != nil {
+		t.Fatalf("write config: %v", err)
+	}
+
+	req, err := loadRunRequestFromConfig(path)
+	if err != nil {
+		t.Fatalf("load run request: %v", err)
+	}
+	if req.LLVMWorkflowJSONPath != "nested-llvm.json" {
+		t.Fatalf("expected nested llvm workflow fallback, got %+v", req)
 	}
 }
 

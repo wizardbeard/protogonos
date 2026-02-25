@@ -2,10 +2,14 @@ package scape
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"hash/fnv"
 	"math"
+	"os"
+	"path/filepath"
 	"strings"
+	"sync"
 
 	protoio "protogonos/internal/io"
 )
@@ -14,8 +18,53 @@ import (
 // phase-ordering workflow, preserving a phase-indexed optimize loop.
 type LLVMPhaseOrderingScape struct{}
 
+type llvmModeProfile struct {
+	Program           string  `json:"program"`
+	MaxPhases         int     `json:"max_phases"`
+	InitialComplexity float64 `json:"initial_complexity"`
+	TargetComplexity  float64 `json:"target_complexity"`
+	BaseRuntime       float64 `json:"base_runtime"`
+}
+
+type llvmWorkflow struct {
+	name          string
+	optimizations []string
+	modes         map[string]llvmModeProfile
+}
+
+type llvmWorkflowFile struct {
+	Name          string                     `json:"name"`
+	Optimizations []string                   `json:"optimizations"`
+	Modes         map[string]llvmModeProfile `json:"modes"`
+}
+
+var (
+	llvmWorkflowSourceMu sync.RWMutex
+	llvmWorkflowSource   = defaultLLVMWorkflow()
+)
+
 func (LLVMPhaseOrderingScape) Name() string {
 	return "llvm-phase-ordering"
+}
+
+// ResetLLVMWorkflowSource restores the deterministic built-in LLVM workflow.
+func ResetLLVMWorkflowSource() {
+	llvmWorkflowSourceMu.Lock()
+	defer llvmWorkflowSourceMu.Unlock()
+	llvmWorkflowSource = defaultLLVMWorkflow()
+}
+
+// LoadLLVMWorkflowJSON loads LLVM optimization surface/runtime profiles from JSON.
+func LoadLLVMWorkflowJSON(path string) error {
+	workflow, err := loadLLVMWorkflowJSON(path)
+	if err != nil {
+		return err
+	}
+
+	llvmWorkflowSourceMu.Lock()
+	defer llvmWorkflowSourceMu.Unlock()
+	llvmWorkflowSource = workflow
+	return nil
 }
 
 func (LLVMPhaseOrderingScape) Evaluate(ctx context.Context, agent Agent) (Fitness, Trace, error) {
@@ -23,7 +72,8 @@ func (LLVMPhaseOrderingScape) Evaluate(ctx context.Context, agent Agent) (Fitnes
 }
 
 func (LLVMPhaseOrderingScape) EvaluateMode(ctx context.Context, agent Agent, mode string) (Fitness, Trace, error) {
-	cfg, err := llvmPhaseOrderingConfigForMode(mode)
+	workflow := currentLLVMWorkflow(ctx)
+	cfg, err := llvmPhaseOrderingConfigForMode(mode, workflow)
 	if err != nil {
 		return 0, nil, err
 	}
@@ -124,7 +174,7 @@ func evaluateLLVMPhaseOrdering(
 			return 0, nil, fmt.Errorf("llvm-phase-ordering requires at least one output")
 		}
 
-		decision := decodeLLVMDecision(output, passNorm)
+		decision := decodeLLVMDecision(output, passNorm, cfg.optimizations)
 		if decision.mode == "scalar" {
 			scalarDecisions++
 		} else {
@@ -184,7 +234,8 @@ func evaluateLLVMPhaseOrdering(
 		"mode":                   cfg.mode,
 		"program":                cfg.program,
 		"termination_reason":     terminationReason,
-		"optimization_surface":   len(llvmOptimizationList),
+		"workflow_name":          cfg.workflowName,
+		"optimization_surface":   len(cfg.optimizations),
 		"percept_width":          llvmPerceptWidth,
 		"percept_layout":         "legacy2+extended29",
 		"selected_optimizations": optimizationHistory,
@@ -201,49 +252,29 @@ type llvmPhaseOrderingConfig struct {
 	initialComplexity float64
 	targetComplexity  float64
 	baseRuntime       float64
+	workflowName      string
+	optimizations     []string
 }
 
-func llvmPhaseOrderingConfigForMode(mode string) (llvmPhaseOrderingConfig, error) {
-	switch strings.TrimSpace(strings.ToLower(mode)) {
-	case "", "gt":
-		return llvmPhaseOrderingConfig{
-			mode:              "gt",
-			program:           "bzip2",
-			maxPhases:         50,
-			initialComplexity: 1.25,
-			targetComplexity:  0.34,
-			baseRuntime:       1.0,
-		}, nil
-	case "validation":
-		return llvmPhaseOrderingConfig{
-			mode:              "validation",
-			program:           "gcc",
-			maxPhases:         40,
-			initialComplexity: 1.40,
-			targetComplexity:  0.40,
-			baseRuntime:       1.08,
-		}, nil
-	case "test":
-		return llvmPhaseOrderingConfig{
-			mode:              "test",
-			program:           "parser",
-			maxPhases:         40,
-			initialComplexity: 1.50,
-			targetComplexity:  0.45,
-			baseRuntime:       1.12,
-		}, nil
-	case "benchmark":
-		return llvmPhaseOrderingConfig{
-			mode:              "benchmark",
-			program:           "bzip2",
-			maxPhases:         50,
-			initialComplexity: 1.30,
-			targetComplexity:  0.36,
-			baseRuntime:       1.00,
-		}, nil
-	default:
+func llvmPhaseOrderingConfigForMode(mode string, workflow llvmWorkflow) (llvmPhaseOrderingConfig, error) {
+	mode = strings.TrimSpace(strings.ToLower(mode))
+	if mode == "" {
+		mode = "gt"
+	}
+	profile, ok := workflow.profileForMode(mode)
+	if !ok {
 		return llvmPhaseOrderingConfig{}, fmt.Errorf("unsupported llvm-phase-ordering mode: %s", mode)
 	}
+	return llvmPhaseOrderingConfig{
+		mode:              mode,
+		program:           profile.Program,
+		maxPhases:         profile.MaxPhases,
+		initialComplexity: profile.InitialComplexity,
+		targetComplexity:  profile.TargetComplexity,
+		baseRuntime:       profile.BaseRuntime,
+		workflowName:      workflow.name,
+		optimizations:     append([]string(nil), workflow.optimizations...),
+	}, nil
 }
 
 type llvmDecision struct {
@@ -257,7 +288,7 @@ type llvmDecision struct {
 
 const llvmPerceptWidth = 31
 
-var llvmOptimizationList = []string{
+var defaultLLVMOptimizations = []string{
 	"done",
 	"adce",
 	"always-inline",
@@ -315,36 +346,163 @@ var llvmOptimizationList = []string{
 	"tailcallelim",
 }
 
-func decodeLLVMDecision(output []float64, passNorm float64) llvmDecision {
+func defaultLLVMWorkflow() llvmWorkflow {
+	return llvmWorkflow{
+		name:          "llvm.synthetic.v1",
+		optimizations: append([]string(nil), defaultLLVMOptimizations...),
+		modes: map[string]llvmModeProfile{
+			"gt": {
+				Program:           "bzip2",
+				MaxPhases:         50,
+				InitialComplexity: 1.25,
+				TargetComplexity:  0.34,
+				BaseRuntime:       1.0,
+			},
+			"validation": {
+				Program:           "gcc",
+				MaxPhases:         40,
+				InitialComplexity: 1.40,
+				TargetComplexity:  0.40,
+				BaseRuntime:       1.08,
+			},
+			"test": {
+				Program:           "parser",
+				MaxPhases:         40,
+				InitialComplexity: 1.50,
+				TargetComplexity:  0.45,
+				BaseRuntime:       1.12,
+			},
+			"benchmark": {
+				Program:           "bzip2",
+				MaxPhases:         50,
+				InitialComplexity: 1.30,
+				TargetComplexity:  0.36,
+				BaseRuntime:       1.00,
+			},
+		},
+	}
+}
+
+func currentLLVMWorkflow(ctx context.Context) llvmWorkflow {
+	if workflow, ok := llvmWorkflowFromContext(ctx); ok {
+		return workflow
+	}
+	llvmWorkflowSourceMu.RLock()
+	defer llvmWorkflowSourceMu.RUnlock()
+	return llvmWorkflowSource
+}
+
+func loadLLVMWorkflowJSON(path string) (llvmWorkflow, error) {
+	path = strings.TrimSpace(path)
+	if path == "" {
+		return llvmWorkflow{}, fmt.Errorf("llvm workflow json path is required")
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return llvmWorkflow{}, fmt.Errorf("read llvm workflow json %s: %w", path, err)
+	}
+	var file llvmWorkflowFile
+	if err := json.Unmarshal(data, &file); err != nil {
+		return llvmWorkflow{}, fmt.Errorf("decode llvm workflow json %s: %w", path, err)
+	}
+
+	workflow := defaultLLVMWorkflow()
+	if strings.TrimSpace(file.Name) != "" {
+		workflow.name = strings.TrimSpace(file.Name)
+	} else {
+		workflow.name = fmt.Sprintf("llvm.json.%s", filepath.Base(path))
+	}
+	if len(file.Optimizations) > 0 {
+		workflow.optimizations = normalizeLLVMOptimizations(file.Optimizations)
+	}
+	for mode, profile := range file.Modes {
+		normalizedMode := strings.TrimSpace(strings.ToLower(mode))
+		if normalizedMode == "" {
+			continue
+		}
+		if profile.Program == "" {
+			profile.Program = workflow.modes["gt"].Program
+		}
+		if profile.MaxPhases <= 0 {
+			profile.MaxPhases = workflow.modes["gt"].MaxPhases
+		}
+		if profile.InitialComplexity <= 0 {
+			profile.InitialComplexity = workflow.modes["gt"].InitialComplexity
+		}
+		if profile.TargetComplexity <= 0 {
+			profile.TargetComplexity = workflow.modes["gt"].TargetComplexity
+		}
+		if profile.BaseRuntime <= 0 {
+			profile.BaseRuntime = workflow.modes["gt"].BaseRuntime
+		}
+		workflow.modes[normalizedMode] = profile
+	}
+	return workflow, nil
+}
+
+func normalizeLLVMOptimizations(in []string) []string {
+	seen := make(map[string]struct{}, len(in))
+	out := make([]string, 0, len(in)+1)
+	for _, item := range in {
+		name := strings.TrimSpace(strings.ToLower(item))
+		if name == "" {
+			continue
+		}
+		if _, exists := seen[name]; exists {
+			continue
+		}
+		seen[name] = struct{}{}
+		out = append(out, name)
+	}
+	if len(out) == 0 {
+		return append([]string(nil), defaultLLVMOptimizations...)
+	}
+	if out[0] != "done" {
+		out = append([]string{"done"}, out...)
+	}
+	return out
+}
+
+func (w llvmWorkflow) profileForMode(mode string) (llvmModeProfile, bool) {
+	if profile, ok := w.modes[mode]; ok {
+		return profile, true
+	}
+	return llvmModeProfile{}, false
+}
+
+func decodeLLVMDecision(output []float64, passNorm float64, optimizations []string) llvmDecision {
+	if len(optimizations) == 0 {
+		optimizations = defaultLLVMOptimizations
+	}
 	if len(output) == 1 {
 		action := clampLLVM(output[0], -1, 1)
 		target := llvmTargetPhase(passNorm)
 		alignment := 1.0 - 0.5*math.Abs(action-target)
-		optIndex := scalarActionToOptimizationIndex(action)
+		optIndex := scalarActionToOptimizationIndex(action, optimizations)
 		done := action < -0.995 && passNorm >= 0.80
 		return llvmDecision{
 			mode:              "scalar",
 			scalarAction:      action,
 			optimizationIndex: optIndex,
-			optimization:      llvmOptimizationName(optIndex),
+			optimization:      llvmOptimizationName(optIndex, optimizations),
 			done:              done,
 			alignment:         clampLLVM(alignment, 0, 1),
 		}
 	}
 
 	optIndex := argmax(output)
-	if optIndex >= len(llvmOptimizationList) {
-		optIndex = len(llvmOptimizationList) - 1
+	if optIndex >= len(optimizations) {
+		optIndex = len(optimizations) - 1
 	}
-	targetIndex := int(math.Round((1.0 - passNorm) * float64(len(llvmOptimizationList)-1)))
-	targetIndex = clampIntLLVM(targetIndex, 0, len(llvmOptimizationList)-1)
+	targetIndex := int(math.Round((1.0 - passNorm) * float64(len(optimizations)-1)))
+	targetIndex = clampIntLLVM(targetIndex, 0, len(optimizations)-1)
 	distance := math.Abs(float64(optIndex - targetIndex))
-	alignment := 1.0 - distance/float64(len(llvmOptimizationList)-1)
+	alignment := 1.0 - distance/float64(maxIntLLVM(1, len(optimizations)-1))
 	return llvmDecision{
 		mode:              "vector",
 		scalarAction:      0,
 		optimizationIndex: optIndex,
-		optimization:      llvmOptimizationName(optIndex),
+		optimization:      llvmOptimizationName(optIndex, optimizations),
 		done:              optIndex == 0,
 		alignment:         clampLLVM(alignment, 0, 1),
 	}
@@ -410,15 +568,21 @@ func llvmRuntimeEstimate(cfg llvmPhaseOrderingConfig, complexity float64, phases
 	return runtime
 }
 
-func scalarActionToOptimizationIndex(action float64) int {
+func scalarActionToOptimizationIndex(action float64, optimizations []string) int {
+	if len(optimizations) == 0 {
+		return 0
+	}
 	scale := (clampLLVM(action, -1, 1) + 1) / 2
-	index := int(math.Round(scale * float64(len(llvmOptimizationList)-1)))
-	return clampIntLLVM(index, 0, len(llvmOptimizationList)-1)
+	index := int(math.Round(scale * float64(len(optimizations)-1)))
+	return clampIntLLVM(index, 0, len(optimizations)-1)
 }
 
-func llvmOptimizationName(index int) string {
-	index = clampIntLLVM(index, 0, len(llvmOptimizationList)-1)
-	return llvmOptimizationList[index]
+func llvmOptimizationName(index int, optimizations []string) string {
+	if len(optimizations) == 0 {
+		return "done"
+	}
+	index = clampIntLLVM(index, 0, len(optimizations)-1)
+	return optimizations[index]
 }
 
 func llvmProgramOptimizationAffinity(program, optimization string) float64 {
