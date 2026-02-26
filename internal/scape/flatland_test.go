@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math"
 	"testing"
+	"time"
 
 	"protogonos/internal/agent"
 	protoio "protogonos/internal/io"
@@ -173,6 +174,40 @@ func TestFlatlandScapePublicUpdateAndListAgents(t *testing.T) {
 		{ID: "dup"},
 	}); err == nil {
 		t.Fatal("expected duplicate update ids to fail")
+	}
+}
+
+func TestFlatlandScapeRunPublicTicksUntilCancel(t *testing.T) {
+	scape := FlatlandScape{}
+	if err := scape.Start(context.Background()); err != nil {
+		t.Fatalf("start: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = scape.Stop(context.Background())
+	})
+	if err := scape.EnterPublicAgent(FlatlandPublicAgent{ID: "runner"}); err != nil {
+		t.Fatalf("enter runner: %v", err)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 40*time.Millisecond)
+	defer cancel()
+	if err := scape.RunPublic(ctx, 2*time.Millisecond); err != nil {
+		t.Fatalf("run public: %v", err)
+	}
+
+	trace, err := scape.TickPublic(context.Background())
+	if err != nil {
+		t.Fatalf("tick after run public: %v", err)
+	}
+	if tick, ok := trace["tick"].(int); !ok || tick <= 1 {
+		t.Fatalf("expected run public to advance world ticks before manual tick, trace=%+v", trace)
+	}
+}
+
+func TestFlatlandScapeRunPublicRejectsNonPositiveInterval(t *testing.T) {
+	scape := FlatlandScape{}
+	if err := scape.RunPublic(context.Background(), 0); err == nil {
+		t.Fatal("expected run public with zero interval to fail")
 	}
 }
 

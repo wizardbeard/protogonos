@@ -8,6 +8,7 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"time"
 
 	protoio "protogonos/internal/io"
 )
@@ -286,6 +287,29 @@ func (FlatlandScape) TickPublic(ctx context.Context) (Trace, error) {
 		"total_predator_hits":  totalPredatorHits,
 		"agents":               agentStates,
 	}, nil
+}
+
+func (s FlatlandScape) RunPublic(ctx context.Context, interval time.Duration) error {
+	if interval <= 0 {
+		return fmt.Errorf("flatland public tick interval must be > 0")
+	}
+
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return nil
+		case <-ticker.C:
+			if _, err := s.TickPublic(ctx); err != nil {
+				if ctx.Err() != nil {
+					return nil
+				}
+				return err
+			}
+		}
+	}
 }
 
 func flatlandPublicAgentTrace(state *flatlandPublicAgentState) Trace {
