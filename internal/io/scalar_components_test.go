@@ -555,10 +555,28 @@ func TestScalarComponentsRegistered(t *testing.T) {
 	if _, err := ResolveSensor(GTSADeltaSensorName, "scape_GTSA"); err != nil {
 		t.Fatalf("resolve gtsa delta alias sensor scape_GTSA: %v", err)
 	}
+	if _, err := ResolveSensor(GTSAInputSensorName, "gtsa_sim"); err != nil {
+		t.Fatalf("resolve gtsa alias sensor gtsa_sim: %v", err)
+	}
+	if _, err := ResolveSensor(FlatlandDistanceSensorName, "flatland_sim"); err != nil {
+		t.Fatalf("resolve flatland alias sensor flatland_sim: %v", err)
+	}
+	if _, err := ResolveActuator(FlatlandTwoWheelsActuatorName, "scape_flatland"); err != nil {
+		t.Fatalf("resolve flatland alias actuator scape_flatland: %v", err)
+	}
+	if _, err := ResolveSensor(EpitopesSignalSensorName, "epitopes_sim"); err != nil {
+		t.Fatalf("resolve epitopes alias sensor epitopes_sim: %v", err)
+	}
+	if _, err := ResolveActuator(EpitopesResponseActuatorName, "scape_epitopes_sim"); err != nil {
+		t.Fatalf("resolve epitopes alias actuator scape_epitopes_sim: %v", err)
+	}
 	if _, err := ResolveActuator(LLVMPhaseActuatorName, "scape_LLVMPhaseOrdering"); err != nil {
 		t.Fatalf("resolve llvm alias actuator scape_LLVMPhaseOrdering: %v", err)
 	}
 	if _, err := ResolveSensor(LLVMDiversitySensorName, "scape_LLVMPhaseOrdering"); err != nil {
 		t.Fatalf("resolve llvm alias sensor scape_LLVMPhaseOrdering: %v", err)
+	}
+	if _, err := ResolveActuator(LLVMPhaseActuatorName, "llvm_phase_ordering_sim"); err != nil {
+		t.Fatalf("resolve llvm alias actuator llvm_phase_ordering_sim: %v", err)
 	}
 }
