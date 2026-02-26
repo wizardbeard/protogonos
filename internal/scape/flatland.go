@@ -494,6 +494,11 @@ const (
 	flatlandScannerProfileBalanced = "balanced5"
 	flatlandScannerProfileCore     = "core3"
 	flatlandScannerProfileForward  = "forward5"
+	flatlandScannerColorPoison     = -1.0
+	flatlandScannerColorPlant      = -0.5
+	flatlandScannerColorPrey       = 0.0
+	flatlandScannerColorPredator   = 0.5
+	flatlandScannerColorWall       = 0.75
 )
 
 var flatlandDistanceScannerSensors = [flatlandScannerDensity]string{
@@ -938,8 +943,10 @@ type flatlandScannerEntityKind int
 
 const (
 	flatlandScannerEntityNone flatlandScannerEntityKind = iota
-	flatlandScannerEntityFood
+	flatlandScannerEntityPlant
+	flatlandScannerEntityPrey
 	flatlandScannerEntityPoison
+	flatlandScannerEntityPredator
 	flatlandScannerEntityWall
 )
 
@@ -971,14 +978,20 @@ func (e *flatlandEpisode) senseScannerVectors() (
 		}
 		distanceScan[i] = clamp(1.0-float64(distance)/float64(half), 0, 1)
 		switch kind {
-		case flatlandScannerEntityFood:
-			colorScan[i] = 1.0
+		case flatlandScannerEntityPlant:
+			colorScan[i] = flatlandScannerColorPlant
 			energyScan[i] = clamp(potency/flatlandFoodEnergyMax, 0, 1)
+		case flatlandScannerEntityPrey:
+			colorScan[i] = flatlandScannerColorPrey
+			energyScan[i] = clamp(potency/flatlandPreyEnergyMax, 0, 1)
 		case flatlandScannerEntityPoison:
-			colorScan[i] = -1.0
+			colorScan[i] = flatlandScannerColorPoison
 			energyScan[i] = -clamp(potency/flatlandPoisonDamageMax, 0, 1)
+		case flatlandScannerEntityPredator:
+			colorScan[i] = flatlandScannerColorPredator
+			energyScan[i] = -clamp(potency/flatlandPredatorDamageMax, 0, 1)
 		case flatlandScannerEntityWall:
-			colorScan[i] = 0.35
+			colorScan[i] = flatlandScannerColorWall
 			energyScan[i] = -flatlandWallPenalty
 		}
 		distanceScan[i] *= weight
@@ -1068,7 +1081,7 @@ func (e *flatlandEpisode) nearestEntityFrom(origin int) (flatlandScannerEntityKi
 		distance := absInt(signedRingDistance(origin, resource.position, flatlandWorldSize))
 		if distance < bestDistance {
 			bestDistance = distance
-			bestKind = flatlandScannerEntityFood
+			bestKind = flatlandScannerEntityPlant
 			bestPotency = clamp(resource.potency, flatlandFoodEnergyMin, flatlandFoodEnergyMax)
 		}
 	}
@@ -1079,7 +1092,7 @@ func (e *flatlandEpisode) nearestEntityFrom(origin int) (flatlandScannerEntityKi
 		distance := absInt(signedRingDistance(origin, resource.position, flatlandWorldSize))
 		if distance < bestDistance {
 			bestDistance = distance
-			bestKind = flatlandScannerEntityFood
+			bestKind = flatlandScannerEntityPrey
 			bestPotency = clamp(resource.potency, flatlandPreyEnergyMin, flatlandPreyEnergyMax)
 		}
 	}
@@ -1101,7 +1114,7 @@ func (e *flatlandEpisode) nearestEntityFrom(origin int) (flatlandScannerEntityKi
 		distance := absInt(signedRingDistance(origin, resource.position, flatlandWorldSize))
 		if distance < bestDistance {
 			bestDistance = distance
-			bestKind = flatlandScannerEntityPoison
+			bestKind = flatlandScannerEntityPredator
 			bestPotency = clamp(resource.potency, flatlandPredatorDamageMin, flatlandPredatorDamageMax)
 		}
 	}

@@ -891,6 +891,114 @@ func TestFlatlandEpisodeScannerProfileCoreMasksEdgeBins(t *testing.T) {
 	}
 }
 
+func TestFlatlandEpisodeNearestEntityFromClassifiesSocialAndResourceTypes(t *testing.T) {
+	episode := newFlatlandEpisode(flatlandModeConfig{
+		mode:            "test",
+		maxAge:          64,
+		forageGoal:      6,
+		foodPositions:   []int{},
+		poisonPositions: []int{},
+		wallPositions:   []int{},
+	})
+	episode.food = []flatlandResource{{position: 3, potency: flatlandFoodEnergyMax}}
+	episode.prey = []flatlandResource{{position: 7, potency: flatlandPreyEnergyMax}}
+	episode.poison = []flatlandResource{{position: 11, potency: flatlandPoisonDamageMax}}
+	episode.predators = []flatlandResource{{position: 15, potency: flatlandPredatorDamageMax}}
+	episode.walls = map[int]struct{}{19: {}}
+
+	cases := []struct {
+		name        string
+		origin      int
+		wantKind    flatlandScannerEntityKind
+		wantPotency float64
+	}{
+		{name: "plant", origin: 3, wantKind: flatlandScannerEntityPlant, wantPotency: flatlandFoodEnergyMax},
+		{name: "prey", origin: 7, wantKind: flatlandScannerEntityPrey, wantPotency: flatlandPreyEnergyMax},
+		{name: "poison", origin: 11, wantKind: flatlandScannerEntityPoison, wantPotency: flatlandPoisonDamageMax},
+		{name: "predator", origin: 15, wantKind: flatlandScannerEntityPredator, wantPotency: flatlandPredatorDamageMax},
+		{name: "wall", origin: 19, wantKind: flatlandScannerEntityWall, wantPotency: flatlandWallPenalty},
+	}
+	for _, tc := range cases {
+		kind, distance, potency, ok := episode.nearestEntityFrom(tc.origin)
+		if !ok {
+			t.Fatalf("%s: expected nearest entity, got none", tc.name)
+		}
+		if distance != 0 {
+			t.Fatalf("%s: expected distance=0, got=%d", tc.name, distance)
+		}
+		if kind != tc.wantKind {
+			t.Fatalf("%s: expected kind=%v got=%v", tc.name, tc.wantKind, kind)
+		}
+		if math.Abs(potency-tc.wantPotency) > 1e-9 {
+			t.Fatalf("%s: expected potency=%f got=%f", tc.name, tc.wantPotency, potency)
+		}
+	}
+}
+
+func TestFlatlandEpisodeScannerColorSemanticsMatchEntityClasses(t *testing.T) {
+	newScannerEpisode := func() *flatlandEpisode {
+		episode := newFlatlandEpisode(flatlandModeConfig{
+			mode:            "test",
+			maxAge:          64,
+			forageGoal:      6,
+			foodPositions:   []int{},
+			poisonPositions: []int{},
+			wallPositions:   []int{},
+			scannerSpread:   0.2,
+			scannerOffset:   0,
+			scannerProfile:  flatlandScannerProfileBalanced,
+		})
+		episode.position = 0
+		episode.heading = 1
+		episode.food = nil
+		episode.prey = nil
+		episode.poison = nil
+		episode.predators = nil
+		episode.walls = map[int]struct{}{}
+		return episode
+	}
+
+	assertCenter := func(name string, setup func(*flatlandEpisode), wantColor float64, energySign int) {
+		t.Helper()
+		episode := newScannerEpisode()
+		setup(episode)
+		distance, color, energy := episode.senseScannerVectors()
+		center := flatlandScannerDensity / 2
+		if distance[center] <= 0 {
+			t.Fatalf("%s: expected center distance signal > 0, got=%v", name, distance)
+		}
+		if math.Abs(color[center]-wantColor) > 1e-9 {
+			t.Fatalf("%s: expected center color=%f got=%f bins=%v", name, wantColor, color[center], color)
+		}
+		switch energySign {
+		case 1:
+			if energy[center] <= 0 {
+				t.Fatalf("%s: expected positive center energy signal, got=%v", name, energy)
+			}
+		case -1:
+			if energy[center] >= 0 {
+				t.Fatalf("%s: expected negative center energy signal, got=%v", name, energy)
+			}
+		}
+	}
+
+	assertCenter("plant", func(e *flatlandEpisode) {
+		e.food = []flatlandResource{{position: 0, potency: flatlandFoodEnergyMax}}
+	}, flatlandScannerColorPlant, 1)
+	assertCenter("prey", func(e *flatlandEpisode) {
+		e.prey = []flatlandResource{{position: 0, potency: flatlandPreyEnergyMax}}
+	}, flatlandScannerColorPrey, 1)
+	assertCenter("poison", func(e *flatlandEpisode) {
+		e.poison = []flatlandResource{{position: 0, potency: flatlandPoisonDamageMax}}
+	}, flatlandScannerColorPoison, -1)
+	assertCenter("predator", func(e *flatlandEpisode) {
+		e.predators = []flatlandResource{{position: 0, potency: flatlandPredatorDamageMax}}
+	}, flatlandScannerColorPredator, -1)
+	assertCenter("wall", func(e *flatlandEpisode) {
+		e.walls = map[int]struct{}{0: {}}
+	}, flatlandScannerColorWall, -1)
+}
+
 func mustTraceFloat64(t *testing.T, trace Trace, key string) float64 {
 	t.Helper()
 	value, ok := trace[key].(float64)
