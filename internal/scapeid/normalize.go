@@ -33,24 +33,27 @@ func aliasCandidates(normalized string) []string {
 	}
 	candidate = strings.Trim(candidate, "-")
 
-	candidates := []string{normalized}
-	if candidate != "" && candidate != normalized {
-		candidates = append(candidates, candidate)
-	}
-
-	trimmedCandidate := trimSimSuffix(candidate)
-	if trimmedCandidate != "" && trimmedCandidate != candidate {
-		candidates = append(candidates, trimmedCandidate)
-	}
-
-	trimmedNormalized := trimSimSuffix(normalized)
-	if trimmedNormalized != "" &&
-		trimmedNormalized != normalized &&
-		trimmedNormalized != candidate &&
-		trimmedNormalized != trimmedCandidate {
-		candidates = append(candidates, trimmedNormalized)
+	candidates := make([]string, 0, 10)
+	for _, value := range []string{normalized, candidate} {
+		candidates = appendAliasCandidate(candidates, value)
+		candidates = appendAliasCandidate(candidates, trimSimSuffix(value))
+		candidates = appendAliasCandidate(candidates, trimVersionSuffix(value))
+		candidates = appendAliasCandidate(candidates, trimVersionSuffix(trimSimSuffix(value)))
+		candidates = appendAliasCandidate(candidates, trimSimSuffix(trimVersionSuffix(value)))
 	}
 	return candidates
+}
+
+func appendAliasCandidate(candidates []string, candidate string) []string {
+	if candidate == "" {
+		return candidates
+	}
+	for _, existing := range candidates {
+		if existing == candidate {
+			return candidates
+		}
+	}
+	return append(candidates, candidate)
 }
 
 func trimSimSuffix(value string) string {
@@ -63,6 +66,17 @@ func trimSimSuffix(value string) string {
 		return strings.TrimSuffix(value, "-sim")
 	case strings.HasSuffix(value, "sim") && !strings.Contains(value, "-"):
 		return strings.TrimSuffix(value, "sim")
+	default:
+		return value
+	}
+}
+
+func trimVersionSuffix(value string) string {
+	switch {
+	case strings.HasSuffix(value, "-v1"):
+		return strings.TrimSuffix(value, "-v1")
+	case strings.HasSuffix(value, "v1") && !strings.Contains(value, "-"):
+		return strings.TrimSuffix(value, "v1")
 	default:
 		return value
 	}
