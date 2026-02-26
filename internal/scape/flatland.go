@@ -126,8 +126,7 @@ func flatlandConfigForMode(mode string) (flatlandModeConfig, error) {
 
 func evaluateFlatlandWithStep(ctx context.Context, runner StepAgent, cfg flatlandModeConfig) (Fitness, Trace, error) {
 	fitness, trace, err := evaluateFlatlandWithAggregation(ctx, runner.ID(), cfg, func(ctx context.Context, sense flatlandSenseInput) (flatlandControl, error) {
-		// Preserve manual StepAgent compatibility with the original 2-channel flatland input.
-		out, err := runner.RunStep(ctx, []float64{sense.distance, sense.energy})
+		out, err := runner.RunStep(ctx, flatlandStepInputVector(sense))
 		if err != nil {
 			return flatlandControl{}, err
 		}
@@ -137,6 +136,7 @@ func evaluateFlatlandWithStep(ctx context.Context, runner StepAgent, cfg flatlan
 		return 0, nil, err
 	}
 	trace["control_surface"] = "step_output"
+	trace["step_input_width"] = flatlandBaseFeatureWidth + flatlandScannerWidth
 	return fitness, trace, nil
 }
 
@@ -430,6 +430,7 @@ const (
 	flatlandRespawnStride          = 7
 	flatlandScannerDensity         = 5
 	flatlandScannerWidth           = flatlandScannerDensity * 3
+	flatlandBaseFeatureWidth       = 8
 	flatlandScannerSpreadDefault   = 0.18
 	flatlandScannerProfileBalanced = "balanced5"
 	flatlandScannerProfileCore     = "core3"
@@ -1437,6 +1438,30 @@ func meanFlatlandScan(values [flatlandScannerDensity]float64) float64 {
 		sum += value
 	}
 	return sum / float64(flatlandScannerDensity)
+}
+
+func flatlandStepInputVector(sense flatlandSenseInput) []float64 {
+	values := make([]float64, 0, flatlandBaseFeatureWidth+flatlandScannerWidth)
+	values = append(values,
+		sense.distance,
+		sense.energy,
+		sense.poison,
+		sense.wall,
+		sense.foodProximity,
+		sense.poisonProximity,
+		sense.wallProximity,
+		sense.resourceBalance,
+	)
+	for _, value := range sense.distanceScan {
+		values = append(values, value)
+	}
+	for _, value := range sense.colorScan {
+		values = append(values, value)
+	}
+	for _, value := range sense.energyScan {
+		values = append(values, value)
+	}
+	return values
 }
 
 func flatlandScanSlice(values [flatlandScannerDensity]float64) []float64 {

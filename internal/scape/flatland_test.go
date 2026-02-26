@@ -3,6 +3,7 @@ package scape
 import (
 	"context"
 	"fmt"
+	"math"
 	"testing"
 
 	"protogonos/internal/agent"
@@ -72,6 +73,53 @@ func TestFlatlandScapeForagingCollectsResources(t *testing.T) {
 			foragerTrace,
 			stationaryTrace,
 		)
+	}
+}
+
+func TestFlatlandScapeStepInputSurfaceIncludesScannerAndExtendedChannels(t *testing.T) {
+	scape := FlatlandScape{}
+	var lastInput []float64
+	agent := scriptedStepAgent{
+		id: "flatland-step-input-surface",
+		fn: func(input []float64) []float64 {
+			lastInput = append([]float64(nil), input...)
+			return flatlandGreedyForager(input)
+		},
+	}
+
+	_, trace, err := scape.Evaluate(context.Background(), agent)
+	if err != nil {
+		t.Fatalf("evaluate: %v", err)
+	}
+	if len(lastInput) != flatlandBaseFeatureWidth+flatlandScannerWidth {
+		t.Fatalf("expected step input width=%d, got=%d input=%v", flatlandBaseFeatureWidth+flatlandScannerWidth, len(lastInput), lastInput)
+	}
+	if width, ok := trace["step_input_width"].(int); !ok || width != flatlandBaseFeatureWidth+flatlandScannerWidth {
+		t.Fatalf("expected trace step_input_width=%d, trace=%+v", flatlandBaseFeatureWidth+flatlandScannerWidth, trace)
+	}
+
+	expectEqual := func(name string, got, want float64) {
+		t.Helper()
+		if math.Abs(got-want) > 1e-9 {
+			t.Fatalf("expected %s=%f got=%f", name, want, got)
+		}
+	}
+
+	expectEqual("distance", lastInput[0], mustTraceFloat64(t, trace, "last_food_distance"))
+	expectEqual("poison", lastInput[2], mustTraceFloat64(t, trace, "last_poison_signal"))
+	expectEqual("wall", lastInput[3], mustTraceFloat64(t, trace, "last_wall_signal"))
+	expectEqual("food_proximity", lastInput[4], mustTraceFloat64(t, trace, "last_food_proximity"))
+	expectEqual("poison_proximity", lastInput[5], mustTraceFloat64(t, trace, "last_poison_proximity"))
+	expectEqual("wall_proximity", lastInput[6], mustTraceFloat64(t, trace, "last_wall_proximity"))
+	expectEqual("resource_balance", lastInput[7], mustTraceFloat64(t, trace, "last_resource_balance"))
+
+	distanceBins := mustTraceFloat64Slice(t, trace, "last_distance_scan_bins")
+	colorBins := mustTraceFloat64Slice(t, trace, "last_color_scan_bins")
+	energyBins := mustTraceFloat64Slice(t, trace, "last_energy_scan_bins")
+	for i := 0; i < flatlandScannerDensity; i++ {
+		expectEqual("distance_scan_bin", lastInput[flatlandBaseFeatureWidth+i], distanceBins[i])
+		expectEqual("color_scan_bin", lastInput[flatlandBaseFeatureWidth+flatlandScannerDensity+i], colorBins[i])
+		expectEqual("energy_scan_bin", lastInput[flatlandBaseFeatureWidth+2*flatlandScannerDensity+i], energyBins[i])
 	}
 }
 
@@ -717,4 +765,22 @@ func TestFlatlandEpisodeScannerProfileCoreMasksEdgeBins(t *testing.T) {
 	if coreDistance[flatlandScannerDensity/2] <= 0 {
 		t.Fatalf("expected core profile center bin to remain active, got=%v", coreDistance)
 	}
+}
+
+func mustTraceFloat64(t *testing.T, trace Trace, key string) float64 {
+	t.Helper()
+	value, ok := trace[key].(float64)
+	if !ok {
+		t.Fatalf("expected trace[%q] float64, got trace=%+v", key, trace)
+	}
+	return value
+}
+
+func mustTraceFloat64Slice(t *testing.T, trace Trace, key string) []float64 {
+	t.Helper()
+	value, ok := trace[key].([]float64)
+	if !ok {
+		t.Fatalf("expected trace[%q] []float64, got trace=%+v", key, trace)
+	}
+	return value
 }
