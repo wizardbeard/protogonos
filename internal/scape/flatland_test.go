@@ -107,6 +107,75 @@ func TestFlatlandScapePublicLifecycleAndTick(t *testing.T) {
 	}
 }
 
+func TestFlatlandScapePublicUpdateAndListAgents(t *testing.T) {
+	scape := FlatlandScape{}
+	if err := scape.Start(context.Background()); err != nil {
+		t.Fatalf("start: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = scape.Stop(context.Background())
+	})
+
+	if err := scape.EnterPublicAgent(FlatlandPublicAgent{ID: "seed"}); err != nil {
+		t.Fatalf("enter seed: %v", err)
+	}
+
+	agents, err := scape.PublicAgents()
+	if err != nil {
+		t.Fatalf("public agents: %v", err)
+	}
+	if len(agents) != 1 {
+		t.Fatalf("expected one initial public agent, got=%d", len(agents))
+	}
+	if id, _ := agents[0]["id"].(string); id != "seed" {
+		t.Fatalf("expected seed public agent, agents=%+v", agents)
+	}
+
+	if err := scape.UpdatePublicAgents([]FlatlandPublicAgent{
+		{ID: "seed"},
+		{ID: "bench", Mode: "benchmark"},
+	}); err != nil {
+		t.Fatalf("update public agents: %v", err)
+	}
+
+	trace, err := scape.TickPublic(context.Background())
+	if err != nil {
+		t.Fatalf("tick after update: %v", err)
+	}
+	if active, ok := trace["active_agents"].(int); !ok || active != 2 {
+		t.Fatalf("expected active_agents=2 after update, trace=%+v", trace)
+	}
+
+	agents, err = scape.PublicAgents()
+	if err != nil {
+		t.Fatalf("public agents after update: %v", err)
+	}
+	if len(agents) != 2 {
+		t.Fatalf("expected two public agents after update, got=%d", len(agents))
+	}
+	if mode, _ := agents[1]["mode"].(string); mode == "" {
+		t.Fatalf("expected public agent mode annotation, agents=%+v", agents)
+	}
+
+	if err := scape.UpdatePublicAgents([]FlatlandPublicAgent{{ID: "bench", Mode: "benchmark"}}); err != nil {
+		t.Fatalf("update public agents remove seed: %v", err)
+	}
+	trace, err = scape.TickPublic(context.Background())
+	if err != nil {
+		t.Fatalf("tick after removal update: %v", err)
+	}
+	if active, ok := trace["active_agents"].(int); !ok || active != 1 {
+		t.Fatalf("expected active_agents=1 after removal update, trace=%+v", trace)
+	}
+
+	if err := scape.UpdatePublicAgents([]FlatlandPublicAgent{
+		{ID: "dup"},
+		{ID: "dup"},
+	}); err == nil {
+		t.Fatal("expected duplicate update ids to fail")
+	}
+}
+
 func TestFlatlandScapeForagingCollectsResources(t *testing.T) {
 	scape := FlatlandScape{}
 	stationary := scriptedStepAgent{

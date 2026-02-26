@@ -22,6 +22,7 @@ type FlatlandPublicAgent struct {
 
 type flatlandPublicAgentState struct {
 	id         string
+	mode       string
 	episode    *flatlandEpisode
 	decide     func([]float64) []float64
 	terminated bool
@@ -91,19 +92,106 @@ func (FlatlandScape) EnterPublicAgent(agent FlatlandPublicAgent) error {
 	}
 
 	cfg := flatlandPublicWorld.config
+	mode := cfg.mode
 	if strings.TrimSpace(agent.Mode) != "" {
 		modeCfg, err := flatlandConfigForMode(agent.Mode)
 		if err != nil {
 			return err
 		}
 		cfg = modeCfg
+		mode = modeCfg.mode
 	}
 	episode := newFlatlandEpisodeForAgent(cfg, agentID)
 	flatlandPublicWorld.agents[agentID] = &flatlandPublicAgentState{
 		id:      agentID,
+		mode:    mode,
 		episode: episode,
 		decide:  agent.Decide,
 	}
+	return nil
+}
+
+func (FlatlandScape) PublicAgents() ([]Trace, error) {
+	flatlandPublicWorld.mu.RLock()
+	defer flatlandPublicWorld.mu.RUnlock()
+	if !flatlandPublicWorld.started {
+		return nil, fmt.Errorf("flatland public world is not started")
+	}
+
+	ids := make([]string, 0, len(flatlandPublicWorld.agents))
+	for id := range flatlandPublicWorld.agents {
+		ids = append(ids, id)
+	}
+	sort.Strings(ids)
+
+	out := make([]Trace, 0, len(ids))
+	for _, id := range ids {
+		out = append(out, flatlandPublicAgentTrace(flatlandPublicWorld.agents[id]))
+	}
+	return out, nil
+}
+
+func (FlatlandScape) UpdatePublicAgents(agents []FlatlandPublicAgent) error {
+	flatlandPublicWorld.mu.Lock()
+	defer flatlandPublicWorld.mu.Unlock()
+	if !flatlandPublicWorld.started {
+		return fmt.Errorf("flatland public world is not started")
+	}
+
+	next := make(map[string]*flatlandPublicAgentState, len(agents))
+	for _, agent := range agents {
+		agentID := strings.TrimSpace(agent.ID)
+		if agentID == "" {
+			return fmt.Errorf("flatland public agent id is required")
+		}
+		if _, exists := next[agentID]; exists {
+			return fmt.Errorf("duplicate public agent update for id: %s", agentID)
+		}
+
+		existing, hasExisting := flatlandPublicWorld.agents[agentID]
+		if hasExisting {
+			mode := existing.mode
+			if mode == "" {
+				mode = flatlandPublicWorld.config.mode
+			}
+			if strings.TrimSpace(agent.Mode) != "" {
+				modeCfg, err := flatlandConfigForMode(agent.Mode)
+				if err != nil {
+					return err
+				}
+				mode = modeCfg.mode
+				if mode != existing.mode {
+					existing.mode = mode
+					existing.episode = newFlatlandEpisodeForAgent(modeCfg, agentID)
+					existing.terminated = false
+				}
+			}
+			if agent.Decide != nil || existing.decide == nil {
+				existing.decide = agent.Decide
+			}
+			next[agentID] = existing
+			continue
+		}
+
+		cfg := flatlandPublicWorld.config
+		mode := cfg.mode
+		if strings.TrimSpace(agent.Mode) != "" {
+			modeCfg, err := flatlandConfigForMode(agent.Mode)
+			if err != nil {
+				return err
+			}
+			cfg = modeCfg
+			mode = modeCfg.mode
+		}
+		next[agentID] = &flatlandPublicAgentState{
+			id:      agentID,
+			mode:    mode,
+			episode: newFlatlandEpisodeForAgent(cfg, agentID),
+			decide:  agent.Decide,
+		}
+	}
+
+	flatlandPublicWorld.agents = next
 	return nil
 }
 
@@ -204,6 +292,7 @@ func flatlandPublicAgentTrace(state *flatlandPublicAgentState) Trace {
 	episode := state.episode
 	return Trace{
 		"id":                       state.id,
+		"mode":                     state.mode,
 		"position":                 episode.position,
 		"age":                      episode.age,
 		"energy":                   episode.energy,
