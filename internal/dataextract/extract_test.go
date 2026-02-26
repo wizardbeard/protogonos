@@ -42,3 +42,39 @@ func TestExtractEpitopesCSVWithNamedSequenceColumns(t *testing.T) {
 		t.Fatalf("unexpected epitopes output:\n%s", got)
 	}
 }
+
+func TestExtractSeriesCSVNormalizeMinMax(t *testing.T) {
+	in := strings.NewReader("close\n10\n20\n30\n")
+	var out strings.Builder
+	err := ExtractSeriesCSV(in, &out, SeriesOptions{
+		HasHeader:         true,
+		ValueColumnName:   "close",
+		ValueColumnIndex:  -1,
+		OutputValueHeader: "value",
+		Normalize:         "minmax",
+	})
+	if err != nil {
+		t.Fatalf("extract series: %v", err)
+	}
+	if got := out.String(); got != "t,value\n0,0\n1,0.5\n2,1\n" {
+		t.Fatalf("unexpected minmax output:\n%s", got)
+	}
+}
+
+func TestExtractSeriesCSVNormalizeZScore(t *testing.T) {
+	in := strings.NewReader("close\n10\n20\n30\n")
+	var out strings.Builder
+	err := ExtractSeriesCSV(in, &out, SeriesOptions{
+		HasHeader:         true,
+		ValueColumnName:   "close",
+		ValueColumnIndex:  -1,
+		OutputValueHeader: "value",
+		Normalize:         "zscore",
+	})
+	if err != nil {
+		t.Fatalf("extract series: %v", err)
+	}
+	if got := out.String(); got != "t,value\n0,-1.224744871391589\n1,0\n2,1.224744871391589\n" {
+		t.Fatalf("unexpected zscore output:\n%s", got)
+	}
+}

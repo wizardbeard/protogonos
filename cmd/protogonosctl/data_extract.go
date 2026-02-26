@@ -20,6 +20,7 @@ func runDataExtract(_ context.Context, args []string) error {
 	hasHeader := fs.Bool("has-header", true, "input CSV has header row")
 	valueCol := fs.String("value-col", "", "series value column name (header mode)")
 	valueIndex := fs.Int("value-index", -1, "series value column index (no-header mode)")
+	normalize := fs.String("normalize", "none", "series normalization mode: none|minmax|zscore")
 	signalCol := fs.String("signal-col", "signal", "epitopes signal column name")
 	memoryCol := fs.String("memory-col", "memory", "epitopes memory column name")
 	classCol := fs.String("class-col", "class", "epitopes class column name")
@@ -69,6 +70,7 @@ func runDataExtract(_ context.Context, args []string) error {
 			ValueColumnName:   columnName,
 			ValueColumnIndex:  *valueIndex,
 			OutputValueHeader: "value",
+			Normalize:         *normalize,
 		})
 	case "fx":
 		columnName := strings.TrimSpace(*valueCol)
@@ -80,6 +82,7 @@ func runDataExtract(_ context.Context, args []string) error {
 			ValueColumnName:   columnName,
 			ValueColumnIndex:  *valueIndex,
 			OutputValueHeader: "close",
+			Normalize:         *normalize,
 		})
 	case "epitopes":
 		sequenceNames := parseCommaSeparated(*sequenceCols)
@@ -111,7 +114,7 @@ func runDataExtract(_ context.Context, args []string) error {
 		return err
 	}
 
-	fmt.Printf("data_extract scape=%s in=%s out=%s\n", strings.ToLower(strings.TrimSpace(*scapeName)), *inputPath, *outputPath)
+	fmt.Printf("data_extract scape=%s in=%s out=%s normalize=%s\n", strings.ToLower(strings.TrimSpace(*scapeName)), *inputPath, *outputPath, strings.ToLower(strings.TrimSpace(*normalize)))
 	return nil
 }
 

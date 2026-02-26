@@ -65,3 +65,33 @@ func TestRunDataExtractEpitopes(t *testing.T) {
 		t.Fatalf("unexpected epitopes header:\n%s", got)
 	}
 }
+
+func TestRunDataExtractGTSAWithNormalization(t *testing.T) {
+	tmp := t.TempDir()
+	in := filepath.Join(tmp, "raw_norm.csv")
+	out := filepath.Join(tmp, "gtsa_norm.csv")
+	raw := "close\n10\n20\n30\n"
+	if err := os.WriteFile(in, []byte(raw), 0o644); err != nil {
+		t.Fatalf("write input: %v", err)
+	}
+
+	err := runDataExtract(context.Background(), []string{
+		"--scape", "gtsa",
+		"--in", in,
+		"--out", out,
+		"--value-col", "close",
+		"--normalize", "minmax",
+	})
+	if err != nil {
+		t.Fatalf("run data-extract gtsa normalize: %v", err)
+	}
+
+	data, err := os.ReadFile(out)
+	if err != nil {
+		t.Fatalf("read output: %v", err)
+	}
+	got := string(data)
+	if got != "t,value\n0,0\n1,0.5\n2,1\n" {
+		t.Fatalf("unexpected normalized gtsa output:\n%s", got)
+	}
+}

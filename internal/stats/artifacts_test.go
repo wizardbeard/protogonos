@@ -3,6 +3,7 @@ package stats
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"protogonos/internal/model"
@@ -105,6 +106,9 @@ func TestWriteAndExportRunArtifacts(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("write benchmark summary: %v", err)
 	}
+	if err := WriteBenchmarkSeries(runDir, []float64{0.5, 0.6, 0.7}); err != nil {
+		t.Fatalf("write benchmark series: %v", err)
+	}
 
 	exportedDirWithBenchmark, err := ExportRunArtifacts(baseDir, runID, outDir)
 	if err != nil {
@@ -112,6 +116,9 @@ func TestWriteAndExportRunArtifacts(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(exportedDirWithBenchmark, "benchmark_summary.json")); err != nil {
 		t.Fatalf("expected exported benchmark summary: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(exportedDirWithBenchmark, "benchmark_series.csv")); err != nil {
+		t.Fatalf("expected exported benchmark series: %v", err)
 	}
 }
 
@@ -243,5 +250,24 @@ func TestReadTuningComparison(t *testing.T) {
 	}
 	if got.FinalImprovement != want.FinalImprovement {
 		t.Fatalf("unexpected compare report: got=%+v want=%+v", got, want)
+	}
+}
+
+func TestWriteBenchmarkSeries(t *testing.T) {
+	runDir := t.TempDir()
+	if err := WriteBenchmarkSeries(runDir, []float64{1.5, 1.75}); err != nil {
+		t.Fatalf("write benchmark series: %v", err)
+	}
+
+	data, err := os.ReadFile(filepath.Join(runDir, "benchmark_series.csv"))
+	if err != nil {
+		t.Fatalf("read benchmark series: %v", err)
+	}
+	got := string(data)
+	if got != "generation,best_fitness\n1,1.5\n2,1.75\n" {
+		t.Fatalf("unexpected benchmark series output:\n%s", got)
+	}
+	if strings.Count(got, "\n") != 3 {
+		t.Fatalf("expected 3 csv lines, got %d", strings.Count(got, "\n"))
 	}
 }

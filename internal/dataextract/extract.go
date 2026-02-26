@@ -4,6 +4,7 @@ import (
 	"encoding/csv"
 	"fmt"
 	"io"
+	"math"
 	"strconv"
 	"strings"
 )
@@ -13,6 +14,7 @@ type SeriesOptions struct {
 	ValueColumnName   string
 	ValueColumnIndex  int
 	OutputValueHeader string
+	Normalize         string
 }
 
 type EpitopesOptions struct {
@@ -37,10 +39,6 @@ func ExtractSeriesCSV(in io.Reader, out io.Writer, opts SeriesOptions) error {
 	if valueHeader == "" {
 		valueHeader = "value"
 	}
-	if err := writer.Write([]string{"t", valueHeader}); err != nil {
-		return fmt.Errorf("write series header: %w", err)
-	}
-
 	valueIdx := opts.ValueColumnIndex
 	row := 0
 	if opts.HasHeader {
@@ -66,7 +64,7 @@ func ExtractSeriesCSV(in io.Reader, out io.Writer, opts SeriesOptions) error {
 		valueIdx = 0
 	}
 
-	recordIndex := 0
+	values := make([]float64, 0)
 	for {
 		record, err := reader.Read()
 		if err == io.EOF {
@@ -86,13 +84,24 @@ func ExtractSeriesCSV(in io.Reader, out io.Writer, opts SeriesOptions) error {
 		if err != nil {
 			return fmt.Errorf("parse series value row %d: %w", row, err)
 		}
+		values = append(values, value)
+	}
+
+	normalized, err := normalizeSeriesValues(values, opts.Normalize)
+	if err != nil {
+		return err
+	}
+
+	if err := writer.Write([]string{"t", valueHeader}); err != nil {
+		return fmt.Errorf("write series header: %w", err)
+	}
+	for i, value := range normalized {
 		if err := writer.Write([]string{
-			strconv.Itoa(recordIndex),
+			strconv.Itoa(i),
 			strconv.FormatFloat(value, 'f', -1, 64),
 		}); err != nil {
-			return fmt.Errorf("write series row %d: %w", row, err)
+			return fmt.Errorf("write series row %d: %w", i+1, err)
 		}
-		recordIndex++
 	}
 
 	if err := writer.Error(); err != nil {
@@ -310,4 +319,73 @@ func maxInt(a, b int) int {
 		return a
 	}
 	return b
+}
+
+func normalizeSeriesValues(values []float64, mode string) ([]float64, error) {
+	out := append([]float64(nil), values...)
+	switch strings.ToLower(strings.TrimSpace(mode)) {
+	case "", "none":
+		return out, nil
+	case "minmax":
+		return normalizeSeriesMinMax(out), nil
+	case "zscore":
+		return normalizeSeriesZScore(out), nil
+	default:
+		return nil, fmt.Errorf("unsupported series normalization mode: %s", mode)
+	}
+}
+
+func normalizeSeriesMinMax(values []float64) []float64 {
+	if len(values) == 0 {
+		return values
+	}
+	minValue := values[0]
+	maxValue := values[0]
+	for _, value := range values[1:] {
+		if value < minValue {
+			minValue = value
+		}
+		if value > maxValue {
+			maxValue = value
+		}
+	}
+	rangeValue := maxValue - minValue
+	if rangeValue == 0 {
+		for i := range values {
+			values[i] = 0
+		}
+		return values
+	}
+	for i := range values {
+		values[i] = (values[i] - minValue) / rangeValue
+	}
+	return values
+}
+
+func normalizeSeriesZScore(values []float64) []float64 {
+	if len(values) == 0 {
+		return values
+	}
+	mean := 0.0
+	for _, value := range values {
+		mean += value
+	}
+	mean /= float64(len(values))
+
+	sumSq := 0.0
+	for _, value := range values {
+		diff := value - mean
+		sumSq += diff * diff
+	}
+	std := math.Sqrt(sumSq / float64(len(values)))
+	if std == 0 {
+		for i := range values {
+			values[i] = 0
+		}
+		return values
+	}
+	for i := range values {
+		values[i] = (values[i] - mean) / std
+	}
+	return values
 }

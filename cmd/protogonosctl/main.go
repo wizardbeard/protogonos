@@ -1341,6 +1341,9 @@ func runBenchmark(ctx context.Context, args []string) error {
 	if err := stats.WriteBenchmarkSummary(runSummary.ArtifactsDir, report); err != nil {
 		return err
 	}
+	if err := stats.WriteBenchmarkSeries(runSummary.ArtifactsDir, runSummary.BestByGeneration); err != nil {
+		return err
+	}
 
 	fmt.Printf("benchmark run_id=%s scape=%s initial_best=%.6f final_best=%.6f mean_best=%.6f std_best=%.6f best_min=%.6f best_max=%.6f improvement=%.6f threshold=%.6f passed=%t\n",
 		runSummary.RunID,
@@ -1356,6 +1359,7 @@ func runBenchmark(ctx context.Context, args []string) error {
 		passed,
 	)
 	fmt.Printf("benchmark_summary=%s\n", filepath.Join(runSummary.ArtifactsDir, "benchmark_summary.json"))
+	fmt.Printf("benchmark_series=%s\n", filepath.Join(runSummary.ArtifactsDir, "benchmark_series.csv"))
 	return nil
 }
 

@@ -1,12 +1,14 @@
 package stats
 
 import (
+	"encoding/csv"
 	"encoding/json"
 	"fmt"
 	"io"
 	"os"
 	"path/filepath"
 	"sort"
+	"strconv"
 
 	"protogonos/internal/model"
 )
@@ -288,6 +290,14 @@ func ExportRunArtifacts(baseDir, runID, outDir string) (string, error) {
 	} else if err != nil && !os.IsNotExist(err) {
 		return "", err
 	}
+	seriesPath := filepath.Join(src, "benchmark_series.csv")
+	if _, err := os.Stat(seriesPath); err == nil {
+		if err := copyFile(seriesPath, filepath.Join(dst, "benchmark_series.csv")); err != nil {
+			return "", err
+		}
+	} else if err != nil && !os.IsNotExist(err) {
+		return "", err
+	}
 
 	return dst, nil
 }
@@ -315,6 +325,30 @@ func ReadTuningComparison(baseDir, runID string) (TuningComparison, bool, error)
 
 func WriteBenchmarkSummary(runDir string, summary BenchmarkSummary) error {
 	return writeJSON(filepath.Join(runDir, "benchmark_summary.json"), summary)
+}
+
+func WriteBenchmarkSeries(runDir string, bestByGeneration []float64) error {
+	path := filepath.Join(runDir, "benchmark_series.csv")
+	file, err := os.Create(path)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+
+	writer := csv.NewWriter(file)
+	if err := writer.Write([]string{"generation", "best_fitness"}); err != nil {
+		return err
+	}
+	for i, best := range bestByGeneration {
+		if err := writer.Write([]string{
+			strconv.Itoa(i + 1),
+			strconv.FormatFloat(best, 'f', -1, 64),
+		}); err != nil {
+			return err
+		}
+	}
+	writer.Flush()
+	return writer.Error()
 }
 
 func writeJSON(path string, value any) error {
