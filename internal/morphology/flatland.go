@@ -27,8 +27,8 @@ func (FlatlandScannerMorphology) Name() string {
 
 func (FlatlandScannerMorphology) Sensors() []string {
 	// Mirrors reference-style scanner-heavy prey profile:
-	// distance/color/energy scanners + internal energy reader.
-	return append(flatlandScannerSensors(), protoio.FlatlandEnergySensorName)
+	// distance/color/energy scanners + internal scalar channels.
+	return append(flatlandScannerSensors(), flatlandScannerStateSensors()...)
 }
 
 func (FlatlandScannerMorphology) Actuators() []string {
@@ -43,14 +43,28 @@ func flatlandExtendedSensors() []string {
 	base := []string{
 		protoio.FlatlandDistanceSensorName,
 		protoio.FlatlandEnergySensorName,
+		protoio.FlatlandPreySensorName,
+		protoio.FlatlandPredatorSensorName,
 		protoio.FlatlandPoisonSensorName,
 		protoio.FlatlandWallSensorName,
 		protoio.FlatlandFoodProximitySensorName,
+		protoio.FlatlandPreyProximitySensorName,
+		protoio.FlatlandPredatorProximitySensorName,
 		protoio.FlatlandPoisonProximitySensorName,
 		protoio.FlatlandWallProximitySensorName,
 		protoio.FlatlandResourceBalanceSensorName,
 	}
 	return append(base, flatlandScannerSensors()...)
+}
+
+func flatlandScannerStateSensors() []string {
+	return []string{
+		protoio.FlatlandEnergySensorName,
+		protoio.FlatlandPreySensorName,
+		protoio.FlatlandPredatorSensorName,
+		protoio.FlatlandPreyProximitySensorName,
+		protoio.FlatlandPredatorProximitySensorName,
+	}
 }
 
 func flatlandScannerSensors() []string {

@@ -486,6 +486,10 @@ func flatlandSeedSensorIDs() []string {
 		protoio.FlatlandEnergyScan3SensorName,
 		protoio.FlatlandEnergyScan4SensorName,
 		protoio.FlatlandEnergySensorName,
+		protoio.FlatlandPreySensorName,
+		protoio.FlatlandPredatorSensorName,
+		protoio.FlatlandPreyProximitySensorName,
+		protoio.FlatlandPredatorProximitySensorName,
 	}
 }
 
@@ -495,6 +499,10 @@ func flatlandSeedInputNeuronIDs() []string {
 		"c0", "c1", "c2", "c3", "c4",
 		"es0", "es1", "es2", "es3", "es4",
 		"e",
+		"prey",
+		"pred",
+		"prey_prox",
+		"pred_prox",
 	}
 }
 
@@ -514,6 +522,14 @@ func flatlandSeedWheelWeights(index int) (float64, float64) {
 	case index >= 10 && index < 15:
 		base := 0.45 * binProfile[index-10]
 		return base, -base
+	case index == 16:
+		return 0.45, -0.45
+	case index == 17:
+		return -0.45, 0.45
+	case index == 18:
+		return 0.30, 0.30
+	case index == 19:
+		return -0.30, -0.30
 	default:
 		return 0.25, 0.25
 	}

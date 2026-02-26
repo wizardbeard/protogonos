@@ -29,9 +29,13 @@ func TestFlatlandMorphologyIncludesExtendedSensors(t *testing.T) {
 	expected := []string{
 		protoio.FlatlandDistanceSensorName,
 		protoio.FlatlandEnergySensorName,
+		protoio.FlatlandPreySensorName,
+		protoio.FlatlandPredatorSensorName,
 		protoio.FlatlandPoisonSensorName,
 		protoio.FlatlandWallSensorName,
 		protoio.FlatlandFoodProximitySensorName,
+		protoio.FlatlandPreyProximitySensorName,
+		protoio.FlatlandPredatorProximitySensorName,
 		protoio.FlatlandPoisonProximitySensorName,
 		protoio.FlatlandWallProximitySensorName,
 		protoio.FlatlandResourceBalanceSensorName,
@@ -73,6 +77,12 @@ func TestFlatlandScannerMorphologySurface(t *testing.T) {
 	sensors := m.Sensors()
 	if !slices.Contains(sensors, protoio.FlatlandEnergySensorName) {
 		t.Fatalf("expected scanner profile to include energy reader channel, got=%v", sensors)
+	}
+	if !slices.Contains(sensors, protoio.FlatlandPreySensorName) ||
+		!slices.Contains(sensors, protoio.FlatlandPredatorSensorName) ||
+		!slices.Contains(sensors, protoio.FlatlandPreyProximitySensorName) ||
+		!slices.Contains(sensors, protoio.FlatlandPredatorProximitySensorName) {
+		t.Fatalf("expected scanner profile to include social channels, got=%v", sensors)
 	}
 	if !slices.Contains(sensors, protoio.FlatlandDistanceScan0SensorName) ||
 		!slices.Contains(sensors, protoio.FlatlandDistanceScan4SensorName) ||

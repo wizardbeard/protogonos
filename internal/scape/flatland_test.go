@@ -106,12 +106,16 @@ func TestFlatlandScapeStepInputSurfaceIncludesScannerAndExtendedChannels(t *test
 	}
 
 	expectEqual("distance", lastInput[0], mustTraceFloat64(t, trace, "last_food_distance"))
-	expectEqual("poison", lastInput[2], mustTraceFloat64(t, trace, "last_poison_signal"))
-	expectEqual("wall", lastInput[3], mustTraceFloat64(t, trace, "last_wall_signal"))
-	expectEqual("food_proximity", lastInput[4], mustTraceFloat64(t, trace, "last_food_proximity"))
-	expectEqual("poison_proximity", lastInput[5], mustTraceFloat64(t, trace, "last_poison_proximity"))
-	expectEqual("wall_proximity", lastInput[6], mustTraceFloat64(t, trace, "last_wall_proximity"))
-	expectEqual("resource_balance", lastInput[7], mustTraceFloat64(t, trace, "last_resource_balance"))
+	expectEqual("prey", lastInput[2], mustTraceFloat64(t, trace, "last_prey_signal"))
+	expectEqual("predator", lastInput[3], mustTraceFloat64(t, trace, "last_predator_signal"))
+	expectEqual("poison", lastInput[4], mustTraceFloat64(t, trace, "last_poison_signal"))
+	expectEqual("wall", lastInput[5], mustTraceFloat64(t, trace, "last_wall_signal"))
+	expectEqual("food_proximity", lastInput[6], mustTraceFloat64(t, trace, "last_food_proximity"))
+	expectEqual("prey_proximity", lastInput[7], mustTraceFloat64(t, trace, "last_prey_proximity"))
+	expectEqual("predator_proximity", lastInput[8], mustTraceFloat64(t, trace, "last_predator_proximity"))
+	expectEqual("poison_proximity", lastInput[9], mustTraceFloat64(t, trace, "last_poison_proximity"))
+	expectEqual("wall_proximity", lastInput[10], mustTraceFloat64(t, trace, "last_wall_proximity"))
+	expectEqual("resource_balance", lastInput[11], mustTraceFloat64(t, trace, "last_resource_balance"))
 
 	distanceBins := mustTraceFloat64Slice(t, trace, "last_distance_scan_bins")
 	colorBins := mustTraceFloat64Slice(t, trace, "last_color_scan_bins")
@@ -184,27 +188,39 @@ func TestFlatlandScapeEvaluateWithIOComponents(t *testing.T) {
 func TestFlatlandScapeEvaluateWithExtendedIOComponents(t *testing.T) {
 	genome := model.Genome{
 		SensorIDs: []string{
+			protoio.FlatlandPreySensorName,
+			protoio.FlatlandPredatorSensorName,
 			protoio.FlatlandPoisonSensorName,
 			protoio.FlatlandWallSensorName,
 			protoio.FlatlandFoodProximitySensorName,
+			protoio.FlatlandPreyProximitySensorName,
+			protoio.FlatlandPredatorProximitySensorName,
 			protoio.FlatlandPoisonProximitySensorName,
 			protoio.FlatlandWallProximitySensorName,
 			protoio.FlatlandResourceBalanceSensorName,
 		},
 		ActuatorIDs: []string{protoio.FlatlandMoveActuatorName},
 		Neurons: []model.Neuron{
+			{ID: "prey", Activation: "identity"},
+			{ID: "predator", Activation: "identity"},
 			{ID: "poison", Activation: "identity"},
 			{ID: "wall", Activation: "identity"},
 			{ID: "food_prox", Activation: "identity"},
+			{ID: "prey_prox", Activation: "identity"},
+			{ID: "predator_prox", Activation: "identity"},
 			{ID: "poison_prox", Activation: "identity"},
 			{ID: "wall_prox", Activation: "identity"},
 			{ID: "balance", Activation: "identity"},
 			{ID: "move", Activation: "tanh"},
 		},
 		Synapses: []model.Synapse{
+			{From: "prey", To: "move", Weight: 0.5, Enabled: true},
+			{From: "predator", To: "move", Weight: -0.6, Enabled: true},
 			{From: "poison", To: "move", Weight: -0.8, Enabled: true},
 			{From: "wall", To: "move", Weight: -0.6, Enabled: true},
 			{From: "food_prox", To: "move", Weight: 0.9, Enabled: true},
+			{From: "prey_prox", To: "move", Weight: 0.7, Enabled: true},
+			{From: "predator_prox", To: "move", Weight: -0.8, Enabled: true},
 			{From: "poison_prox", To: "move", Weight: -0.7, Enabled: true},
 			{From: "wall_prox", To: "move", Weight: -0.5, Enabled: true},
 			{From: "balance", To: "move", Weight: 0.4, Enabled: true},
@@ -212,12 +228,16 @@ func TestFlatlandScapeEvaluateWithExtendedIOComponents(t *testing.T) {
 	}
 
 	sensors := map[string]protoio.Sensor{
-		protoio.FlatlandPoisonSensorName:          protoio.NewScalarInputSensor(0),
-		protoio.FlatlandWallSensorName:            protoio.NewScalarInputSensor(0),
-		protoio.FlatlandFoodProximitySensorName:   protoio.NewScalarInputSensor(0),
-		protoio.FlatlandPoisonProximitySensorName: protoio.NewScalarInputSensor(0),
-		protoio.FlatlandWallProximitySensorName:   protoio.NewScalarInputSensor(0),
-		protoio.FlatlandResourceBalanceSensorName: protoio.NewScalarInputSensor(0),
+		protoio.FlatlandPreySensorName:              protoio.NewScalarInputSensor(0),
+		protoio.FlatlandPredatorSensorName:          protoio.NewScalarInputSensor(0),
+		protoio.FlatlandPoisonSensorName:            protoio.NewScalarInputSensor(0),
+		protoio.FlatlandWallSensorName:              protoio.NewScalarInputSensor(0),
+		protoio.FlatlandFoodProximitySensorName:     protoio.NewScalarInputSensor(0),
+		protoio.FlatlandPreyProximitySensorName:     protoio.NewScalarInputSensor(0),
+		protoio.FlatlandPredatorProximitySensorName: protoio.NewScalarInputSensor(0),
+		protoio.FlatlandPoisonProximitySensorName:   protoio.NewScalarInputSensor(0),
+		protoio.FlatlandWallProximitySensorName:     protoio.NewScalarInputSensor(0),
+		protoio.FlatlandResourceBalanceSensorName:   protoio.NewScalarInputSensor(0),
 	}
 	actuators := map[string]protoio.Actuator{
 		protoio.FlatlandMoveActuatorName: protoio.NewScalarOutputActuator(),
@@ -228,7 +248,7 @@ func TestFlatlandScapeEvaluateWithExtendedIOComponents(t *testing.T) {
 		genome,
 		sensors,
 		actuators,
-		[]string{"poison", "wall", "food_prox", "poison_prox", "wall_prox", "balance"},
+		[]string{"prey", "predator", "poison", "wall", "food_prox", "prey_prox", "predator_prox", "poison_prox", "wall_prox", "balance"},
 		[]string{"move"},
 		nil,
 	)
@@ -244,7 +264,7 @@ func TestFlatlandScapeEvaluateWithExtendedIOComponents(t *testing.T) {
 	if fitness <= 0 {
 		t.Fatalf("expected positive fitness, got %f", fitness)
 	}
-	if width, ok := trace["feature_width"].(int); !ok || width != 8 {
+	if width, ok := trace["feature_width"].(int); !ok || width != flatlandBaseFeatureWidth {
 		t.Fatalf("expected extended feature width marker, trace=%+v", trace)
 	}
 	if width, ok := trace["scanner_feature_width"].(int); !ok || width != 15 {
@@ -413,11 +433,23 @@ func TestFlatlandScapeTraceCapturesMetabolicsAndCollisions(t *testing.T) {
 	if _, ok := trace["last_poison_signal"].(float64); !ok {
 		t.Fatalf("trace missing last_poison_signal: %+v", trace)
 	}
+	if _, ok := trace["last_prey_signal"].(float64); !ok {
+		t.Fatalf("trace missing last_prey_signal: %+v", trace)
+	}
+	if _, ok := trace["last_predator_signal"].(float64); !ok {
+		t.Fatalf("trace missing last_predator_signal: %+v", trace)
+	}
 	if _, ok := trace["last_wall_signal"].(float64); !ok {
 		t.Fatalf("trace missing last_wall_signal: %+v", trace)
 	}
 	if _, ok := trace["last_food_proximity"].(float64); !ok {
 		t.Fatalf("trace missing last_food_proximity: %+v", trace)
+	}
+	if _, ok := trace["last_prey_proximity"].(float64); !ok {
+		t.Fatalf("trace missing last_prey_proximity: %+v", trace)
+	}
+	if _, ok := trace["last_predator_proximity"].(float64); !ok {
+		t.Fatalf("trace missing last_predator_proximity: %+v", trace)
 	}
 	if _, ok := trace["last_poison_proximity"].(float64); !ok {
 		t.Fatalf("trace missing last_poison_proximity: %+v", trace)

@@ -165,6 +165,12 @@ func evaluateFlatlandWithTick(ctx context.Context, ticker TickAgent, cfg flatlan
 		if ioBindings.energySetter != nil {
 			ioBindings.energySetter.Set(sense.energy)
 		}
+		if ioBindings.preySetter != nil {
+			ioBindings.preySetter.Set(sense.prey)
+		}
+		if ioBindings.predatorSetter != nil {
+			ioBindings.predatorSetter.Set(sense.predator)
+		}
 		if ioBindings.poisonSetter != nil {
 			ioBindings.poisonSetter.Set(sense.poison)
 		}
@@ -173,6 +179,12 @@ func evaluateFlatlandWithTick(ctx context.Context, ticker TickAgent, cfg flatlan
 		}
 		if ioBindings.foodProximitySetter != nil {
 			ioBindings.foodProximitySetter.Set(sense.foodProximity)
+		}
+		if ioBindings.preyProximitySetter != nil {
+			ioBindings.preyProximitySetter.Set(sense.preyProximity)
+		}
+		if ioBindings.predatorProximitySetter != nil {
+			ioBindings.predatorProximitySetter.Set(sense.predatorProximity)
 		}
 		if ioBindings.poisonProximitySetter != nil {
 			ioBindings.poisonProximitySetter.Set(sense.poisonProximity)
@@ -279,8 +291,12 @@ func evaluateFlatland(
 	poisonCollisions := 0
 	lastDistance := 0.0
 	lastPoison := 0.0
+	lastPrey := 0.0
+	lastPredator := 0.0
 	lastWall := 0.0
 	lastFoodProximity := 0.0
+	lastPreyProximity := 0.0
+	lastPredatorProximity := 0.0
 	lastPoisonProximity := 0.0
 	lastWallProximity := 0.0
 	lastResourceBalance := 0.0
@@ -302,8 +318,12 @@ func evaluateFlatland(
 		sense := episode.sense()
 		lastDistance = sense.distance
 		lastPoison = sense.poison
+		lastPrey = sense.prey
+		lastPredator = sense.predator
 		lastWall = sense.wall
 		lastFoodProximity = sense.foodProximity
+		lastPreyProximity = sense.preyProximity
+		lastPredatorProximity = sense.predatorProximity
 		lastPoisonProximity = sense.poisonProximity
 		lastWallProximity = sense.wallProximity
 		lastResourceBalance = sense.resourceBalance
@@ -398,9 +418,13 @@ func evaluateFlatland(
 		"social_dynamics":         episode.socialDynamics,
 		"terminal_reason":         terminalReason,
 		"last_food_distance":      lastDistance,
+		"last_prey_signal":        lastPrey,
+		"last_predator_signal":    lastPredator,
 		"last_poison_signal":      lastPoison,
 		"last_wall_signal":        lastWall,
 		"last_food_proximity":     lastFoodProximity,
+		"last_prey_proximity":     lastPreyProximity,
+		"last_predator_proximity": lastPredatorProximity,
 		"last_poison_proximity":   lastPoisonProximity,
 		"last_wall_proximity":     lastWallProximity,
 		"last_resource_balance":   lastResourceBalance,
@@ -411,7 +435,7 @@ func evaluateFlatland(
 		"last_color_scan_mean":    lastColorScanMean,
 		"last_energy_scan_mean":   lastEnergyScanMean,
 		"last_control_width":      lastControlWidth,
-		"feature_width":           8,
+		"feature_width":           flatlandBaseFeatureWidth,
 		"scanner_density":         flatlandScannerDensity,
 		"scanner_feature_width":   flatlandScannerWidth,
 		"scanner_spread":          episode.scannerSpread,
@@ -465,7 +489,7 @@ const (
 	flatlandRespawnStride          = 7
 	flatlandScannerDensity         = 5
 	flatlandScannerWidth           = flatlandScannerDensity * 3
-	flatlandBaseFeatureWidth       = 8
+	flatlandBaseFeatureWidth       = 12
 	flatlandScannerSpreadDefault   = 0.18
 	flatlandScannerProfileBalanced = "balanced5"
 	flatlandScannerProfileCore     = "core3"
@@ -503,17 +527,21 @@ type flatlandResource struct {
 }
 
 type flatlandSenseInput struct {
-	distance        float64
-	energy          float64
-	poison          float64
-	wall            float64
-	foodProximity   float64
-	poisonProximity float64
-	wallProximity   float64
-	resourceBalance float64
-	distanceScan    [flatlandScannerDensity]float64
-	colorScan       [flatlandScannerDensity]float64
-	energyScan      [flatlandScannerDensity]float64
+	distance          float64
+	energy            float64
+	prey              float64
+	predator          float64
+	poison            float64
+	wall              float64
+	foodProximity     float64
+	preyProximity     float64
+	predatorProximity float64
+	poisonProximity   float64
+	wallProximity     float64
+	resourceBalance   float64
+	distanceScan      [flatlandScannerDensity]float64
+	colorScan         [flatlandScannerDensity]float64
+	energyScan        [flatlandScannerDensity]float64
 }
 
 type flatlandControl struct {
@@ -888,17 +916,21 @@ func (e *flatlandEpisode) normalizedEnergy() float64 {
 func (e *flatlandEpisode) sense() flatlandSenseInput {
 	distanceScan, colorScan, energyScan := e.senseScannerVectors()
 	return flatlandSenseInput{
-		distance:        e.senseDistanceToFood(),
-		energy:          e.normalizedEnergy(),
-		poison:          e.senseResourceHeading(e.poison),
-		wall:            e.senseWallHeading(),
-		foodProximity:   e.senseResourceProximity(e.food),
-		poisonProximity: e.senseResourceProximity(e.poison),
-		wallProximity:   e.senseWallProximity(),
-		resourceBalance: e.senseResourceBalance(),
-		distanceScan:    distanceScan,
-		colorScan:       colorScan,
-		energyScan:      energyScan,
+		distance:          e.senseDistanceToFood(),
+		energy:            e.normalizedEnergy(),
+		prey:              e.senseResourceHeading(e.prey),
+		predator:          e.senseResourceHeading(e.predators),
+		poison:            e.senseResourceHeading(e.poison),
+		wall:              e.senseWallHeading(),
+		foodProximity:     e.senseResourceProximity(e.food),
+		preyProximity:     e.senseResourceProximity(e.prey),
+		predatorProximity: e.senseResourceProximity(e.predators),
+		poisonProximity:   e.senseResourceProximity(e.poison),
+		wallProximity:     e.senseWallProximity(),
+		resourceBalance:   e.senseResourceBalance(),
+		distanceScan:      distanceScan,
+		colorScan:         colorScan,
+		energyScan:        energyScan,
 	}
 }
 
@@ -1450,19 +1482,23 @@ func signInt(value int) int {
 }
 
 type flatlandIOBindings struct {
-	distanceSetter        protoio.ScalarSensorSetter
-	energySetter          protoio.ScalarSensorSetter
-	poisonSetter          protoio.ScalarSensorSetter
-	wallSetter            protoio.ScalarSensorSetter
-	foodProximitySetter   protoio.ScalarSensorSetter
-	poisonProximitySetter protoio.ScalarSensorSetter
-	wallProximitySetter   protoio.ScalarSensorSetter
-	resourceBalanceSetter protoio.ScalarSensorSetter
-	distanceScanSetters   [flatlandScannerDensity]protoio.ScalarSensorSetter
-	colorScanSetters      [flatlandScannerDensity]protoio.ScalarSensorSetter
-	energyScanSetters     [flatlandScannerDensity]protoio.ScalarSensorSetter
-	moveOutput            protoio.SnapshotActuator
-	controlSurface        string
+	distanceSetter          protoio.ScalarSensorSetter
+	energySetter            protoio.ScalarSensorSetter
+	preySetter              protoio.ScalarSensorSetter
+	predatorSetter          protoio.ScalarSensorSetter
+	poisonSetter            protoio.ScalarSensorSetter
+	wallSetter              protoio.ScalarSensorSetter
+	foodProximitySetter     protoio.ScalarSensorSetter
+	preyProximitySetter     protoio.ScalarSensorSetter
+	predatorProximitySetter protoio.ScalarSensorSetter
+	poisonProximitySetter   protoio.ScalarSensorSetter
+	wallProximitySetter     protoio.ScalarSensorSetter
+	resourceBalanceSetter   protoio.ScalarSensorSetter
+	distanceScanSetters     [flatlandScannerDensity]protoio.ScalarSensorSetter
+	colorScanSetters        [flatlandScannerDensity]protoio.ScalarSensorSetter
+	energyScanSetters       [flatlandScannerDensity]protoio.ScalarSensorSetter
+	moveOutput              protoio.SnapshotActuator
+	controlSurface          string
 }
 
 func flatlandIO(agent TickAgent) (flatlandIOBindings, error) {
@@ -1482,6 +1518,14 @@ func flatlandIO(agent TickAgent) (flatlandIOBindings, error) {
 	if err != nil {
 		return flatlandIOBindings{}, err
 	}
+	preySetter, hasPrey, err := resolveOptionalFlatlandSetter(typed, protoio.FlatlandPreySensorName)
+	if err != nil {
+		return flatlandIOBindings{}, err
+	}
+	predatorSetter, hasPredator, err := resolveOptionalFlatlandSetter(typed, protoio.FlatlandPredatorSensorName)
+	if err != nil {
+		return flatlandIOBindings{}, err
+	}
 	poisonSetter, hasPoison, err := resolveOptionalFlatlandSetter(typed, protoio.FlatlandPoisonSensorName)
 	if err != nil {
 		return flatlandIOBindings{}, err
@@ -1491,6 +1535,14 @@ func flatlandIO(agent TickAgent) (flatlandIOBindings, error) {
 		return flatlandIOBindings{}, err
 	}
 	foodProximitySetter, hasFoodProximity, err := resolveOptionalFlatlandSetter(typed, protoio.FlatlandFoodProximitySensorName)
+	if err != nil {
+		return flatlandIOBindings{}, err
+	}
+	preyProximitySetter, hasPreyProximity, err := resolveOptionalFlatlandSetter(typed, protoio.FlatlandPreyProximitySensorName)
+	if err != nil {
+		return flatlandIOBindings{}, err
+	}
+	predatorProximitySetter, hasPredatorProximity, err := resolveOptionalFlatlandSetter(typed, protoio.FlatlandPredatorProximitySensorName)
 	if err != nil {
 		return flatlandIOBindings{}, err
 	}
@@ -1545,9 +1597,13 @@ func flatlandIO(agent TickAgent) (flatlandIOBindings, error) {
 	}
 	if !hasDistance &&
 		!hasEnergy &&
+		!hasPrey &&
+		!hasPredator &&
 		!hasPoison &&
 		!hasWall &&
 		!hasFoodProximity &&
+		!hasPreyProximity &&
+		!hasPredatorProximity &&
 		!hasPoisonProximity &&
 		!hasWallProximity &&
 		!hasResourceBalance &&
@@ -1580,19 +1636,23 @@ func flatlandIO(agent TickAgent) (flatlandIOBindings, error) {
 	}
 
 	return flatlandIOBindings{
-		distanceSetter:        distanceSetter,
-		energySetter:          energySetter,
-		poisonSetter:          poisonSetter,
-		wallSetter:            wallSetter,
-		foodProximitySetter:   foodProximitySetter,
-		poisonProximitySetter: poisonProximitySetter,
-		wallProximitySetter:   wallProximitySetter,
-		resourceBalanceSetter: resourceBalanceSetter,
-		distanceScanSetters:   distanceScanSetters,
-		colorScanSetters:      colorScanSetters,
-		energyScanSetters:     energyScanSetters,
-		moveOutput:            moveOutput,
-		controlSurface:        actuatorName,
+		distanceSetter:          distanceSetter,
+		energySetter:            energySetter,
+		preySetter:              preySetter,
+		predatorSetter:          predatorSetter,
+		poisonSetter:            poisonSetter,
+		wallSetter:              wallSetter,
+		foodProximitySetter:     foodProximitySetter,
+		preyProximitySetter:     preyProximitySetter,
+		predatorProximitySetter: predatorProximitySetter,
+		poisonProximitySetter:   poisonProximitySetter,
+		wallProximitySetter:     wallProximitySetter,
+		resourceBalanceSetter:   resourceBalanceSetter,
+		distanceScanSetters:     distanceScanSetters,
+		colorScanSetters:        colorScanSetters,
+		energyScanSetters:       energyScanSetters,
+		moveOutput:              moveOutput,
+		controlSurface:          actuatorName,
 	}, nil
 }
 
@@ -1673,9 +1733,13 @@ func flatlandStepInputVector(sense flatlandSenseInput) []float64 {
 	values = append(values,
 		sense.distance,
 		sense.energy,
+		sense.prey,
+		sense.predator,
 		sense.poison,
 		sense.wall,
 		sense.foodProximity,
+		sense.preyProximity,
+		sense.predatorProximity,
 		sense.poisonProximity,
 		sense.wallProximity,
 		sense.resourceBalance,

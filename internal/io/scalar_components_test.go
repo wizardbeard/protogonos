@@ -187,6 +187,20 @@ func TestScalarComponentsRegistered(t *testing.T) {
 	if flatEnergy.Name() != ScalarInputSensorName {
 		t.Fatalf("unexpected flatland energy sensor name: %s", flatEnergy.Name())
 	}
+	flatPrey, err := ResolveSensor(FlatlandPreySensorName, "flatland")
+	if err != nil {
+		t.Fatalf("resolve flatland prey sensor: %v", err)
+	}
+	if flatPrey.Name() != ScalarInputSensorName {
+		t.Fatalf("unexpected flatland prey sensor name: %s", flatPrey.Name())
+	}
+	flatPredator, err := ResolveSensor(FlatlandPredatorSensorName, "flatland")
+	if err != nil {
+		t.Fatalf("resolve flatland predator sensor: %v", err)
+	}
+	if flatPredator.Name() != ScalarInputSensorName {
+		t.Fatalf("unexpected flatland predator sensor name: %s", flatPredator.Name())
+	}
 	flatPoison, err := ResolveSensor(FlatlandPoisonSensorName, "flatland")
 	if err != nil {
 		t.Fatalf("resolve flatland poison sensor: %v", err)
@@ -207,6 +221,20 @@ func TestScalarComponentsRegistered(t *testing.T) {
 	}
 	if flatFoodProximity.Name() != ScalarInputSensorName {
 		t.Fatalf("unexpected flatland food proximity sensor name: %s", flatFoodProximity.Name())
+	}
+	flatPreyProximity, err := ResolveSensor(FlatlandPreyProximitySensorName, "flatland")
+	if err != nil {
+		t.Fatalf("resolve flatland prey proximity sensor: %v", err)
+	}
+	if flatPreyProximity.Name() != ScalarInputSensorName {
+		t.Fatalf("unexpected flatland prey proximity sensor name: %s", flatPreyProximity.Name())
+	}
+	flatPredatorProximity, err := ResolveSensor(FlatlandPredatorProximitySensorName, "flatland")
+	if err != nil {
+		t.Fatalf("resolve flatland predator proximity sensor: %v", err)
+	}
+	if flatPredatorProximity.Name() != ScalarInputSensorName {
+		t.Fatalf("unexpected flatland predator proximity sensor name: %s", flatPredatorProximity.Name())
 	}
 	flatPoisonProximity, err := ResolveSensor(FlatlandPoisonProximitySensorName, "flatland")
 	if err != nil {
@@ -560,6 +588,9 @@ func TestScalarComponentsRegistered(t *testing.T) {
 	}
 	if _, err := ResolveSensor(FlatlandDistanceSensorName, "flatland_sim"); err != nil {
 		t.Fatalf("resolve flatland alias sensor flatland_sim: %v", err)
+	}
+	if _, err := ResolveSensor(FlatlandPredatorProximitySensorName, "flatland_sim"); err != nil {
+		t.Fatalf("resolve flatland alias predator-proximity sensor flatland_sim: %v", err)
 	}
 	if _, err := ResolveActuator(FlatlandTwoWheelsActuatorName, "scape_flatland"); err != nil {
 		t.Fatalf("resolve flatland alias actuator scape_flatland: %v", err)
