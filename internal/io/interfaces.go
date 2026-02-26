@@ -13,6 +13,12 @@ type ScalarSensorSetter interface {
 	Set(value float64)
 }
 
+// VectorSensorSetter is an optional sensor capability used by scapes that
+// provide variable-width feature vectors.
+type VectorSensorSetter interface {
+	Set(values []float64)
+}
+
 type Actuator interface {
 	Name() string
 	Write(ctx context.Context, values []float64) error

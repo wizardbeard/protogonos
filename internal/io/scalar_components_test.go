@@ -25,6 +25,32 @@ func TestScalarInputSensor(t *testing.T) {
 	}
 }
 
+func TestVectorInputSensor(t *testing.T) {
+	s := NewVectorInputSensor([]float64{0.25, 0.5})
+	setter, ok := any(s).(VectorSensorSetter)
+	if !ok {
+		t.Fatal("expected VectorInputSensor to implement VectorSensorSetter")
+	}
+	setter.Set([]float64{0.25, 0.5})
+
+	values, err := s.Read(context.Background())
+	if err != nil {
+		t.Fatalf("read: %v", err)
+	}
+	if len(values) != 2 || values[0] != 0.25 || values[1] != 0.5 {
+		t.Fatalf("unexpected sensor values: %+v", values)
+	}
+
+	s.Set([]float64{-1, 0, 1})
+	values, err = s.Read(context.Background())
+	if err != nil {
+		t.Fatalf("read: %v", err)
+	}
+	if len(values) != 3 || values[0] != -1 || values[1] != 0 || values[2] != 1 {
+		t.Fatalf("unexpected updated values: %+v", values)
+	}
+}
+
 func TestScalarOutputActuator(t *testing.T) {
 	a := NewScalarOutputActuator()
 	if err := a.Write(context.Background(), []float64{0.9}); err != nil {
@@ -43,6 +69,13 @@ func TestScalarComponentsRegistered(t *testing.T) {
 	}
 	if sensor.Name() != ScalarInputSensorName {
 		t.Fatalf("unexpected sensor name: %s", sensor.Name())
+	}
+	vectorSensor, err := ResolveSensor(VectorInputSensorName, "regression-mimic")
+	if err != nil {
+		t.Fatalf("resolve vector sensor: %v", err)
+	}
+	if vectorSensor.Name() != VectorInputSensorName {
+		t.Fatalf("unexpected vector sensor name: %s", vectorSensor.Name())
 	}
 
 	actuator, err := ResolveActuator(ScalarOutputActuatorName, "regression-mimic")

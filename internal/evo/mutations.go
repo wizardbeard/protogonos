@@ -2867,11 +2867,8 @@ func removeDirectedRandomSynapse(genome model.Genome, rng *rand.Rand, keep func(
 func sensorCandidates(genome model.Genome, scapeName string) []string {
 	existing := toIDSet(genome.SensorIDs)
 	candidates := make([]string, 0)
-	for _, name := range protoio.ListSensors() {
+	for _, name := range protoio.ListSensorsForScape(scapeName) {
 		if _, ok := existing[name]; ok {
-			continue
-		}
-		if _, err := protoio.ResolveSensor(name, scapeName); err != nil {
 			continue
 		}
 		candidates = append(candidates, name)

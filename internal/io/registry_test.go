@@ -143,3 +143,51 @@ func TestRegistryListsSorted(t *testing.T) {
 		t.Fatalf("unexpected actuator list: %+v", actuators)
 	}
 }
+
+func TestSensorCompatibilityHelpers(t *testing.T) {
+	resetRegistriesForTests()
+	t.Cleanup(resetRegistriesForTests)
+
+	if !SensorCompatibleWithScape(Pole2CartPositionSensorName, "pb_sim") {
+		t.Fatal("expected pb_sim alias to be compatible with pole2 cart position sensor")
+	}
+	if SensorCompatibleWithScape(Pole2CartPositionSensorName, "xor") {
+		t.Fatal("expected pole2 cart position sensor to be incompatible with xor")
+	}
+	if SensorCompatibleWithScape("unknown_sensor", "xor") {
+		t.Fatal("expected unknown sensor to be incompatible")
+	}
+
+	if err := RegisterSensorWithSpec(SensorSpec{
+		Name:          "custom_xor_sensor",
+		Factory:       func() Sensor { return testSensor{} },
+		SchemaVersion: SupportedSchemaVersion,
+		CodecVersion:  SupportedCodecVersion,
+		Compatible: func(scape string) error {
+			if scape != "xor" {
+				return errors.New("not xor")
+			}
+			return nil
+		},
+	}); err != nil {
+		t.Fatalf("register custom sensor: %v", err)
+	}
+
+	xorSensors := ListSensorsForScape("xor")
+	if !containsString(xorSensors, "custom_xor_sensor") {
+		t.Fatalf("expected custom sensor in xor filtered list, got=%v", xorSensors)
+	}
+	dtmSensors := ListSensorsForScape("dtm")
+	if containsString(dtmSensors, "custom_xor_sensor") {
+		t.Fatalf("expected custom sensor excluded from dtm filtered list, got=%v", dtmSensors)
+	}
+}
+
+func containsString(values []string, want string) bool {
+	for _, value := range values {
+		if value == want {
+			return true
+		}
+	}
+	return false
+}

@@ -115,16 +115,37 @@ func ResolveSensor(name, scape string) (Sensor, error) {
 	if !ok {
 		return nil, fmt.Errorf("%w: %s", ErrSensorNotFound, name)
 	}
-	if entry.schemaVersion != SupportedSchemaVersion || entry.codecVersion != SupportedCodecVersion {
-		return nil, fmt.Errorf("%w: %s", ErrVersionMismatch, name)
-	}
-	scape = scapeid.Normalize(scape)
-	if entry.compatible != nil {
-		if err := entry.compatible(scape); err != nil {
-			return nil, fmt.Errorf("%w: sensor=%s: %v", ErrIncompatible, name, err)
-		}
+	if err := sensorCompatibilityError(name, entry, scapeid.Normalize(scape)); err != nil {
+		return nil, err
 	}
 	return entry.factory(), nil
+}
+
+func SensorCompatibleWithScape(name, scape string) bool {
+	sensorRegistry.mu.RLock()
+	entry, ok := sensorRegistry.m[name]
+	sensorRegistry.mu.RUnlock()
+	if !ok {
+		return false
+	}
+	return sensorCompatibilityError(name, entry, scapeid.Normalize(scape)) == nil
+}
+
+func ListSensorsForScape(scape string) []string {
+	normalized := scapeid.Normalize(scape)
+
+	sensorRegistry.mu.RLock()
+	defer sensorRegistry.mu.RUnlock()
+
+	names := make([]string, 0, len(sensorRegistry.m))
+	for name, entry := range sensorRegistry.m {
+		if sensorCompatibilityError(name, entry, normalized) != nil {
+			continue
+		}
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	return names
 }
 
 func ListSensors() []string {
@@ -137,6 +158,18 @@ func ListSensors() []string {
 	}
 	sort.Strings(names)
 	return names
+}
+
+func sensorCompatibilityError(name string, entry registeredSensor, scape string) error {
+	if entry.schemaVersion != SupportedSchemaVersion || entry.codecVersion != SupportedCodecVersion {
+		return fmt.Errorf("%w: %s", ErrVersionMismatch, name)
+	}
+	if entry.compatible != nil {
+		if err := entry.compatible(scape); err != nil {
+			return fmt.Errorf("%w: sensor=%s: %v", ErrIncompatible, name, err)
+		}
+	}
+	return nil
 }
 
 func RegisterActuator(name string, factory ActuatorFactory) error {

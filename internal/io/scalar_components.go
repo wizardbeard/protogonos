@@ -8,6 +8,7 @@ import (
 
 const (
 	ScalarInputSensorName               = "scalar_input"
+	VectorInputSensorName               = "vector_input"
 	ScalarOutputActuatorName            = "scalar_output"
 	XORInputLeftSensorName              = "xor_input_left"
 	XORInputRightSensorName             = "xor_input_right"
@@ -118,6 +119,33 @@ func (s *ScalarInputSensor) Set(value float64) {
 	s.mu.Unlock()
 }
 
+type VectorInputSensor struct {
+	mu     sync.RWMutex
+	values []float64
+}
+
+func NewVectorInputSensor(initial []float64) *VectorInputSensor {
+	out := &VectorInputSensor{}
+	out.Set(initial)
+	return out
+}
+
+func (s *VectorInputSensor) Name() string {
+	return VectorInputSensorName
+}
+
+func (s *VectorInputSensor) Read(_ context.Context) ([]float64, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return append([]float64(nil), s.values...), nil
+}
+
+func (s *VectorInputSensor) Set(values []float64) {
+	s.mu.Lock()
+	s.values = append([]float64(nil), values...)
+	s.mu.Unlock()
+}
+
 type ScalarOutputActuator struct {
 	mu   sync.RWMutex
 	last []float64
@@ -152,6 +180,21 @@ func initializeDefaultComponents() {
 	err := RegisterSensorWithSpec(SensorSpec{
 		Name:          ScalarInputSensorName,
 		Factory:       func() Sensor { return NewScalarInputSensor(0) },
+		SchemaVersion: SupportedSchemaVersion,
+		CodecVersion:  SupportedCodecVersion,
+		Compatible: func(scape string) error {
+			if scape != "regression-mimic" {
+				return fmt.Errorf("unsupported scape: %s", scape)
+			}
+			return nil
+		},
+	})
+	if err != nil {
+		panic(err)
+	}
+	err = RegisterSensorWithSpec(SensorSpec{
+		Name:          VectorInputSensorName,
+		Factory:       func() Sensor { return NewVectorInputSensor(nil) },
 		SchemaVersion: SupportedSchemaVersion,
 		CodecVersion:  SupportedCodecVersion,
 		Compatible: func(scape string) error {
