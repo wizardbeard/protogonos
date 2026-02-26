@@ -47,20 +47,23 @@ func (FlatlandScape) EvaluateMode(ctx context.Context, agent Agent, mode string)
 }
 
 type flatlandModeConfig struct {
-	mode            string
-	maxAge          int
-	forageGoal      int
-	foodPositions   []int
-	poisonPositions []int
-	wallPositions   []int
-	scannerSpread   float64
-	scannerOffset   float64
-	scannerProfile  string
-	randomizeLayout bool
-	layoutVariants  int
-	hasForcedLayout bool
-	forcedLayout    int
-	benchmarkTrials int
+	mode              string
+	maxAge            int
+	forageGoal        int
+	foodPositions     []int
+	poisonPositions   []int
+	wallPositions     []int
+	preyPositions     []int
+	predatorPositions []int
+	socialDynamics    bool
+	scannerSpread     float64
+	scannerOffset     float64
+	scannerProfile    string
+	randomizeLayout   bool
+	layoutVariants    int
+	hasForcedLayout   bool
+	forcedLayout      int
+	benchmarkTrials   int
 }
 
 func flatlandConfigForMode(mode string) (flatlandModeConfig, error) {
@@ -80,44 +83,53 @@ func flatlandConfigForMode(mode string) (flatlandModeConfig, error) {
 		}, nil
 	case "validation":
 		return flatlandModeConfig{
-			mode:            "validation",
-			maxAge:          180,
-			forageGoal:      6,
-			foodPositions:   []int{4, 10, 18, 26, 34, 42},
-			poisonPositions: []int{13, 29},
-			wallPositions:   []int{7, 15, 23, 31, 39},
-			scannerSpread:   0.16,
-			scannerOffset:   0.05,
-			scannerProfile:  flatlandScannerProfileForward,
-			benchmarkTrials: 1,
+			mode:              "validation",
+			maxAge:            180,
+			forageGoal:        6,
+			foodPositions:     []int{4, 10, 18, 26, 34, 42},
+			poisonPositions:   []int{13, 29},
+			wallPositions:     []int{7, 15, 23, 31, 39},
+			preyPositions:     []int{2, 22, 38},
+			predatorPositions: []int{17, 33},
+			socialDynamics:    true,
+			scannerSpread:     0.16,
+			scannerOffset:     0.05,
+			scannerProfile:    flatlandScannerProfileForward,
+			benchmarkTrials:   1,
 		}, nil
 	case "test":
 		return flatlandModeConfig{
-			mode:            "test",
-			maxAge:          180,
-			forageGoal:      6,
-			foodPositions:   []int{6, 12, 20, 28, 36, 44},
-			poisonPositions: []int{15, 31},
-			wallPositions:   []int{9, 17, 25, 33, 41},
-			scannerSpread:   flatlandScannerSpreadDefault,
-			scannerOffset:   0,
-			scannerProfile:  flatlandScannerProfileBalanced,
-			benchmarkTrials: 1,
+			mode:              "test",
+			maxAge:            180,
+			forageGoal:        6,
+			foodPositions:     []int{6, 12, 20, 28, 36, 44},
+			poisonPositions:   []int{15, 31},
+			wallPositions:     []int{9, 17, 25, 33, 41},
+			preyPositions:     []int{4, 24, 40},
+			predatorPositions: []int{14, 30},
+			socialDynamics:    true,
+			scannerSpread:     flatlandScannerSpreadDefault,
+			scannerOffset:     0,
+			scannerProfile:    flatlandScannerProfileBalanced,
+			benchmarkTrials:   1,
 		}, nil
 	case "benchmark":
 		return flatlandModeConfig{
-			mode:            "benchmark",
-			maxAge:          180,
-			forageGoal:      6,
-			foodPositions:   []int{6, 12, 20, 28, 36, 44},
-			poisonPositions: []int{15, 31},
-			wallPositions:   []int{9, 17, 25, 33, 41},
-			scannerSpread:   0.2,
-			scannerOffset:   -0.05,
-			scannerProfile:  flatlandScannerProfileCore,
-			randomizeLayout: true,
-			layoutVariants:  7,
-			benchmarkTrials: 1,
+			mode:              "benchmark",
+			maxAge:            180,
+			forageGoal:        6,
+			foodPositions:     []int{6, 12, 20, 28, 36, 44},
+			poisonPositions:   []int{15, 31},
+			wallPositions:     []int{9, 17, 25, 33, 41},
+			preyPositions:     []int{3, 19, 35},
+			predatorPositions: []int{12, 28},
+			socialDynamics:    true,
+			scannerSpread:     0.2,
+			scannerOffset:     -0.05,
+			scannerProfile:    flatlandScannerProfileCore,
+			randomizeLayout:   true,
+			layoutVariants:    7,
+			benchmarkTrials:   1,
 		}, nil
 	default:
 		return flatlandModeConfig{}, fmt.Errorf("unsupported flatland mode: %s", mode)
@@ -337,7 +349,8 @@ func evaluateFlatland(
 	}
 
 	resourceCollisions := foodCollisions + poisonCollisions
-	totalCollisions := resourceCollisions + episode.wallCollisions
+	socialCollisions := episode.preyCollected + episode.predatorHits
+	totalCollisions := resourceCollisions + episode.wallCollisions + socialCollisions
 	avgReward := episode.rewardAcc / float64(age)
 	survival := float64(episode.age) / float64(cfg.maxAge)
 	energyTerm := clamp(episode.normalizedEnergy(), 0, 1)
@@ -347,8 +360,14 @@ func evaluateFlatland(
 	rewardTerm := 0.5 + 0.5*clamp(avgReward, -1, 1)
 	wallPenalty := clamp(float64(episode.wallCollisions)/float64(age), 0, 1)
 	respawnActivity := clamp(float64(episode.resourceRespawns)/float64(age), 0, 1)
+	socialBalance := float64(episode.preyCollected-episode.predatorHits) / float64(socialCollisions+1)
+	socialTerm := 0.5 + 0.5*clamp(socialBalance, -1, 1)
+	predatorPenalty := clamp(float64(episode.predatorHits)/float64(age), 0, 1)
 
 	fitness := 0.33*survival + 0.24*energyTerm + 0.24*forageTerm + 0.14*rewardTerm - 0.12*wallPenalty + 0.03*respawnActivity
+	if episode.socialDynamics {
+		fitness += 0.05*socialTerm - 0.06*predatorPenalty
+	}
 	if episode.foodCollected >= episode.forageGoal {
 		fitness += 0.1
 	}
@@ -365,12 +384,18 @@ func evaluateFlatland(
 		"forage_goal":             episode.forageGoal,
 		"food_collected":          episode.foodCollected,
 		"poison_hits":             episode.poisonHits,
+		"prey_collected":          episode.preyCollected,
+		"predator_hits":           episode.predatorHits,
+		"social_collisions":       socialCollisions,
 		"collisions":              totalCollisions,
 		"wall_collisions":         episode.wallCollisions,
 		"movement_steps":          movementSteps,
 		"resource_respawns":       episode.resourceRespawns,
 		"active_food":             episode.activeResources(episode.food),
 		"active_poison":           episode.activeResources(episode.poison),
+		"active_prey":             episode.activeResources(episode.prey),
+		"active_predators":        episode.activeResources(episode.predators),
+		"social_dynamics":         episode.socialDynamics,
 		"terminal_reason":         terminalReason,
 		"last_food_distance":      lastDistance,
 		"last_poison_signal":      lastPoison,
@@ -418,12 +443,22 @@ const (
 	flatlandPoisonDamageMin        = 0.30
 	flatlandPoisonDamageMax        = 0.44
 	flatlandPoisonDrift            = 0.006
+	flatlandPreyEnergyMin          = 0.14
+	flatlandPreyEnergyMax          = 0.30
+	flatlandPreyGrowth             = 0.008
+	flatlandPredatorDamageMin      = 0.18
+	flatlandPredatorDamageMax      = 0.32
+	flatlandPredatorDrift          = 0.005
 	flatlandSurvivalReward         = 0.01
 	flatlandFoodReward             = 0.25
 	flatlandPoisonPenalty          = 0.30
+	flatlandPreyReward             = 0.16
+	flatlandPredatorPenalty        = 0.20
 	flatlandWallPenalty            = 0.07
 	flatlandFoodRespawn            = 12
 	flatlandPoisonRespawn          = 16
+	flatlandPreyRespawn            = 9
+	flatlandPredatorRespawn        = 13
 	flatlandDefaultForageGoal      = 8
 	flatlandSensorDistanceLo       = -1.0
 	flatlandSensorDistanceHi       = 1.0
@@ -501,8 +536,13 @@ type flatlandEpisode struct {
 	rewardAcc        float64
 	food             []flatlandResource
 	poison           []flatlandResource
+	prey             []flatlandResource
+	predators        []flatlandResource
 	walls            map[int]struct{}
 	respawnCursor    int
+	socialDynamics   bool
+	preyCollected    int
+	predatorHits     int
 	scannerSpread    float64
 	scannerOffset    float64
 	scannerProfile   string
@@ -534,6 +574,8 @@ func newFlatlandEpisodeForAgent(cfg flatlandModeConfig, agentID string) *flatlan
 	if len(poisonPositions) == 0 {
 		poisonPositions = []int{14, 30}
 	}
+	preyPositions := append([]int(nil), cfg.preyPositions...)
+	predatorPositions := append([]int(nil), cfg.predatorPositions...)
 	wallPositions := append([]int(nil), cfg.wallPositions...)
 	if len(wallPositions) == 0 {
 		wallPositions = []int{8, 16, 24, 32, 40}
@@ -542,6 +584,8 @@ func newFlatlandEpisodeForAgent(cfg flatlandModeConfig, agentID string) *flatlan
 	if layoutShift != 0 {
 		foodPositions = shiftFlatlandPositions(foodPositions, layoutShift)
 		poisonPositions = shiftFlatlandPositions(poisonPositions, layoutShift)
+		preyPositions = shiftFlatlandPositions(preyPositions, layoutShift)
+		predatorPositions = shiftFlatlandPositions(predatorPositions, layoutShift)
 		wallPositions = shiftFlatlandPositions(wallPositions, layoutShift)
 	}
 	scannerSpread := cfg.scannerSpread
@@ -561,6 +605,8 @@ func newFlatlandEpisodeForAgent(cfg flatlandModeConfig, agentID string) *flatlan
 	occupied := make(map[int]struct{})
 	food := buildFlatlandResources(foodPositions, flatlandFoodEnergyMin, walls, occupied)
 	poison := buildFlatlandResources(poisonPositions, flatlandPoisonDamageMin, walls, occupied)
+	prey := buildFlatlandOptionalResources(preyPositions, flatlandPreyEnergyMin, walls, occupied)
+	predators := buildFlatlandOptionalResources(predatorPositions, flatlandPredatorDamageMin, walls, occupied)
 
 	start := 0
 	for offset := 0; offset < flatlandWorldSize; offset++ {
@@ -585,8 +631,11 @@ func newFlatlandEpisodeForAgent(cfg flatlandModeConfig, agentID string) *flatlan
 		forageGoal:     forageGoal,
 		food:           food,
 		poison:         poison,
+		prey:           prey,
+		predators:      predators,
 		walls:          walls,
 		respawnCursor:  wrapFlatlandPosition(start + 3),
+		socialDynamics: cfg.socialDynamics,
 		scannerSpread:  scannerSpread,
 		scannerOffset:  scannerOffset,
 		scannerProfile: scannerProfile,
@@ -720,6 +769,18 @@ func buildFlatlandResources(
 	return out
 }
 
+func buildFlatlandOptionalResources(
+	positions []int,
+	potency float64,
+	walls map[int]struct{},
+	occupied map[int]struct{},
+) []flatlandResource {
+	if len(positions) == 0 {
+		return nil
+	}
+	return buildFlatlandResources(positions, potency, walls, occupied)
+}
+
 func (e *flatlandEpisode) advanceRespawns() {
 	for i := range e.food {
 		resource := &e.food[i]
@@ -748,16 +809,54 @@ func (e *flatlandEpisode) advanceRespawns() {
 		}
 		resource.potency = clamp(resource.potency+flatlandPoisonDrift, flatlandPoisonDamageMin, flatlandPoisonDamageMax)
 	}
+
+	for i := range e.prey {
+		resource := &e.prey[i]
+		if resource.cooldown > 0 {
+			resource.cooldown--
+			if resource.cooldown == 0 {
+				resource.position = e.nextRespawnPosition(resource.position)
+				resource.potency = flatlandPreyEnergyMin
+				e.resourceRespawns++
+			}
+			continue
+		}
+		resource.potency = clamp(resource.potency+flatlandPreyGrowth, flatlandPreyEnergyMin, flatlandPreyEnergyMax)
+	}
+
+	for i := range e.predators {
+		resource := &e.predators[i]
+		if resource.cooldown > 0 {
+			resource.cooldown--
+			if resource.cooldown == 0 {
+				resource.position = e.nextRespawnPosition(resource.position)
+				resource.potency = flatlandPredatorDamageMin
+				e.resourceRespawns++
+			}
+			continue
+		}
+		resource.potency = clamp(resource.potency+flatlandPredatorDrift, flatlandPredatorDamageMin, flatlandPredatorDamageMax)
+	}
 }
 
 func (e *flatlandEpisode) nextRespawnPosition(previous int) int {
-	occupied := make(map[int]struct{}, len(e.food)+len(e.poison)+1)
+	occupied := make(map[int]struct{}, len(e.food)+len(e.poison)+len(e.prey)+len(e.predators)+1)
 	for _, resource := range e.food {
 		if resource.cooldown == 0 {
 			occupied[resource.position] = struct{}{}
 		}
 	}
 	for _, resource := range e.poison {
+		if resource.cooldown == 0 {
+			occupied[resource.position] = struct{}{}
+		}
+	}
+	for _, resource := range e.prey {
+		if resource.cooldown == 0 {
+			occupied[resource.position] = struct{}{}
+		}
+	}
+	for _, resource := range e.predators {
 		if resource.cooldown == 0 {
 			occupied[resource.position] = struct{}{}
 		}
@@ -941,6 +1040,17 @@ func (e *flatlandEpisode) nearestEntityFrom(origin int) (flatlandScannerEntityKi
 			bestPotency = clamp(resource.potency, flatlandFoodEnergyMin, flatlandFoodEnergyMax)
 		}
 	}
+	for _, resource := range e.prey {
+		if resource.cooldown > 0 {
+			continue
+		}
+		distance := absInt(signedRingDistance(origin, resource.position, flatlandWorldSize))
+		if distance < bestDistance {
+			bestDistance = distance
+			bestKind = flatlandScannerEntityFood
+			bestPotency = clamp(resource.potency, flatlandPreyEnergyMin, flatlandPreyEnergyMax)
+		}
+	}
 	for _, resource := range e.poison {
 		if resource.cooldown > 0 {
 			continue
@@ -950,6 +1060,17 @@ func (e *flatlandEpisode) nearestEntityFrom(origin int) (flatlandScannerEntityKi
 			bestDistance = distance
 			bestKind = flatlandScannerEntityPoison
 			bestPotency = clamp(resource.potency, flatlandPoisonDamageMin, flatlandPoisonDamageMax)
+		}
+	}
+	for _, resource := range e.predators {
+		if resource.cooldown > 0 {
+			continue
+		}
+		distance := absInt(signedRingDistance(origin, resource.position, flatlandWorldSize))
+		if distance < bestDistance {
+			bestDistance = distance
+			bestKind = flatlandScannerEntityPoison
+			bestPotency = clamp(resource.potency, flatlandPredatorDamageMin, flatlandPredatorDamageMax)
 		}
 	}
 	for wall := range e.walls {
@@ -1042,8 +1163,8 @@ func (e *flatlandEpisode) senseWallProximity() float64 {
 }
 
 func (e *flatlandEpisode) senseResourceBalance() float64 {
-	activeFood := e.activeResources(e.food)
-	activePoison := e.activeResources(e.poison)
+	activeFood := e.activeResources(e.food) + e.activeResources(e.prey)
+	activePoison := e.activeResources(e.poison) + e.activeResources(e.predators)
 	denom := activeFood + activePoison
 	if denom == 0 {
 		return 0
@@ -1126,6 +1247,9 @@ func (e *flatlandEpisode) step(move float64) (int, bool, bool, bool, string) {
 
 	hitFood := e.consumeFoodAtPosition()
 	hitPoison := e.consumePoisonAtPosition()
+	_ = e.consumePreyAtPosition()
+	_ = e.collidePredatorAtPosition()
+	e.moveAmbientActors()
 
 	e.energy -= flatlandBaseMetabolic + flatlandMoveMetabolic*math.Abs(float64(moveStep))
 	if moveStep == 0 {
@@ -1186,6 +1310,99 @@ func (e *flatlandEpisode) consumePoisonAtPosition() bool {
 	return false
 }
 
+func (e *flatlandEpisode) consumePreyAtPosition() bool {
+	for i := range e.prey {
+		resource := &e.prey[i]
+		if resource.cooldown > 0 || resource.position != e.position {
+			continue
+		}
+		potency := clamp(resource.potency, flatlandPreyEnergyMin, flatlandPreyEnergyMax)
+		resource.cooldown = flatlandPreyRespawn
+		resource.potency = flatlandPreyEnergyMin
+		e.energy += potency
+		if e.energy > flatlandEnergyCap {
+			e.energy = flatlandEnergyCap
+		}
+		e.preyCollected++
+		e.rewardAcc += flatlandPreyReward * (potency / flatlandPreyEnergyMax)
+		return true
+	}
+	return false
+}
+
+func (e *flatlandEpisode) collidePredatorAtPosition() bool {
+	for i := range e.predators {
+		resource := &e.predators[i]
+		if resource.cooldown > 0 || resource.position != e.position {
+			continue
+		}
+		potency := clamp(resource.potency, flatlandPredatorDamageMin, flatlandPredatorDamageMax)
+		resource.cooldown = flatlandPredatorRespawn
+		resource.potency = flatlandPredatorDamageMin
+		e.energy -= potency
+		e.predatorHits++
+		e.rewardAcc -= flatlandPredatorPenalty * (potency / flatlandPredatorDamageMax)
+		return true
+	}
+	return false
+}
+
+func (e *flatlandEpisode) moveAmbientActors() {
+	if !e.socialDynamics {
+		return
+	}
+	e.movePrey()
+	e.movePredators()
+}
+
+func (e *flatlandEpisode) movePrey() {
+	for i := range e.prey {
+		resource := &e.prey[i]
+		if resource.cooldown > 0 {
+			continue
+		}
+		delta := signedRingDistance(e.position, resource.position, flatlandWorldSize)
+		direction := signInt(delta)
+		if direction == 0 {
+			if (e.age+i+e.layoutVariant)%2 == 0 {
+				direction = 1
+			} else {
+				direction = -1
+			}
+		}
+		resource.position = e.advanceAmbientPosition(resource.position, direction)
+	}
+}
+
+func (e *flatlandEpisode) movePredators() {
+	for i := range e.predators {
+		resource := &e.predators[i]
+		if resource.cooldown > 0 {
+			continue
+		}
+		delta := signedRingDistance(resource.position, e.position, flatlandWorldSize)
+		direction := signInt(delta)
+		if direction == 0 {
+			direction = e.heading
+			if direction == 0 {
+				direction = 1
+			}
+		}
+		resource.position = e.advanceAmbientPosition(resource.position, direction)
+	}
+}
+
+func (e *flatlandEpisode) advanceAmbientPosition(position int, step int) int {
+	if step == 0 {
+		return position
+	}
+	candidate := wrapFlatlandPosition(position + step)
+	if e.isWall(candidate) {
+		return position
+	}
+	return candidate
+}
+
 func (e *flatlandEpisode) isWall(position int) bool {
 	_, blocked := e.walls[position]
 	return blocked
@@ -1219,6 +1436,17 @@ func absInt(value int) int {
 		return -value
 	}
 	return value
+}
+
+func signInt(value int) int {
+	switch {
+	case value > 0:
+		return 1
+	case value < 0:
+		return -1
+	default:
+		return 0
+	}
 }
 
 type flatlandIOBindings struct {

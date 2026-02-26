@@ -642,6 +642,98 @@ func TestFlatlandEpisodeWallCollisionPenalizesAndTracks(t *testing.T) {
 	}
 }
 
+func TestFlatlandScapeBenchmarkTraceIncludesSocialDynamics(t *testing.T) {
+	scape := FlatlandScape{}
+	forager := scriptedStepAgent{
+		id: "flatland-social-benchmark",
+		fn: flatlandGreedyForager,
+	}
+
+	_, trace, err := scape.EvaluateMode(context.Background(), forager, "benchmark")
+	if err != nil {
+		t.Fatalf("evaluate benchmark: %v", err)
+	}
+
+	if enabled, ok := trace["social_dynamics"].(bool); !ok || !enabled {
+		t.Fatalf("expected social_dynamics=true, trace=%+v", trace)
+	}
+	prey, ok := trace["prey_collected"].(int)
+	if !ok {
+		t.Fatalf("expected prey_collected in trace, trace=%+v", trace)
+	}
+	predatorHits, ok := trace["predator_hits"].(int)
+	if !ok {
+		t.Fatalf("expected predator_hits in trace, trace=%+v", trace)
+	}
+	socialCollisions, ok := trace["social_collisions"].(int)
+	if !ok {
+		t.Fatalf("expected social_collisions in trace, trace=%+v", trace)
+	}
+	if socialCollisions != prey+predatorHits {
+		t.Fatalf("expected social_collisions=%d (prey=%d + predator_hits=%d), trace=%+v", prey+predatorHits, prey, predatorHits, trace)
+	}
+	if _, ok := trace["active_prey"].(int); !ok {
+		t.Fatalf("expected active_prey in trace, trace=%+v", trace)
+	}
+	if _, ok := trace["active_predators"].(int); !ok {
+		t.Fatalf("expected active_predators in trace, trace=%+v", trace)
+	}
+}
+
+func TestFlatlandEpisodePredatorCollisionPenalizesAndTracks(t *testing.T) {
+	episode := newFlatlandEpisode(flatlandModeConfig{
+		mode:              "test",
+		maxAge:            16,
+		forageGoal:        8,
+		foodPositions:     []int{},
+		poisonPositions:   []int{},
+		wallPositions:     []int{},
+		predatorPositions: []int{1},
+	})
+
+	startEnergy := episode.energy
+	episode.step(1)
+	if episode.predatorHits != 1 {
+		t.Fatalf("expected predator hit count=1, got %d", episode.predatorHits)
+	}
+	if episode.energy >= startEnergy {
+		t.Fatalf("expected predator collision to reduce energy, before=%f after=%f", startEnergy, episode.energy)
+	}
+	if len(episode.predators) != 1 {
+		t.Fatalf("expected single predator resource, got=%d", len(episode.predators))
+	}
+	if episode.predators[0].cooldown != flatlandPredatorRespawn {
+		t.Fatalf("expected predator respawn cooldown=%d, got=%d", flatlandPredatorRespawn, episode.predators[0].cooldown)
+	}
+}
+
+func TestFlatlandEpisodePreyCollisionRewardsAndTracks(t *testing.T) {
+	episode := newFlatlandEpisode(flatlandModeConfig{
+		mode:            "test",
+		maxAge:          16,
+		forageGoal:      8,
+		foodPositions:   []int{},
+		poisonPositions: []int{},
+		wallPositions:   []int{},
+		preyPositions:   []int{1},
+	})
+
+	startEnergy := episode.energy
+	episode.step(1)
+	if episode.preyCollected != 1 {
+		t.Fatalf("expected prey_collected=1, got %d", episode.preyCollected)
+	}
+	if episode.energy <= startEnergy {
+		t.Fatalf("expected prey collision to increase energy, before=%f after=%f", startEnergy, episode.energy)
+	}
+	if len(episode.prey) != 1 {
+		t.Fatalf("expected single prey resource, got=%d", len(episode.prey))
+	}
+	if episode.prey[0].cooldown != flatlandPreyRespawn {
+		t.Fatalf("expected prey respawn cooldown=%d, got=%d", flatlandPreyRespawn, episode.prey[0].cooldown)
+	}
+}
+
 func TestFlatlandEpisodeRespawnsFoodAwayFromConsumedCell(t *testing.T) {
 	episode := newFlatlandEpisode(flatlandModeConfig{
 		mode:            "test",
