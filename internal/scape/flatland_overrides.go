@@ -17,6 +17,8 @@ type FlatlandOverrides struct {
 	LayoutVariants     *int
 	ForceLayoutVariant *int
 	BenchmarkTrials    *int
+	MaxAge             *int
+	ForageGoal         *int
 }
 
 type flatlandOverrides struct {
@@ -34,6 +36,10 @@ type flatlandOverrides struct {
 	hasForcedLayout    bool
 	benchmarkTrials    int
 	hasBenchmarkTrials bool
+	maxAge             int
+	hasMaxAge          bool
+	forageGoal         int
+	hasForageGoal      bool
 }
 
 type flatlandOverridesContextKey struct{}
@@ -123,6 +129,22 @@ func normalizeFlatlandOverrides(raw FlatlandOverrides) (flatlandOverrides, error
 		normalized.benchmarkTrials = trials
 		normalized.hasBenchmarkTrials = true
 	}
+	if raw.MaxAge != nil {
+		maxAge := *raw.MaxAge
+		if maxAge <= 0 {
+			return flatlandOverrides{}, fmt.Errorf("flatland max age must be > 0, got %d", maxAge)
+		}
+		normalized.maxAge = maxAge
+		normalized.hasMaxAge = true
+	}
+	if raw.ForageGoal != nil {
+		forageGoal := *raw.ForageGoal
+		if forageGoal <= 0 {
+			return flatlandOverrides{}, fmt.Errorf("flatland forage goal must be > 0, got %d", forageGoal)
+		}
+		normalized.forageGoal = forageGoal
+		normalized.hasForageGoal = true
+	}
 
 	return normalized, nil
 }
@@ -149,6 +171,12 @@ func applyFlatlandOverrides(cfg flatlandModeConfig, overrides flatlandOverrides)
 	}
 	if overrides.hasBenchmarkTrials {
 		cfg.benchmarkTrials = overrides.benchmarkTrials
+	}
+	if overrides.hasMaxAge {
+		cfg.maxAge = overrides.maxAge
+	}
+	if overrides.hasForageGoal {
+		cfg.forageGoal = overrides.forageGoal
 	}
 	if cfg.layoutVariants <= 0 {
 		cfg.layoutVariants = 1

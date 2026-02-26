@@ -72,6 +72,8 @@ type RunRequest struct {
 	FlatlandLayoutVariants  *int
 	FlatlandForceLayout     *int
 	FlatlandBenchmarkTrials *int
+	FlatlandMaxAge          *int
+	FlatlandForageGoal      *int
 	Population              int
 	Generations             int
 	SurvivalPercentage      float64
@@ -549,6 +551,8 @@ func (c *Client) Run(ctx context.Context, req RunRequest) (RunSummary, error) {
 			FlatlandLayoutVariants:  cloneIntPtr(req.FlatlandLayoutVariants),
 			FlatlandForceLayout:     cloneIntPtr(req.FlatlandForceLayout),
 			FlatlandBenchmarkTrials: cloneIntPtr(req.FlatlandBenchmarkTrials),
+			FlatlandMaxAge:          cloneIntPtr(req.FlatlandMaxAge),
+			FlatlandForageGoal:      cloneIntPtr(req.FlatlandForageGoal),
 			ContinuePopulationID:    req.ContinuePopulationID,
 			SpecieIdentifier:        req.SpecieIdentifier,
 			InitialGeneration:       initialGeneration,
@@ -1578,7 +1582,9 @@ func hasFlatlandOverrideConfig(req RunRequest) bool {
 		req.FlatlandLayoutRandomize != nil ||
 		req.FlatlandLayoutVariants != nil ||
 		req.FlatlandForceLayout != nil ||
-		req.FlatlandBenchmarkTrials != nil
+		req.FlatlandBenchmarkTrials != nil ||
+		req.FlatlandMaxAge != nil ||
+		req.FlatlandForageGoal != nil
 }
 
 func toFlatlandOverrides(req RunRequest) scape.FlatlandOverrides {
@@ -1590,6 +1596,8 @@ func toFlatlandOverrides(req RunRequest) scape.FlatlandOverrides {
 		LayoutVariants:     cloneIntPtr(req.FlatlandLayoutVariants),
 		ForceLayoutVariant: cloneIntPtr(req.FlatlandForceLayout),
 		BenchmarkTrials:    cloneIntPtr(req.FlatlandBenchmarkTrials),
+		MaxAge:             cloneIntPtr(req.FlatlandMaxAge),
+		ForageGoal:         cloneIntPtr(req.FlatlandForageGoal),
 	}
 }
 

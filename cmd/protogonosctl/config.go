@@ -104,6 +104,12 @@ func loadRunRequestFromConfig(path string) (protoapi.RunRequest, error) {
 	if v, ok := asInt(raw["flatland_benchmark_trials"]); ok {
 		req.FlatlandBenchmarkTrials = intPtr(v)
 	}
+	if v, ok := asInt(raw["flatland_max_age"]); ok {
+		req.FlatlandMaxAge = intPtr(v)
+	}
+	if v, ok := asInt(raw["flatland_forage_goal"]); ok {
+		req.FlatlandForageGoal = intPtr(v)
+	}
 	if scapeData, ok := raw["scape_data"].(map[string]any); ok {
 		applyScapeDataConfigFallbacks(&req, scapeData)
 	}
@@ -527,6 +533,16 @@ func applyScapeDataConfigFallbacks(req *protoapi.RunRequest, scapeData map[strin
 		if req.FlatlandBenchmarkTrials == nil {
 			if v, ok := asInt(flatlandData["benchmark_trials"]); ok {
 				req.FlatlandBenchmarkTrials = intPtr(v)
+			}
+		}
+		if req.FlatlandMaxAge == nil {
+			if v, ok := asInt(flatlandData["max_age"]); ok {
+				req.FlatlandMaxAge = intPtr(v)
+			}
+		}
+		if req.FlatlandForageGoal == nil {
+			if v, ok := asInt(flatlandData["forage_goal"]); ok {
+				req.FlatlandForageGoal = intPtr(v)
 			}
 		}
 	}

@@ -784,6 +784,28 @@ func TestMaterializeRunConfigFromRequestValidatesFlatlandOverrides(t *testing.T)
 	if err == nil || !strings.Contains(err.Error(), "benchmark trials") {
 		t.Fatalf("expected flatland benchmark trials validation error, got %v", err)
 	}
+
+	maxAge := 0
+	_, err = materializeRunConfigFromRequest(RunRequest{
+		Scape:          "flatland",
+		Population:     6,
+		Generations:    1,
+		FlatlandMaxAge: &maxAge,
+	})
+	if err == nil || !strings.Contains(err.Error(), "max age") {
+		t.Fatalf("expected flatland max age validation error, got %v", err)
+	}
+
+	forageGoal := 0
+	_, err = materializeRunConfigFromRequest(RunRequest{
+		Scape:              "flatland",
+		Population:         6,
+		Generations:        1,
+		FlatlandForageGoal: &forageGoal,
+	})
+	if err == nil || !strings.Contains(err.Error(), "forage goal") {
+		t.Fatalf("expected flatland forage goal validation error, got %v", err)
+	}
 }
 
 func TestApplyScapeDataSourcesAppliesFlatlandOverridesToContext(t *testing.T) {
@@ -793,6 +815,8 @@ func TestApplyScapeDataSourcesAppliesFlatlandOverridesToContext(t *testing.T) {
 	layoutVariants := 5
 	forcedLayout := 2
 	trials := 3
+	maxAge := 64
+	forageGoal := 4
 	ctx, err := applyScapeDataSources(context.Background(), RunRequest{
 		FlatlandScannerProfile:  "forward",
 		FlatlandScannerSpread:   &spread,
@@ -801,6 +825,8 @@ func TestApplyScapeDataSourcesAppliesFlatlandOverridesToContext(t *testing.T) {
 		FlatlandLayoutVariants:  &layoutVariants,
 		FlatlandForceLayout:     &forcedLayout,
 		FlatlandBenchmarkTrials: &trials,
+		FlatlandMaxAge:          &maxAge,
+		FlatlandForageGoal:      &forageGoal,
 	})
 	if err != nil {
 		t.Fatalf("apply scape data sources: %v", err)
@@ -840,6 +866,12 @@ func TestApplyScapeDataSourcesAppliesFlatlandOverridesToContext(t *testing.T) {
 	}
 	if mean, ok := trace["benchmark_fitness_mean"].(float64); !ok || float64(fitness) != mean {
 		t.Fatalf("expected returned fitness to equal benchmark_fitness_mean, fitness=%f trace=%+v", fitness, trace)
+	}
+	if gotMaxAge, _ := trace["max_age"].(int); gotMaxAge != maxAge {
+		t.Fatalf("expected max_age=%d, got trace=%+v", maxAge, trace)
+	}
+	if gotForageGoal, _ := trace["forage_goal"].(int); gotForageGoal != forageGoal {
+		t.Fatalf("expected forage_goal=%d, got trace=%+v", forageGoal, trace)
 	}
 }
 

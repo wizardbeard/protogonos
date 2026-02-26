@@ -43,6 +43,8 @@ type RunConfig struct {
 	FlatlandLayoutVariants  *int     `json:"flatland_layout_variants,omitempty"`
 	FlatlandForceLayout     *int     `json:"flatland_force_layout_variant,omitempty"`
 	FlatlandBenchmarkTrials *int     `json:"flatland_benchmark_trials,omitempty"`
+	FlatlandMaxAge          *int     `json:"flatland_max_age,omitempty"`
+	FlatlandForageGoal      *int     `json:"flatland_forage_goal,omitempty"`
 	PopulationSize          int      `json:"population_size"`
 	Generations             int      `json:"generations"`
 	SurvivalPercentage      float64  `json:"survival_percentage"`

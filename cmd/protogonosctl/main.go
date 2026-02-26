@@ -182,6 +182,8 @@ func runRun(ctx context.Context, args []string) error {
 	flatlandLayoutVariants := fs.Int("flatland-layout-variants", 0, "optional flatland layout variants override (>0)")
 	flatlandForceLayoutVariant := fs.Int("flatland-force-layout-variant", 0, "optional flatland forced layout variant index")
 	flatlandBenchmarkTrials := fs.Int("flatland-benchmark-trials", 0, "optional flatland benchmark trial count override (>0)")
+	flatlandMaxAge := fs.Int("flatland-max-age", 0, "optional flatland max age override (>0)")
+	flatlandForageGoal := fs.Int("flatland-forage-goal", 0, "optional flatland forage goal override (>0)")
 	epitopesGTStart := fs.Int("epitopes-gt-start", 0, "optional epitopes GT start index for loaded CSV")
 	epitopesGTEnd := fs.Int("epitopes-gt-end", 0, "optional epitopes GT end index for loaded CSV")
 	epitopesValidationStart := fs.Int("epitopes-validation-start", 0, "optional epitopes validation start index for loaded CSV")
@@ -392,6 +394,8 @@ func runRun(ctx context.Context, args []string) error {
 		LayoutVariants:     *flatlandLayoutVariants,
 		ForceLayoutVariant: *flatlandForceLayoutVariant,
 		BenchmarkTrials:    *flatlandBenchmarkTrials,
+		MaxAge:             *flatlandMaxAge,
+		ForageGoal:         *flatlandForageGoal,
 	})
 	if *profileName != "" {
 		preset, err := loadParityPreset(*profileName)
@@ -1048,6 +1052,8 @@ func runBenchmark(ctx context.Context, args []string) error {
 	flatlandLayoutVariants := fs.Int("flatland-layout-variants", 0, "optional flatland layout variants override (>0)")
 	flatlandForceLayoutVariant := fs.Int("flatland-force-layout-variant", 0, "optional flatland forced layout variant index")
 	flatlandBenchmarkTrials := fs.Int("flatland-benchmark-trials", 0, "optional flatland benchmark trial count override (>0)")
+	flatlandMaxAge := fs.Int("flatland-max-age", 0, "optional flatland max age override (>0)")
+	flatlandForageGoal := fs.Int("flatland-forage-goal", 0, "optional flatland forage goal override (>0)")
 	epitopesGTStart := fs.Int("epitopes-gt-start", 0, "optional epitopes GT start index for loaded CSV")
 	epitopesGTEnd := fs.Int("epitopes-gt-end", 0, "optional epitopes GT end index for loaded CSV")
 	epitopesValidationStart := fs.Int("epitopes-validation-start", 0, "optional epitopes validation start index for loaded CSV")
@@ -1256,6 +1262,8 @@ func runBenchmark(ctx context.Context, args []string) error {
 		LayoutVariants:     *flatlandLayoutVariants,
 		ForceLayoutVariant: *flatlandForceLayoutVariant,
 		BenchmarkTrials:    *flatlandBenchmarkTrials,
+		MaxAge:             *flatlandMaxAge,
+		ForageGoal:         *flatlandForageGoal,
 	})
 	if *profileName != "" {
 		preset, err := loadParityPreset(*profileName)
@@ -1729,6 +1737,8 @@ type flatlandFlagInputs struct {
 	LayoutVariants     int
 	ForceLayoutVariant int
 	BenchmarkTrials    int
+	MaxAge             int
+	ForageGoal         int
 }
 
 func applyFlatlandFlagOverrides(req *protoapi.RunRequest, setFlags map[string]bool, values flatlandFlagInputs) {
@@ -1755,6 +1765,12 @@ func applyFlatlandFlagOverrides(req *protoapi.RunRequest, setFlags map[string]bo
 	}
 	if setFlags["flatland-benchmark-trials"] {
 		req.FlatlandBenchmarkTrials = intPtr(values.BenchmarkTrials)
+	}
+	if setFlags["flatland-max-age"] {
+		req.FlatlandMaxAge = intPtr(values.MaxAge)
+	}
+	if setFlags["flatland-forage-goal"] {
+		req.FlatlandForageGoal = intPtr(values.ForageGoal)
 	}
 }
 

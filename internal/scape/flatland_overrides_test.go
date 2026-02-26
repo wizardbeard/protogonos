@@ -14,6 +14,8 @@ func TestWithFlatlandOverridesAppliesScannerAndLayoutSettings(t *testing.T) {
 	randomize := false
 	variants := 5
 	forced := 3
+	maxAge := 72
+	forageGoal := 5
 
 	ctx, err := WithFlatlandOverrides(context.Background(), FlatlandOverrides{
 		ScannerProfile:     "forward",
@@ -22,6 +24,8 @@ func TestWithFlatlandOverridesAppliesScannerAndLayoutSettings(t *testing.T) {
 		RandomizeLayout:    &randomize,
 		LayoutVariants:     &variants,
 		ForceLayoutVariant: &forced,
+		MaxAge:             &maxAge,
+		ForageGoal:         &forageGoal,
 	})
 	if err != nil {
 		t.Fatalf("with flatland overrides: %v", err)
@@ -72,6 +76,12 @@ func TestWithFlatlandOverridesAppliesScannerAndLayoutSettings(t *testing.T) {
 	}
 	if gotVariants, _ := traceA["layout_variants"].(int); gotVariants != variants {
 		t.Fatalf("expected layout_variants=%d, got trace=%+v", variants, traceA)
+	}
+	if gotMaxAge, _ := traceA["max_age"].(int); gotMaxAge != maxAge {
+		t.Fatalf("expected max_age=%d, got trace=%+v", maxAge, traceA)
+	}
+	if gotForageGoal, _ := traceA["forage_goal"].(int); gotForageGoal != forageGoal {
+		t.Fatalf("expected forage_goal=%d, got trace=%+v", forageGoal, traceA)
 	}
 
 	if gotVariant, _ := traceB["layout_variant"].(int); gotVariant != wantVariant {
@@ -161,6 +171,20 @@ func TestWithFlatlandOverridesRejectsInvalidValues(t *testing.T) {
 				BenchmarkTrials: flatlandIntPtr(0),
 			},
 			wantErr: "benchmark trials",
+		},
+		{
+			name: "invalid max age",
+			input: FlatlandOverrides{
+				MaxAge: flatlandIntPtr(0),
+			},
+			wantErr: "max age",
+		},
+		{
+			name: "invalid forage goal",
+			input: FlatlandOverrides{
+				ForageGoal: flatlandIntPtr(0),
+			},
+			wantErr: "forage goal",
 		},
 	}
 

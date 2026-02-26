@@ -247,6 +247,7 @@ func TestLoadRunRequestFromConfigParsesFlatlandOverrides(t *testing.T) {
 	payload := map[string]any{
 		"flatland_scanner_profile": "core3",
 		"flatland_scanner_spread":  0.21,
+		"flatland_max_age":         95,
 		"scape_data": map[string]any{
 			"flatland": map[string]any{
 				"scanner_profile":      "forward5",
@@ -255,6 +256,7 @@ func TestLoadRunRequestFromConfigParsesFlatlandOverrides(t *testing.T) {
 				"layout_variants":      6,
 				"force_layout_variant": 3,
 				"benchmark_trials":     4,
+				"forage_goal":          7,
 			},
 		},
 	}
@@ -292,6 +294,12 @@ func TestLoadRunRequestFromConfigParsesFlatlandOverrides(t *testing.T) {
 	}
 	if req.FlatlandBenchmarkTrials == nil || *req.FlatlandBenchmarkTrials != 4 {
 		t.Fatalf("expected nested flatland benchmark trials=4, got %+v", req.FlatlandBenchmarkTrials)
+	}
+	if req.FlatlandMaxAge == nil || *req.FlatlandMaxAge != 95 {
+		t.Fatalf("expected top-level flatland max_age=95, got %+v", req.FlatlandMaxAge)
+	}
+	if req.FlatlandForageGoal == nil || *req.FlatlandForageGoal != 7 {
+		t.Fatalf("expected nested flatland forage_goal=7, got %+v", req.FlatlandForageGoal)
 	}
 }
 
