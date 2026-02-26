@@ -710,6 +710,15 @@ func TestFlatlandScapeBenchmarkTraceIncludesSocialDynamics(t *testing.T) {
 	if _, ok := trace["active_predators"].(int); !ok {
 		t.Fatalf("expected active_predators in trace, trace=%+v", trace)
 	}
+	if _, ok := trace["prey_hunted"].(int); !ok {
+		t.Fatalf("expected prey_hunted in trace, trace=%+v", trace)
+	}
+	if _, ok := trace["predator_feeds"].(int); !ok {
+		t.Fatalf("expected predator_feeds in trace, trace=%+v", trace)
+	}
+	if _, ok := trace["predator_pressure_events"].(int); !ok {
+		t.Fatalf("expected predator_pressure_events in trace, trace=%+v", trace)
+	}
 }
 
 func TestFlatlandEpisodePredatorCollisionPenalizesAndTracks(t *testing.T) {
@@ -763,6 +772,63 @@ func TestFlatlandEpisodePreyCollisionRewardsAndTracks(t *testing.T) {
 	}
 	if episode.prey[0].cooldown != flatlandPreyRespawn {
 		t.Fatalf("expected prey respawn cooldown=%d, got=%d", flatlandPreyRespawn, episode.prey[0].cooldown)
+	}
+}
+
+func TestFlatlandEpisodePredatorHuntsNearbyPrey(t *testing.T) {
+	episode := newFlatlandEpisode(flatlandModeConfig{
+		mode:              "test",
+		maxAge:            16,
+		forageGoal:        8,
+		foodPositions:     []int{},
+		poisonPositions:   []int{},
+		wallPositions:     []int{},
+		preyPositions:     []int{10},
+		predatorPositions: []int{9},
+		socialDynamics:    true,
+	})
+	episode.position = 30
+
+	episode.step(0)
+	if episode.preyHunted != 1 {
+		t.Fatalf("expected prey_hunted=1, got %d", episode.preyHunted)
+	}
+	if episode.predatorFeeds != 1 {
+		t.Fatalf("expected predator_feeds=1, got %d", episode.predatorFeeds)
+	}
+	if len(episode.prey) != 1 || episode.prey[0].cooldown != flatlandPreyRespawn {
+		t.Fatalf("expected hunted prey to enter respawn cooldown=%d, prey=%+v", flatlandPreyRespawn, episode.prey)
+	}
+	if len(episode.predators) != 1 || episode.predators[0].potency <= flatlandPredatorDamageMin {
+		t.Fatalf("expected predator potency boost after feed, predators=%+v", episode.predators)
+	}
+}
+
+func TestFlatlandEpisodePredatorPressurePenalizesNearMiss(t *testing.T) {
+	episode := newFlatlandEpisode(flatlandModeConfig{
+		mode:              "test",
+		maxAge:            16,
+		forageGoal:        8,
+		foodPositions:     []int{},
+		poisonPositions:   []int{},
+		wallPositions:     []int{},
+		preyPositions:     []int{},
+		predatorPositions: []int{2},
+		socialDynamics:    true,
+	})
+	episode.position = 0
+
+	startEnergy := episode.energy
+	baselineNoPressure := startEnergy - (flatlandBaseMetabolic + flatlandIdleMetabolic)
+	episode.step(0)
+	if episode.predatorHits != 0 {
+		t.Fatalf("expected near-miss pressure scenario without direct hit, predator_hits=%d", episode.predatorHits)
+	}
+	if episode.predatorPressureEvents == 0 {
+		t.Fatalf("expected at least one predator pressure event, got=%d", episode.predatorPressureEvents)
+	}
+	if episode.energy >= baselineNoPressure {
+		t.Fatalf("expected pressure to reduce energy below baseline=%f, got=%f", baselineNoPressure, episode.energy)
 	}
 }
 

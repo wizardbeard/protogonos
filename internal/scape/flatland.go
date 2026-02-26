@@ -383,10 +383,12 @@ func evaluateFlatland(
 	socialBalance := float64(episode.preyCollected-episode.predatorHits) / float64(socialCollisions+1)
 	socialTerm := 0.5 + 0.5*clamp(socialBalance, -1, 1)
 	predatorPenalty := clamp(float64(episode.predatorHits)/float64(age), 0, 1)
+	preyLossPenalty := clamp(float64(episode.preyHunted)/float64(age), 0, 1)
+	predatorPressurePenalty := clamp(float64(episode.predatorPressureEvents)/float64(age), 0, 1)
 
 	fitness := 0.33*survival + 0.24*energyTerm + 0.24*forageTerm + 0.14*rewardTerm - 0.12*wallPenalty + 0.03*respawnActivity
 	if episode.socialDynamics {
-		fitness += 0.05*socialTerm - 0.06*predatorPenalty
+		fitness += 0.05*socialTerm - 0.06*predatorPenalty - 0.03*preyLossPenalty - 0.04*predatorPressurePenalty
 	}
 	if episode.foodCollected >= episode.forageGoal {
 		fitness += 0.1
@@ -394,111 +396,121 @@ func evaluateFlatland(
 	fitness = clamp(fitness, 0, 1.4)
 
 	return Fitness(fitness), Trace{
-		"position":                float64(episode.position),
-		"energy":                  episode.energy,
-		"energy_norm":             episode.normalizedEnergy(),
-		"reward":                  avgReward,
-		"reward_total":            episode.rewardAcc,
-		"age":                     episode.age,
-		"max_age":                 cfg.maxAge,
-		"forage_goal":             episode.forageGoal,
-		"food_collected":          episode.foodCollected,
-		"poison_hits":             episode.poisonHits,
-		"prey_collected":          episode.preyCollected,
-		"predator_hits":           episode.predatorHits,
-		"social_collisions":       socialCollisions,
-		"collisions":              totalCollisions,
-		"wall_collisions":         episode.wallCollisions,
-		"movement_steps":          movementSteps,
-		"resource_respawns":       episode.resourceRespawns,
-		"active_food":             episode.activeResources(episode.food),
-		"active_poison":           episode.activeResources(episode.poison),
-		"active_prey":             episode.activeResources(episode.prey),
-		"active_predators":        episode.activeResources(episode.predators),
-		"social_dynamics":         episode.socialDynamics,
-		"terminal_reason":         terminalReason,
-		"last_food_distance":      lastDistance,
-		"last_prey_signal":        lastPrey,
-		"last_predator_signal":    lastPredator,
-		"last_poison_signal":      lastPoison,
-		"last_wall_signal":        lastWall,
-		"last_food_proximity":     lastFoodProximity,
-		"last_prey_proximity":     lastPreyProximity,
-		"last_predator_proximity": lastPredatorProximity,
-		"last_poison_proximity":   lastPoisonProximity,
-		"last_wall_proximity":     lastWallProximity,
-		"last_resource_balance":   lastResourceBalance,
-		"last_distance_scan_bins": flatlandScanSlice(lastDistanceScan),
-		"last_color_scan_bins":    flatlandScanSlice(lastColorScan),
-		"last_energy_scan_bins":   flatlandScanSlice(lastEnergyScan),
-		"last_distance_scan_mean": lastDistanceScanMean,
-		"last_color_scan_mean":    lastColorScanMean,
-		"last_energy_scan_mean":   lastEnergyScanMean,
-		"last_control_width":      lastControlWidth,
-		"feature_width":           flatlandBaseFeatureWidth,
-		"scanner_density":         flatlandScannerDensity,
-		"scanner_feature_width":   flatlandScannerWidth,
-		"scanner_spread":          episode.scannerSpread,
-		"scanner_offset":          episode.scannerOffset,
-		"scanner_heading":         episode.heading,
-		"initial_heading":         episode.initialHeading,
-		"scanner_profile":         episode.scannerProfile,
-		"scanner_profile_weights": flatlandScanSlice(episode.scannerWeights),
-		"layout_variant":          episode.layoutVariant,
-		"layout_shift":            episode.layoutShift,
-		"layout_forced":           episode.layoutForced,
-		"layout_variants":         max(cfg.layoutVariants, 1),
-		"mode":                    cfg.mode,
+		"position":                 float64(episode.position),
+		"energy":                   episode.energy,
+		"energy_norm":              episode.normalizedEnergy(),
+		"reward":                   avgReward,
+		"reward_total":             episode.rewardAcc,
+		"age":                      episode.age,
+		"max_age":                  cfg.maxAge,
+		"forage_goal":              episode.forageGoal,
+		"food_collected":           episode.foodCollected,
+		"poison_hits":              episode.poisonHits,
+		"prey_collected":           episode.preyCollected,
+		"predator_hits":            episode.predatorHits,
+		"prey_hunted":              episode.preyHunted,
+		"predator_feeds":           episode.predatorFeeds,
+		"predator_pressure_events": episode.predatorPressureEvents,
+		"social_collisions":        socialCollisions,
+		"collisions":               totalCollisions,
+		"wall_collisions":          episode.wallCollisions,
+		"movement_steps":           movementSteps,
+		"resource_respawns":        episode.resourceRespawns,
+		"active_food":              episode.activeResources(episode.food),
+		"active_poison":            episode.activeResources(episode.poison),
+		"active_prey":              episode.activeResources(episode.prey),
+		"active_predators":         episode.activeResources(episode.predators),
+		"social_dynamics":          episode.socialDynamics,
+		"terminal_reason":          terminalReason,
+		"last_food_distance":       lastDistance,
+		"last_prey_signal":         lastPrey,
+		"last_predator_signal":     lastPredator,
+		"last_poison_signal":       lastPoison,
+		"last_wall_signal":         lastWall,
+		"last_food_proximity":      lastFoodProximity,
+		"last_prey_proximity":      lastPreyProximity,
+		"last_predator_proximity":  lastPredatorProximity,
+		"last_poison_proximity":    lastPoisonProximity,
+		"last_wall_proximity":      lastWallProximity,
+		"last_resource_balance":    lastResourceBalance,
+		"last_distance_scan_bins":  flatlandScanSlice(lastDistanceScan),
+		"last_color_scan_bins":     flatlandScanSlice(lastColorScan),
+		"last_energy_scan_bins":    flatlandScanSlice(lastEnergyScan),
+		"last_distance_scan_mean":  lastDistanceScanMean,
+		"last_color_scan_mean":     lastColorScanMean,
+		"last_energy_scan_mean":    lastEnergyScanMean,
+		"last_control_width":       lastControlWidth,
+		"feature_width":            flatlandBaseFeatureWidth,
+		"scanner_density":          flatlandScannerDensity,
+		"scanner_feature_width":    flatlandScannerWidth,
+		"scanner_spread":           episode.scannerSpread,
+		"scanner_offset":           episode.scannerOffset,
+		"scanner_heading":          episode.heading,
+		"initial_heading":          episode.initialHeading,
+		"scanner_profile":          episode.scannerProfile,
+		"scanner_profile_weights":  flatlandScanSlice(episode.scannerWeights),
+		"layout_variant":           episode.layoutVariant,
+		"layout_shift":             episode.layoutShift,
+		"layout_forced":            episode.layoutForced,
+		"layout_variants":          max(cfg.layoutVariants, 1),
+		"mode":                     cfg.mode,
 	}, nil
 }
 
 const (
-	flatlandWorldSize              = 48
-	flatlandDefaultMaxAge          = 220
-	flatlandInitialEnergy          = 1.2
-	flatlandEnergyCap              = 2.0
-	flatlandBaseMetabolic          = 0.012
-	flatlandIdleMetabolic          = 0.004
-	flatlandMoveMetabolic          = 0.018
-	flatlandWallEnergyPenalty      = 0.035
-	flatlandFoodEnergyMin          = 0.20
-	flatlandFoodEnergyMax          = 0.38
-	flatlandFoodGrowth             = 0.012
-	flatlandPoisonDamageMin        = 0.30
-	flatlandPoisonDamageMax        = 0.44
-	flatlandPoisonDrift            = 0.006
-	flatlandPreyEnergyMin          = 0.14
-	flatlandPreyEnergyMax          = 0.30
-	flatlandPreyGrowth             = 0.008
-	flatlandPredatorDamageMin      = 0.18
-	flatlandPredatorDamageMax      = 0.32
-	flatlandPredatorDrift          = 0.005
-	flatlandSurvivalReward         = 0.01
-	flatlandFoodReward             = 0.25
-	flatlandPoisonPenalty          = 0.30
-	flatlandPreyReward             = 0.16
-	flatlandPredatorPenalty        = 0.20
-	flatlandWallPenalty            = 0.07
-	flatlandFoodRespawn            = 12
-	flatlandPoisonRespawn          = 16
-	flatlandPreyRespawn            = 9
-	flatlandPredatorRespawn        = 13
-	flatlandDefaultForageGoal      = 8
-	flatlandSensorDistanceLo       = -1.0
-	flatlandSensorDistanceHi       = 1.0
-	flatlandRespawnStride          = 7
-	flatlandScannerDensity         = 5
-	flatlandScannerWidth           = flatlandScannerDensity * 3
-	flatlandBaseFeatureWidth       = 12
-	flatlandScannerSpreadDefault   = 0.18
-	flatlandScannerProfileBalanced = "balanced5"
-	flatlandScannerProfileCore     = "core3"
-	flatlandScannerProfileForward  = "forward5"
-	flatlandScannerColorPoison     = -1.0
-	flatlandScannerColorPlant      = -0.5
-	flatlandScannerColorPrey       = 0.0
-	flatlandScannerColorPredator   = 0.5
-	flatlandScannerColorWall       = 0.75
+	flatlandWorldSize                     = 48
+	flatlandDefaultMaxAge                 = 220
+	flatlandInitialEnergy                 = 1.2
+	flatlandEnergyCap                     = 2.0
+	flatlandBaseMetabolic                 = 0.012
+	flatlandIdleMetabolic                 = 0.004
+	flatlandMoveMetabolic                 = 0.018
+	flatlandWallEnergyPenalty             = 0.035
+	flatlandFoodEnergyMin                 = 0.20
+	flatlandFoodEnergyMax                 = 0.38
+	flatlandFoodGrowth                    = 0.012
+	flatlandPoisonDamageMin               = 0.30
+	flatlandPoisonDamageMax               = 0.44
+	flatlandPoisonDrift                   = 0.006
+	flatlandPreyEnergyMin                 = 0.14
+	flatlandPreyEnergyMax                 = 0.30
+	flatlandPreyGrowth                    = 0.008
+	flatlandPredatorDamageMin             = 0.18
+	flatlandPredatorDamageMax             = 0.32
+	flatlandPredatorDrift                 = 0.005
+	flatlandSurvivalReward                = 0.01
+	flatlandFoodReward                    = 0.25
+	flatlandPoisonPenalty                 = 0.30
+	flatlandPreyReward                    = 0.16
+	flatlandPredatorPenalty               = 0.20
+	flatlandPredatorFeedBoost             = 0.05
+	flatlandPreyLossPenalty               = 0.04
+	flatlandPredatorPressurePenalty       = 0.02
+	flatlandPredatorPressureRewardPenalty = 0.02
+	flatlandPredatorPressureRadius        = 1
+	flatlandPredatorPreyPriorityRange     = 6
+	flatlandPreyPredatorAvoidRange        = 5
+	flatlandWallPenalty                   = 0.07
+	flatlandFoodRespawn                   = 12
+	flatlandPoisonRespawn                 = 16
+	flatlandPreyRespawn                   = 9
+	flatlandPredatorRespawn               = 13
+	flatlandDefaultForageGoal             = 8
+	flatlandSensorDistanceLo              = -1.0
+	flatlandSensorDistanceHi              = 1.0
+	flatlandRespawnStride                 = 7
+	flatlandScannerDensity                = 5
+	flatlandScannerWidth                  = flatlandScannerDensity * 3
+	flatlandBaseFeatureWidth              = 12
+	flatlandScannerSpreadDefault          = 0.18
+	flatlandScannerProfileBalanced        = "balanced5"
+	flatlandScannerProfileCore            = "core3"
+	flatlandScannerProfileForward         = "forward5"
+	flatlandScannerColorPoison            = -1.0
+	flatlandScannerColorPlant             = -0.5
+	flatlandScannerColorPrey              = 0.0
+	flatlandScannerColorPredator          = 0.5
+	flatlandScannerColorWall              = 0.75
 )
 
 var flatlandDistanceScannerSensors = [flatlandScannerDensity]string{
@@ -555,34 +567,37 @@ type flatlandControl struct {
 }
 
 type flatlandEpisode struct {
-	position         int
-	heading          int
-	initialHeading   int
-	energy           float64
-	age              int
-	maxAge           int
-	forageGoal       int
-	foodCollected    int
-	poisonHits       int
-	wallCollisions   int
-	resourceRespawns int
-	rewardAcc        float64
-	food             []flatlandResource
-	poison           []flatlandResource
-	prey             []flatlandResource
-	predators        []flatlandResource
-	walls            map[int]struct{}
-	respawnCursor    int
-	socialDynamics   bool
-	preyCollected    int
-	predatorHits     int
-	scannerSpread    float64
-	scannerOffset    float64
-	scannerProfile   string
-	scannerWeights   [flatlandScannerDensity]float64
-	layoutVariant    int
-	layoutShift      int
-	layoutForced     bool
+	position               int
+	heading                int
+	initialHeading         int
+	energy                 float64
+	age                    int
+	maxAge                 int
+	forageGoal             int
+	foodCollected          int
+	poisonHits             int
+	wallCollisions         int
+	resourceRespawns       int
+	rewardAcc              float64
+	food                   []flatlandResource
+	poison                 []flatlandResource
+	prey                   []flatlandResource
+	predators              []flatlandResource
+	walls                  map[int]struct{}
+	respawnCursor          int
+	socialDynamics         bool
+	preyCollected          int
+	predatorHits           int
+	preyHunted             int
+	predatorFeeds          int
+	predatorPressureEvents int
+	scannerSpread          float64
+	scannerOffset          float64
+	scannerProfile         string
+	scannerWeights         [flatlandScannerDensity]float64
+	layoutVariant          int
+	layoutShift            int
+	layoutForced           bool
 }
 
 func newFlatlandEpisode(cfg flatlandModeConfig) *flatlandEpisode {
@@ -1295,6 +1310,8 @@ func (e *flatlandEpisode) step(move float64) (int, bool, bool, bool, string) {
 	_ = e.consumePreyAtPosition()
 	_ = e.collidePredatorAtPosition()
 	e.moveAmbientActors()
+	_ = e.consumePreyAtPosition()
+	_ = e.collidePredatorAtPosition()
 
 	e.energy -= flatlandBaseMetabolic + flatlandMoveMetabolic*math.Abs(float64(moveStep))
 	if moveStep == 0 {
@@ -1398,6 +1415,8 @@ func (e *flatlandEpisode) moveAmbientActors() {
 	}
 	e.movePrey()
 	e.movePredators()
+	e.resolvePredatorPreyContacts()
+	e.applyPredatorPressure()
 }
 
 func (e *flatlandEpisode) movePrey() {
@@ -1407,6 +1426,9 @@ func (e *flatlandEpisode) movePrey() {
 			continue
 		}
 		delta := signedRingDistance(e.position, resource.position, flatlandWorldSize)
+		if predatorDelta, predatorDistance, ok := e.nearestActivePredatorDeltaFrom(resource.position); ok && predatorDistance <= flatlandPreyPredatorAvoidRange {
+			delta = -predatorDelta
+		}
 		direction := signInt(delta)
 		if direction == 0 {
 			if (e.age+i+e.layoutVariant)%2 == 0 {
@@ -1425,8 +1447,11 @@ func (e *flatlandEpisode) movePredators() {
 		if resource.cooldown > 0 {
 			continue
 		}
-		delta := signedRingDistance(resource.position, e.position, flatlandWorldSize)
-		direction := signInt(delta)
+		targetDelta := signedRingDistance(resource.position, e.position, flatlandWorldSize)
+		if preyDelta, preyDistance, ok := e.nearestActivePreyDeltaFrom(resource.position); ok && preyDistance <= flatlandPredatorPreyPriorityRange {
+			targetDelta = preyDelta
+		}
+		direction := signInt(targetDelta)
 		if direction == 0 {
 			direction = e.heading
 			if direction == 0 {
@@ -1435,6 +1460,119 @@ func (e *flatlandEpisode) movePredators() {
 		}
 		resource.position = e.advanceAmbientPosition(resource.position, direction)
 	}
+}
+
+func (e *flatlandEpisode) resolvePredatorPreyContacts() {
+	for i := range e.predators {
+		predator := &e.predators[i]
+		if predator.cooldown > 0 {
+			continue
+		}
+		_, preyDistance, preyIndex, ok := e.nearestActivePreyAt(predator.position)
+		if !ok || preyDistance > 1 {
+			continue
+		}
+
+		prey := &e.prey[preyIndex]
+		potency := clamp(prey.potency, flatlandPreyEnergyMin, flatlandPreyEnergyMax)
+		prey.cooldown = flatlandPreyRespawn
+		prey.potency = flatlandPreyEnergyMin
+		e.preyHunted++
+		e.predatorFeeds++
+
+		feedScale := clamp(potency/flatlandPreyEnergyMax, 0, 1)
+		predator.potency = clamp(
+			predator.potency+flatlandPredatorFeedBoost*feedScale,
+			flatlandPredatorDamageMin,
+			flatlandPredatorDamageMax,
+		)
+		e.rewardAcc -= flatlandPreyLossPenalty * feedScale
+	}
+}
+
+func (e *flatlandEpisode) applyPredatorPressure() {
+	for _, predator := range e.predators {
+		if predator.cooldown > 0 {
+			continue
+		}
+		distance := absInt(signedRingDistance(e.position, predator.position, flatlandWorldSize))
+		if distance == 0 || distance > flatlandPredatorPressureRadius {
+			continue
+		}
+
+		distanceScale := float64(flatlandPredatorPressureRadius-distance+1) / float64(flatlandPredatorPressureRadius+1)
+		potencyScale := clamp(predator.potency/flatlandPredatorDamageMax, 0, 1)
+		pressure := clamp(distanceScale*potencyScale, 0, 1)
+		if pressure <= 0 {
+			continue
+		}
+
+		e.predatorPressureEvents++
+		e.energy -= flatlandPredatorPressurePenalty * pressure
+		e.rewardAcc -= flatlandPredatorPressureRewardPenalty * pressure
+	}
+}
+
+func (e *flatlandEpisode) nearestActivePreyDeltaFrom(origin int) (int, int, bool) {
+	bestDelta := 0
+	bestDistance := flatlandWorldSize + 1
+	for _, resource := range e.prey {
+		if resource.cooldown > 0 {
+			continue
+		}
+		delta := signedRingDistance(origin, resource.position, flatlandWorldSize)
+		distance := absInt(delta)
+		if distance < bestDistance {
+			bestDistance = distance
+			bestDelta = delta
+		}
+	}
+	if bestDistance > flatlandWorldSize {
+		return 0, 0, false
+	}
+	return bestDelta, bestDistance, true
+}
+
+func (e *flatlandEpisode) nearestActivePredatorDeltaFrom(origin int) (int, int, bool) {
+	bestDelta := 0
+	bestDistance := flatlandWorldSize + 1
+	for _, resource := range e.predators {
+		if resource.cooldown > 0 {
+			continue
+		}
+		delta := signedRingDistance(origin, resource.position, flatlandWorldSize)
+		distance := absInt(delta)
+		if distance < bestDistance {
+			bestDistance = distance
+			bestDelta = delta
+		}
+	}
+	if bestDistance > flatlandWorldSize {
+		return 0, 0, false
+	}
+	return bestDelta, bestDistance, true
+}
+
+func (e *flatlandEpisode) nearestActivePreyAt(origin int) (int, int, int, bool) {
+	bestDelta := 0
+	bestDistance := flatlandWorldSize + 1
+	bestIndex := -1
+	for i, resource := range e.prey {
+		if resource.cooldown > 0 {
+			continue
+		}
+		delta := signedRingDistance(origin, resource.position, flatlandWorldSize)
+		distance := absInt(delta)
+		if distance < bestDistance {
+			bestDistance = distance
+			bestDelta = delta
+			bestIndex = i
+		}
+	}
+	if bestIndex < 0 || bestDistance > flatlandWorldSize {
+		return 0, 0, -1, false
+	}
+	return bestDelta, bestDistance, bestIndex, true
 }
 
 func (e *flatlandEpisode) advanceAmbientPosition(position int, step int) int {
