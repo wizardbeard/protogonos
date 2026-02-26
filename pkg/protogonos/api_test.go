@@ -12,8 +12,28 @@ import (
 	"time"
 
 	"protogonos/internal/model"
+	internalscape "protogonos/internal/scape"
 	"protogonos/internal/stats"
 )
+
+type flatlandRunStepAgent struct {
+	id string
+}
+
+func (a flatlandRunStepAgent) ID() string { return a.id }
+
+func (a flatlandRunStepAgent) RunStep(_ context.Context, input []float64) ([]float64, error) {
+	if len(input) == 0 {
+		return []float64{0}, nil
+	}
+	if input[0] > 0 {
+		return []float64{1}, nil
+	}
+	if input[0] < 0 {
+		return []float64{-1}, nil
+	}
+	return []float64{0}, nil
+}
 
 func TestClientRunRunsAndExport(t *testing.T) {
 	base := t.TempDir()
@@ -727,6 +747,87 @@ func TestMaterializeRunConfigFromRequestValidatesScapeDatasetBounds(t *testing.T
 	})
 	if err == nil || !strings.Contains(err.Error(), "epitopes gt start") {
 		t.Fatalf("expected epitopes gt-start validation error, got %v", err)
+	}
+}
+
+func TestMaterializeRunConfigFromRequestValidatesFlatlandOverrides(t *testing.T) {
+	spread := 0.01
+	_, err := materializeRunConfigFromRequest(RunRequest{
+		Scape:                 "flatland",
+		Population:            6,
+		Generations:           1,
+		FlatlandScannerSpread: &spread,
+	})
+	if err == nil || !strings.Contains(err.Error(), "scanner spread") {
+		t.Fatalf("expected flatland scanner spread validation error, got %v", err)
+	}
+
+	trials := 0
+	_, err = materializeRunConfigFromRequest(RunRequest{
+		Scape:                   "flatland",
+		Population:              6,
+		Generations:             1,
+		FlatlandBenchmarkTrials: &trials,
+	})
+	if err == nil || !strings.Contains(err.Error(), "benchmark trials") {
+		t.Fatalf("expected flatland benchmark trials validation error, got %v", err)
+	}
+}
+
+func TestApplyScapeDataSourcesAppliesFlatlandOverridesToContext(t *testing.T) {
+	spread := 0.22
+	offset := 0.12
+	randomize := true
+	layoutVariants := 5
+	forcedLayout := 2
+	trials := 3
+	ctx, err := applyScapeDataSources(context.Background(), RunRequest{
+		FlatlandScannerProfile:  "forward",
+		FlatlandScannerSpread:   &spread,
+		FlatlandScannerOffset:   &offset,
+		FlatlandLayoutRandomize: &randomize,
+		FlatlandLayoutVariants:  &layoutVariants,
+		FlatlandForceLayout:     &forcedLayout,
+		FlatlandBenchmarkTrials: &trials,
+	})
+	if err != nil {
+		t.Fatalf("apply scape data sources: %v", err)
+	}
+
+	flatland := internalscape.FlatlandScape{}
+	fitness, trace, err := flatland.EvaluateMode(ctx, flatlandRunStepAgent{id: "flatland-api-ctx"}, "benchmark")
+	if err != nil {
+		t.Fatalf("evaluate flatland benchmark with overrides: %v", err)
+	}
+	if profile, _ := trace["scanner_profile"].(string); profile != "forward5" {
+		t.Fatalf("expected flatland scanner profile override forward5, got trace=%+v", trace)
+	}
+	if gotSpread, _ := trace["scanner_spread"].(float64); gotSpread != spread {
+		t.Fatalf("expected flatland scanner spread=%f, got trace=%+v", spread, trace)
+	}
+	if gotOffset, _ := trace["scanner_offset"].(float64); gotOffset != offset {
+		t.Fatalf("expected flatland scanner offset=%f, got trace=%+v", offset, trace)
+	}
+	if gotVariant, _ := trace["layout_variant"].(int); gotVariant != forcedLayout {
+		t.Fatalf("expected forced flatland layout variant=%d, got trace=%+v", forcedLayout, trace)
+	}
+	if gotVariants, _ := trace["layout_variants"].(int); gotVariants != layoutVariants {
+		t.Fatalf("expected flatland layout variants=%d, got trace=%+v", layoutVariants, trace)
+	}
+	if forced, _ := trace["layout_forced"].(bool); !forced {
+		t.Fatalf("expected forced flatland layout flag, got trace=%+v", trace)
+	}
+	if gotTrials, _ := trace["benchmark_trials"].(int); gotTrials != trials {
+		t.Fatalf("expected benchmark trials=%d, got trace=%+v", trials, trace)
+	}
+	if aggregated, _ := trace["benchmark_aggregated"].(bool); !aggregated {
+		t.Fatalf("expected benchmark aggregation enabled, got trace=%+v", trace)
+	}
+	if trialFitness, ok := trace["benchmark_trial_fitnesses"].([]float64); !ok || len(trialFitness) != trials {
+		t.Fatalf("expected benchmark_trial_fitnesses len=%d, got trace=%+v", trials, trace)
+	}
+	if mean, ok := trace["benchmark_fitness_mean"].(float64); !ok || float64(fitness) != mean {
+		t.Fatalf("expected returned fitness to equal benchmark_fitness_mean, fitness=%f trace=%+v", fitness, trace)
 	}
 }
 

@@ -175,6 +175,13 @@ func runRun(ctx context.Context, args []string) error {
 	fxCSV := fs.String("fx-csv", "", "optional FX CSV price-series path")
 	epitopesCSV := fs.String("epitopes-csv", "", "optional epitopes CSV table path")
 	llvmWorkflowJSON := fs.String("llvm-workflow-json", "", "optional LLVM workflow JSON path")
+	flatlandScannerProfile := fs.String("flatland-scanner-profile", "", "optional flatland scanner profile override: balanced5|core3|forward5")
+	flatlandScannerSpread := fs.Float64("flatland-scanner-spread", 0, "optional flatland scanner spread override in [0.05,1]")
+	flatlandScannerOffset := fs.Float64("flatland-scanner-offset", 0, "optional flatland scanner offset override in [-1,1]")
+	flatlandLayoutRandomize := fs.Bool("flatland-layout-randomize", false, "optional flatland layout randomization override")
+	flatlandLayoutVariants := fs.Int("flatland-layout-variants", 0, "optional flatland layout variants override (>0)")
+	flatlandForceLayoutVariant := fs.Int("flatland-force-layout-variant", 0, "optional flatland forced layout variant index")
+	flatlandBenchmarkTrials := fs.Int("flatland-benchmark-trials", 0, "optional flatland benchmark trial count override (>0)")
 	epitopesGTStart := fs.Int("epitopes-gt-start", 0, "optional epitopes GT start index for loaded CSV")
 	epitopesGTEnd := fs.Int("epitopes-gt-end", 0, "optional epitopes GT end index for loaded CSV")
 	epitopesValidationStart := fs.Int("epitopes-validation-start", 0, "optional epitopes validation start index for loaded CSV")
@@ -250,6 +257,7 @@ func runRun(ctx context.Context, args []string) error {
 			FXCSVPath:               *fxCSV,
 			EpitopesCSVPath:         *epitopesCSV,
 			LLVMWorkflowJSONPath:    *llvmWorkflowJSON,
+			FlatlandScannerProfile:  *flatlandScannerProfile,
 			EpitopesGTStart:         *epitopesGTStart,
 			EpitopesGTEnd:           *epitopesGTEnd,
 			EpitopesValidationStart: *epitopesValidationStart,
@@ -376,6 +384,15 @@ func runRun(ctx context.Context, args []string) error {
 			return err
 		}
 	}
+	applyFlatlandFlagOverrides(&req, setFlags, flatlandFlagInputs{
+		ScannerProfile:     *flatlandScannerProfile,
+		ScannerSpread:      *flatlandScannerSpread,
+		ScannerOffset:      *flatlandScannerOffset,
+		LayoutRandomize:    *flatlandLayoutRandomize,
+		LayoutVariants:     *flatlandLayoutVariants,
+		ForceLayoutVariant: *flatlandForceLayoutVariant,
+		BenchmarkTrials:    *flatlandBenchmarkTrials,
+	})
 	if *profileName != "" {
 		preset, err := loadParityPreset(*profileName)
 		if err != nil {
@@ -1024,6 +1041,13 @@ func runBenchmark(ctx context.Context, args []string) error {
 	fxCSV := fs.String("fx-csv", "", "optional FX CSV price-series path")
 	epitopesCSV := fs.String("epitopes-csv", "", "optional epitopes CSV table path")
 	llvmWorkflowJSON := fs.String("llvm-workflow-json", "", "optional LLVM workflow JSON path")
+	flatlandScannerProfile := fs.String("flatland-scanner-profile", "", "optional flatland scanner profile override: balanced5|core3|forward5")
+	flatlandScannerSpread := fs.Float64("flatland-scanner-spread", 0, "optional flatland scanner spread override in [0.05,1]")
+	flatlandScannerOffset := fs.Float64("flatland-scanner-offset", 0, "optional flatland scanner offset override in [-1,1]")
+	flatlandLayoutRandomize := fs.Bool("flatland-layout-randomize", false, "optional flatland layout randomization override")
+	flatlandLayoutVariants := fs.Int("flatland-layout-variants", 0, "optional flatland layout variants override (>0)")
+	flatlandForceLayoutVariant := fs.Int("flatland-force-layout-variant", 0, "optional flatland forced layout variant index")
+	flatlandBenchmarkTrials := fs.Int("flatland-benchmark-trials", 0, "optional flatland benchmark trial count override (>0)")
 	epitopesGTStart := fs.Int("epitopes-gt-start", 0, "optional epitopes GT start index for loaded CSV")
 	epitopesGTEnd := fs.Int("epitopes-gt-end", 0, "optional epitopes GT end index for loaded CSV")
 	epitopesValidationStart := fs.Int("epitopes-validation-start", 0, "optional epitopes validation start index for loaded CSV")
@@ -1099,6 +1123,7 @@ func runBenchmark(ctx context.Context, args []string) error {
 			FXCSVPath:               *fxCSV,
 			EpitopesCSVPath:         *epitopesCSV,
 			LLVMWorkflowJSONPath:    *llvmWorkflowJSON,
+			FlatlandScannerProfile:  *flatlandScannerProfile,
 			EpitopesGTStart:         *epitopesGTStart,
 			EpitopesGTEnd:           *epitopesGTEnd,
 			EpitopesValidationStart: *epitopesValidationStart,
@@ -1223,6 +1248,15 @@ func runBenchmark(ctx context.Context, args []string) error {
 			return err
 		}
 	}
+	applyFlatlandFlagOverrides(&req, setFlags, flatlandFlagInputs{
+		ScannerProfile:     *flatlandScannerProfile,
+		ScannerSpread:      *flatlandScannerSpread,
+		ScannerOffset:      *flatlandScannerOffset,
+		LayoutRandomize:    *flatlandLayoutRandomize,
+		LayoutVariants:     *flatlandLayoutVariants,
+		ForceLayoutVariant: *flatlandForceLayoutVariant,
+		BenchmarkTrials:    *flatlandBenchmarkTrials,
+	})
 	if *profileName != "" {
 		preset, err := loadParityPreset(*profileName)
 		if err != nil {
@@ -1685,6 +1719,43 @@ func selectionFromName(name string) (evo.Selector, error) {
 
 func normalizeTuneSelection(name string) string {
 	return tuning.NormalizeCandidateSelectionName(name)
+}
+
+type flatlandFlagInputs struct {
+	ScannerProfile     string
+	ScannerSpread      float64
+	ScannerOffset      float64
+	LayoutRandomize    bool
+	LayoutVariants     int
+	ForceLayoutVariant int
+	BenchmarkTrials    int
+}
+
+func applyFlatlandFlagOverrides(req *protoapi.RunRequest, setFlags map[string]bool, values flatlandFlagInputs) {
+	if req == nil {
+		return
+	}
+	if setFlags["flatland-scanner-profile"] {
+		req.FlatlandScannerProfile = values.ScannerProfile
+	}
+	if setFlags["flatland-scanner-spread"] {
+		req.FlatlandScannerSpread = float64Ptr(values.ScannerSpread)
+	}
+	if setFlags["flatland-scanner-offset"] {
+		req.FlatlandScannerOffset = float64Ptr(values.ScannerOffset)
+	}
+	if setFlags["flatland-layout-randomize"] {
+		req.FlatlandLayoutRandomize = boolPtr(values.LayoutRandomize)
+	}
+	if setFlags["flatland-layout-variants"] {
+		req.FlatlandLayoutVariants = intPtr(values.LayoutVariants)
+	}
+	if setFlags["flatland-force-layout-variant"] {
+		req.FlatlandForceLayout = intPtr(values.ForceLayoutVariant)
+	}
+	if setFlags["flatland-benchmark-trials"] {
+		req.FlatlandBenchmarkTrials = intPtr(values.BenchmarkTrials)
+	}
 }
 
 func postprocessorFromName(name string) (evo.FitnessPostprocessor, error) {

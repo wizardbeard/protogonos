@@ -65,6 +65,13 @@ type RunRequest struct {
 	EpitopesTestEnd         int
 	EpitopesBenchmarkStart  int
 	EpitopesBenchmarkEnd    int
+	FlatlandScannerProfile  string
+	FlatlandScannerSpread   *float64
+	FlatlandScannerOffset   *float64
+	FlatlandLayoutRandomize *bool
+	FlatlandLayoutVariants  *int
+	FlatlandForceLayout     *int
+	FlatlandBenchmarkTrials *int
 	Population              int
 	Generations             int
 	SurvivalPercentage      float64
@@ -535,6 +542,13 @@ func (c *Client) Run(ctx context.Context, req RunRequest) (RunSummary, error) {
 			EpitopesTestEnd:         req.EpitopesTestEnd,
 			EpitopesBenchmarkStart:  req.EpitopesBenchmarkStart,
 			EpitopesBenchmarkEnd:    req.EpitopesBenchmarkEnd,
+			FlatlandScannerProfile:  req.FlatlandScannerProfile,
+			FlatlandScannerSpread:   cloneFloat64Ptr(req.FlatlandScannerSpread),
+			FlatlandScannerOffset:   cloneFloat64Ptr(req.FlatlandScannerOffset),
+			FlatlandLayoutRandomize: cloneBoolPtr(req.FlatlandLayoutRandomize),
+			FlatlandLayoutVariants:  cloneIntPtr(req.FlatlandLayoutVariants),
+			FlatlandForceLayout:     cloneIntPtr(req.FlatlandForceLayout),
+			FlatlandBenchmarkTrials: cloneIntPtr(req.FlatlandBenchmarkTrials),
 			ContinuePopulationID:    req.ContinuePopulationID,
 			SpecieIdentifier:        req.SpecieIdentifier,
 			InitialGeneration:       initialGeneration,
@@ -629,7 +643,7 @@ func (c *Client) Run(ctx context.Context, req RunRequest) (RunSummary, error) {
 }
 
 func applyScapeDataSources(ctx context.Context, req RunRequest) (context.Context, error) {
-	return scape.WithDataSources(ctx, scape.DataSources{
+	scopedCtx, err := scape.WithDataSources(ctx, scape.DataSources{
 		GTSA: scape.GTSADataSource{
 			CSVPath: req.GTSACSVPath,
 			Bounds: scape.GTSATableBounds{
@@ -658,6 +672,17 @@ func applyScapeDataSources(ctx context.Context, req RunRequest) (context.Context
 			WorkflowJSONPath: req.LLVMWorkflowJSONPath,
 		},
 	})
+	if err != nil {
+		return nil, err
+	}
+	if !hasFlatlandOverrideConfig(req) {
+		return scopedCtx, nil
+	}
+	scopedCtx, err = scape.WithFlatlandOverrides(scopedCtx, toFlatlandOverrides(req))
+	if err != nil {
+		return nil, fmt.Errorf("configure flatland overrides: %w", err)
+	}
+	return scopedCtx, nil
 }
 
 func (c *Client) Runs(_ context.Context, req RunsRequest) ([]RunItem, error) {
@@ -1307,6 +1332,11 @@ func materializeRunConfigFromRequest(req RunRequest) (materializedRunConfig, err
 	if req.EpitopesBenchmarkEnd < 0 {
 		return materializedRunConfig{}, errors.New("epitopes benchmark end must be >= 0")
 	}
+	if hasFlatlandOverrideConfig(req) {
+		if _, err := scape.WithFlatlandOverrides(context.Background(), toFlatlandOverrides(req)); err != nil {
+			return materializedRunConfig{}, err
+		}
+	}
 	if req.Population < 0 {
 		return materializedRunConfig{}, errors.New("population must be >= 0")
 	}
@@ -1539,6 +1569,52 @@ func parseOpMode(raw string) (string, bool, bool, error) {
 		}
 	}
 	return "", false, false, errors.New("composite non-gt op mode is unsupported; include gt for probe combinations")
+}
+
+func hasFlatlandOverrideConfig(req RunRequest) bool {
+	return strings.TrimSpace(req.FlatlandScannerProfile) != "" ||
+		req.FlatlandScannerSpread != nil ||
+		req.FlatlandScannerOffset != nil ||
+		req.FlatlandLayoutRandomize != nil ||
+		req.FlatlandLayoutVariants != nil ||
+		req.FlatlandForceLayout != nil ||
+		req.FlatlandBenchmarkTrials != nil
+}
+
+func toFlatlandOverrides(req RunRequest) scape.FlatlandOverrides {
+	return scape.FlatlandOverrides{
+		ScannerProfile:     req.FlatlandScannerProfile,
+		ScannerSpread:      cloneFloat64Ptr(req.FlatlandScannerSpread),
+		ScannerOffset:      cloneFloat64Ptr(req.FlatlandScannerOffset),
+		RandomizeLayout:    cloneBoolPtr(req.FlatlandLayoutRandomize),
+		LayoutVariants:     cloneIntPtr(req.FlatlandLayoutVariants),
+		ForceLayoutVariant: cloneIntPtr(req.FlatlandForceLayout),
+		BenchmarkTrials:    cloneIntPtr(req.FlatlandBenchmarkTrials),
+	}
+}
+
+func cloneFloat64Ptr(v *float64) *float64 {
+	if v == nil {
+		return nil
+	}
+	out := *v
+	return &out
+}
+
+func cloneBoolPtr(v *bool) *bool {
+	if v == nil {
+		return nil
+	}
+	out := *v
+	return &out
+}
+
+func cloneIntPtr(v *int) *int {
+	if v == nil {
+		return nil
+	}
+	out := *v
+	return &out
 }
 
 func defaultMutationPolicy(seed int64, scapeName string, inputNeuronIDs, outputNeuronIDs []string, req RunRequest) []evo.WeightedMutation {

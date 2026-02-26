@@ -83,6 +83,27 @@ func loadRunRequestFromConfig(path string) (protoapi.RunRequest, error) {
 	if v, ok := asInt(raw["epitopes_benchmark_end"]); ok {
 		req.EpitopesBenchmarkEnd = v
 	}
+	if v, ok := asString(raw["flatland_scanner_profile"]); ok {
+		req.FlatlandScannerProfile = v
+	}
+	if v, ok := asFloat64(raw["flatland_scanner_spread"]); ok {
+		req.FlatlandScannerSpread = float64Ptr(v)
+	}
+	if v, ok := asFloat64(raw["flatland_scanner_offset"]); ok {
+		req.FlatlandScannerOffset = float64Ptr(v)
+	}
+	if v, ok := asBool(raw["flatland_layout_randomize"]); ok {
+		req.FlatlandLayoutRandomize = boolPtr(v)
+	}
+	if v, ok := asInt(raw["flatland_layout_variants"]); ok {
+		req.FlatlandLayoutVariants = intPtr(v)
+	}
+	if v, ok := asInt(raw["flatland_force_layout_variant"]); ok {
+		req.FlatlandForceLayout = intPtr(v)
+	}
+	if v, ok := asInt(raw["flatland_benchmark_trials"]); ok {
+		req.FlatlandBenchmarkTrials = intPtr(v)
+	}
 	if scapeData, ok := raw["scape_data"].(map[string]any); ok {
 		applyScapeDataConfigFallbacks(&req, scapeData)
 	}
@@ -471,6 +492,44 @@ func applyScapeDataConfigFallbacks(req *protoapi.RunRequest, scapeData map[strin
 			}
 		}
 	}
+
+	if flatlandData, ok := scapeData["flatland"].(map[string]any); ok {
+		if req.FlatlandScannerProfile == "" {
+			if v, ok := asString(flatlandData["scanner_profile"]); ok {
+				req.FlatlandScannerProfile = v
+			}
+		}
+		if req.FlatlandScannerSpread == nil {
+			if v, ok := asFloat64(flatlandData["scanner_spread"]); ok {
+				req.FlatlandScannerSpread = float64Ptr(v)
+			}
+		}
+		if req.FlatlandScannerOffset == nil {
+			if v, ok := asFloat64(flatlandData["scanner_offset"]); ok {
+				req.FlatlandScannerOffset = float64Ptr(v)
+			}
+		}
+		if req.FlatlandLayoutRandomize == nil {
+			if v, ok := asBool(flatlandData["layout_randomize"]); ok {
+				req.FlatlandLayoutRandomize = boolPtr(v)
+			}
+		}
+		if req.FlatlandLayoutVariants == nil {
+			if v, ok := asInt(flatlandData["layout_variants"]); ok {
+				req.FlatlandLayoutVariants = intPtr(v)
+			}
+		}
+		if req.FlatlandForceLayout == nil {
+			if v, ok := asInt(flatlandData["force_layout_variant"]); ok {
+				req.FlatlandForceLayout = intPtr(v)
+			}
+		}
+		if req.FlatlandBenchmarkTrials == nil {
+			if v, ok := asInt(flatlandData["benchmark_trials"]); ok {
+				req.FlatlandBenchmarkTrials = intPtr(v)
+			}
+		}
+	}
 }
 
 func overrideFromFlags(req *protoapi.RunRequest, set map[string]bool, flagValue map[string]any) error {
@@ -687,6 +746,18 @@ func map2recFirstNonEmpty(xs []string) string {
 		}
 	}
 	return ""
+}
+
+func float64Ptr(v float64) *float64 {
+	return &v
+}
+
+func boolPtr(v bool) *bool {
+	return &v
+}
+
+func intPtr(v int) *int {
+	return &v
 }
 
 func applyMutationOperatorWeights(req *protoapi.RunRequest, operators []map2rec.WeightedOperator) {

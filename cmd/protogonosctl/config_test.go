@@ -242,6 +242,59 @@ func TestLoadRunRequestFromConfigParsesNestedLLVMWorkflowSourceFallback(t *testi
 	}
 }
 
+func TestLoadRunRequestFromConfigParsesFlatlandOverrides(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "run_config_flatland_overrides.json")
+	payload := map[string]any{
+		"flatland_scanner_profile": "core3",
+		"flatland_scanner_spread":  0.21,
+		"scape_data": map[string]any{
+			"flatland": map[string]any{
+				"scanner_profile":      "forward5",
+				"scanner_offset":       -0.25,
+				"layout_randomize":     false,
+				"layout_variants":      6,
+				"force_layout_variant": 3,
+				"benchmark_trials":     4,
+			},
+		},
+	}
+	data, err := json.Marshal(payload)
+	if err != nil {
+		t.Fatalf("marshal payload: %v", err)
+	}
+	if err := os.WriteFile(path, data, 0o644); err != nil {
+		t.Fatalf("write config: %v", err)
+	}
+
+	req, err := loadRunRequestFromConfig(path)
+	if err != nil {
+		t.Fatalf("load run request: %v", err)
+	}
+	// Top-level value wins when both top-level and scape_data are provided.
+	if req.FlatlandScannerProfile != "core3" {
+		t.Fatalf("expected top-level flatland scanner profile core3, got %q", req.FlatlandScannerProfile)
+	}
+	if req.FlatlandScannerSpread == nil || *req.FlatlandScannerSpread != 0.21 {
+		t.Fatalf("expected flatland scanner spread 0.21, got %+v", req.FlatlandScannerSpread)
+	}
+	// Nested scape_data fills remaining unset flatland fields.
+	if req.FlatlandScannerOffset == nil || *req.FlatlandScannerOffset != -0.25 {
+		t.Fatalf("expected nested flatland scanner offset -0.25, got %+v", req.FlatlandScannerOffset)
+	}
+	if req.FlatlandLayoutRandomize == nil || *req.FlatlandLayoutRandomize {
+		t.Fatalf("expected nested flatland layout_randomize=false, got %+v", req.FlatlandLayoutRandomize)
+	}
+	if req.FlatlandLayoutVariants == nil || *req.FlatlandLayoutVariants != 6 {
+		t.Fatalf("expected nested flatland layout variants=6, got %+v", req.FlatlandLayoutVariants)
+	}
+	if req.FlatlandForceLayout == nil || *req.FlatlandForceLayout != 3 {
+		t.Fatalf("expected nested flatland force layout variant=3, got %+v", req.FlatlandForceLayout)
+	}
+	if req.FlatlandBenchmarkTrials == nil || *req.FlatlandBenchmarkTrials != 4 {
+		t.Fatalf("expected nested flatland benchmark trials=4, got %+v", req.FlatlandBenchmarkTrials)
+	}
+}
+
 func TestLoadRunRequestFromConfigMapsOpModeList(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "run_config_op_mode_list.json")
 	payload := map[string]any{
