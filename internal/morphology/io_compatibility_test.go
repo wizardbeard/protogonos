@@ -37,9 +37,16 @@ func TestEnsureScapeCompatibilitySupportsReferenceAliases(t *testing.T) {
 		"xor_sim",
 		"pb_sim",
 		"dtm_sim",
+		"flatland_sim",
+		"scape_flatland",
+		"gtsa_sim",
 		"fx_sim",
+		"scape_fx_sim",
 		"scape_GTSA",
+		"epitopes_sim",
+		"scape_epitopes_sim",
 		"scape_LLVMPhaseOrdering",
+		"llvm_phase_ordering_sim",
 	}
 	for _, alias := range aliases {
 		if err := EnsureScapeCompatibility(alias); err != nil {

@@ -558,6 +558,30 @@ func TestPolisInitNormalizesConfiguredPublicScapeAliases(t *testing.T) {
 	}
 }
 
+func TestPolisAddPublicScapeNormalizesFlatlandAlias(t *testing.T) {
+	ctx := context.Background()
+	aliased := &managedTestScape{testScape: testScape{name: "flatland_sim"}}
+	p := NewPolis(Config{Store: storage.NewMemoryStore()})
+	if err := p.Init(ctx); err != nil {
+		t.Fatalf("init failed: %v", err)
+	}
+	if err := p.AddPublicScape(ctx, PublicScapeSpec{Scape: aliased, Type: "flatland"}); err != nil {
+		t.Fatalf("add aliased public scape: %v", err)
+	}
+	if _, ok := p.GetScape("flatland"); !ok {
+		t.Fatal("expected canonical flatland lookup to resolve aliased public scape")
+	}
+	if _, ok := p.GetScape("flatland_sim"); !ok {
+		t.Fatal("expected alias flatland lookup to resolve aliased public scape")
+	}
+	if err := p.RemovePublicScape(ctx, "flatland_sim", StopReasonNormal); err != nil {
+		t.Fatalf("remove aliased public scape by alias: %v", err)
+	}
+	if aliased.stopCalls != 1 || aliased.stopReason != StopReasonNormal {
+		t.Fatalf("expected aliased scape normal stop semantics, calls=%d reason=%q", aliased.stopCalls, aliased.stopReason)
+	}
+}
+
 func TestPolisStopWithReasonRejectsInvalidReason(t *testing.T) {
 	p := NewPolis(Config{Store: storage.NewMemoryStore()})
 	if err := p.Init(context.Background()); err != nil {

@@ -459,9 +459,16 @@ func TestConstructSeedPopulationSupportsReferenceScapeAliases(t *testing.T) {
 		"pb_sim":                  "pole2-balancing",
 		"pb_sim1":                 "pole2-balancing",
 		"dtm_sim":                 "dtm",
+		"flatland_sim":            "flatland",
+		"scape_flatland":          "flatland",
+		"gtsa_sim":                "gtsa",
 		"fx_sim":                  "fx",
+		"scape_fx_sim":            "fx",
 		"scape_GTSA":              "gtsa",
+		"epitopes_sim":            "epitopes",
+		"scape_epitopes_sim":      "epitopes",
 		"scape_LLVMPhaseOrdering": "llvm-phase-ordering",
+		"llvm_phase_ordering_sim": "llvm-phase-ordering",
 	}
 
 	for alias, canonical := range aliases {

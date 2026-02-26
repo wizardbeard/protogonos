@@ -714,17 +714,29 @@ func TestMaterializeRunConfigFromRequestParsesCompositeOpModeForGTProbes(t *test
 }
 
 func TestMaterializeRunConfigFromRequestNormalizesReferenceScapeAlias(t *testing.T) {
-	cfg, err := materializeRunConfigFromRequest(RunRequest{
-		Scape:       "scape_LLVMPhaseOrdering",
-		Population:  6,
-		Generations: 1,
-		OpMode:      "gt",
-	})
-	if err != nil {
-		t.Fatalf("materialize run config: %v", err)
+	cases := map[string]string{
+		"scape_LLVMPhaseOrdering": "llvm-phase-ordering",
+		"llvm_phase_ordering_sim": "llvm-phase-ordering",
+		"flatland_sim":            "flatland",
+		"scape_flatland":          "flatland",
+		"epitopes_sim":            "epitopes",
+		"scape_epitopes_sim":      "epitopes",
+		"gtsa_sim":                "gtsa",
+		"scape_fx_sim":            "fx",
 	}
-	if cfg.Request.Scape != "llvm-phase-ordering" {
-		t.Fatalf("expected normalized scape llvm-phase-ordering, got %s", cfg.Request.Scape)
+	for alias, want := range cases {
+		cfg, err := materializeRunConfigFromRequest(RunRequest{
+			Scape:       alias,
+			Population:  6,
+			Generations: 1,
+			OpMode:      "gt",
+		})
+		if err != nil {
+			t.Fatalf("materialize run config alias=%s: %v", alias, err)
+		}
+		if cfg.Request.Scape != want {
+			t.Fatalf("expected normalized scape %s for alias=%s, got %s", want, alias, cfg.Request.Scape)
+		}
 	}
 }
 
