@@ -62,6 +62,17 @@ func TestScalarOutputActuator(t *testing.T) {
 	}
 }
 
+func TestVectorOutputActuator(t *testing.T) {
+	a := NewVectorOutputActuator()
+	if err := a.Write(context.Background(), []float64{-0.5, 0.25, 0.75}); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+	last := a.Last()
+	if len(last) != 3 || last[0] != -0.5 || last[1] != 0.25 || last[2] != 0.75 {
+		t.Fatalf("unexpected actuator last output: %+v", last)
+	}
+}
+
 func TestScalarComponentsRegistered(t *testing.T) {
 	sensor, err := ResolveSensor(ScalarInputSensorName, "regression-mimic")
 	if err != nil {
@@ -84,6 +95,13 @@ func TestScalarComponentsRegistered(t *testing.T) {
 	}
 	if actuator.Name() != ScalarOutputActuatorName {
 		t.Fatalf("unexpected actuator name: %s", actuator.Name())
+	}
+	vectorActuator, err := ResolveActuator(VectorOutputActuatorName, "regression-mimic")
+	if err != nil {
+		t.Fatalf("resolve vector actuator: %v", err)
+	}
+	if vectorActuator.Name() != VectorOutputActuatorName {
+		t.Fatalf("unexpected vector actuator name: %s", vectorActuator.Name())
 	}
 
 	xorLeft, err := ResolveSensor(XORInputLeftSensorName, "xor")

@@ -10,6 +10,7 @@ const (
 	ScalarInputSensorName               = "scalar_input"
 	VectorInputSensorName               = "vector_input"
 	ScalarOutputActuatorName            = "scalar_output"
+	VectorOutputActuatorName            = "vector_output"
 	XORInputLeftSensorName              = "xor_input_left"
 	XORInputRightSensorName             = "xor_input_right"
 	XOROutputActuatorName               = "xor_output"
@@ -167,6 +168,32 @@ func (a *ScalarOutputActuator) Write(_ context.Context, values []float64) error 
 }
 
 func (a *ScalarOutputActuator) Last() []float64 {
+	a.mu.RLock()
+	defer a.mu.RUnlock()
+	return append([]float64(nil), a.last...)
+}
+
+type VectorOutputActuator struct {
+	mu   sync.RWMutex
+	last []float64
+}
+
+func NewVectorOutputActuator() *VectorOutputActuator {
+	return &VectorOutputActuator{}
+}
+
+func (a *VectorOutputActuator) Name() string {
+	return VectorOutputActuatorName
+}
+
+func (a *VectorOutputActuator) Write(_ context.Context, values []float64) error {
+	a.mu.Lock()
+	a.last = append([]float64(nil), values...)
+	a.mu.Unlock()
+	return nil
+}
+
+func (a *VectorOutputActuator) Last() []float64 {
 	a.mu.RLock()
 	defer a.mu.RUnlock()
 	return append([]float64(nil), a.last...)
@@ -1100,6 +1127,21 @@ func initializeDefaultComponents() {
 	err = RegisterActuatorWithSpec(ActuatorSpec{
 		Name:          ScalarOutputActuatorName,
 		Factory:       func() Actuator { return NewScalarOutputActuator() },
+		SchemaVersion: SupportedSchemaVersion,
+		CodecVersion:  SupportedCodecVersion,
+		Compatible: func(scape string) error {
+			if scape != "regression-mimic" {
+				return fmt.Errorf("unsupported scape: %s", scape)
+			}
+			return nil
+		},
+	})
+	if err != nil {
+		panic(err)
+	}
+	err = RegisterActuatorWithSpec(ActuatorSpec{
+		Name:          VectorOutputActuatorName,
+		Factory:       func() Actuator { return NewVectorOutputActuator() },
 		SchemaVersion: SupportedSchemaVersion,
 		CodecVersion:  SupportedCodecVersion,
 		Compatible: func(scape string) error {

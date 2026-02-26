@@ -214,16 +214,37 @@ func ResolveActuator(name, scape string) (Actuator, error) {
 	if !ok {
 		return nil, fmt.Errorf("%w: %s", ErrActuatorNotFound, name)
 	}
-	if entry.schemaVersion != SupportedSchemaVersion || entry.codecVersion != SupportedCodecVersion {
-		return nil, fmt.Errorf("%w: %s", ErrVersionMismatch, name)
-	}
-	scape = scapeid.Normalize(scape)
-	if entry.compatible != nil {
-		if err := entry.compatible(scape); err != nil {
-			return nil, fmt.Errorf("%w: actuator=%s: %v", ErrIncompatible, name, err)
-		}
+	if err := actuatorCompatibilityError(name, entry, scapeid.Normalize(scape)); err != nil {
+		return nil, err
 	}
 	return entry.factory(), nil
+}
+
+func ActuatorCompatibleWithScape(name, scape string) bool {
+	actuatorRegistry.mu.RLock()
+	entry, ok := actuatorRegistry.m[name]
+	actuatorRegistry.mu.RUnlock()
+	if !ok {
+		return false
+	}
+	return actuatorCompatibilityError(name, entry, scapeid.Normalize(scape)) == nil
+}
+
+func ListActuatorsForScape(scape string) []string {
+	normalized := scapeid.Normalize(scape)
+
+	actuatorRegistry.mu.RLock()
+	defer actuatorRegistry.mu.RUnlock()
+
+	names := make([]string, 0, len(actuatorRegistry.m))
+	for name, entry := range actuatorRegistry.m {
+		if actuatorCompatibilityError(name, entry, normalized) != nil {
+			continue
+		}
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	return names
 }
 
 func ListActuators() []string {
@@ -236,6 +257,18 @@ func ListActuators() []string {
 	}
 	sort.Strings(names)
 	return names
+}
+
+func actuatorCompatibilityError(name string, entry registeredActuator, scape string) error {
+	if entry.schemaVersion != SupportedSchemaVersion || entry.codecVersion != SupportedCodecVersion {
+		return fmt.Errorf("%w: %s", ErrVersionMismatch, name)
+	}
+	if entry.compatible != nil {
+		if err := entry.compatible(scape); err != nil {
+			return fmt.Errorf("%w: actuator=%s: %v", ErrIncompatible, name, err)
+		}
+	}
+	return nil
 }
 
 func resetRegistriesForTests() {

@@ -183,6 +183,45 @@ func TestSensorCompatibilityHelpers(t *testing.T) {
 	}
 }
 
+func TestActuatorCompatibilityHelpers(t *testing.T) {
+	resetRegistriesForTests()
+	t.Cleanup(resetRegistriesForTests)
+
+	if !ActuatorCompatibleWithScape(FlatlandTwoWheelsActuatorName, "scape_flatland") {
+		t.Fatal("expected scape_flatland alias to be compatible with flatland actuator")
+	}
+	if ActuatorCompatibleWithScape(FlatlandTwoWheelsActuatorName, "xor") {
+		t.Fatal("expected flatland actuator to be incompatible with xor")
+	}
+	if ActuatorCompatibleWithScape("unknown_actuator", "xor") {
+		t.Fatal("expected unknown actuator to be incompatible")
+	}
+
+	if err := RegisterActuatorWithSpec(ActuatorSpec{
+		Name:          "custom_xor_actuator",
+		Factory:       func() Actuator { return testActuator{} },
+		SchemaVersion: SupportedSchemaVersion,
+		CodecVersion:  SupportedCodecVersion,
+		Compatible: func(scape string) error {
+			if scape != "xor" {
+				return errors.New("not xor")
+			}
+			return nil
+		},
+	}); err != nil {
+		t.Fatalf("register custom actuator: %v", err)
+	}
+
+	xorActuators := ListActuatorsForScape("xor")
+	if !containsString(xorActuators, "custom_xor_actuator") {
+		t.Fatalf("expected custom actuator in xor filtered list, got=%v", xorActuators)
+	}
+	dtmActuators := ListActuatorsForScape("dtm")
+	if containsString(dtmActuators, "custom_xor_actuator") {
+		t.Fatalf("expected custom actuator excluded from dtm filtered list, got=%v", dtmActuators)
+	}
+}
+
 func containsString(values []string, want string) bool {
 	for _, value := range values {
 		if value == want {

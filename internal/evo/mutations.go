@@ -2879,11 +2879,8 @@ func sensorCandidates(genome model.Genome, scapeName string) []string {
 func actuatorCandidates(genome model.Genome, scapeName string) []string {
 	existing := toIDSet(genome.ActuatorIDs)
 	candidates := make([]string, 0)
-	for _, name := range protoio.ListActuators() {
+	for _, name := range protoio.ListActuatorsForScape(scapeName) {
 		if _, ok := existing[name]; ok {
-			continue
-		}
-		if _, err := protoio.ResolveActuator(name, scapeName); err != nil {
 			continue
 		}
 		candidates = append(candidates, name)
