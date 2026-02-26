@@ -30,11 +30,12 @@ type flatlandPublicAgentState struct {
 }
 
 type flatlandPublicRuntime struct {
-	mu      sync.RWMutex
-	started bool
-	config  flatlandModeConfig
-	tick    int
-	agents  map[string]*flatlandPublicAgentState
+	mu             sync.RWMutex
+	started        bool
+	config         flatlandModeConfig
+	tick           int
+	agents         map[string]*flatlandPublicAgentState
+	lastStopReason string
 }
 
 func newFlatlandPublicRuntime() *flatlandPublicRuntime {
@@ -65,12 +66,44 @@ func (FlatlandScape) Start(_ context.Context) error {
 }
 
 func (FlatlandScape) Stop(_ context.Context) error {
+	return FlatlandScape{}.StopWithReason(context.Background(), "normal")
+}
+
+func (FlatlandScape) StopWithReason(_ context.Context, reason string) error {
+	rawReason := reason
+	reason = normalizeFlatlandPublicStopReason(reason)
+	if reason == "" {
+		return fmt.Errorf("unsupported flatland public stop reason: %s", strings.TrimSpace(rawReason))
+	}
+
 	flatlandPublicWorld.mu.Lock()
 	defer flatlandPublicWorld.mu.Unlock()
 	flatlandPublicWorld.started = false
 	flatlandPublicWorld.tick = 0
 	flatlandPublicWorld.agents = make(map[string]*flatlandPublicAgentState)
+	flatlandPublicWorld.lastStopReason = reason
 	return nil
+}
+
+func (FlatlandScape) Shutdown(_ context.Context) error {
+	return FlatlandScape{}.StopWithReason(context.Background(), "shutdown")
+}
+
+func (FlatlandScape) LastPublicStopReason() string {
+	flatlandPublicWorld.mu.RLock()
+	defer flatlandPublicWorld.mu.RUnlock()
+	return flatlandPublicWorld.lastStopReason
+}
+
+func normalizeFlatlandPublicStopReason(raw string) string {
+	switch strings.TrimSpace(strings.ToLower(raw)) {
+	case "", "normal":
+		return "normal"
+	case "shutdown":
+		return "shutdown"
+	default:
+		return ""
+	}
 }
 
 func (FlatlandScape) Sync(_ context.Context) error {

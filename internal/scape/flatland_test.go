@@ -211,6 +211,33 @@ func TestFlatlandScapeRunPublicRejectsNonPositiveInterval(t *testing.T) {
 	}
 }
 
+func TestFlatlandScapePublicStopReasons(t *testing.T) {
+	scape := FlatlandScape{}
+	if err := scape.Start(context.Background()); err != nil {
+		t.Fatalf("start: %v", err)
+	}
+	if err := scape.Shutdown(context.Background()); err != nil {
+		t.Fatalf("shutdown: %v", err)
+	}
+	if reason := scape.LastPublicStopReason(); reason != "shutdown" {
+		t.Fatalf("expected shutdown last stop reason, got=%q", reason)
+	}
+
+	if err := scape.Start(context.Background()); err != nil {
+		t.Fatalf("start after shutdown: %v", err)
+	}
+	if err := scape.Stop(context.Background()); err != nil {
+		t.Fatalf("stop: %v", err)
+	}
+	if reason := scape.LastPublicStopReason(); reason != "normal" {
+		t.Fatalf("expected normal last stop reason, got=%q", reason)
+	}
+
+	if err := scape.StopWithReason(context.Background(), "bad_reason"); err == nil {
+		t.Fatal("expected unsupported stop reason to fail")
+	}
+}
+
 func TestFlatlandScapeForagingCollectsResources(t *testing.T) {
 	scape := FlatlandScape{}
 	stationary := scriptedStepAgent{
