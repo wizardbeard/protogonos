@@ -35,6 +35,78 @@ func flatlandGreedyForager(input []float64) []float64 {
 	return []float64{0}
 }
 
+func TestFlatlandScapePublicLifecycleAndTick(t *testing.T) {
+	scape := FlatlandScape{}
+	if _, err := scape.TickPublic(context.Background()); err == nil {
+		t.Fatal("expected public tick to fail before start")
+	}
+	if err := scape.EnterPublicAgent(FlatlandPublicAgent{ID: "a"}); err == nil {
+		t.Fatal("expected enter to fail before start")
+	}
+
+	if err := scape.Start(context.Background()); err != nil {
+		t.Fatalf("start: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = scape.Stop(context.Background())
+	})
+
+	if err := scape.EnterPublicAgent(FlatlandPublicAgent{
+		ID:   "forager",
+		Mode: "benchmark",
+		Decide: func(input []float64) []float64 {
+			return flatlandGreedyForager(input)
+		},
+	}); err != nil {
+		t.Fatalf("enter forager: %v", err)
+	}
+	if err := scape.EnterPublicAgent(FlatlandPublicAgent{ID: "idle"}); err != nil {
+		t.Fatalf("enter idle: %v", err)
+	}
+	if err := scape.EnterPublicAgent(FlatlandPublicAgent{ID: "idle"}); err == nil {
+		t.Fatal("expected duplicate public enter to fail")
+	}
+
+	var trace Trace
+	for i := 0; i < 5; i++ {
+		var err error
+		trace, err = scape.TickPublic(context.Background())
+		if err != nil {
+			t.Fatalf("tick %d: %v", i, err)
+		}
+	}
+	if tick, ok := trace["tick"].(int); !ok || tick != 5 {
+		t.Fatalf("expected tick=5 trace marker, trace=%+v", trace)
+	}
+	if active, ok := trace["active_agents"].(int); !ok || active != 2 {
+		t.Fatalf("expected active_agents=2, trace=%+v", trace)
+	}
+	if _, ok := trace["avg_energy"].(float64); !ok {
+		t.Fatalf("expected avg_energy in public trace, trace=%+v", trace)
+	}
+	agents, ok := trace["agents"].([]Trace)
+	if !ok || len(agents) != 2 {
+		t.Fatalf("expected two public agent traces, trace=%+v", trace)
+	}
+	if id, _ := agents[0]["id"].(string); id != "forager" && id != "idle" {
+		t.Fatalf("unexpected public agent trace ordering/content: %+v", agents)
+	}
+
+	if err := scape.LeavePublicAgent("forager"); err != nil {
+		t.Fatalf("leave forager: %v", err)
+	}
+	trace, err := scape.TickPublic(context.Background())
+	if err != nil {
+		t.Fatalf("tick after leave: %v", err)
+	}
+	if active, ok := trace["active_agents"].(int); !ok || active != 1 {
+		t.Fatalf("expected active_agents=1 after leave, trace=%+v", trace)
+	}
+	if err := scape.LeavePublicAgent("forager"); err == nil {
+		t.Fatal("expected missing public agent leave to fail")
+	}
+}
+
 func TestFlatlandScapeForagingCollectsResources(t *testing.T) {
 	scape := FlatlandScape{}
 	stationary := scriptedStepAgent{

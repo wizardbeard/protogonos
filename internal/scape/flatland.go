@@ -5,15 +5,227 @@ import (
 	"fmt"
 	"hash/fnv"
 	"math"
+	"sort"
 	"strings"
+	"sync"
 
 	protoio "protogonos/internal/io"
 )
 
 type FlatlandScape struct{}
 
+type FlatlandPublicAgent struct {
+	ID     string
+	Mode   string
+	Decide func(input []float64) []float64
+}
+
+type flatlandPublicAgentState struct {
+	id         string
+	episode    *flatlandEpisode
+	decide     func([]float64) []float64
+	terminated bool
+}
+
+type flatlandPublicRuntime struct {
+	mu      sync.RWMutex
+	started bool
+	config  flatlandModeConfig
+	tick    int
+	agents  map[string]*flatlandPublicAgentState
+}
+
+func newFlatlandPublicRuntime() *flatlandPublicRuntime {
+	return &flatlandPublicRuntime{
+		agents: make(map[string]*flatlandPublicAgentState),
+	}
+}
+
+var flatlandPublicWorld = newFlatlandPublicRuntime()
+
 func (FlatlandScape) Name() string {
 	return "flatland"
+}
+
+func (FlatlandScape) Start(_ context.Context) error {
+	cfg, err := flatlandConfigForMode("gt")
+	if err != nil {
+		return err
+	}
+
+	flatlandPublicWorld.mu.Lock()
+	defer flatlandPublicWorld.mu.Unlock()
+	flatlandPublicWorld.started = true
+	flatlandPublicWorld.config = cfg
+	flatlandPublicWorld.tick = 0
+	flatlandPublicWorld.agents = make(map[string]*flatlandPublicAgentState)
+	return nil
+}
+
+func (FlatlandScape) Stop(_ context.Context) error {
+	flatlandPublicWorld.mu.Lock()
+	defer flatlandPublicWorld.mu.Unlock()
+	flatlandPublicWorld.started = false
+	flatlandPublicWorld.tick = 0
+	flatlandPublicWorld.agents = make(map[string]*flatlandPublicAgentState)
+	return nil
+}
+
+func (FlatlandScape) Sync(_ context.Context) error {
+	return nil
+}
+
+func (FlatlandScape) EnterPublicAgent(agent FlatlandPublicAgent) error {
+	agentID := strings.TrimSpace(agent.ID)
+	if agentID == "" {
+		return fmt.Errorf("flatland public agent id is required")
+	}
+
+	flatlandPublicWorld.mu.Lock()
+	defer flatlandPublicWorld.mu.Unlock()
+	if !flatlandPublicWorld.started {
+		return fmt.Errorf("flatland public world is not started")
+	}
+	if _, exists := flatlandPublicWorld.agents[agentID]; exists {
+		return fmt.Errorf("flatland public agent already entered: %s", agentID)
+	}
+
+	cfg := flatlandPublicWorld.config
+	if strings.TrimSpace(agent.Mode) != "" {
+		modeCfg, err := flatlandConfigForMode(agent.Mode)
+		if err != nil {
+			return err
+		}
+		cfg = modeCfg
+	}
+	episode := newFlatlandEpisodeForAgent(cfg, agentID)
+	flatlandPublicWorld.agents[agentID] = &flatlandPublicAgentState{
+		id:      agentID,
+		episode: episode,
+		decide:  agent.Decide,
+	}
+	return nil
+}
+
+func (FlatlandScape) LeavePublicAgent(agentID string) error {
+	agentID = strings.TrimSpace(agentID)
+	if agentID == "" {
+		return fmt.Errorf("flatland public agent id is required")
+	}
+
+	flatlandPublicWorld.mu.Lock()
+	defer flatlandPublicWorld.mu.Unlock()
+	if !flatlandPublicWorld.started {
+		return fmt.Errorf("flatland public world is not started")
+	}
+	if _, exists := flatlandPublicWorld.agents[agentID]; !exists {
+		return fmt.Errorf("flatland public agent not found: %s", agentID)
+	}
+	delete(flatlandPublicWorld.agents, agentID)
+	return nil
+}
+
+func (FlatlandScape) TickPublic(ctx context.Context) (Trace, error) {
+	flatlandPublicWorld.mu.Lock()
+	defer flatlandPublicWorld.mu.Unlock()
+	if !flatlandPublicWorld.started {
+		return nil, fmt.Errorf("flatland public world is not started")
+	}
+
+	ids := make([]string, 0, len(flatlandPublicWorld.agents))
+	for id := range flatlandPublicWorld.agents {
+		ids = append(ids, id)
+	}
+	sort.Strings(ids)
+
+	terminated := 0
+	totalEnergy := 0.0
+	totalFood := 0
+	totalPrey := 0
+	totalPredatorHits := 0
+	agentStates := make([]Trace, 0, len(ids))
+
+	for _, id := range ids {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
+		state := flatlandPublicWorld.agents[id]
+		if state.terminated {
+			terminated++
+			agentStates = append(agentStates, flatlandPublicAgentTrace(state))
+			continue
+		}
+
+		state.episode.advanceRespawns()
+		sense := state.episode.sense()
+		out := defaultFlatlandPublicPolicy(sense)
+		if state.decide != nil {
+			candidate := state.decide(flatlandStepInputVector(sense))
+			if len(candidate) > 0 {
+				out = candidate
+			}
+		}
+		control, err := flatlandControlFromOutput(out)
+		if err != nil {
+			return nil, err
+		}
+		_, _, _, _, reason := state.episode.step(control.move)
+		if reason != "" {
+			state.terminated = true
+			terminated++
+		}
+
+		totalEnergy += state.episode.energy
+		totalFood += state.episode.foodCollected
+		totalPrey += state.episode.preyCollected
+		totalPredatorHits += state.episode.predatorHits
+		agentStates = append(agentStates, flatlandPublicAgentTrace(state))
+	}
+
+	flatlandPublicWorld.tick++
+	avgEnergy := 0.0
+	if len(ids) > 0 {
+		avgEnergy = totalEnergy / float64(len(ids))
+	}
+	return Trace{
+		"mode":                 flatlandPublicWorld.config.mode,
+		"tick":                 flatlandPublicWorld.tick,
+		"active_agents":        len(ids),
+		"terminated_agents":    terminated,
+		"avg_energy":           avgEnergy,
+		"total_food_collected": totalFood,
+		"total_prey_collected": totalPrey,
+		"total_predator_hits":  totalPredatorHits,
+		"agents":               agentStates,
+	}, nil
+}
+
+func flatlandPublicAgentTrace(state *flatlandPublicAgentState) Trace {
+	episode := state.episode
+	return Trace{
+		"id":                       state.id,
+		"position":                 episode.position,
+		"age":                      episode.age,
+		"energy":                   episode.energy,
+		"food_collected":           episode.foodCollected,
+		"prey_collected":           episode.preyCollected,
+		"predator_hits":            episode.predatorHits,
+		"prey_hunted":              episode.preyHunted,
+		"predator_feeds":           episode.predatorFeeds,
+		"predator_pressure_events": episode.predatorPressureEvents,
+		"terminated":               state.terminated,
+	}
+}
+
+func defaultFlatlandPublicPolicy(sense flatlandSenseInput) []float64 {
+	drive := sense.distance
+	if sense.poisonProximity > sense.foodProximity {
+		drive -= 0.4 * sense.poison
+	}
+	if sense.predatorProximity > 0 {
+		drive -= 0.5 * sense.predator
+	}
+	return []float64{clamp(drive, -1, 1)}
 }
 
 func (FlatlandScape) Evaluate(ctx context.Context, agent Agent) (Fitness, Trace, error) {
