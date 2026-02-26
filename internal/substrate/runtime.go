@@ -6,11 +6,16 @@ import (
 	"fmt"
 )
 
+var (
+	ErrNoSubstrateBackup = errors.New("no substrate backup available")
+)
+
 type SimpleRuntime struct {
 	cpp     CPP
 	cep     CEP
 	params  map[string]float64
 	weights []float64
+	backup  []float64
 }
 
 func NewSimpleRuntime(spec Spec, weightCount int) (*SimpleRuntime, error) {
@@ -67,4 +72,25 @@ func (r *SimpleRuntime) Weights() []float64 {
 	out := make([]float64, len(r.weights))
 	copy(out, r.weights)
 	return out
+}
+
+func (r *SimpleRuntime) Backup() {
+	r.backup = r.Weights()
+}
+
+func (r *SimpleRuntime) Restore() error {
+	if len(r.backup) == 0 {
+		return ErrNoSubstrateBackup
+	}
+	if len(r.weights) != len(r.backup) {
+		r.weights = make([]float64, len(r.backup))
+	}
+	copy(r.weights, r.backup)
+	return nil
+}
+
+func (r *SimpleRuntime) Reset() {
+	for i := range r.weights {
+		r.weights[i] = 0
+	}
 }

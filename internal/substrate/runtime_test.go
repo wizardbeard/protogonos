@@ -2,6 +2,7 @@ package substrate
 
 import (
 	"context"
+	"errors"
 	"testing"
 )
 
@@ -55,5 +56,62 @@ func TestSimpleRuntimeValidation(t *testing.T) {
 	}
 	if _, err := NewSimpleRuntime(Spec{CEPName: "missing"}, 1); err == nil {
 		t.Fatal("expected missing cep error")
+	}
+}
+
+func TestSimpleRuntimeBackupRestoreReset(t *testing.T) {
+	resetRegistriesForTests()
+	t.Cleanup(resetRegistriesForTests)
+
+	rt, err := NewSimpleRuntime(Spec{
+		CPPName: DefaultCPPName,
+		CEPName: DefaultCEPName,
+		Parameters: map[string]float64{
+			"scale": 1.0,
+		},
+	}, 2)
+	if err != nil {
+		t.Fatalf("new runtime: %v", err)
+	}
+
+	first, err := rt.Step(context.Background(), []float64{1, 3})
+	if err != nil {
+		t.Fatalf("step first: %v", err)
+	}
+	rt.Backup()
+
+	second, err := rt.Step(context.Background(), []float64{1, 3})
+	if err != nil {
+		t.Fatalf("step second: %v", err)
+	}
+	if second[0] <= first[0] || second[1] <= first[1] {
+		t.Fatalf("expected second step to accumulate weights, first=%v second=%v", first, second)
+	}
+
+	if err := rt.Restore(); err != nil {
+		t.Fatalf("restore: %v", err)
+	}
+	restored := rt.Weights()
+	if restored[0] != first[0] || restored[1] != first[1] {
+		t.Fatalf("expected restored weights=%v, got=%v", first, restored)
+	}
+
+	rt.Reset()
+	resetWeights := rt.Weights()
+	if resetWeights[0] != 0 || resetWeights[1] != 0 {
+		t.Fatalf("expected reset weights to be zeroed, got=%v", resetWeights)
+	}
+}
+
+func TestSimpleRuntimeRestoreRequiresBackup(t *testing.T) {
+	resetRegistriesForTests()
+	t.Cleanup(resetRegistriesForTests)
+
+	rt, err := NewSimpleRuntime(Spec{}, 1)
+	if err != nil {
+		t.Fatalf("new runtime: %v", err)
+	}
+	if err := rt.Restore(); !errors.Is(err, ErrNoSubstrateBackup) {
+		t.Fatalf("expected ErrNoSubstrateBackup, got %v", err)
 	}
 }

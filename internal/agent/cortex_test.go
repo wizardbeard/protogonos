@@ -140,6 +140,110 @@ func TestCortexSubstrateTransformsOutputs(t *testing.T) {
 	}
 }
 
+func TestCortexBackupRestoreWeightsIncludesSubstrateState(t *testing.T) {
+	genome := model.Genome{
+		Neurons: []model.Neuron{
+			{ID: "i", Activation: "identity"},
+			{ID: "o", Activation: "identity"},
+		},
+		Synapses: []model.Synapse{
+			{From: "i", To: "o", Weight: 1.0, Enabled: true},
+		},
+	}
+
+	rt, err := substrate.NewSimpleRuntime(substrate.Spec{
+		CPPName: substrate.DefaultCPPName,
+		CEPName: substrate.DefaultCEPName,
+		Parameters: map[string]float64{
+			"scale": 1.0,
+		},
+	}, 1)
+	if err != nil {
+		t.Fatalf("new substrate runtime: %v", err)
+	}
+
+	c, err := NewCortex("agent-sub-backup", genome, nil, nil, []string{"i"}, []string{"o"}, rt)
+	if err != nil {
+		t.Fatalf("new cortex: %v", err)
+	}
+
+	out1, err := c.RunStep(context.Background(), []float64{1.5})
+	if err != nil {
+		t.Fatalf("run step 1: %v", err)
+	}
+	c.BackupWeights()
+
+	out2, err := c.RunStep(context.Background(), []float64{1.5})
+	if err != nil {
+		t.Fatalf("run step 2: %v", err)
+	}
+	if out2[0] <= out1[0] {
+		t.Fatalf("expected accumulated substrate output, out1=%v out2=%v", out1, out2)
+	}
+
+	if err := c.RestoreWeights(); err != nil {
+		t.Fatalf("restore weights: %v", err)
+	}
+	out3, err := c.RunStep(context.Background(), []float64{1.5})
+	if err != nil {
+		t.Fatalf("run step 3: %v", err)
+	}
+	if out3[0] != out2[0] {
+		t.Fatalf("expected restored substrate state to reproduce output, out2=%v out3=%v", out2, out3)
+	}
+}
+
+func TestCortexReactivateResetsSubstrateState(t *testing.T) {
+	genome := model.Genome{
+		Neurons: []model.Neuron{
+			{ID: "i", Activation: "identity"},
+			{ID: "o", Activation: "identity"},
+		},
+		Synapses: []model.Synapse{
+			{From: "i", To: "o", Weight: 1.0, Enabled: true},
+		},
+	}
+
+	rt, err := substrate.NewSimpleRuntime(substrate.Spec{
+		CPPName: substrate.DefaultCPPName,
+		CEPName: substrate.DefaultCEPName,
+		Parameters: map[string]float64{
+			"scale": 1.0,
+		},
+	}, 1)
+	if err != nil {
+		t.Fatalf("new substrate runtime: %v", err)
+	}
+
+	c, err := NewCortex("agent-sub-reactivate", genome, nil, nil, []string{"i"}, []string{"o"}, rt)
+	if err != nil {
+		t.Fatalf("new cortex: %v", err)
+	}
+
+	out1, err := c.RunStep(context.Background(), []float64{1.5})
+	if err != nil {
+		t.Fatalf("run step 1: %v", err)
+	}
+	out2, err := c.RunStep(context.Background(), []float64{1.5})
+	if err != nil {
+		t.Fatalf("run step 2: %v", err)
+	}
+	if out2[0] <= out1[0] {
+		t.Fatalf("expected substrate accumulation before reactivation, out1=%v out2=%v", out1, out2)
+	}
+
+	if err := c.Reactivate(); err != nil {
+		t.Fatalf("reactivate: %v", err)
+	}
+	out3, err := c.RunStep(context.Background(), []float64{1.5})
+	if err != nil {
+		t.Fatalf("run step 3: %v", err)
+	}
+	if out3[0] != out1[0] {
+		t.Fatalf("expected substrate reset on reactivation, out1=%v out3=%v", out1, out3)
+	}
+}
+
 func TestCortexHebbianPlasticityStatefulWeights(t *testing.T) {
 	genome := model.Genome{
 		Plasticity: &model.PlasticityConfig{

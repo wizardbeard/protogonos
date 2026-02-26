@@ -27,3 +27,12 @@ type Runtime interface {
 	Step(ctx context.Context, inputs []float64) ([]float64, error)
 	Weights() []float64
 }
+
+// StatefulRuntime is an optional runtime capability mirroring substrate
+// lifecycle controls used by the reference runtime (backup/revert/reset).
+type StatefulRuntime interface {
+	Runtime
+	Backup()
+	Restore() error
+	Reset()
+}

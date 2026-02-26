@@ -131,6 +131,9 @@ func (c *Cortex) Reactivate() error {
 		return ErrCortexTerminated
 	}
 	c.nnState = nn.NewForwardState()
+	if managed, ok := c.substrate.(substrate.StatefulRuntime); ok {
+		managed.Reset()
+	}
 	c.status = CortexStatusActive
 	return nil
 }
@@ -145,6 +148,9 @@ func (c *Cortex) BackupWeights() {
 	c.mu.Lock()
 	backup := genotype.CloneGenome(c.genome)
 	c.weightBackup = &backup
+	if managed, ok := c.substrate.(substrate.StatefulRuntime); ok {
+		managed.Backup()
+	}
 	c.mu.Unlock()
 }
 
@@ -170,6 +176,11 @@ func (c *Cortex) RestoreWeights() error {
 	defer c.mu.Unlock()
 	if c.weightBackup == nil {
 		return ErrNoWeightBackup
+	}
+	if managed, ok := c.substrate.(substrate.StatefulRuntime); ok {
+		if err := managed.Restore(); err != nil {
+			return err
+		}
 	}
 	c.genome = genotype.CloneGenome(*c.weightBackup)
 	c.nnState = nn.NewForwardState()
