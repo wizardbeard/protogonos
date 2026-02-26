@@ -361,6 +361,7 @@ func evaluateFlatlandWithStep(ctx context.Context, runner StepAgent, cfg flatlan
 	}
 	trace["control_surface"] = "step_output"
 	trace["step_input_width"] = flatlandBaseFeatureWidth + flatlandScannerWidth
+	trace["scanner_density_active"] = flatlandScannerDensity
 	return fitness, trace, nil
 }
 
@@ -436,6 +437,7 @@ func evaluateFlatlandWithTick(ctx context.Context, ticker TickAgent, cfg flatlan
 		return 0, nil, err
 	}
 	trace["control_surface"] = ioBindings.controlSurface
+	trace["scanner_density_active"] = ioBindings.scannerDensityActive
 	return fitness, trace, nil
 }
 
@@ -654,6 +656,7 @@ func evaluateFlatland(
 		"last_control_width":       lastControlWidth,
 		"feature_width":            flatlandBaseFeatureWidth,
 		"scanner_density":          flatlandScannerDensity,
+		"scanner_density_active":   flatlandScannerDensity,
 		"scanner_feature_width":    flatlandScannerWidth,
 		"scanner_spread":           episode.scannerSpread,
 		"scanner_offset":           episode.scannerOffset,
@@ -1860,6 +1863,7 @@ type flatlandIOBindings struct {
 	distanceScanSetters     [flatlandScannerDensity]protoio.ScalarSensorSetter
 	colorScanSetters        [flatlandScannerDensity]protoio.ScalarSensorSetter
 	energyScanSetters       [flatlandScannerDensity]protoio.ScalarSensorSetter
+	scannerDensityActive    int
 	moveOutput              protoio.SnapshotActuator
 	controlSurface          string
 }
@@ -1934,28 +1938,17 @@ func flatlandIO(agent TickAgent) (flatlandIOBindings, error) {
 		return flatlandIOBindings{}, err
 	}
 
-	if distanceScanCount != 0 && distanceScanCount != flatlandScannerDensity {
+	distanceMask := flatlandScannerSetterMask(distanceScanSetters)
+	colorMask := flatlandScannerSetterMask(colorScanSetters)
+	energyMask := flatlandScannerSetterMask(energyScanSetters)
+	scannerDensityActive, aligned := flatlandAlignedScannerDensity(distanceMask, colorMask, energyMask)
+	if !aligned {
 		return flatlandIOBindings{}, fmt.Errorf(
-			"agent %s has partial flatland distance scanner set (%d/%d); expected all or none",
+			"agent %s has misaligned flatland scanner masks (distance=%d color=%d energy=%d)",
 			agent.ID(),
 			distanceScanCount,
-			flatlandScannerDensity,
-		)
-	}
-	if colorScanCount != 0 && colorScanCount != flatlandScannerDensity {
-		return flatlandIOBindings{}, fmt.Errorf(
-			"agent %s has partial flatland color scanner set (%d/%d); expected all or none",
-			agent.ID(),
 			colorScanCount,
-			flatlandScannerDensity,
-		)
-	}
-	if energyScanCount != 0 && energyScanCount != flatlandScannerDensity {
-		return flatlandIOBindings{}, fmt.Errorf(
-			"agent %s has partial flatland energy scanner set (%d/%d); expected all or none",
-			agent.ID(),
 			energyScanCount,
-			flatlandScannerDensity,
 		)
 	}
 	if !hasDistance &&
@@ -2014,6 +2007,7 @@ func flatlandIO(agent TickAgent) (flatlandIOBindings, error) {
 		distanceScanSetters:     distanceScanSetters,
 		colorScanSetters:        colorScanSetters,
 		energyScanSetters:       energyScanSetters,
+		scannerDensityActive:    scannerDensityActive,
 		moveOutput:              moveOutput,
 		controlSurface:          actuatorName,
 	}, nil
@@ -2057,6 +2051,63 @@ func resolveOptionalFlatlandScannerSetters(
 	return setters, count, nil
 }
 
+func flatlandScannerSetterMask(
+	setters [flatlandScannerDensity]protoio.ScalarSensorSetter,
+) [flatlandScannerDensity]bool {
+	var mask [flatlandScannerDensity]bool
+	for i, setter := range setters {
+		mask[i] = setter != nil
+	}
+	return mask
+}
+
+func flatlandAlignedScannerDensity(
+	distanceMask [flatlandScannerDensity]bool,
+	colorMask [flatlandScannerDensity]bool,
+	energyMask [flatlandScannerDensity]bool,
+) (int, bool) {
+	type scannerFamily struct {
+		mask  [flatlandScannerDensity]bool
+		count int
+	}
+
+	families := []scannerFamily{
+		{mask: distanceMask, count: countFlatlandScannerMask(distanceMask)},
+		{mask: colorMask, count: countFlatlandScannerMask(colorMask)},
+		{mask: energyMask, count: countFlatlandScannerMask(energyMask)},
+	}
+
+	var baseline [flatlandScannerDensity]bool
+	hasBaseline := false
+	for _, family := range families {
+		if family.count == 0 {
+			continue
+		}
+		if !hasBaseline {
+			baseline = family.mask
+			hasBaseline = true
+			continue
+		}
+		if family.mask != baseline {
+			return 0, false
+		}
+	}
+	if !hasBaseline {
+		return 0, true
+	}
+	return countFlatlandScannerMask(baseline), true
+}
+
+func countFlatlandScannerMask(mask [flatlandScannerDensity]bool) int {
+	count := 0
+	for _, enabled := range mask {
+		if enabled {
+			count++
+		}
+	}
+	return count
+}
+
 func flatlandControlFromOutput(values []float64) (flatlandControl, error) {
 	switch len(values) {
 	case 0:
@@ -2067,17 +2118,42 @@ func flatlandControlFromOutput(values []float64) (flatlandControl, error) {
 			width: 1,
 		}, nil
 	default:
-		left := clamp(values[0], -1, 1)
-		right := clamp(values[1], -1, 1)
+		left, right := flatlandWheelDrive(values)
 		avgDrive := 0.5 * (left + right)
 		differential := right - left
 		// Blend average drive with differential intent for stable 1D surrogate control.
 		move := clamp(0.65*avgDrive+0.35*differential, -1, 1)
 		return flatlandControl{
 			move:  move,
-			width: 2,
+			width: len(values),
 		}, nil
 	}
+}
+
+func flatlandWheelDrive(values []float64) (float64, float64) {
+	leftTotal := 0.0
+	leftCount := 0
+	rightTotal := 0.0
+	rightCount := 0
+	for i, value := range values {
+		clamped := clamp(value, -1, 1)
+		if i%2 == 0 {
+			leftTotal += clamped
+			leftCount++
+			continue
+		}
+		rightTotal += clamped
+		rightCount++
+	}
+	if leftCount == 0 {
+		return 0, 0
+	}
+	left := leftTotal / float64(leftCount)
+	if rightCount == 0 {
+		return left, left
+	}
+	right := rightTotal / float64(rightCount)
+	return left, right
 }
 
 func meanFlatlandScan(values [flatlandScannerDensity]float64) float64 {

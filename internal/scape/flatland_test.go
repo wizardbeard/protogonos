@@ -415,6 +415,86 @@ func TestFlatlandScapeEvaluateWithScannerIOComponents(t *testing.T) {
 	}
 }
 
+func TestFlatlandScapeEvaluateWithAlignedPartialScannerIOComponents(t *testing.T) {
+	genome := model.Genome{
+		SensorIDs: []string{
+			protoio.FlatlandDistanceScan1SensorName,
+			protoio.FlatlandDistanceScan2SensorName,
+			protoio.FlatlandDistanceScan3SensorName,
+			protoio.FlatlandColorScan1SensorName,
+			protoio.FlatlandColorScan2SensorName,
+			protoio.FlatlandColorScan3SensorName,
+			protoio.FlatlandEnergyScan1SensorName,
+			protoio.FlatlandEnergyScan2SensorName,
+			protoio.FlatlandEnergyScan3SensorName,
+		},
+		ActuatorIDs: []string{protoio.FlatlandMoveActuatorName},
+		Neurons: []model.Neuron{
+			{ID: "d1", Activation: "identity"},
+			{ID: "d2", Activation: "identity"},
+			{ID: "d3", Activation: "identity"},
+			{ID: "c1", Activation: "identity"},
+			{ID: "c2", Activation: "identity"},
+			{ID: "c3", Activation: "identity"},
+			{ID: "e1", Activation: "identity"},
+			{ID: "e2", Activation: "identity"},
+			{ID: "e3", Activation: "identity"},
+			{ID: "move", Activation: "tanh"},
+		},
+		Synapses: []model.Synapse{
+			{From: "d1", To: "move", Weight: -0.8, Enabled: true},
+			{From: "d2", To: "move", Weight: 0.2, Enabled: true},
+			{From: "d3", To: "move", Weight: 0.6, Enabled: true},
+		},
+	}
+
+	sensors := map[string]protoio.Sensor{
+		protoio.FlatlandDistanceScan1SensorName: protoio.NewScalarInputSensor(0),
+		protoio.FlatlandDistanceScan2SensorName: protoio.NewScalarInputSensor(0),
+		protoio.FlatlandDistanceScan3SensorName: protoio.NewScalarInputSensor(0),
+		protoio.FlatlandColorScan1SensorName:    protoio.NewScalarInputSensor(0),
+		protoio.FlatlandColorScan2SensorName:    protoio.NewScalarInputSensor(0),
+		protoio.FlatlandColorScan3SensorName:    protoio.NewScalarInputSensor(0),
+		protoio.FlatlandEnergyScan1SensorName:   protoio.NewScalarInputSensor(0),
+		protoio.FlatlandEnergyScan2SensorName:   protoio.NewScalarInputSensor(0),
+		protoio.FlatlandEnergyScan3SensorName:   protoio.NewScalarInputSensor(0),
+	}
+	actuators := map[string]protoio.Actuator{
+		protoio.FlatlandMoveActuatorName: protoio.NewScalarOutputActuator(),
+	}
+
+	cortex, err := agent.NewCortex(
+		"flatland-agent-io-partial-scanner",
+		genome,
+		sensors,
+		actuators,
+		[]string{"d1", "d2", "d3", "c1", "c2", "c3", "e1", "e2", "e3"},
+		[]string{"move"},
+		nil,
+	)
+	if err != nil {
+		t.Fatalf("new cortex: %v", err)
+	}
+
+	scape := FlatlandScape{}
+	fitness, trace, err := scape.Evaluate(context.Background(), cortex)
+	if err != nil {
+		t.Fatalf("evaluate: %v", err)
+	}
+	if fitness <= 0 {
+		t.Fatalf("expected positive fitness, got %f", fitness)
+	}
+	if surface, _ := trace["control_surface"].(string); surface != protoio.FlatlandMoveActuatorName {
+		t.Fatalf("expected tick-agent control surface via flatland_move, trace=%+v", trace)
+	}
+	if active, ok := trace["scanner_density_active"].(int); !ok || active != 3 {
+		t.Fatalf("expected active scanner density=3, trace=%+v", trace)
+	}
+	if density, ok := trace["scanner_density"].(int); !ok || density != 5 {
+		t.Fatalf("expected fixed scanner density=5, trace=%+v", trace)
+	}
+}
+
 func TestFlatlandScapeEvaluateWithTwoWheelsActuator(t *testing.T) {
 	genome := model.Genome{
 		SensorIDs: []string{
@@ -470,6 +550,27 @@ func TestFlatlandScapeEvaluateWithTwoWheelsActuator(t *testing.T) {
 	}
 	if width, ok := trace["last_control_width"].(int); !ok || width != 2 {
 		t.Fatalf("expected two-channel control width, trace=%+v", trace)
+	}
+}
+
+func TestFlatlandScapeStepAgentSupportsWideControlVector(t *testing.T) {
+	scape := FlatlandScape{}
+	agent := scriptedStepAgent{
+		id: "flatland-wide-control",
+		fn: func(_ []float64) []float64 {
+			return []float64{0.8, -0.2, 0.6, -0.4}
+		},
+	}
+
+	fitness, trace, err := scape.Evaluate(context.Background(), agent)
+	if err != nil {
+		t.Fatalf("evaluate: %v", err)
+	}
+	if fitness <= 0 {
+		t.Fatalf("expected positive fitness, got %f", fitness)
+	}
+	if width, ok := trace["last_control_width"].(int); !ok || width != 4 {
+		t.Fatalf("expected control width=4 for wide control vector, trace=%+v", trace)
 	}
 }
 
