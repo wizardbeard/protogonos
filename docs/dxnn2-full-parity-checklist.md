@@ -1,6 +1,6 @@
 # DXNN2 Full Parity Checklist (Reference `.ref/src`)
 
-Snapshot date: 2026-02-12
+Snapshot date: 2026-02-27
 
 Status keys:
 - `done`: implemented and covered by tests in current Go rewrite.
@@ -49,6 +49,7 @@ Status keys:
 
 ## Completed in latest iterations
 
+- Hardened parity done-check gating (`scripts/done_check.sh`) to require benchmark summary pass semantics (`"passed": true`) on both benchmark and export artifacts, widened bounded smoke coverage to `flatland`/`gtsa`/`fx`/`epitopes`/`dtm`/`pole2-balancing`/`llvm-phase-ordering`, and documented plateau-safe thresholds (`regression-mimic` at `0.0`, smoke runs at `-0.2` with `--w-substrate 0`).
 - Expanded `sensor.erl` parity with a vector-input sensor family (`vector_input`), alias-aware compatibility helpers (`SensorCompatibleWithScape` / `ListSensorsForScape`), and mutation-candidate filtering wired to scape-filtered sensor registries.
 - Expanded `actuator.erl` parity with a vector-output actuator family (`vector_output`), alias-aware compatibility helpers (`ActuatorCompatibleWithScape` / `ListActuatorsForScape`), and mutation-candidate filtering wired to scape-filtered actuator registries.
 - Expanded `benchmarker.erl` artifact parity by adding persisted per-generation benchmark series exports (`benchmark_series.csv`) and carrying that artifact through export flows.

@@ -4,7 +4,7 @@ This audit is based on the local reference implementation at `.ref/src`.
 
 ## Audit date
 
-- 2026-02-21
+- 2026-02-27
 
 ## Verification source
 
@@ -55,6 +55,10 @@ Status legend:
 | `visor.erl` | visualization loop/UI drawing | none | `out-of-scope-now` | `.ref/src/visor.erl` |
 | `epitopes.erl` | experiment/sim utility tooling | `internal/scape/epitopes.go` deterministic scape-level surrogate with table-driven sense/classify sessions, mode windows, optional TickAgent internal-state channels (`epitopes_target`/`epitopes_progress`/`epitopes_margin`) backed by morphology/IO/seed defaults, and optional external CSV table ingestion (`LoadEpitopesTableCSV`/`ResetEpitopesTableSource`) for data-driven row sets | `partial` | `internal/scape/epitopes.go`, `internal/scape/epitopes_test.go`, `internal/morphology/epitopes.go`, `internal/io/scalar_components.go`, `internal/genotype/lifecycle.go`, `.ref/src/epitopes.erl` |
 | `data_extractor.erl` | dataset ingestion and conversion tooling | baseline extractor workflow via `protogonosctl data-extract` + `internal/dataextract` for GTSA/FX/Epitopes canonical CSV output from raw CSV column selections | `partial` | `cmd/protogonosctl/data_extract.go`, `internal/dataextract/extract.go`, `internal/dataextract/extract_test.go`, `.ref/src/data_extractor.erl` |
+
+## Latest iteration updates
+
+- 2026-02-27: hardened parity done-check gate (`scripts/done_check.sh`) so benchmark acceptance now requires `benchmark_summary.json` with `"passed": true` for both benchmark and exported artifacts, and expanded bounded smoke scape coverage to `flatland`, `gtsa`, `fx`, `epitopes`, `dtm`, `pole2-balancing`, and `llvm-phase-ordering` (smoke runs use `--w-substrate 0` while IO-topology coherence work is in progress).
 
 ## Summary
 
