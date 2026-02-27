@@ -4,21 +4,26 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math"
 	"math/rand"
 	"path/filepath"
 	"sort"
 	"strings"
 	"time"
 
+	"protogonos/internal/agent"
 	"protogonos/internal/evo"
 	"protogonos/internal/genotype"
+	protoio "protogonos/internal/io"
 	"protogonos/internal/model"
 	"protogonos/internal/morphology"
+	"protogonos/internal/nn"
 	"protogonos/internal/platform"
 	"protogonos/internal/scape"
 	"protogonos/internal/scapeid"
 	"protogonos/internal/stats"
 	"protogonos/internal/storage"
+	"protogonos/internal/substrate"
 	"protogonos/internal/tuning"
 )
 
@@ -262,6 +267,38 @@ type ScapeSummaryItem struct {
 	Name        string
 	Description string
 	BestFitness float64
+}
+
+type EpitopesReplayRequest struct {
+	RunID  string
+	Latest bool
+	Limit  int
+	Mode   string
+}
+
+type EpitopesReplayItem struct {
+	Rank          int
+	GenomeID      string
+	StoredFitness float64
+	ReplayFitness float64
+	TableName     string
+	Total         int
+}
+
+type EpitopesReplaySummary struct {
+	RunID        string
+	Scape        string
+	Mode         string
+	TableName    string
+	Evaluated    int
+	MeanFitness  float64
+	StdFitness   float64
+	MaxFitness   float64
+	MinFitness   float64
+	MeanOver280  float64
+	BestGenomeID string
+	BestFitness  float64
+	Items        []EpitopesReplayItem
 }
 
 func New(opts Options) (*Client, error) {
@@ -690,6 +727,173 @@ func applyScapeDataSources(ctx context.Context, req RunRequest) (context.Context
 		return nil, fmt.Errorf("configure flatland overrides: %w", err)
 	}
 	return scopedCtx, nil
+}
+
+func runRequestFromArtifactsConfig(cfg stats.RunConfig) RunRequest {
+	return RunRequest{
+		Scape:                   cfg.Scape,
+		GTSACSVPath:             cfg.GTSACSVPath,
+		GTSATrainEnd:            cfg.GTSATrainEnd,
+		GTSAValidationEnd:       cfg.GTSAValidationEnd,
+		GTSATestEnd:             cfg.GTSATestEnd,
+		FXCSVPath:               cfg.FXCSVPath,
+		EpitopesCSVPath:         cfg.EpitopesCSVPath,
+		EpitopesTableName:       cfg.EpitopesTableName,
+		LLVMWorkflowJSONPath:    cfg.LLVMWorkflowJSONPath,
+		EpitopesGTStart:         cfg.EpitopesGTStart,
+		EpitopesGTEnd:           cfg.EpitopesGTEnd,
+		EpitopesValidationStart: cfg.EpitopesValidationStart,
+		EpitopesValidationEnd:   cfg.EpitopesValidationEnd,
+		EpitopesTestStart:       cfg.EpitopesTestStart,
+		EpitopesTestEnd:         cfg.EpitopesTestEnd,
+		EpitopesBenchmarkStart:  cfg.EpitopesBenchmarkStart,
+		EpitopesBenchmarkEnd:    cfg.EpitopesBenchmarkEnd,
+		FlatlandScannerProfile:  cfg.FlatlandScannerProfile,
+		FlatlandScannerSpread:   cloneFloat64Ptr(cfg.FlatlandScannerSpread),
+		FlatlandScannerOffset:   cloneFloat64Ptr(cfg.FlatlandScannerOffset),
+		FlatlandLayoutRandomize: cloneBoolPtr(cfg.FlatlandLayoutRandomize),
+		FlatlandLayoutVariants:  cloneIntPtr(cfg.FlatlandLayoutVariants),
+		FlatlandForceLayout:     cloneIntPtr(cfg.FlatlandForceLayout),
+		FlatlandBenchmarkTrials: cloneIntPtr(cfg.FlatlandBenchmarkTrials),
+		FlatlandMaxAge:          cloneIntPtr(cfg.FlatlandMaxAge),
+		FlatlandForageGoal:      cloneIntPtr(cfg.FlatlandForageGoal),
+	}
+}
+
+func normalizeEpitopesReplayMode(raw string) (string, error) {
+	switch strings.ToLower(strings.TrimSpace(raw)) {
+	case "", "benchmark":
+		return "benchmark", nil
+	case "gt":
+		return "gt", nil
+	case "validation":
+		return "validation", nil
+	case "test":
+		return "test", nil
+	default:
+		return "", fmt.Errorf("unsupported epitopes replay mode: %s", raw)
+	}
+}
+
+func defaultSeedIONeuronsForScape(scapeName string, seed int64) ([]string, []string, error) {
+	seedPopulation, err := genotype.ConstructSeedPopulation(scapeName, 1, seed)
+	if err != nil {
+		return nil, nil, err
+	}
+	if len(seedPopulation.InputNeuronIDs) == 0 {
+		return nil, nil, fmt.Errorf("seed input neuron ids are empty for scape %s", scapeName)
+	}
+	if len(seedPopulation.OutputNeuronIDs) == 0 {
+		return nil, nil, fmt.Errorf("seed output neuron ids are empty for scape %s", scapeName)
+	}
+	return append([]string(nil), seedPopulation.InputNeuronIDs...),
+		append([]string(nil), seedPopulation.OutputNeuronIDs...),
+		nil
+}
+
+func buildReplayCortex(scapeName string, genome model.Genome, inputNeuronIDs, outputNeuronIDs []string) (*agent.Cortex, error) {
+	sensors, actuators, err := buildReplayIO(scapeName, genome)
+	if err != nil {
+		return nil, err
+	}
+	substrateRuntime, err := buildReplaySubstrate(genome, len(outputNeuronIDs))
+	if err != nil {
+		return nil, err
+	}
+	return agent.NewCortex(
+		genome.ID,
+		genome,
+		sensors,
+		actuators,
+		inputNeuronIDs,
+		outputNeuronIDs,
+		substrateRuntime,
+	)
+}
+
+func buildReplayIO(scapeName string, genome model.Genome) (map[string]protoio.Sensor, map[string]protoio.Actuator, error) {
+	var sensors map[string]protoio.Sensor
+	if len(genome.SensorIDs) > 0 {
+		sensors = make(map[string]protoio.Sensor, len(genome.SensorIDs))
+		for _, sensorID := range genome.SensorIDs {
+			sensor, err := protoio.ResolveSensor(sensorID, scapeName)
+			if err != nil {
+				return nil, nil, fmt.Errorf("resolve sensor %s for scape %s: %w", sensorID, scapeName, err)
+			}
+			sensors[sensorID] = sensor
+		}
+	}
+
+	var actuators map[string]protoio.Actuator
+	if len(genome.ActuatorIDs) > 0 {
+		actuators = make(map[string]protoio.Actuator, len(genome.ActuatorIDs))
+		for _, actuatorID := range genome.ActuatorIDs {
+			actuator, err := protoio.ResolveActuator(actuatorID, scapeName)
+			if err != nil {
+				return nil, nil, fmt.Errorf("resolve actuator %s for scape %s: %w", actuatorID, scapeName, err)
+			}
+			actuators[actuatorID] = actuator
+		}
+	}
+
+	return sensors, actuators, nil
+}
+
+func buildReplaySubstrate(genome model.Genome, outputCount int) (substrate.Runtime, error) {
+	if genome.Substrate == nil {
+		return nil, nil
+	}
+	cfg := genome.Substrate
+	spec := substrate.Spec{
+		CPPName:    cfg.CPPName,
+		CEPName:    cfg.CEPName,
+		Dimensions: append([]int(nil), cfg.Dimensions...),
+		Parameters: map[string]float64{},
+	}
+	for k, v := range cfg.Parameters {
+		spec.Parameters[k] = v
+	}
+	weightCount := cfg.WeightCount
+	if weightCount <= 0 {
+		weightCount = outputCount
+	}
+	rt, err := substrate.NewSimpleRuntime(spec, weightCount)
+	if err != nil {
+		return nil, fmt.Errorf("build substrate runtime for genome %s: %w", genome.ID, err)
+	}
+	return rt, nil
+}
+
+func meanStd(values []float64) (float64, float64) {
+	if len(values) == 0 {
+		return 0, 0
+	}
+	mean, err := nn.Avg(values)
+	if err != nil {
+		return 0, 0
+	}
+	std, err := nn.Std(values)
+	if err != nil {
+		return mean, 0
+	}
+	return mean, std
+}
+
+func fitnessRange(values []float64) (maxVal, minVal float64) {
+	if len(values) == 0 {
+		return 0, 0
+	}
+	maxVal = values[0]
+	minVal = values[0]
+	for i := 1; i < len(values); i++ {
+		if values[i] > maxVal {
+			maxVal = values[i]
+		}
+		if values[i] < minVal {
+			minVal = values[i]
+		}
+	}
+	return maxVal, minVal
 }
 
 func (c *Client) Runs(_ context.Context, req RunsRequest) ([]RunItem, error) {
@@ -1142,6 +1346,147 @@ func (c *Client) TopGenomes(ctx context.Context, req TopGenomesRequest) ([]model
 	out := make([]model.TopGenomeRecord, len(top))
 	copy(out, top)
 	return out, nil
+}
+
+func (c *Client) EpitopesReplay(ctx context.Context, req EpitopesReplayRequest) (EpitopesReplaySummary, error) {
+	if req.RunID != "" && req.Latest {
+		return EpitopesReplaySummary{}, errors.New("use either run id or latest")
+	}
+	if req.Limit < 0 {
+		return EpitopesReplaySummary{}, errors.New("limit must be >= 0")
+	}
+
+	runID := req.RunID
+	if req.Latest {
+		entries, err := stats.ListRunIndex(c.benchmarksDir)
+		if err != nil {
+			return EpitopesReplaySummary{}, err
+		}
+		if len(entries) == 0 {
+			return EpitopesReplaySummary{}, errors.New("no runs available")
+		}
+		runID = entries[0].RunID
+	}
+	if strings.TrimSpace(runID) == "" {
+		return EpitopesReplaySummary{}, errors.New("epitopes replay requires run id or latest")
+	}
+
+	mode, err := normalizeEpitopesReplayMode(req.Mode)
+	if err != nil {
+		return EpitopesReplaySummary{}, err
+	}
+
+	runCfg, ok, err := stats.ReadRunConfig(c.benchmarksDir, runID)
+	if err != nil {
+		return EpitopesReplaySummary{}, err
+	}
+	if !ok {
+		return EpitopesReplaySummary{}, fmt.Errorf("run config not found for run id: %s", runID)
+	}
+	if scapeid.Normalize(runCfg.Scape) != "epitopes" {
+		return EpitopesReplaySummary{}, fmt.Errorf("run %s is not an epitopes run (scape=%s)", runID, runCfg.Scape)
+	}
+
+	top, ok, err := stats.ReadTopGenomes(c.benchmarksDir, runID)
+	if err != nil {
+		return EpitopesReplaySummary{}, err
+	}
+	if !ok {
+		return EpitopesReplaySummary{}, fmt.Errorf("top genomes artifact not found for run id: %s", runID)
+	}
+	if len(top) == 0 {
+		return EpitopesReplaySummary{}, fmt.Errorf("top genomes artifact is empty for run id: %s", runID)
+	}
+	if req.Limit > 0 && len(top) > req.Limit {
+		top = top[:req.Limit]
+	}
+
+	p, err := c.ensurePolis(ctx)
+	if err != nil {
+		return EpitopesReplaySummary{}, err
+	}
+	if err := registerDefaultScapes(p); err != nil {
+		return EpitopesReplaySummary{}, err
+	}
+	targetScape, ok := p.GetScape("epitopes")
+	if !ok {
+		return EpitopesReplaySummary{}, errors.New("epitopes scape is not registered")
+	}
+	modeAware, ok := targetScape.(scape.ModeAwareScape)
+	if !ok {
+		return EpitopesReplaySummary{}, errors.New("epitopes scape does not support mode-aware evaluation")
+	}
+
+	replayReq := runRequestFromArtifactsConfig(runCfg)
+	replayCtx, err := applyScapeDataSources(ctx, replayReq)
+	if err != nil {
+		return EpitopesReplaySummary{}, err
+	}
+	inputNeuronIDs, outputNeuronIDs, err := defaultSeedIONeuronsForScape("epitopes", runCfg.Seed)
+	if err != nil {
+		return EpitopesReplaySummary{}, err
+	}
+
+	values := make([]float64, 0, len(top))
+	items := make([]EpitopesReplayItem, 0, len(top))
+	bestFitness := math.Inf(-1)
+	bestGenomeID := ""
+	tableName := ""
+	for _, item := range top {
+		cortex, err := buildReplayCortex("epitopes", item.Genome, inputNeuronIDs, outputNeuronIDs)
+		if err != nil {
+			return EpitopesReplaySummary{}, fmt.Errorf("build replay cortex for genome %s: %w", item.Genome.ID, err)
+		}
+		fitness, trace, err := modeAware.EvaluateMode(replayCtx, cortex, mode)
+		if err != nil {
+			return EpitopesReplaySummary{}, fmt.Errorf("evaluate replay genome %s: %w", item.Genome.ID, err)
+		}
+		replayFitness := float64(fitness)
+		if replayFitness > bestFitness {
+			bestFitness = replayFitness
+			bestGenomeID = item.Genome.ID
+		}
+		currentTableName, _ := trace["table_name"].(string)
+		if tableName == "" && currentTableName != "" {
+			tableName = currentTableName
+		}
+		total := 0
+		if v, ok := trace["total"].(int); ok {
+			total = v
+		}
+		values = append(values, replayFitness)
+		items = append(items, EpitopesReplayItem{
+			Rank:          item.Rank,
+			GenomeID:      item.Genome.ID,
+			StoredFitness: item.Fitness,
+			ReplayFitness: replayFitness,
+			TableName:     currentTableName,
+			Total:         total,
+		})
+	}
+
+	meanFitness, stdFitness := meanStd(values)
+	maxFitness, minFitness := fitnessRange(values)
+	meanOver280 := 0.0
+	if mode == "benchmark" {
+		meanOver280 = meanFitness / 280.0
+	}
+
+	return EpitopesReplaySummary{
+		RunID:        runID,
+		Scape:        "epitopes",
+		Mode:         mode,
+		TableName:    tableName,
+		Evaluated:    len(items),
+		MeanFitness:  meanFitness,
+		StdFitness:   stdFitness,
+		MaxFitness:   maxFitness,
+		MinFitness:   minFitness,
+		MeanOver280:  meanOver280,
+		BestGenomeID: bestGenomeID,
+		BestFitness:  bestFitness,
+		Items:        items,
+	}, nil
 }
 
 func (c *Client) ScapeSummary(ctx context.Context, scapeName string) (ScapeSummaryItem, error) {

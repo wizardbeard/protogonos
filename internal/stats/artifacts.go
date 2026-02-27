@@ -303,6 +303,40 @@ func ExportRunArtifacts(baseDir, runID, outDir string) (string, error) {
 	return dst, nil
 }
 
+func ReadRunConfig(baseDir, runID string) (RunConfig, bool, error) {
+	path := filepath.Join(baseDir, runID, "config.json")
+	data, err := os.ReadFile(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return RunConfig{}, false, nil
+		}
+		return RunConfig{}, false, err
+	}
+
+	var cfg RunConfig
+	if err := json.Unmarshal(data, &cfg); err != nil {
+		return RunConfig{}, false, err
+	}
+	return cfg, true, nil
+}
+
+func ReadTopGenomes(baseDir, runID string) ([]TopGenome, bool, error) {
+	path := filepath.Join(baseDir, runID, "top_genomes.json")
+	data, err := os.ReadFile(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, false, nil
+		}
+		return nil, false, err
+	}
+
+	var top []TopGenome
+	if err := json.Unmarshal(data, &top); err != nil {
+		return nil, false, err
+	}
+	return top, true, nil
+}
+
 func WriteTuningComparison(runDir string, report TuningComparison) error {
 	return writeJSON(filepath.Join(runDir, "compare_tuning.json"), report)
 }

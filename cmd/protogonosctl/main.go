@@ -72,6 +72,8 @@ func run(ctx context.Context, args []string) error {
 		return runTop(ctx, args[1:])
 	case "scape-summary":
 		return runScapeSummary(ctx, args[1:])
+	case "epitopes-test":
+		return runEpitopesTest(ctx, args[1:])
 	case "export":
 		return runExport(ctx, args[1:])
 	case "data-extract":
@@ -1032,6 +1034,79 @@ func runScapeSummary(ctx context.Context, args []string) error {
 	return nil
 }
 
+func runEpitopesTest(ctx context.Context, args []string) error {
+	fs := flag.NewFlagSet("epitopes-test", flag.ContinueOnError)
+	runID := fs.String("run-id", "", "run id")
+	latest := fs.Bool("latest", false, "replay top genomes for the most recent run from run index")
+	limit := fs.Int("limit", 0, "max top genomes to replay (<=0 for all)")
+	mode := fs.String("mode", "benchmark", "replay mode: benchmark|gt|validation|test")
+	jsonOut := fs.Bool("json", false, "emit replay summary as JSON")
+	storeKind := fs.String("store", storage.DefaultStoreKind(), "store backend: memory|sqlite")
+	dbPath := fs.String("db-path", "protogonos.db", "sqlite database path")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	if *runID != "" && *latest {
+		return errors.New("use either --run-id or --latest, not both")
+	}
+	if *runID == "" && !*latest {
+		return errors.New("epitopes-test requires --run-id or --latest")
+	}
+
+	client, err := protoapi.New(protoapi.Options{
+		StoreKind:     *storeKind,
+		DBPath:        *dbPath,
+		BenchmarksDir: benchmarksDir,
+		ExportsDir:    exportsDir,
+	})
+	if err != nil {
+		return err
+	}
+	defer func() {
+		_ = client.Close()
+	}()
+
+	summary, err := client.EpitopesReplay(ctx, protoapi.EpitopesReplayRequest{
+		RunID:  *runID,
+		Latest: *latest,
+		Limit:  *limit,
+		Mode:   *mode,
+	})
+	if err != nil {
+		return err
+	}
+	if *jsonOut {
+		enc := json.NewEncoder(os.Stdout)
+		enc.SetIndent("", "  ")
+		return enc.Encode(summary)
+	}
+
+	fmt.Printf("epitopes_test run_id=%s mode=%s evaluated=%d table=%s best_genome=%s best_fitness=%.6f mean=%.6f std=%.6f max=%.6f min=%.6f mean_over_280=%.6f\n",
+		summary.RunID,
+		summary.Mode,
+		summary.Evaluated,
+		summary.TableName,
+		summary.BestGenomeID,
+		summary.BestFitness,
+		summary.MeanFitness,
+		summary.StdFitness,
+		summary.MaxFitness,
+		summary.MinFitness,
+		summary.MeanOver280,
+	)
+	for _, item := range summary.Items {
+		fmt.Printf("rank=%d genome_id=%s stored_fitness=%.6f replay_fitness=%.6f table=%s total=%d\n",
+			item.Rank,
+			item.GenomeID,
+			item.StoredFitness,
+			item.ReplayFitness,
+			item.TableName,
+			item.Total,
+		)
+	}
+	return nil
+}
+
 func runBenchmark(ctx context.Context, args []string) error {
 	fs := flag.NewFlagSet("benchmark", flag.ContinueOnError)
 	configPath := fs.String("config", "", "optional run config JSON path (map2rec-backed)")
@@ -1680,7 +1755,7 @@ func defaultMutationPolicy(
 }
 
 func usageError(msg string) error {
-	return fmt.Errorf("%s\nusage: protogonosctl <init|reset|start|run|benchmark|profile|runs|lineage|fitness|diagnostics|species|species-diff|monitor|population|top|scape-summary|export> [flags]", msg)
+	return fmt.Errorf("%s\nusage: protogonosctl <init|reset|start|run|benchmark|profile|runs|lineage|fitness|diagnostics|species|species-diff|monitor|population|top|scape-summary|epitopes-test|export> [flags]", msg)
 }
 
 func selectionFromName(name string) (evo.Selector, error) {

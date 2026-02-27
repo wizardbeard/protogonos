@@ -906,6 +906,87 @@ func TestApplyScapeDataSourcesAppliesEpitopesTableSelectionToContext(t *testing.
 	}
 }
 
+func TestClientEpitopesReplayReplaysTopGenomesFromArtifacts(t *testing.T) {
+	base := t.TempDir()
+	client, err := New(Options{
+		StoreKind:     "memory",
+		BenchmarksDir: filepath.Join(base, "benchmarks"),
+		ExportsDir:    filepath.Join(base, "exports"),
+	})
+	if err != nil {
+		t.Fatalf("new client: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = client.Close()
+	})
+
+	runSummary, err := client.Run(context.Background(), RunRequest{
+		Scape:       "epitopes",
+		Population:  6,
+		Generations: 1,
+		Seed:        31,
+		Workers:     2,
+	})
+	if err != nil {
+		t.Fatalf("run epitopes: %v", err)
+	}
+
+	replay, err := client.EpitopesReplay(context.Background(), EpitopesReplayRequest{
+		RunID: runSummary.RunID,
+		Limit: 3,
+		Mode:  "benchmark",
+	})
+	if err != nil {
+		t.Fatalf("epitopes replay: %v", err)
+	}
+	if replay.RunID != runSummary.RunID {
+		t.Fatalf("unexpected replay run id: %+v", replay)
+	}
+	if replay.Evaluated != 3 || len(replay.Items) != 3 {
+		t.Fatalf("expected 3 replayed genomes, got %+v", replay)
+	}
+	if replay.BestGenomeID == "" {
+		t.Fatalf("expected best genome id in replay summary, got %+v", replay)
+	}
+	if replay.TableName != "abc_pred16" {
+		t.Fatalf("expected default epitopes table in replay summary, got %+v", replay)
+	}
+}
+
+func TestClientEpitopesReplayRejectsNonEpitopesRun(t *testing.T) {
+	base := t.TempDir()
+	client, err := New(Options{
+		StoreKind:     "memory",
+		BenchmarksDir: filepath.Join(base, "benchmarks"),
+		ExportsDir:    filepath.Join(base, "exports"),
+	})
+	if err != nil {
+		t.Fatalf("new client: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = client.Close()
+	})
+
+	runSummary, err := client.Run(context.Background(), RunRequest{
+		Scape:       "xor",
+		Population:  6,
+		Generations: 1,
+		Seed:        41,
+		Workers:     2,
+	})
+	if err != nil {
+		t.Fatalf("run xor: %v", err)
+	}
+
+	_, err = client.EpitopesReplay(context.Background(), EpitopesReplayRequest{
+		RunID: runSummary.RunID,
+		Mode:  "benchmark",
+	})
+	if err == nil || !strings.Contains(err.Error(), "not an epitopes run") {
+		t.Fatalf("expected non-epitopes replay error, got %v", err)
+	}
+}
+
 func TestClientRunAppliesFXCSVSourceFromRunRequest(t *testing.T) {
 	base := t.TempDir()
 	client, err := New(Options{

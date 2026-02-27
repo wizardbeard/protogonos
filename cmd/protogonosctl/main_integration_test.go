@@ -950,6 +950,77 @@ func TestScapeSummaryCommandSQLiteReadsPersistedSummary(t *testing.T) {
 	}
 }
 
+func TestEpitopesTestCommandReplaysTopGenomes(t *testing.T) {
+	origWD, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("getwd: %v", err)
+	}
+	workdir := t.TempDir()
+	if err := os.Chdir(workdir); err != nil {
+		t.Fatalf("chdir tempdir: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = os.Chdir(origWD)
+	})
+
+	dbPath := filepath.Join(workdir, "protogonos.db")
+	runArgs := []string{
+		"run",
+		"--store", "sqlite",
+		"--db-path", dbPath,
+		"--scape", "epitopes",
+		"--epitopes-table", "abc_pred12",
+		"--pop", "6",
+		"--gens", "1",
+		"--seed", "46",
+		"--workers", "2",
+	}
+	if err := run(context.Background(), runArgs); err != nil {
+		t.Fatalf("run command: %v", err)
+	}
+
+	out, err := captureStdout(func() error {
+		return run(context.Background(), []string{
+			"epitopes-test",
+			"--store", "sqlite",
+			"--db-path", dbPath,
+			"--latest",
+			"--limit", "2",
+		})
+	})
+	if err != nil {
+		t.Fatalf("epitopes-test command: %v", err)
+	}
+	if !strings.Contains(out, "epitopes_test run_id=") || !strings.Contains(out, "mean_over_280=") || !strings.Contains(out, "table=abc_pred12") {
+		t.Fatalf("unexpected epitopes-test output: %s", out)
+	}
+
+	jsonOut, err := captureStdout(func() error {
+		return run(context.Background(), []string{
+			"epitopes-test",
+			"--store", "sqlite",
+			"--db-path", dbPath,
+			"--latest",
+			"--limit", "2",
+			"--json",
+		})
+	})
+	if err != nil {
+		t.Fatalf("epitopes-test json command: %v", err)
+	}
+	var parsed map[string]any
+	if err := json.Unmarshal([]byte(jsonOut), &parsed); err != nil {
+		t.Fatalf("decode epitopes-test json output: %v\n%s", err, jsonOut)
+	}
+	if _, ok := parsed["BestGenomeID"]; !ok {
+		t.Fatalf("expected BestGenomeID in epitopes-test json output: %v", parsed)
+	}
+	items, ok := parsed["Items"].([]any)
+	if !ok || len(items) == 0 {
+		t.Fatalf("expected non-empty items in epitopes-test json output: %v", parsed)
+	}
+}
+
 func TestBenchmarkCommandWritesSummary(t *testing.T) {
 	origWD, err := os.Getwd()
 	if err != nil {

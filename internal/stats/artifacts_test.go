@@ -120,6 +120,28 @@ func TestWriteAndExportRunArtifacts(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(exportedDirWithBenchmark, "benchmark_series.csv")); err != nil {
 		t.Fatalf("expected exported benchmark series: %v", err)
 	}
+
+	readCfg, ok, err := ReadRunConfig(baseDir, runID)
+	if err != nil {
+		t.Fatalf("read run config: %v", err)
+	}
+	if !ok {
+		t.Fatalf("expected run config to exist for run id %s", runID)
+	}
+	if readCfg.RunID != runID || readCfg.Scape != "xor" {
+		t.Fatalf("unexpected run config payload: %+v", readCfg)
+	}
+
+	readTop, ok, err := ReadTopGenomes(baseDir, runID)
+	if err != nil {
+		t.Fatalf("read top genomes: %v", err)
+	}
+	if !ok {
+		t.Fatalf("expected top genomes to exist for run id %s", runID)
+	}
+	if len(readTop) != 1 || readTop[0].Genome.ID != "g1" {
+		t.Fatalf("unexpected top genomes payload: %+v", readTop)
+	}
 }
 
 func TestRunIndexAppendListAndUpsert(t *testing.T) {
@@ -190,6 +212,22 @@ func TestRunIndexAppendListAndUpsert(t *testing.T) {
 	}
 	if entries[0].RunID != "run-1" || entries[0].FinalBestFitness != 0.90 {
 		t.Fatalf("unexpected upsert result: %+v", entries[0])
+	}
+}
+
+func TestReadRunConfigAndTopGenomesMissingReturnsNotFound(t *testing.T) {
+	baseDir := t.TempDir()
+
+	if _, ok, err := ReadRunConfig(baseDir, "missing-run"); err != nil {
+		t.Fatalf("read missing run config: %v", err)
+	} else if ok {
+		t.Fatal("expected missing run config to report not found")
+	}
+
+	if top, ok, err := ReadTopGenomes(baseDir, "missing-run"); err != nil {
+		t.Fatalf("read missing top genomes: %v", err)
+	} else if ok || top != nil {
+		t.Fatalf("expected missing top genomes to report not found, got top=%+v ok=%t", top, ok)
 	}
 }
 
