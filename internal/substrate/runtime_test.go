@@ -3,6 +3,7 @@ package substrate
 import (
 	"context"
 	"errors"
+	"math"
 	"testing"
 )
 
@@ -74,6 +75,38 @@ func TestSimpleRuntimeSetWeightCEP(t *testing.T) {
 	}
 }
 
+func TestSimpleRuntimeSetWeightCEPSaturatesReferenceLimit(t *testing.T) {
+	resetRegistriesForTests()
+	t.Cleanup(resetRegistriesForTests)
+
+	rt, err := NewSimpleRuntime(Spec{
+		CPPName: DefaultCPPName,
+		CEPName: SetWeightCEPName,
+		Parameters: map[string]float64{
+			"scale": 10,
+		},
+	}, 1)
+	if err != nil {
+		t.Fatalf("new runtime: %v", err)
+	}
+
+	w, err := rt.Step(context.Background(), []float64{1})
+	if err != nil {
+		t.Fatalf("step +1: %v", err)
+	}
+	if len(w) != 1 || math.Abs(w[0]-referenceSubstrateWeightLimit) > 1e-9 {
+		t.Fatalf("expected set_weight saturation to +%v, got=%v", referenceSubstrateWeightLimit, w)
+	}
+
+	w, err = rt.Step(context.Background(), []float64{-1})
+	if err != nil {
+		t.Fatalf("step -1: %v", err)
+	}
+	if len(w) != 1 || math.Abs(w[0]+referenceSubstrateWeightLimit) > 1e-9 {
+		t.Fatalf("expected set_weight saturation to -%v, got=%v", referenceSubstrateWeightLimit, w)
+	}
+}
+
 func TestSimpleRuntimeSetABCNCEP(t *testing.T) {
 	resetRegistriesForTests()
 	t.Cleanup(resetRegistriesForTests)
@@ -96,6 +129,62 @@ func TestSimpleRuntimeSetABCNCEP(t *testing.T) {
 	}
 	if len(first) != 1 || len(second) != 1 || second[0] <= first[0] {
 		t.Fatalf("expected iterative set_abcn surrogate behavior, first=%v second=%v", first, second)
+	}
+}
+
+func TestSimpleRuntimeSetABCNCEPSaturatesReferenceLimit(t *testing.T) {
+	resetRegistriesForTests()
+	t.Cleanup(resetRegistriesForTests)
+
+	rt, err := NewSimpleRuntime(Spec{
+		CPPName: DefaultCPPName,
+		CEPName: SetABCNCEPName,
+		Parameters: map[string]float64{
+			"scale": 10,
+		},
+	}, 1)
+	if err != nil {
+		t.Fatalf("new runtime: %v", err)
+	}
+
+	w, err := rt.Step(context.Background(), []float64{1})
+	if err != nil {
+		t.Fatalf("step 1: %v", err)
+	}
+	if len(w) != 1 || math.Abs(w[0]-referenceSubstrateWeightLimit) > 1e-9 {
+		t.Fatalf("expected set_abcn surrogate saturation at +%v, got=%v", referenceSubstrateWeightLimit, w)
+	}
+}
+
+func TestSimpleRuntimeDeltaWeightCEPSaturatesReferenceLimit(t *testing.T) {
+	resetRegistriesForTests()
+	t.Cleanup(resetRegistriesForTests)
+
+	rt, err := NewSimpleRuntime(Spec{
+		CPPName: DefaultCPPName,
+		CEPName: DefaultCEPName,
+		Parameters: map[string]float64{
+			"scale": 10,
+		},
+	}, 1)
+	if err != nil {
+		t.Fatalf("new runtime: %v", err)
+	}
+
+	w, err := rt.Step(context.Background(), []float64{1})
+	if err != nil {
+		t.Fatalf("step 1: %v", err)
+	}
+	if len(w) != 1 || math.Abs(w[0]-referenceSubstrateWeightLimit) > 1e-9 {
+		t.Fatalf("expected delta_weight saturation at +%v, got=%v", referenceSubstrateWeightLimit, w)
+	}
+
+	w, err = rt.Step(context.Background(), []float64{1})
+	if err != nil {
+		t.Fatalf("step 2: %v", err)
+	}
+	if len(w) != 1 || math.Abs(w[0]-referenceSubstrateWeightLimit) > 1e-9 {
+		t.Fatalf("expected saturated value to remain capped at +%v, got=%v", referenceSubstrateWeightLimit, w)
 	}
 }
 

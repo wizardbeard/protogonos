@@ -10,6 +10,8 @@ const (
 	DefaultCEPName   = "delta_weight"
 	SetWeightCEPName = "set_weight"
 	SetABCNCEPName   = "set_abcn"
+
+	referenceSubstrateWeightLimit = 3.1415
 )
 
 type SetWeightCPP struct{}
@@ -36,7 +38,7 @@ func (DeltaWeightCEP) Name() string {
 }
 
 func (DeltaWeightCEP) Apply(_ context.Context, current float64, delta float64, params map[string]float64) (float64, error) {
-	return current + cepControlValue(delta, params), nil
+	return saturateSubstrateWeight(current + cepControlValue(delta, params)), nil
 }
 
 type SetWeightCEP struct{}
@@ -46,7 +48,7 @@ func (SetWeightCEP) Name() string {
 }
 
 func (SetWeightCEP) Apply(_ context.Context, _ float64, delta float64, params map[string]float64) (float64, error) {
-	return cepControlValue(delta, params), nil
+	return saturateSubstrateWeight(cepControlValue(delta, params)), nil
 }
 
 type SetABCNCEP struct{}
@@ -58,8 +60,8 @@ func (SetABCNCEP) Name() string {
 func (SetABCNCEP) Apply(_ context.Context, current float64, delta float64, params map[string]float64) (float64, error) {
 	// Reference set_abcn applies a richer substrate message. In the simplified
 	// scalar runtime, preserve iterative behavior by applying the same bounded
-	// control signal as delta_weight.
-	return current + cepControlValue(delta, params), nil
+	// control signal as delta_weight, including reference-style saturation.
+	return saturateSubstrateWeight(current + cepControlValue(delta, params)), nil
 }
 
 func cepControlValue(delta float64, params map[string]float64) float64 {
@@ -97,6 +99,10 @@ func clamp(value, min, max float64) float64 {
 		return max
 	}
 	return value
+}
+
+func saturateSubstrateWeight(value float64) float64 {
+	return clamp(value, -referenceSubstrateWeightLimit, referenceSubstrateWeightLimit)
 }
 
 func init() {
