@@ -45,14 +45,40 @@ func runDataExtract(_ context.Context, args []string) error {
 	tableName := fs.String("table-name", "", "optional table name for --table-out")
 	tableCheck := fs.String("table-check", "", "check/dump existing table file and exit")
 	dumpLimit := fs.Int("dump-limit", 10, "max table rows to print for --table-check")
+	tableSave := fs.String("table-save", "", "write transformed --table-check result to table file path")
+	tableScaleMax := fs.Bool("table-scale-max", false, "scale table input columns by per-column max (dg_scale1 analog)")
+	tableScaleAsinh := fs.Bool("table-scale-asinh", false, "apply asinh scaling to table inputs (dg_scale2 analog)")
+	tableBinarize := fs.Bool("table-binarize", false, "binarize table inputs (dg_bin analog)")
+	tableCleanZeroInputs := fs.Bool("table-clean-zero-inputs", false, "remove rows whose input-vector sum is zero (dg_clean analog)")
+	tableStats := fs.Bool("table-stats", false, "print per-input-column min/avg/max stats")
+	tableZeroCounts := fs.Bool("table-zero-counts", false, "print zero/non-zero input counts and ratio")
 	if err := fs.Parse(args); err != nil {
 		return err
+	}
+
+	transformOpts := tableTransformOptions{
+		ScaleMax:        *tableScaleMax,
+		ScaleAsinh:      *tableScaleAsinh,
+		Binarize:        *tableBinarize,
+		CleanZeroInputs: *tableCleanZeroInputs,
 	}
 
 	if strings.TrimSpace(*tableCheck) != "" {
 		table, err := dataextract.ReadTableFile(*tableCheck)
 		if err != nil {
 			return err
+		}
+		if err := applyTableTransforms(&table, transformOpts); err != nil {
+			return err
+		}
+		if *tableStats {
+			if err := printTableStats(table); err != nil {
+				return err
+			}
+		}
+		if *tableZeroCounts {
+			zeroes, nonZeroes, ratio := dataextract.CountZeroInputs(table)
+			fmt.Printf("table_zeroes zeroes=%d non_zeroes=%d ratio=%g\n", zeroes, nonZeroes, ratio)
 		}
 		fmt.Printf("table_check name=%s rows=%d ivl=%d ovl=%d trn_end=%d val_end=%d tst_end=%d\n",
 			table.Info.Name,
@@ -65,6 +91,11 @@ func runDataExtract(_ context.Context, args []string) error {
 		)
 		for _, row := range dataextract.DumpTable(table, *dumpLimit) {
 			fmt.Printf("row index=%d inputs=%v targets=%v fields=%v\n", row.Index, row.Inputs, row.Targets, row.Fields)
+		}
+		if strings.TrimSpace(*tableSave) != "" {
+			if err := dataextract.WriteTableFile(*tableSave, table); err != nil {
+				return err
+			}
 		}
 		return nil
 	}
@@ -227,6 +258,18 @@ func runDataExtract(_ context.Context, args []string) error {
 		if err != nil {
 			return err
 		}
+		if err := applyTableTransforms(&table, transformOpts); err != nil {
+			return err
+		}
+		if *tableStats {
+			if err := printTableStats(table); err != nil {
+				return err
+			}
+		}
+		if *tableZeroCounts {
+			zeroes, nonZeroes, ratio := dataextract.CountZeroInputs(table)
+			fmt.Printf("table_zeroes zeroes=%d non_zeroes=%d ratio=%g\n", zeroes, nonZeroes, ratio)
+		}
 		if err := dataextract.WriteTableFile(*tableOut, table); err != nil {
 			return err
 		}
@@ -262,4 +305,47 @@ func parseIndexList(raw string) ([]int, error) {
 		out = append(out, idx)
 	}
 	return out, nil
+}
+
+type tableTransformOptions struct {
+	ScaleMax        bool
+	ScaleAsinh      bool
+	Binarize        bool
+	CleanZeroInputs bool
+}
+
+func applyTableTransforms(table *dataextract.TableFile, opts tableTransformOptions) error {
+	if table == nil {
+		return errors.New("table is required")
+	}
+	if opts.ScaleMax {
+		stats, err := dataextract.InputColumnStats(*table)
+		if err != nil {
+			return err
+		}
+		if err := dataextract.ScaleInputsByColumnMax(table, stats); err != nil {
+			return err
+		}
+	}
+	if opts.ScaleAsinh {
+		dataextract.ScaleInputsAsinh(table)
+	}
+	if opts.Binarize {
+		dataextract.BinarizeInputs(table)
+	}
+	if opts.CleanZeroInputs {
+		dataextract.CleanZeroInputRows(table)
+	}
+	return nil
+}
+
+func printTableStats(table dataextract.TableFile) error {
+	stats, err := dataextract.InputColumnStats(table)
+	if err != nil {
+		return err
+	}
+	for i, stat := range stats {
+		fmt.Printf("table_stats col=%d min=%g avg=%g max=%g\n", i, stat.Min, stat.Avg, stat.Max)
+	}
+	return nil
 }

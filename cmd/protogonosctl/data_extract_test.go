@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"math"
 	"os"
 	"path/filepath"
 	"strings"
@@ -193,5 +194,88 @@ func TestRunDataExtractWritesTableFile(t *testing.T) {
 		"--dump-limit", "1",
 	}); err != nil {
 		t.Fatalf("run data-extract table-check: %v", err)
+	}
+}
+
+func TestRunDataExtractTableTransformsOnWrite(t *testing.T) {
+	tmp := t.TempDir()
+	in := filepath.Join(tmp, "raw.csv")
+	out := filepath.Join(tmp, "gtsa.csv")
+	tablePath := filepath.Join(tmp, "gtsa.transforms.json")
+	raw := "t,close\n0,0\n1,2\n"
+	if err := os.WriteFile(in, []byte(raw), 0o644); err != nil {
+		t.Fatalf("write input: %v", err)
+	}
+
+	err := runDataExtract(context.Background(), []string{
+		"--scape", "gtsa",
+		"--in", in,
+		"--out", out,
+		"--value-col", "close",
+		"--table-out", tablePath,
+		"--table-scale-asinh",
+		"--table-binarize",
+		"--table-clean-zero-inputs",
+		"--table-stats",
+		"--table-zero-counts",
+	})
+	if err != nil {
+		t.Fatalf("run data-extract transforms on write: %v", err)
+	}
+
+	table, err := dataextract.ReadTableFile(tablePath)
+	if err != nil {
+		t.Fatalf("read transformed table: %v", err)
+	}
+	if len(table.Rows) != 1 {
+		t.Fatalf("expected 1 non-zero row after cleaning, got %d", len(table.Rows))
+	}
+	if got := table.Rows[0].Inputs[0]; got != 1 {
+		t.Fatalf("expected binarized value 1, got %f", got)
+	}
+	if table.Rows[0].Index != 1 {
+		t.Fatalf("expected reindexed row, got index=%d", table.Rows[0].Index)
+	}
+}
+
+func TestRunDataExtractTableCheckScaleMaxAndSave(t *testing.T) {
+	tmp := t.TempDir()
+	inPath := filepath.Join(tmp, "in.table.json")
+	outPath := filepath.Join(tmp, "out.table.json")
+	table := dataextract.TableFile{
+		Info: dataextract.TableInfo{Name: "scale_test", IVL: 2, OVL: 0, TrnEnd: 2, ValEnd: 2, TstEnd: 2},
+		Rows: []dataextract.TableRow{
+			{Index: 1, Inputs: []float64{2, 4}},
+			{Index: 2, Inputs: []float64{4, 8}},
+		},
+	}
+	if err := dataextract.WriteTableFile(inPath, table); err != nil {
+		t.Fatalf("write input table: %v", err)
+	}
+
+	err := runDataExtract(context.Background(), []string{
+		"--table-check", inPath,
+		"--table-scale-max",
+		"--table-save", outPath,
+	})
+	if err != nil {
+		t.Fatalf("run data-extract table-check scale-max: %v", err)
+	}
+
+	scaled, err := dataextract.ReadTableFile(outPath)
+	if err != nil {
+		t.Fatalf("read output table: %v", err)
+	}
+	if got := scaled.Rows[0].Inputs[0]; math.Abs(got-0.5) > 1e-9 {
+		t.Fatalf("unexpected scaled value row1 col1: %f", got)
+	}
+	if got := scaled.Rows[0].Inputs[1]; math.Abs(got-0.5) > 1e-9 {
+		t.Fatalf("unexpected scaled value row1 col2: %f", got)
+	}
+	if got := scaled.Rows[1].Inputs[0]; math.Abs(got-1.0) > 1e-9 {
+		t.Fatalf("unexpected scaled value row2 col1: %f", got)
+	}
+	if got := scaled.Rows[1].Inputs[1]; math.Abs(got-1.0) > 1e-9 {
+		t.Fatalf("unexpected scaled value row2 col2: %f", got)
 	}
 }
