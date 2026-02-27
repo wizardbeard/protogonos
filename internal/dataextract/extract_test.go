@@ -78,3 +78,59 @@ func TestExtractSeriesCSVNormalizeZScore(t *testing.T) {
 		t.Fatalf("unexpected zscore output:\n%s", got)
 	}
 }
+
+func TestExtractMNISTCSVDefaultClassLastOneHot(t *testing.T) {
+	in := strings.NewReader("px0,px1,label\n0,255,0\n128,64,9\n")
+	var out strings.Builder
+	err := ExtractMNISTCSV(in, &out, MNISTOptions{
+		HasHeader:            true,
+		LabelColumnName:      "label",
+		LabelColumnIndex:     -1,
+		OneHotClassification: true,
+	})
+	if err != nil {
+		t.Fatalf("extract mnist: %v", err)
+	}
+	want := "px0,px1,class9,class8,class7,class6,class5,class4,class3,class2,class1,class0\n" +
+		"0,255,0,0,0,0,0,0,0,0,0,1\n" +
+		"128,64,1,0,0,0,0,0,0,0,0,0\n"
+	if got := out.String(); got != want {
+		t.Fatalf("unexpected mnist output:\n%s", got)
+	}
+}
+
+func TestExtractWineCSVOneHotParityMapping(t *testing.T) {
+	in := strings.NewReader("class,f0,f1\n1,10.1,11.2\n2,12.3,13.4\n3,14.5,15.6\n")
+	var out strings.Builder
+	err := ExtractWineCSV(in, &out, WineOptions{
+		HasHeader:            true,
+		LabelColumnName:      "class",
+		LabelColumnIndex:     -1,
+		OneHotClassification: true,
+	})
+	if err != nil {
+		t.Fatalf("extract wine: %v", err)
+	}
+	want := "f0,f1,class3,class2,class1\n" +
+		"10.1,11.2,0,0,1\n" +
+		"12.3,13.4,0,1,0\n" +
+		"14.5,15.6,1,0,0\n"
+	if got := out.String(); got != want {
+		t.Fatalf("unexpected wine output:\n%s", got)
+	}
+}
+
+func TestExtractChrHMMCSVDefaultColumns(t *testing.T) {
+	in := strings.NewReader("chr,from,to,tag,a,b\nchr22,100,200,Enh,x,y\n")
+	var out strings.Builder
+	err := ExtractChrHMMCSV(in, &out, ChrHMMOptions{
+		HasHeader: true,
+	})
+	if err != nil {
+		t.Fatalf("extract chr_hmm: %v", err)
+	}
+	want := "from,to,tag,extra0,extra1\n100,200,Enh,x,y\n"
+	if got := out.String(); got != want {
+		t.Fatalf("unexpected chr_hmm output:\n%s", got)
+	}
+}

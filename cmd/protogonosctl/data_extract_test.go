@@ -95,3 +95,60 @@ func TestRunDataExtractGTSAWithNormalization(t *testing.T) {
 		t.Fatalf("unexpected normalized gtsa output:\n%s", got)
 	}
 }
+
+func TestRunDataExtractMNIST(t *testing.T) {
+	tmp := t.TempDir()
+	in := filepath.Join(tmp, "mnist_raw.csv")
+	out := filepath.Join(tmp, "mnist.csv")
+	raw := "px0,px1,label\n0,255,0\n128,64,9\n"
+	if err := os.WriteFile(in, []byte(raw), 0o644); err != nil {
+		t.Fatalf("write input: %v", err)
+	}
+
+	err := runDataExtract(context.Background(), []string{
+		"--scape", "mnist",
+		"--in", in,
+		"--out", out,
+		"--label-col", "label",
+	})
+	if err != nil {
+		t.Fatalf("run data-extract mnist: %v", err)
+	}
+
+	data, err := os.ReadFile(out)
+	if err != nil {
+		t.Fatalf("read output: %v", err)
+	}
+	got := string(data)
+	if !strings.Contains(got, "class9,class8,class7,class6,class5,class4,class3,class2,class1,class0\n") {
+		t.Fatalf("unexpected mnist header:\n%s", got)
+	}
+}
+
+func TestRunDataExtractChrHMM(t *testing.T) {
+	tmp := t.TempDir()
+	in := filepath.Join(tmp, "chr_hmm_raw.csv")
+	out := filepath.Join(tmp, "chr_hmm.csv")
+	raw := "chr,from,to,tag,a,b\nchr22,100,200,Enh,x,y\n"
+	if err := os.WriteFile(in, []byte(raw), 0o644); err != nil {
+		t.Fatalf("write input: %v", err)
+	}
+
+	err := runDataExtract(context.Background(), []string{
+		"--scape", "chr-hmm",
+		"--in", in,
+		"--out", out,
+	})
+	if err != nil {
+		t.Fatalf("run data-extract chr-hmm: %v", err)
+	}
+
+	data, err := os.ReadFile(out)
+	if err != nil {
+		t.Fatalf("read output: %v", err)
+	}
+	got := string(data)
+	if got != "from,to,tag,extra0,extra1\n100,200,Enh,x,y\n" {
+		t.Fatalf("unexpected chr-hmm output:\n%s", got)
+	}
+}

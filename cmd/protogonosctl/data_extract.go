@@ -14,7 +14,7 @@ import (
 
 func runDataExtract(_ context.Context, args []string) error {
 	fs := flag.NewFlagSet("data-extract", flag.ContinueOnError)
-	scapeName := fs.String("scape", "", "target dataset shape: gtsa|fx|epitopes")
+	scapeName := fs.String("scape", "", "target dataset shape: gtsa|fx|epitopes|mnist|wine|chr-hmm")
 	inputPath := fs.String("in", "", "input CSV path")
 	outputPath := fs.String("out", "", "output CSV path")
 	hasHeader := fs.Bool("has-header", true, "input CSV has header row")
@@ -29,6 +29,17 @@ func runDataExtract(_ context.Context, args []string) error {
 	classIndex := fs.Int("class-index", 2, "epitopes class column index")
 	sequenceCols := fs.String("sequence-cols", "", "comma-separated epitopes sequence column names")
 	sequenceIndexes := fs.String("sequence-indexes", "", "comma-separated epitopes sequence column indexes")
+	labelCol := fs.String("label-col", "", "mnist/wine class column name")
+	labelIndex := fs.Int("label-index", -1, "mnist/wine class column index")
+	featureCols := fs.String("feature-cols", "", "comma-separated feature column names for mnist/wine")
+	featureIndexes := fs.String("feature-indexes", "", "comma-separated feature column indexes for mnist/wine")
+	oneHot := fs.Bool("one-hot", true, "emit one-hot classes for mnist/wine")
+	fromCol := fs.String("from-col", "from", "chr-hmm from column name")
+	toCol := fs.String("to-col", "to", "chr-hmm to column name")
+	tagCol := fs.String("tag-col", "tag", "chr-hmm tag column name")
+	fromIndex := fs.Int("from-index", 1, "chr-hmm from column index")
+	toIndex := fs.Int("to-index", 2, "chr-hmm to column index")
+	tagIndex := fs.Int("tag-index", 3, "chr-hmm tag column index")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
@@ -106,6 +117,58 @@ func runDataExtract(_ context.Context, args []string) error {
 			ClassColumnIndex:      *classIndex,
 			SequenceColumnNames:   sequenceNames,
 			SequenceColumnIndexes: seqIndexes,
+		})
+	case "mnist":
+		featureNames := parseCommaSeparated(*featureCols)
+		featureIdx, parseErr := parseIndexList(*featureIndexes)
+		if parseErr != nil {
+			return parseErr
+		}
+		lCol := strings.TrimSpace(*labelCol)
+		if !*hasHeader {
+			lCol = ""
+		}
+		err = dataextract.ExtractMNISTCSV(in, out, dataextract.MNISTOptions{
+			HasHeader:            *hasHeader,
+			LabelColumnName:      lCol,
+			LabelColumnIndex:     *labelIndex,
+			FeatureColumnNames:   featureNames,
+			FeatureColumnIndexes: featureIdx,
+			OneHotClassification: *oneHot,
+		})
+	case "wine":
+		featureNames := parseCommaSeparated(*featureCols)
+		featureIdx, parseErr := parseIndexList(*featureIndexes)
+		if parseErr != nil {
+			return parseErr
+		}
+		lCol := strings.TrimSpace(*labelCol)
+		if !*hasHeader {
+			lCol = ""
+		}
+		err = dataextract.ExtractWineCSV(in, out, dataextract.WineOptions{
+			HasHeader:            *hasHeader,
+			LabelColumnName:      lCol,
+			LabelColumnIndex:     *labelIndex,
+			FeatureColumnNames:   featureNames,
+			FeatureColumnIndexes: featureIdx,
+			OneHotClassification: *oneHot,
+		})
+	case "chr-hmm":
+		fCol := strings.TrimSpace(*fromCol)
+		tCol := strings.TrimSpace(*toCol)
+		taCol := strings.TrimSpace(*tagCol)
+		if !*hasHeader {
+			fCol, tCol, taCol = "", "", ""
+		}
+		err = dataextract.ExtractChrHMMCSV(in, out, dataextract.ChrHMMOptions{
+			HasHeader:       *hasHeader,
+			FromColumnName:  fCol,
+			FromColumnIndex: *fromIndex,
+			ToColumnName:    tCol,
+			ToColumnIndex:   *toIndex,
+			TagColumnName:   taCol,
+			TagColumnIndex:  *tagIndex,
 		})
 	default:
 		return fmt.Errorf("unsupported data-extract scape: %s", *scapeName)
