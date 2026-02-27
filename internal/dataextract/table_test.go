@@ -46,6 +46,23 @@ func TestBuildTableFromExtractedCSVForChrHMM(t *testing.T) {
 	}
 }
 
+func TestBuildTableFromExtractedCSVForChromHMMExpanded(t *testing.T) {
+	in := strings.NewReader("tag_Enh,bp_index,tag,chrom\n1,100,Enh,chr22\n")
+	table, err := BuildTableFromExtractedCSV(in, BuildTableOptions{
+		Scape: "chrom-hmm-expanded",
+		Name:  "chrom_hmm_expanded_test",
+	})
+	if err != nil {
+		t.Fatalf("build chrom_hmm_expanded table: %v", err)
+	}
+	if len(table.Rows) != 1 {
+		t.Fatalf("expected one row, got %d", len(table.Rows))
+	}
+	if len(table.Rows[0].Fields) != 4 {
+		t.Fatalf("expected fields row for chrom_hmm_expanded, got %+v", table.Rows[0])
+	}
+}
+
 func TestWriteReadAndDumpTableFile(t *testing.T) {
 	table := TableFile{
 		Info: TableInfo{

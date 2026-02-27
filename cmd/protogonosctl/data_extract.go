@@ -15,7 +15,7 @@ import (
 
 func runDataExtract(_ context.Context, args []string) error {
 	fs := flag.NewFlagSet("data-extract", flag.ContinueOnError)
-	scapeName := fs.String("scape", "", "target dataset shape: gtsa|fx|epitopes|mnist|wine|chr-hmm")
+	scapeName := fs.String("scape", "", "target dataset shape: simple|gtsa|fx|epitopes|mnist|wine|chr-hmm|chrom-hmm-expanded|vowel-recognition|abc-pred1|hedge-fund|mines-vs-rocks")
 	inputPath := fs.String("in", "", "input CSV path")
 	outputPath := fs.String("out", "", "output CSV path")
 	hasHeader := fs.Bool("has-header", true, "input CSV has header row")
@@ -38,9 +38,13 @@ func runDataExtract(_ context.Context, args []string) error {
 	fromCol := fs.String("from-col", "from", "chr-hmm from column name")
 	toCol := fs.String("to-col", "to", "chr-hmm to column name")
 	tagCol := fs.String("tag-col", "tag", "chr-hmm tag column name")
+	chromCol := fs.String("chrom-col", "chr", "chrom-hmm-expanded chrom column name")
 	fromIndex := fs.Int("from-index", 1, "chr-hmm from column index")
 	toIndex := fs.Int("to-index", 2, "chr-hmm to column index")
 	tagIndex := fs.Int("tag-index", 3, "chr-hmm tag column index")
+	chromIndex := fs.Int("chrom-index", 0, "chrom-hmm-expanded chrom column index")
+	chromStep := fs.Int("chrom-step", 200, "chrom-hmm-expanded expansion step size")
+	chromKnownTags := fs.Bool("chrom-known-tags", false, "use fixed chrom-HMM known tag set for one-hot order")
 	tableOut := fs.String("table-out", "", "optional ETS-like table file (.json) output path")
 	tableName := fs.String("table-name", "", "optional table name for --table-out")
 	tableCheck := fs.String("table-check", "", "check/dump existing table file and exit")
@@ -176,6 +180,10 @@ func runDataExtract(_ context.Context, args []string) error {
 	}()
 
 	switch strings.TrimSpace(strings.ToLower(*scapeName)) {
+	case "simple":
+		err = dataextract.ExtractSimpleCSV(in, out, dataextract.SimpleOptions{
+			HasHeader: *hasHeader,
+		})
 	case "gtsa":
 		columnName := strings.TrimSpace(*valueCol)
 		if columnName == "" && *hasHeader {
@@ -274,6 +282,43 @@ func runDataExtract(_ context.Context, args []string) error {
 			ToColumnIndex:   *toIndex,
 			TagColumnName:   taCol,
 			TagColumnIndex:  *tagIndex,
+		})
+	case "chrom-hmm-expanded":
+		chCol := strings.TrimSpace(*chromCol)
+		fCol := strings.TrimSpace(*fromCol)
+		tCol := strings.TrimSpace(*toCol)
+		taCol := strings.TrimSpace(*tagCol)
+		if !*hasHeader {
+			chCol, fCol, tCol, taCol = "", "", "", ""
+		}
+		err = dataextract.ExtractChromHMMExpandedCSV(in, out, dataextract.ChromHMMExpandedOptions{
+			HasHeader:      *hasHeader,
+			ChromColumn:    chCol,
+			ChromIndex:     *chromIndex,
+			FromColumn:     fCol,
+			FromIndex:      *fromIndex,
+			ToColumn:       tCol,
+			ToIndex:        *toIndex,
+			TagColumn:      taCol,
+			TagIndex:       *tagIndex,
+			Step:           *chromStep,
+			UseKnownTagSet: *chromKnownTags,
+		})
+	case "vowel-recognition":
+		err = dataextract.ExtractVowelRecognitionCSV(in, out, dataextract.VowelRecognitionOptions{
+			HasHeader: *hasHeader,
+		})
+	case "abc-pred1":
+		err = dataextract.ExtractABCPred1CSV(in, out, dataextract.ABCPred1Options{
+			HasHeader: *hasHeader,
+		})
+	case "hedge-fund":
+		err = dataextract.ExtractHedgeFundCSV(in, out, dataextract.HedgeFundOptions{
+			HasHeader: *hasHeader,
+		})
+	case "mines-vs-rocks":
+		err = dataextract.ExtractMinesVsRocksCSV(in, out, dataextract.MinesVsRocksOptions{
+			HasHeader: *hasHeader,
 		})
 	default:
 		return fmt.Errorf("unsupported data-extract scape: %s", *scapeName)

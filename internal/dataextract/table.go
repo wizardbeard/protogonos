@@ -98,6 +98,26 @@ func buildTableRowFromRecord(scape string, header, record []string, index int) (
 			Index:  index,
 			Fields: append([]string(nil), record...),
 		}, nil
+	case "chrom-hmm-expanded", "chrom_hmm_expanded":
+		return TableRow{
+			Index:  index,
+			Fields: append([]string(nil), record...),
+		}, nil
+	case "abc-pred1", "abc_pred1":
+		return TableRow{
+			Index:  index,
+			Fields: append([]string(nil), record...),
+		}, nil
+	case "hedge-fund", "hedge_fund":
+		return TableRow{
+			Index:  index,
+			Fields: append([]string(nil), record...),
+		}, nil
+	case "simple":
+		return TableRow{
+			Index:  index,
+			Fields: append([]string(nil), record...),
+		}, nil
 	}
 
 	inputs := make([]float64, 0, len(record))

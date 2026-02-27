@@ -40,6 +40,33 @@ func TestRunDataExtractGTSA(t *testing.T) {
 	}
 }
 
+func TestRunDataExtractSimple(t *testing.T) {
+	tmp := t.TempDir()
+	in := filepath.Join(tmp, "raw_simple.csv")
+	out := filepath.Join(tmp, "simple.csv")
+	raw := "x,y\n1,2\n"
+	if err := os.WriteFile(in, []byte(raw), 0o644); err != nil {
+		t.Fatalf("write input: %v", err)
+	}
+
+	err := runDataExtract(context.Background(), []string{
+		"--scape", "simple",
+		"--in", in,
+		"--out", out,
+	})
+	if err != nil {
+		t.Fatalf("run data-extract simple: %v", err)
+	}
+
+	data, err := os.ReadFile(out)
+	if err != nil {
+		t.Fatalf("read output: %v", err)
+	}
+	if got := string(data); got != "x,y\n1,2\n" {
+		t.Fatalf("unexpected simple output:\n%s", got)
+	}
+}
+
 func TestRunDataExtractEpitopes(t *testing.T) {
 	tmp := t.TempDir()
 	in := filepath.Join(tmp, "raw_ep.csv")
@@ -153,6 +180,66 @@ func TestRunDataExtractChrHMM(t *testing.T) {
 	got := string(data)
 	if got != "from,to,tag,extra0,extra1\n100,200,Enh,x,y\n" {
 		t.Fatalf("unexpected chr-hmm output:\n%s", got)
+	}
+}
+
+func TestRunDataExtractChromHMMExpanded(t *testing.T) {
+	tmp := t.TempDir()
+	in := filepath.Join(tmp, "chrom_hmm_raw.csv")
+	out := filepath.Join(tmp, "chrom_hmm_expanded.csv")
+	raw := "chr,from,to,tag\nchr22,100,500,Enh\n"
+	if err := os.WriteFile(in, []byte(raw), 0o644); err != nil {
+		t.Fatalf("write input: %v", err)
+	}
+
+	err := runDataExtract(context.Background(), []string{
+		"--scape", "chrom-hmm-expanded",
+		"--in", in,
+		"--out", out,
+		"--chrom-step", "200",
+	})
+	if err != nil {
+		t.Fatalf("run data-extract chrom-hmm-expanded: %v", err)
+	}
+
+	data, err := os.ReadFile(out)
+	if err != nil {
+		t.Fatalf("read output: %v", err)
+	}
+	got := string(data)
+	if !strings.HasPrefix(got, "tag_Enh,bp_index,tag,chrom\n") {
+		t.Fatalf("unexpected expanded header:\n%s", got)
+	}
+	if !strings.Contains(got, "1,100,Enh,chr22\n") {
+		t.Fatalf("expected expanded first row:\n%s", got)
+	}
+}
+
+func TestRunDataExtractMinesVsRocks(t *testing.T) {
+	tmp := t.TempDir()
+	in := filepath.Join(tmp, "rw_raw.csv")
+	out := filepath.Join(tmp, "rw.csv")
+	raw := "*CM001,0.1,0.2\nCR001,0.3,0.4\n"
+	if err := os.WriteFile(in, []byte(raw), 0o644); err != nil {
+		t.Fatalf("write input: %v", err)
+	}
+
+	err := runDataExtract(context.Background(), []string{
+		"--scape", "mines-vs-rocks",
+		"--in", in,
+		"--out", out,
+		"--has-header=false",
+	})
+	if err != nil {
+		t.Fatalf("run data-extract mines-vs-rocks: %v", err)
+	}
+
+	data, err := os.ReadFile(out)
+	if err != nil {
+		t.Fatalf("read output: %v", err)
+	}
+	if got := string(data); got != "split,feature0,feature1,class0,class1\n0,0.1,0.2,1,0\n1,0.3,0.4,0,1\n" {
+		t.Fatalf("unexpected mines-vs-rocks output:\n%s", got)
 	}
 }
 
