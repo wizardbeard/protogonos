@@ -399,3 +399,81 @@ func TestAvailableEpitopesTableNamesIncludesReferenceDefaults(t *testing.T) {
 		}
 	}
 }
+
+func TestEpitopesSimulatorSenseClassifyFlowResetsAfterHalt(t *testing.T) {
+	sim, err := NewEpitopesSimulator(context.Background(), "gt", EpitopesSimParameters{
+		TableName:  "abc_pred16",
+		StartIndex: 1,
+		EndIndex:   2,
+	})
+	if err != nil {
+		t.Fatalf("new epitopes simulator: %v", err)
+	}
+
+	state := sim.State()
+	if state.StartIndex != 1 || state.EndIndex != 2 || state.IndexCurrent != 0 || state.Halted {
+		t.Fatalf("unexpected initial simulator state: %+v", state)
+	}
+
+	if _, err := sim.Sense(); err != nil {
+		t.Fatalf("sense #1: %v", err)
+	}
+	if reward, halt, err := sim.Classify([]float64{1}); err != nil {
+		t.Fatalf("classify #1: %v", err)
+	} else if halt {
+		t.Fatalf("expected halt=false on first classify, reward=%d", reward)
+	}
+	if _, err := sim.Sense(); err != nil {
+		t.Fatalf("sense #2: %v", err)
+	}
+	if _, halt, err := sim.Classify([]float64{1}); err != nil {
+		t.Fatalf("classify #2: %v", err)
+	} else if !halt {
+		t.Fatal("expected halt=true on second classify at end index")
+	}
+
+	haltedState := sim.State()
+	if !haltedState.Halted || haltedState.IndexCurrent != 0 {
+		t.Fatalf("expected halted simulator state after end index classify, got %+v", haltedState)
+	}
+
+	if _, err := sim.Sense(); err != nil {
+		t.Fatalf("sense after halt reset: %v", err)
+	}
+	resetState := sim.State()
+	if resetState.Halted || resetState.IndexCurrent != 1 {
+		t.Fatalf("expected sense to reset simulator index to start, got %+v", resetState)
+	}
+}
+
+func TestEpitopesSimulatorBenchmarkUsesBenchmarkWindow(t *testing.T) {
+	sim, err := NewEpitopesSimulator(context.Background(), "benchmark", EpitopesSimParameters{
+		TableName:           "abc_pred16",
+		StartIndex:          1,
+		EndIndex:            64,
+		StartBenchmarkIndex: 129,
+		EndBenchmarkIndex:   130,
+	})
+	if err != nil {
+		t.Fatalf("new epitopes simulator benchmark: %v", err)
+	}
+
+	state := sim.State()
+	if state.StartIndex != 129 || state.EndIndex != 130 || state.OpMode != "benchmark" {
+		t.Fatalf("unexpected benchmark simulator window state: %+v", state)
+	}
+	if _, err := sim.Sense(); err != nil {
+		t.Fatalf("benchmark sense: %v", err)
+	}
+	if state := sim.State(); state.IndexCurrent != 129 {
+		t.Fatalf("expected benchmark sense to start at benchmark window index, got %+v", state)
+	}
+}
+
+func TestNewEpitopesSimulatorRejectsUnknownTable(t *testing.T) {
+	if _, err := NewEpitopesSimulator(context.Background(), "gt", EpitopesSimParameters{
+		TableName: "abc_pred999",
+	}); err == nil {
+		t.Fatal("expected unknown epitopes simulator table error")
+	}
+}

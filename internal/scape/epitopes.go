@@ -48,6 +48,33 @@ type EpitopesTableBounds struct {
 	BenchmarkEnd    int
 }
 
+// EpitopesSimParameters mirrors reference sim/1 parameter tuples:
+// [TableName,StartIndex,EndIndex,StartBenchIndex,EndBenchIndex].
+type EpitopesSimParameters struct {
+	TableName           string
+	StartIndex          int
+	EndIndex            int
+	StartBenchmarkIndex int
+	EndBenchmarkIndex   int
+}
+
+// EpitopesSimState captures the current simulator window/index state.
+type EpitopesSimState struct {
+	TableName    string
+	OpMode       string
+	StartIndex   int
+	EndIndex     int
+	IndexCurrent int
+	Halted       bool
+}
+
+// EpitopesSimulator mirrors epitopes:sim sense/classify sequencing in Go form.
+type EpitopesSimulator struct {
+	opMode  string
+	table   epitopesTable
+	session *epitopesSession
+}
+
 var (
 	epitopesSourceMu    sync.RWMutex
 	epitopesSourceState = defaultEpitopesSource()
@@ -59,6 +86,92 @@ var (
 
 func (EpitopesScape) Name() string {
 	return "epitopes"
+}
+
+// NewEpitopesSimulator creates a simulator session with explicit op mode + window parameters.
+func NewEpitopesSimulator(
+	ctx context.Context,
+	opMode string,
+	params EpitopesSimParameters,
+) (*EpitopesSimulator, error) {
+	mode := strings.ToLower(strings.TrimSpace(opMode))
+	if mode == "" {
+		mode = "gt"
+	}
+	if mode != "gt" && mode != "benchmark" {
+		return nil, fmt.Errorf("unsupported epitopes simulator op mode: %s", opMode)
+	}
+
+	source := currentEpitopesSource(ctx)
+	table, err := resolveEpitopesSimulatorTable(source, params.TableName)
+	if err != nil {
+		return nil, err
+	}
+
+	startIndex, endIndex, startBench, endBench, err := resolveEpitopesSimulatorWindow(source, params)
+	if err != nil {
+		return nil, err
+	}
+	cfg := epitopesModeConfig{
+		mode:       mode,
+		opMode:     mode,
+		tableName:  table.name,
+		table:      table,
+		startIndex: startIndex,
+		endIndex:   endIndex,
+		startBench: startBench,
+		endBench:   endBench,
+	}
+	session, err := newEpitopesSession(cfg, table)
+	if err != nil {
+		return nil, err
+	}
+	return &EpitopesSimulator{
+		opMode:  mode,
+		table:   table,
+		session: session,
+	}, nil
+}
+
+// Sense returns the current percept vector and does not advance the session index.
+func (s *EpitopesSimulator) Sense() ([]float64, error) {
+	if s == nil || s.session == nil {
+		return nil, fmt.Errorf("epitopes simulator is not initialized")
+	}
+	if s.session.halted {
+		s.session.halted = false
+		s.session.indexCurrent = 0
+	}
+	percept, _, _, err := s.session.sense()
+	if err != nil {
+		return nil, err
+	}
+	return percept, nil
+}
+
+// Classify consumes the provided output, returns reward/halt, and advances index state.
+func (s *EpitopesSimulator) Classify(output []float64) (reward int, halt bool, err error) {
+	if s == nil || s.session == nil {
+		return 0, false, fmt.Errorf("epitopes simulator is not initialized")
+	}
+	prediction := epitopesOutputToBinary(output)
+	reward, halt, _, err = s.session.classify(prediction)
+	return reward, halt, err
+}
+
+// State returns current window/index state for diagnostics.
+func (s *EpitopesSimulator) State() EpitopesSimState {
+	if s == nil || s.session == nil {
+		return EpitopesSimState{}
+	}
+	return EpitopesSimState{
+		TableName:    s.table.name,
+		OpMode:       s.opMode,
+		StartIndex:   s.session.startIndex,
+		EndIndex:     s.session.endIndex,
+		IndexCurrent: s.session.indexCurrent,
+		Halted:       s.session.halted,
+	}
 }
 
 var defaultEpitopesTableSpecs = []struct {
@@ -525,6 +638,56 @@ func loadDefaultEpitopesSource(tableName string, bounds EpitopesTableBounds) (ep
 		table:     table,
 		windows:   windows,
 	}, nil
+}
+
+func resolveEpitopesSimulatorTable(source epitopesSource, tableName string) (epitopesTable, error) {
+	name := strings.TrimSpace(tableName)
+	if name == "" {
+		if strings.TrimSpace(source.table.name) != "" {
+			return source.table, nil
+		}
+		return epitopesTable{}, fmt.Errorf("epitopes simulator table name is required")
+	}
+
+	if table, ok := defaultEpitopesTableByName(name); ok {
+		return table, nil
+	}
+	if strings.EqualFold(name, source.table.name) {
+		return source.table, nil
+	}
+	if strings.EqualFold(name, source.tableName) {
+		return source.table, nil
+	}
+	return epitopesTable{}, fmt.Errorf("unknown epitopes simulator table %q", tableName)
+}
+
+func resolveEpitopesSimulatorWindow(
+	source epitopesSource,
+	params EpitopesSimParameters,
+) (startIndex, endIndex, startBench, endBench int, err error) {
+	startIndex = params.StartIndex
+	if startIndex <= 0 {
+		startIndex = source.windows.gtStart
+	}
+	endIndex = params.EndIndex
+	if endIndex <= 0 {
+		endIndex = source.windows.gtEnd
+	}
+	startBench = params.StartBenchmarkIndex
+	if startBench <= 0 {
+		startBench = source.windows.benchmarkStart
+	}
+	endBench = params.EndBenchmarkIndex
+	if endBench <= 0 {
+		endBench = source.windows.benchmarkEnd
+	}
+	if startIndex <= 0 || endIndex < startIndex {
+		return 0, 0, 0, 0, fmt.Errorf("invalid epitopes simulator gt window start=%d end=%d", startIndex, endIndex)
+	}
+	if startBench <= 0 || endBench < startBench {
+		return 0, 0, 0, 0, fmt.Errorf("invalid epitopes simulator benchmark window start=%d end=%d", startBench, endBench)
+	}
+	return startIndex, endIndex, startBench, endBench, nil
 }
 
 func defaultEpitopesSource() epitopesSource {
