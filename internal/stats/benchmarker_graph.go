@@ -1,6 +1,7 @@
 package stats
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -93,17 +94,21 @@ func WriteBenchmarkerGraphs(baseDir, experimentID, graphPostfix string, graphs [
 	if experimentID == "" {
 		return nil, fmt.Errorf("graph experiment id is required")
 	}
+	reportDir := filepath.Join(baseDir, benchmarkExperimentsDir, experimentID)
+	return WriteBenchmarkerGraphsToDir(reportDir, graphPostfix, graphs)
+}
+
+func WriteBenchmarkerGraphsToDir(outputDir, graphPostfix string, graphs []BenchmarkerGraph) ([]string, error) {
 	if graphPostfix == "" {
 		graphPostfix = "report_Graphs"
 	}
-	reportDir := filepath.Join(baseDir, benchmarkExperimentsDir, experimentID)
-	if err := os.MkdirAll(reportDir, 0o755); err != nil {
+	if err := os.MkdirAll(outputDir, 0o755); err != nil {
 		return nil, err
 	}
 	paths := make([]string, 0, len(graphs))
 	for _, graph := range graphs {
 		name := "graph_" + sanitizeGraphToken(graph.Morphology) + "_" + graphPostfix
-		path := filepath.Join(reportDir, name)
+		path := filepath.Join(outputDir, name)
 		if err := writeBenchmarkerGraphFile(path, graph); err != nil {
 			return nil, err
 		}
@@ -111,6 +116,45 @@ func WriteBenchmarkerGraphs(baseDir, experimentID, graphPostfix string, graphs [
 	}
 	sort.Strings(paths)
 	return paths, nil
+}
+
+func ReadTraceAccFile(path string) ([]TraceGeneration, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+	var traceAcc []TraceGeneration
+	if err := json.Unmarshal(data, &traceAcc); err != nil {
+		return nil, err
+	}
+	return traceAcc, nil
+}
+
+func BuildBenchmarkerGraphFromTrace(traceAcc []TraceGeneration, morphology string) BenchmarkerGraph {
+	series := make([]float64, len(traceAcc))
+	for i, generation := range traceAcc {
+		hasValue := false
+		best := 0.0
+		for _, entry := range generation.Stats {
+			if !hasValue || entry.BestFitness > best {
+				best = entry.BestFitness
+				hasValue = true
+			}
+		}
+		if hasValue {
+			series[i] = best
+		}
+	}
+	if strings.TrimSpace(morphology) == "" {
+		morphology = "trace"
+	}
+	return buildGraphForMorphology(morphology, []benchmarkRunGraphData{
+		{
+			populationSize: 1,
+			series:         series,
+			traceAcc:       traceAcc,
+		},
+	})
 }
 
 func buildGraphForMorphology(morphology string, runs []benchmarkRunGraphData) BenchmarkerGraph {

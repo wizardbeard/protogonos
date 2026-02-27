@@ -132,3 +132,92 @@ func TestWriteBenchmarkerGraphs(t *testing.T) {
 		t.Fatalf("expected validation section, got:\n%s", text)
 	}
 }
+
+func TestBuildBenchmarkerGraphFromTrace(t *testing.T) {
+	traceAcc := []TraceGeneration{
+		{
+			Generation: 1,
+			Stats: []TraceStatEntry{
+				{
+					SpeciesKey:       "sp-a",
+					ChampionGenomeID: "g-a",
+					ChampionGenome: model.Genome{
+						ID:      "g-a",
+						Neurons: []model.Neuron{{ID: "n1"}, {ID: "n2"}},
+					},
+					BestFitness:       0.4,
+					ValidationFitness: float64Ptr(0.2),
+				},
+			},
+		},
+		{
+			Generation: 2,
+			Stats: []TraceStatEntry{
+				{
+					SpeciesKey:       "sp-a",
+					ChampionGenomeID: "g-b",
+					ChampionGenome: model.Genome{
+						ID:      "g-b",
+						Neurons: []model.Neuron{{ID: "n1"}, {ID: "n2"}, {ID: "n3"}},
+					},
+					BestFitness:       0.7,
+					ValidationFitness: float64Ptr(0.5),
+				},
+			},
+		},
+	}
+	graph := BuildBenchmarkerGraphFromTrace(traceAcc, "trace-xor")
+	if graph.Morphology != "trace-xor" {
+		t.Fatalf("unexpected morphology: %+v", graph)
+	}
+	if len(graph.EvaluationIndex) != 2 {
+		t.Fatalf("unexpected graph points: %+v", graph)
+	}
+	if len(graph.AvgFitness) != 2 || graph.AvgFitness[1] <= graph.AvgFitness[0] {
+		t.Fatalf("unexpected avg fitness trend: %+v", graph.AvgFitness)
+	}
+}
+
+func TestReadTraceAccFile(t *testing.T) {
+	base := t.TempDir()
+	runID := "trace-read-run"
+	traceAcc := []TraceGeneration{
+		{
+			Generation: 1,
+			Stats: []TraceStatEntry{
+				{
+					SpeciesKey:       "sp-1",
+					ChampionGenomeID: "g-1",
+					ChampionGenome: model.Genome{
+						ID:      "g-1",
+						Neurons: []model.Neuron{{ID: "n1"}},
+					},
+					BestFitness:       0.3,
+					ValidationFitness: float64Ptr(0.2),
+				},
+			},
+		},
+	}
+	if _, err := WriteRunArtifacts(base, RunArtifacts{
+		Config: RunConfig{
+			RunID:          runID,
+			Scape:          "xor",
+			PopulationSize: 4,
+			Generations:    1,
+			Seed:           1,
+		},
+		BestByGeneration: []float64{0.3},
+		TraceAcc:         traceAcc,
+	}); err != nil {
+		t.Fatalf("write run artifacts: %v", err)
+	}
+
+	path := filepath.Join(base, runID, "trace_acc.json")
+	got, err := ReadTraceAccFile(path)
+	if err != nil {
+		t.Fatalf("read trace_acc file: %v", err)
+	}
+	if len(got) != 1 || len(got[0].Stats) != 1 || got[0].Stats[0].ChampionGenomeID != "g-1" {
+		t.Fatalf("unexpected trace_acc payload: %+v", got)
+	}
+}

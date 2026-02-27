@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"math"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -21,7 +22,7 @@ const (
 
 func runBenchmarkExperiment(ctx context.Context, args []string) error {
 	if len(args) == 0 {
-		return errors.New("benchmark-experiment requires a subcommand: start|continue|show|list|evaluations|report")
+		return errors.New("benchmark-experiment requires a subcommand: start|continue|show|list|evaluations|report|trace2graph|plot")
 	}
 	switch args[0] {
 	case "start":
@@ -36,6 +37,10 @@ func runBenchmarkExperiment(ctx context.Context, args []string) error {
 		return runBenchmarkExperimentEvaluations(args[1:])
 	case "report":
 		return runBenchmarkExperimentReport(args[1:])
+	case "trace2graph":
+		return runBenchmarkExperimentTraceToGraph(args[1:])
+	case "plot":
+		return runBenchmarkExperimentPlot(args[1:])
 	default:
 		return fmt.Errorf("unknown benchmark-experiment subcommand: %s", args[0])
 	}
@@ -353,6 +358,142 @@ func loadBenchmarkExperimentEvaluationStats(
 		return stats.BenchmarkExperiment{}, stats.BenchmarkEvaluationStats{}, err
 	}
 	return exp, evalStats, nil
+}
+
+func runBenchmarkExperimentTraceToGraph(args []string) error {
+	fs := flag.NewFlagSet("benchmark-experiment trace2graph", flag.ContinueOnError)
+	id := fs.String("id", "", "experiment id")
+	traceFile := fs.String("trace-file", "", "trace_acc.json path for standalone trace->graph conversion")
+	name := fs.String("name", "__Graph", "graph postfix")
+	morphology := fs.String("morphology", "trace", "morphology label for --trace-file mode")
+	outDir := fs.String("out-dir", benchmarksDir, "output directory for --trace-file mode")
+	jsonOut := fs.Bool("json", false, "emit generated graph files as JSON")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	useID := strings.TrimSpace(*id) != ""
+	useTraceFile := strings.TrimSpace(*traceFile) != ""
+	if useID == useTraceFile {
+		return errors.New("benchmark-experiment trace2graph requires exactly one of --id or --trace-file")
+	}
+
+	postfix := strings.TrimSpace(*name)
+	if postfix == "" {
+		postfix = "__Graph"
+	}
+
+	var graphFiles []string
+	if useID {
+		exp, ok, err := stats.ReadBenchmarkExperiment(benchmarksDir, strings.TrimSpace(*id))
+		if err != nil {
+			return err
+		}
+		if !ok {
+			return fmt.Errorf("benchmark experiment not found: %s", strings.TrimSpace(*id))
+		}
+		graphs, err := stats.BuildBenchmarkerGraphs(benchmarksDir, exp)
+		if err != nil {
+			return err
+		}
+		graphFiles, err = stats.WriteBenchmarkerGraphs(benchmarksDir, exp.ID, postfix, graphs)
+		if err != nil {
+			return err
+		}
+	} else {
+		tracePath := strings.TrimSpace(*traceFile)
+		traceAcc, err := stats.ReadTraceAccFile(tracePath)
+		if err != nil {
+			return err
+		}
+		graph := stats.BuildBenchmarkerGraphFromTrace(traceAcc, strings.TrimSpace(*morphology))
+		graphFiles, err = stats.WriteBenchmarkerGraphsToDir(filepath.Clean(*outDir), postfix, []stats.BenchmarkerGraph{graph})
+		if err != nil {
+			return err
+		}
+	}
+
+	if *jsonOut {
+		enc := json.NewEncoder(os.Stdout)
+		enc.SetIndent("", "  ")
+		return enc.Encode(struct {
+			Files []string `json:"files"`
+		}{
+			Files: append([]string(nil), graphFiles...),
+		})
+	}
+	for _, file := range graphFiles {
+		fmt.Println(file)
+	}
+	return nil
+}
+
+func runBenchmarkExperimentPlot(args []string) error {
+	fs := flag.NewFlagSet("benchmark-experiment plot", flag.ContinueOnError)
+	id := fs.String("id", "", "experiment id")
+	mode := fs.String("mode", "avg", "plot mode: avg|max")
+	startIndex := fs.Int("start-index", -1, "index for first point (default 500 for avg, 0 for max)")
+	step := fs.Int("step", 500, "index step")
+	jsonOut := fs.Bool("json", false, "emit plot points as JSON")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	if strings.TrimSpace(*id) == "" {
+		return errors.New("benchmark-experiment plot requires --id")
+	}
+	exp, ok, err := stats.ReadBenchmarkExperiment(benchmarksDir, strings.TrimSpace(*id))
+	if err != nil {
+		return err
+	}
+	if !ok {
+		return fmt.Errorf("benchmark experiment not found: %s", strings.TrimSpace(*id))
+	}
+	series := make([][]float64, 0, len(exp.RunIDs))
+	for _, runID := range exp.RunIDs {
+		runSeries, ok, err := stats.ReadBenchmarkSeries(benchmarksDir, runID)
+		if err != nil {
+			return err
+		}
+		if !ok {
+			return fmt.Errorf("benchmark series not found for run id: %s", runID)
+		}
+		series = append(series, runSeries)
+	}
+
+	modeValue := strings.ToLower(strings.TrimSpace(*mode))
+	start := *startIndex
+	var points []stats.BenchmarkerPlotPoint
+	switch modeValue {
+	case "avg":
+		if start < 0 {
+			start = 500
+		}
+		points = stats.BuildBenchmarkerAveragePlot(series, start, *step)
+	case "max":
+		if start < 0 {
+			start = 0
+		}
+		points = stats.BuildBenchmarkerMaxPlot(series, start, *step)
+	default:
+		return fmt.Errorf("unknown benchmark-experiment plot mode: %s", *mode)
+	}
+
+	if *jsonOut {
+		enc := json.NewEncoder(os.Stdout)
+		enc.SetIndent("", "  ")
+		return enc.Encode(struct {
+			ID     string                       `json:"id"`
+			Mode   string                       `json:"mode"`
+			Points []stats.BenchmarkerPlotPoint `json:"points"`
+		}{
+			ID:     exp.ID,
+			Mode:   modeValue,
+			Points: points,
+		})
+	}
+	for _, point := range points {
+		fmt.Printf("%d %g\n", point.Index, point.Value)
+	}
+	return nil
 }
 
 func executeBenchmarkExperiment(ctx context.Context, exp *stats.BenchmarkExperiment) error {

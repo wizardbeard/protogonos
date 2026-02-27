@@ -1318,6 +1318,66 @@ func TestBenchmarkExperimentEvaluationsAndReport(t *testing.T) {
 			t.Fatalf("expected report file %s: %v", name, err)
 		}
 	}
+
+	trace2GraphOut, err := captureStdout(func() error {
+		return run(context.Background(), []string{"benchmark-experiment", "trace2graph", "--id", "exp-reporting", "--name", "trace_rebuild", "--json"})
+	})
+	if err != nil {
+		t.Fatalf("benchmark-experiment trace2graph: %v", err)
+	}
+	var trace2GraphPayload struct {
+		Files []string `json:"files"`
+	}
+	if err := json.Unmarshal([]byte(trace2GraphOut), &trace2GraphPayload); err != nil {
+		t.Fatalf("decode trace2graph payload: %v", err)
+	}
+	if len(trace2GraphPayload.Files) == 0 {
+		t.Fatalf("expected trace2graph files: %+v", trace2GraphPayload)
+	}
+	if _, err := os.Stat(filepath.Join(reportDir, "graph_xor_trace_rebuild")); err != nil {
+		t.Fatalf("expected rebuilt graph file: %v", err)
+	}
+
+	plotOut, err := captureStdout(func() error {
+		return run(context.Background(), []string{"benchmark-experiment", "plot", "--id", "exp-reporting", "--mode", "avg", "--json"})
+	})
+	if err != nil {
+		t.Fatalf("benchmark-experiment plot avg: %v", err)
+	}
+	var plotPayload struct {
+		ID     string                       `json:"id"`
+		Mode   string                       `json:"mode"`
+		Points []stats.BenchmarkerPlotPoint `json:"points"`
+	}
+	if err := json.Unmarshal([]byte(plotOut), &plotPayload); err != nil {
+		t.Fatalf("decode plot payload: %v", err)
+	}
+	if plotPayload.ID != "exp-reporting" || plotPayload.Mode != "avg" || len(plotPayload.Points) == 0 {
+		t.Fatalf("unexpected plot payload: %+v", plotPayload)
+	}
+	if plotPayload.Points[0].Index != 500 {
+		t.Fatalf("expected avg plot to start at 500, got %+v", plotPayload.Points[0])
+	}
+
+	plotMaxOut, err := captureStdout(func() error {
+		return run(context.Background(), []string{"benchmark-experiment", "plot", "--id", "exp-reporting", "--mode", "max", "--json"})
+	})
+	if err != nil {
+		t.Fatalf("benchmark-experiment plot max: %v", err)
+	}
+	var plotMaxPayload struct {
+		Mode   string                       `json:"mode"`
+		Points []stats.BenchmarkerPlotPoint `json:"points"`
+	}
+	if err := json.Unmarshal([]byte(plotMaxOut), &plotMaxPayload); err != nil {
+		t.Fatalf("decode max plot payload: %v", err)
+	}
+	if plotMaxPayload.Mode != "max" || len(plotMaxPayload.Points) == 0 {
+		t.Fatalf("unexpected max plot payload: %+v", plotMaxPayload)
+	}
+	if plotMaxPayload.Points[0].Index != 0 {
+		t.Fatalf("expected max plot to start at 0, got %+v", plotMaxPayload.Points[0])
+	}
 }
 
 func TestBenchmarkCommandConfigLoadsMap2RecAndAllowsFlagOverrides(t *testing.T) {
