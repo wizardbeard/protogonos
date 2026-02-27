@@ -23,7 +23,7 @@ const (
 
 func runBenchmarkExperiment(ctx context.Context, args []string) error {
 	if len(args) == 0 {
-		return errors.New("benchmark-experiment requires a subcommand: start|continue|show|list|evaluations|report|trace2graph|plot|chg-mrph|vector-compare")
+		return errors.New("benchmark-experiment requires a subcommand: start|continue|show|list|evaluations|report|trace2graph|plot|chg-mrph|vector-compare|unconsult")
 	}
 	switch args[0] {
 	case "start":
@@ -46,6 +46,8 @@ func runBenchmarkExperiment(ctx context.Context, args []string) error {
 		return runBenchmarkExperimentChangeMorphology(args[1:])
 	case "vector-compare":
 		return runBenchmarkExperimentVectorCompare(args[1:])
+	case "unconsult":
+		return runBenchmarkExperimentUnconsult(args[1:])
 	default:
 		return fmt.Errorf("unknown benchmark-experiment subcommand: %s", args[0])
 	}
@@ -601,6 +603,71 @@ func runBenchmarkExperimentVectorCompare(args []string) error {
 		return enc.Encode(result)
 	}
 	fmt.Printf("gt=%t lt=%t eq=%t\n", result.GT, result.LT, result.EQ)
+	return nil
+}
+
+func runBenchmarkExperimentUnconsult(args []string) error {
+	fs := flag.NewFlagSet("benchmark-experiment unconsult", flag.ContinueOnError)
+	id := fs.String("id", "", "experiment id (optional)")
+	source := fs.String("source", "run-ids", "experiment source: run-ids|summaries")
+	itemsJSON := fs.String("items-json", "", "optional explicit JSON array to dump")
+	outPath := fs.String("out", filepath.Join(benchmarksDir, "alife_benchmark"), "output file path")
+	jsonOut := fs.Bool("json", false, "emit output metadata as JSON")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+
+	experimentID := strings.TrimSpace(*id)
+	rawItems := strings.TrimSpace(*itemsJSON)
+	if experimentID == "" && rawItems == "" {
+		return errors.New("benchmark-experiment unconsult requires --id or --items-json")
+	}
+	if experimentID != "" && rawItems != "" {
+		return errors.New("benchmark-experiment unconsult accepts either --id or --items-json, not both")
+	}
+
+	items := make([]any, 0, 16)
+	if rawItems != "" {
+		if err := json.Unmarshal([]byte(rawItems), &items); err != nil {
+			return fmt.Errorf("parse --items-json: %w", err)
+		}
+	} else {
+		exp, ok, err := stats.ReadBenchmarkExperiment(benchmarksDir, experimentID)
+		if err != nil {
+			return err
+		}
+		if !ok {
+			return fmt.Errorf("benchmark experiment not found: %s", experimentID)
+		}
+		switch strings.ToLower(strings.TrimSpace(*source)) {
+		case "run-ids", "run_ids":
+			for _, runID := range exp.RunIDs {
+				items = append(items, runID)
+			}
+		case "summaries":
+			for _, summary := range exp.Summaries {
+				items = append(items, summary)
+			}
+		default:
+			return fmt.Errorf("unknown benchmark-experiment unconsult source: %s", *source)
+		}
+	}
+
+	if err := stats.WriteBenchmarkerUnconsult(filepath.Clean(*outPath), items); err != nil {
+		return err
+	}
+	if *jsonOut {
+		enc := json.NewEncoder(os.Stdout)
+		enc.SetIndent("", "  ")
+		return enc.Encode(struct {
+			File  string `json:"file"`
+			Items int    `json:"items"`
+		}{
+			File:  filepath.Clean(*outPath),
+			Items: len(items),
+		})
+	}
+	fmt.Printf("benchmark_experiment_unconsult file=%s items=%d\n", filepath.Clean(*outPath), len(items))
 	return nil
 }
 

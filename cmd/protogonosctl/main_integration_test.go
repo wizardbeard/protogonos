@@ -1427,6 +1427,32 @@ func TestBenchmarkExperimentEvaluationsAndReport(t *testing.T) {
 	if !vectorPayload.GT || vectorPayload.LT || vectorPayload.EQ {
 		t.Fatalf("unexpected vector comparison payload: %+v", vectorPayload)
 	}
+
+	unconsultPath := filepath.Join(workdir, "benchmarks", "custom_alife_benchmark")
+	unconsultOut, err := captureStdout(func() error {
+		return run(context.Background(), []string{"benchmark-experiment", "unconsult", "--id", "exp-reporting", "--source", "run-ids", "--out", unconsultPath, "--json"})
+	})
+	if err != nil {
+		t.Fatalf("benchmark-experiment unconsult: %v", err)
+	}
+	var unconsultPayload struct {
+		File  string `json:"file"`
+		Items int    `json:"items"`
+	}
+	if err := json.Unmarshal([]byte(unconsultOut), &unconsultPayload); err != nil {
+		t.Fatalf("decode unconsult payload: %v", err)
+	}
+	if unconsultPayload.Items != 2 {
+		t.Fatalf("expected 2 unconsult items, got %+v", unconsultPayload)
+	}
+	data, err := os.ReadFile(unconsultPath)
+	if err != nil {
+		t.Fatalf("read unconsult output: %v", err)
+	}
+	text := string(data)
+	if !strings.Contains(text, "\"exp-reporting-run-001\"") || !strings.Contains(text, "\"exp-reporting-run-002\"") {
+		t.Fatalf("unexpected unconsult output content:\n%s", text)
+	}
 }
 
 func TestBenchmarkCommandConfigLoadsMap2RecAndAllowsFlagOverrides(t *testing.T) {
