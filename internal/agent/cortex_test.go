@@ -443,6 +443,101 @@ func TestCortexTickRejectsUnevenActuatorOutputShape(t *testing.T) {
 	}
 }
 
+func TestCortexTickRoutesSensorInputsByExplicitLinks(t *testing.T) {
+	genome := model.Genome{
+		SensorIDs:   []string{"s1", "s2", "s3"},
+		ActuatorIDs: []string{"a1"},
+		Neurons: []model.Neuron{
+			{ID: "i1", Activation: "identity"},
+			{ID: "i2", Activation: "identity"},
+			{ID: "i3", Activation: "identity"},
+			{ID: "o", Activation: "identity"},
+		},
+		Synapses: []model.Synapse{
+			{From: "i1", To: "o", Weight: 1.0, Enabled: true},
+			{From: "i2", To: "o", Weight: 1.0, Enabled: true},
+			{From: "i3", To: "o", Weight: 1.0, Enabled: true},
+		},
+		SensorNeuronLinks: []model.SensorNeuronLink{
+			{SensorID: "s1", NeuronID: "i1"},
+			{SensorID: "s2", NeuronID: "i2"},
+			{SensorID: "s3", NeuronID: "i3"},
+		},
+		NeuronActuatorLinks: []model.NeuronActuatorLink{
+			{NeuronID: "o", ActuatorID: "a1"},
+		},
+	}
+	sensors := map[string]protoio.Sensor{
+		"s1": testSensor{values: []float64{0.1}},
+		"s2": testSensor{values: []float64{0.2}},
+		"s3": testSensor{values: []float64{0.3}},
+	}
+	act := &testActuator{}
+	actuators := map[string]protoio.Actuator{"a1": act}
+
+	// Simulate monitor-built cortex input IDs from an older/scarcer seed surface.
+	c, err := NewCortex("agent-linked-inputs", genome, sensors, actuators, []string{"i1", "i2"}, []string{"o"}, nil)
+	if err != nil {
+		t.Fatalf("new cortex: %v", err)
+	}
+	out, err := c.Tick(context.Background())
+	if err != nil {
+		t.Fatalf("tick: %v", err)
+	}
+	if len(out) != 1 || math.Abs(out[0]-0.6) > 1e-12 {
+		t.Fatalf("unexpected output: got=%v want=[0.6]", out)
+	}
+	if len(act.last) != 1 || math.Abs(act.last[0]-0.6) > 1e-12 {
+		t.Fatalf("unexpected actuator write: got=%v want=[0.6]", act.last)
+	}
+}
+
+func TestCortexTickRoutesActuatorsByExplicitLinks(t *testing.T) {
+	genome := model.Genome{
+		SensorIDs:   []string{"s1"},
+		ActuatorIDs: []string{"a1", "a2"},
+		Neurons: []model.Neuron{
+			{ID: "i1", Activation: "identity"},
+			{ID: "o1", Activation: "identity"},
+		},
+		Synapses: []model.Synapse{
+			{From: "i1", To: "o1", Weight: 1.0, Enabled: true},
+		},
+		SensorNeuronLinks: []model.SensorNeuronLink{
+			{SensorID: "s1", NeuronID: "i1"},
+		},
+		NeuronActuatorLinks: []model.NeuronActuatorLink{
+			{NeuronID: "o1", ActuatorID: "a1"},
+			{NeuronID: "o1", ActuatorID: "a2"},
+		},
+	}
+	sensors := map[string]protoio.Sensor{
+		"s1": testSensor{values: []float64{0.4}},
+	}
+	act1 := &testActuator{}
+	act2 := &testActuator{}
+	actuators := map[string]protoio.Actuator{
+		"a1": act1,
+		"a2": act2,
+	}
+
+	// Only one output neuron is available; explicit links should still route
+	// both actuators without chunk-shape errors.
+	c, err := NewCortex("agent-linked-outputs", genome, sensors, actuators, []string{"i1"}, []string{"o1"}, nil)
+	if err != nil {
+		t.Fatalf("new cortex: %v", err)
+	}
+	if _, err := c.Tick(context.Background()); err != nil {
+		t.Fatalf("tick: %v", err)
+	}
+	if len(act1.last) != 1 || math.Abs(act1.last[0]-0.4) > 1e-12 {
+		t.Fatalf("unexpected actuator a1 output: %v", act1.last)
+	}
+	if len(act2.last) != 1 || math.Abs(act2.last[0]-0.4) > 1e-12 {
+		t.Fatalf("unexpected actuator a2 output: %v", act2.last)
+	}
+}
+
 func TestCortexDiffProductUsesStepInputDeltas(t *testing.T) {
 	genome := model.Genome{
 		Neurons: []model.Neuron{

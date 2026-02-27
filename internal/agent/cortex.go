@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"math"
 	"math/rand"
+	"strings"
 	"sync"
 	"time"
 
@@ -235,20 +236,11 @@ func (c *Cortex) PerturbWeights(rng *rand.Rand, spread float64) error {
 }
 
 func (c *Cortex) Tick(ctx context.Context) ([]float64, error) {
-	inputs := make([]float64, 0, len(c.genome.SensorIDs))
-	for _, sensorID := range c.genome.SensorIDs {
-		sensor, ok := c.sensors[sensorID]
-		if !ok {
-			return nil, fmt.Errorf("sensor not registered: %s", sensorID)
-		}
-		values, err := sensor.Read(ctx)
-		if err != nil {
-			return nil, err
-		}
-		inputs = append(inputs, values...)
+	inputByNeuron, err := c.collectTickInputs(ctx)
+	if err != nil {
+		return nil, err
 	}
-
-	return c.execute(ctx, inputs)
+	return c.executeInputMap(ctx, inputByNeuron)
 }
 
 func (c *Cortex) RunStep(ctx context.Context, inputs []float64) ([]float64, error) {
@@ -296,23 +288,27 @@ func (c *Cortex) RunUntilEvaluationComplete(ctx context.Context, maxCycles int) 
 }
 
 func (c *Cortex) execute(ctx context.Context, inputs []float64) ([]float64, error) {
-	status := c.Status()
-	switch status {
-	case CortexStatusTerminated:
-		return nil, ErrCortexTerminated
-	case CortexStatusInactive:
-		return nil, ErrCortexInactive
-	}
-	if err := ctx.Err(); err != nil {
+	if err := c.ensureExecutable(ctx); err != nil {
 		return nil, err
 	}
-	if len(inputs) != len(c.inputNeuronIDs) {
-		return nil, fmt.Errorf("input size mismatch: got=%d want=%d", len(inputs), len(c.inputNeuronIDs))
-	}
-
 	inputByNeuron := make(map[string]float64, len(c.inputNeuronIDs))
-	for i, neuronID := range c.inputNeuronIDs {
-		inputByNeuron[neuronID] = inputs[i]
+	limit := len(inputs)
+	if limit > len(c.inputNeuronIDs) {
+		limit = len(c.inputNeuronIDs)
+	}
+	for i := 0; i < limit; i++ {
+		neuronID := c.inputNeuronIDs[i]
+		inputByNeuron[neuronID] += inputs[i]
+	}
+	return c.executeInputMap(ctx, inputByNeuron)
+}
+
+func (c *Cortex) executeInputMap(ctx context.Context, inputByNeuron map[string]float64) ([]float64, error) {
+	if err := c.ensureExecutable(ctx); err != nil {
+		return nil, err
+	}
+	if inputByNeuron == nil {
+		inputByNeuron = map[string]float64{}
 	}
 
 	values, err := nn.ForwardWithState(c.genome, inputByNeuron, c.nnState)
@@ -339,29 +335,169 @@ func (c *Cortex) execute(ctx context.Context, inputs []float64) ([]float64, erro
 		}
 	}
 
-	if len(c.genome.ActuatorIDs) > 0 {
-		chunks, err := splitOutputsForActuators(outputs, len(c.genome.ActuatorIDs))
-		if err != nil {
-			return nil, err
-		}
-		for i, actuatorID := range c.genome.ActuatorIDs {
-			actuator, ok := c.actuators[actuatorID]
-			if !ok {
-				return nil, fmt.Errorf("actuator not registered: %s", actuatorID)
-			}
-			chunk := chunks[i]
-			if c.genome.ActuatorTunables != nil {
-				if offset, ok := c.genome.ActuatorTunables[actuatorID]; ok && offset != 0 {
-					chunk = applyActuatorOffset(chunk, offset)
-				}
-			}
-			if err := actuator.Write(ctx, chunk); err != nil {
-				return nil, err
-			}
-		}
+	if err := c.dispatchActuators(ctx, values, outputs); err != nil {
+		return nil, err
 	}
 
 	return outputs, nil
+}
+
+func (c *Cortex) ensureExecutable(ctx context.Context) error {
+	status := c.Status()
+	switch status {
+	case CortexStatusTerminated:
+		return ErrCortexTerminated
+	case CortexStatusInactive:
+		return ErrCortexInactive
+	}
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (c *Cortex) collectTickInputs(ctx context.Context) (map[string]float64, error) {
+	inputByNeuron := make(map[string]float64, len(c.inputNeuronIDs))
+	linksBySensor := make(map[string][]string, len(c.genome.SensorNeuronLinks))
+	for _, link := range c.genome.SensorNeuronLinks {
+		sensorID := strings.TrimSpace(link.SensorID)
+		neuronID := strings.TrimSpace(link.NeuronID)
+		if sensorID == "" || neuronID == "" {
+			continue
+		}
+		linksBySensor[sensorID] = append(linksBySensor[sensorID], neuronID)
+	}
+
+	fallbackInputIndex := 0
+	for _, sensorID := range c.genome.SensorIDs {
+		sensor, ok := c.sensors[sensorID]
+		if !ok {
+			return nil, fmt.Errorf("sensor not registered: %s", sensorID)
+		}
+		values, err := sensor.Read(ctx)
+		if err != nil {
+			return nil, err
+		}
+		if len(values) == 0 {
+			continue
+		}
+
+		targets := linksBySensor[sensorID]
+		if len(targets) == 0 {
+			for _, value := range values {
+				if fallbackInputIndex >= len(c.inputNeuronIDs) {
+					break
+				}
+				inputByNeuron[c.inputNeuronIDs[fallbackInputIndex]] += value
+				fallbackInputIndex++
+			}
+			continue
+		}
+
+		if len(values) == 1 {
+			for _, neuronID := range targets {
+				inputByNeuron[neuronID] += values[0]
+			}
+			continue
+		}
+
+		lastTarget := targets[len(targets)-1]
+		for i, value := range values {
+			target := lastTarget
+			if i < len(targets) {
+				target = targets[i]
+			}
+			inputByNeuron[target] += value
+		}
+	}
+	return inputByNeuron, nil
+}
+
+func (c *Cortex) dispatchActuators(ctx context.Context, neuronValues map[string]float64, outputs []float64) error {
+	if len(c.genome.ActuatorIDs) == 0 {
+		return nil
+	}
+
+	linkNeuronsByActuator := make(map[string][]string, len(c.genome.NeuronActuatorLinks))
+	for _, link := range c.genome.NeuronActuatorLinks {
+		actuatorID := strings.TrimSpace(link.ActuatorID)
+		neuronID := strings.TrimSpace(link.NeuronID)
+		if actuatorID == "" || neuronID == "" {
+			continue
+		}
+		linkNeuronsByActuator[actuatorID] = append(linkNeuronsByActuator[actuatorID], neuronID)
+	}
+
+	useLinkRouting := len(linkNeuronsByActuator) > 0
+	var chunks [][]float64
+	if !useLinkRouting {
+		var err error
+		chunks, err = splitOutputsForActuators(outputs, len(c.genome.ActuatorIDs))
+		if err != nil {
+			return err
+		}
+	}
+
+	for i, actuatorID := range c.genome.ActuatorIDs {
+		actuator, ok := c.actuators[actuatorID]
+		if !ok {
+			return fmt.Errorf("actuator not registered: %s", actuatorID)
+		}
+
+		var chunk []float64
+		if useLinkRouting {
+			linkedNeurons := linkNeuronsByActuator[actuatorID]
+			if len(linkedNeurons) > 0 {
+				chunk = make([]float64, len(linkedNeurons))
+				for idx, neuronID := range linkedNeurons {
+					chunk[idx] = neuronValues[neuronID]
+				}
+			} else {
+				fallback, err := fallbackActuatorChunk(outputs, len(c.genome.ActuatorIDs), i)
+				if err != nil {
+					return err
+				}
+				chunk = fallback
+			}
+		} else {
+			chunk = chunks[i]
+		}
+
+		if c.genome.ActuatorTunables != nil {
+			if offset, ok := c.genome.ActuatorTunables[actuatorID]; ok && offset != 0 {
+				chunk = applyActuatorOffset(chunk, offset)
+			}
+		}
+		if err := actuator.Write(ctx, chunk); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func fallbackActuatorChunk(outputs []float64, actuatorCount, actuatorIndex int) ([]float64, error) {
+	if actuatorCount <= 0 {
+		return nil, fmt.Errorf("actuator count must be > 0")
+	}
+	if actuatorIndex < 0 || actuatorIndex >= actuatorCount {
+		return nil, fmt.Errorf("actuator index out of range: %d", actuatorIndex)
+	}
+	if len(outputs) == 0 {
+		return nil, nil
+	}
+	if actuatorCount == 1 {
+		return append([]float64(nil), outputs...), nil
+	}
+	if len(outputs)%actuatorCount == 0 {
+		chunkSize := len(outputs) / actuatorCount
+		start := actuatorIndex * chunkSize
+		end := start + chunkSize
+		return append([]float64(nil), outputs[start:end]...), nil
+	}
+	if actuatorIndex < len(outputs) {
+		return []float64{outputs[actuatorIndex]}, nil
+	}
+	return []float64{outputs[len(outputs)-1]}, nil
 }
 
 func splitOutputsForActuators(outputs []float64, actuatorCount int) ([][]float64, error) {

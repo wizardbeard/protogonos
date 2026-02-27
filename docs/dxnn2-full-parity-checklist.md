@@ -49,6 +49,7 @@ Status keys:
 
 ## Completed in latest iterations
 
+- Tightened `cortex.erl` IO-topology coherence by routing Tick-time sensor inputs through explicit `sensor_neuron_links`, routing actuator dispatch through `neuron_actuator_links` when present, and allowing bounded step-input width drift without hard failure so IO-structure mutations no longer crash runtime evaluation on input-width mismatches.
 - Hardened parity done-check gating (`scripts/done_check.sh`) to require benchmark summary pass semantics (`"passed": true`) on both benchmark and export artifacts, widened bounded smoke coverage to `flatland`/`gtsa`/`fx`/`epitopes`/`dtm`/`pole2-balancing`/`llvm-phase-ordering`, and documented plateau-safe thresholds (`regression-mimic` at `0.0`, smoke runs at `-0.2` with `--w-substrate 0`).
 - Expanded `sensor.erl` parity with a vector-input sensor family (`vector_input`), alias-aware compatibility helpers (`SensorCompatibleWithScape` / `ListSensorsForScape`), and mutation-candidate filtering wired to scape-filtered sensor registries.
 - Expanded `actuator.erl` parity with a vector-output actuator family (`vector_output`), alias-aware compatibility helpers (`ActuatorCompatibleWithScape` / `ListActuatorsForScape`), and mutation-candidate filtering wired to scape-filtered actuator registries.
