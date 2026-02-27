@@ -3,6 +3,7 @@ package substrate
 import (
 	"errors"
 	"fmt"
+	"strings"
 )
 
 var (
@@ -109,6 +110,38 @@ func BuildCEPCommand(cepName string, output []float64, parameters map[string]flo
 		}, nil
 	default:
 		return CEPCommand{}, fmt.Errorf("%w: %s", ErrUnsupportedCEPCommand, cepName)
+	}
+}
+
+func ApplyCEPCommand(current float64, command CEPCommand, parameters map[string]float64) (float64, error) {
+	switch strings.TrimSpace(command.Command) {
+	case SetWeightCEPName:
+		if len(command.Signal) != 1 {
+			return 0, fmt.Errorf("%w: set_weight expects 1 signal, got=%d", ErrInvalidCEPOutputWidth, len(command.Signal))
+		}
+		return saturateSubstrateWeight(command.Signal[0]), nil
+	case SetIterativeCEPName, DefaultCEPName:
+		if len(command.Signal) != 1 {
+			return 0, fmt.Errorf("%w: set_iterative expects 1 signal, got=%d", ErrInvalidCEPOutputWidth, len(command.Signal))
+		}
+		return saturateSubstrateWeight(current + command.Signal[0]), nil
+	case SetABCNCEPName:
+		if len(command.Signal) == 0 {
+			return 0, fmt.Errorf("%w: set_abcn expects at least 1 signal, got=0", ErrInvalidCEPOutputWidth)
+		}
+		params := cloneFloatMap(parameters)
+		if len(command.Signal) >= 5 {
+			if params == nil {
+				params = map[string]float64{}
+			}
+			params["A"] = command.Signal[1]
+			params["B"] = command.Signal[2]
+			params["C"] = command.Signal[3]
+			params["N"] = command.Signal[4]
+		}
+		return (SetABCNCEP{}).Apply(nil, current, command.Signal[0], params)
+	default:
+		return 0, fmt.Errorf("%w: %s", ErrUnsupportedCEPCommand, command.Command)
 	}
 }
 

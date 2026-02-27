@@ -51,6 +51,23 @@ func TestBuildCEPCommandSetABCNPassThrough(t *testing.T) {
 	}
 }
 
+func TestApplyCEPCommandSetABCNUsesSignalCoefficients(t *testing.T) {
+	next, err := ApplyCEPCommand(
+		0.0,
+		CEPCommand{
+			Command: SetABCNCEPName,
+			Signal:  []float64{1, 0.2, 0.5, -0.1, 0.8},
+		},
+		nil,
+	)
+	if err != nil {
+		t.Fatalf("apply set_abcn command: %v", err)
+	}
+	if math.Abs(next-0.4) > 1e-9 {
+		t.Fatalf("unexpected set_abcn command result: got=%v want=0.4", next)
+	}
+}
+
 func TestCEPProcessForwardOrderedFanIn(t *testing.T) {
 	p, err := NewCEPProcess(SetABCNCEPName, nil, []string{"n1", "n2"})
 	if err != nil {

@@ -7,6 +7,14 @@ import (
 	"testing"
 )
 
+type customRuntimeCEP struct{}
+
+func (customRuntimeCEP) Name() string { return "custom_runtime_cep" }
+
+func (customRuntimeCEP) Apply(_ context.Context, current float64, _ float64, _ map[string]float64) (float64, error) {
+	return current + 0.25, nil
+}
+
 func TestSimpleRuntimeStep(t *testing.T) {
 	resetRegistriesForTests()
 	t.Cleanup(resetRegistriesForTests)
@@ -305,6 +313,39 @@ func TestSimpleRuntimeCEPChainAppliesInOrder(t *testing.T) {
 	}
 	if len(w2) != 1 || w2[0] != 1 {
 		t.Fatalf("expected delta->set chain to produce 1, got=%v", w2)
+	}
+}
+
+func TestSimpleRuntimeFallbackForCustomCEP(t *testing.T) {
+	resetRegistriesForTests()
+	t.Cleanup(resetRegistriesForTests)
+
+	if err := RegisterCEP("custom_runtime_cep", func() CEP { return customRuntimeCEP{} }); err != nil {
+		t.Fatalf("register custom cep: %v", err)
+	}
+
+	rt, err := NewSimpleRuntime(Spec{
+		CPPName: DefaultCPPName,
+		CEPName: "custom_runtime_cep",
+	}, 1)
+	if err != nil {
+		t.Fatalf("new runtime: %v", err)
+	}
+
+	w, err := rt.Step(context.Background(), []float64{1})
+	if err != nil {
+		t.Fatalf("step 1: %v", err)
+	}
+	if len(w) != 1 || math.Abs(w[0]-0.25) > 1e-9 {
+		t.Fatalf("unexpected custom cep fallback update after step 1: %v", w)
+	}
+
+	w, err = rt.Step(context.Background(), []float64{1})
+	if err != nil {
+		t.Fatalf("step 2: %v", err)
+	}
+	if len(w) != 1 || math.Abs(w[0]-0.5) > 1e-9 {
+		t.Fatalf("unexpected custom cep fallback update after step 2: %v", w)
 	}
 }
 

@@ -59,9 +59,24 @@ func (r *SimpleRuntime) Step(ctx context.Context, inputs []float64) ([]float64, 
 	for i := range r.weights {
 		next := r.weights[i]
 		for _, cep := range r.ceps {
-			w, err := cep.Apply(ctx, next, delta, r.params)
-			if err != nil {
-				return nil, fmt.Errorf("cep %s apply: %w", cep.Name(), err)
+			command, err := BuildCEPCommand(cep.Name(), []float64{delta}, r.params)
+			if err == nil {
+				w, applyErr := ApplyCEPCommand(next, command, r.params)
+				if applyErr != nil {
+					return nil, fmt.Errorf("cep %s apply command %s: %w", cep.Name(), command.Command, applyErr)
+				}
+				next = w
+				continue
+			}
+			if !errors.Is(err, ErrUnsupportedCEPCommand) {
+				return nil, fmt.Errorf("cep %s command build: %w", cep.Name(), err)
+			}
+
+			// Keep custom CEP compatibility when a CEP name is not part of the
+			// reference command surface.
+			w, applyErr := cep.Apply(ctx, next, delta, r.params)
+			if applyErr != nil {
+				return nil, fmt.Errorf("cep %s apply: %w", cep.Name(), applyErr)
 			}
 			next = w
 		}
