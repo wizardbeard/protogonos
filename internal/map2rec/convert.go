@@ -843,6 +843,10 @@ func ConvertSubstrate(in map[string]any) SubstrateRecord {
 			if xs, ok := asAnySlice(val); ok {
 				out.CPPIDs = xs
 			}
+		case "cep_names":
+			if xs, ok := asAnySlice(val); ok {
+				out.CEPNames = xs
+			}
 		case "cep_ids":
 			if xs, ok := asAnySlice(val); ok {
 				out.CEPIDs = xs

@@ -263,6 +263,7 @@ type SubstrateRecord struct {
 	Linkform   any
 	Plasticity any
 	CPPIDs     []any
+	CEPNames   []any
 	CEPIDs     []any
 }
 
@@ -653,6 +654,7 @@ func defaultSubstrateRecord() SubstrateRecord {
 	return SubstrateRecord{
 		Plasticity: "none",
 		CPPIDs:     []any{},
+		CEPNames:   []any{},
 		CEPIDs:     []any{},
 	}
 }

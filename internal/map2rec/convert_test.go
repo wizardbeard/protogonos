@@ -789,6 +789,7 @@ func TestConvertSubstrateMapsFields(t *testing.T) {
 		"linkform":   "l2l_feedforward",
 		"plasticity": "hebbian",
 		"cpp_ids":    []any{"cpp-1"},
+		"cep_names":  []any{"set_abcn", "set_weight"},
 		"cep_ids":    []any{"cep-1", "cep-2"},
 	}
 	out := ConvertSubstrate(in)
@@ -798,18 +799,18 @@ func TestConvertSubstrateMapsFields(t *testing.T) {
 	if out.Linkform != "l2l_feedforward" || out.Plasticity != "hebbian" {
 		t.Fatalf("unexpected substrate conversion behavior fields: %+v", out)
 	}
-	if len(out.CPPIDs) != 1 || len(out.CEPIDs) != 2 {
+	if len(out.CPPIDs) != 1 || len(out.CEPNames) != 2 || len(out.CEPIDs) != 2 {
 		t.Fatalf("unexpected substrate conversion component IDs: %+v", out)
 	}
 }
 
 func TestConvertSubstrateMalformedKnownFieldKeepsDefault(t *testing.T) {
-	out := ConvertSubstrate(map[string]any{"cpp_ids": "bad", "cep_ids": map[string]any{"id": "cep-1"}})
+	out := ConvertSubstrate(map[string]any{"cpp_ids": "bad", "cep_names": "bad", "cep_ids": map[string]any{"id": "cep-1"}})
 	if out.Plasticity != "none" {
 		t.Fatalf("expected default plasticity none, got %#v", out.Plasticity)
 	}
-	if len(out.CPPIDs) != 0 || len(out.CEPIDs) != 0 {
-		t.Fatalf("expected default substrate component IDs, got cpp=%+v cep=%+v", out.CPPIDs, out.CEPIDs)
+	if len(out.CPPIDs) != 0 || len(out.CEPNames) != 0 || len(out.CEPIDs) != 0 {
+		t.Fatalf("expected default substrate component IDs, got cpp=%+v cep_names=%+v cep=%+v", out.CPPIDs, out.CEPNames, out.CEPIDs)
 	}
 }
 

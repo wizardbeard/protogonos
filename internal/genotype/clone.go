@@ -42,6 +42,7 @@ func CloneGenome(g model.Genome) model.Genome {
 	if g.Substrate != nil {
 		sub := *g.Substrate
 		sub.CPPIDs = append([]string(nil), g.Substrate.CPPIDs...)
+		sub.CEPNames = append([]string(nil), g.Substrate.CEPNames...)
 		sub.CEPIDs = append([]string(nil), g.Substrate.CEPIDs...)
 		sub.Dimensions = append([]int(nil), g.Substrate.Dimensions...)
 		if g.Substrate.Parameters != nil {

@@ -358,6 +358,9 @@ func cloneGenome(g model.Genome) model.Genome {
 	out.NeuronActuatorLinks = append([]model.NeuronActuatorLink(nil), g.NeuronActuatorLinks...)
 	if g.Substrate != nil {
 		sub := *g.Substrate
+		sub.CPPIDs = append([]string(nil), g.Substrate.CPPIDs...)
+		sub.CEPNames = append([]string(nil), g.Substrate.CEPNames...)
+		sub.CEPIDs = append([]string(nil), g.Substrate.CEPIDs...)
 		sub.Dimensions = append([]int(nil), g.Substrate.Dimensions...)
 		if g.Substrate.Parameters != nil {
 			sub.Parameters = make(map[string]float64, len(g.Substrate.Parameters))

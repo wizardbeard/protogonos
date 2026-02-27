@@ -14,6 +14,7 @@ import (
 	"protogonos/internal/model"
 	internalscape "protogonos/internal/scape"
 	"protogonos/internal/stats"
+	internalsubstrate "protogonos/internal/substrate"
 )
 
 type flatlandRunStepAgent struct {
@@ -1682,5 +1683,30 @@ func TestClientDeletePopulation(t *testing.T) {
 	}
 	if err := client.DeletePopulation(context.Background(), DeletePopulationRequest{PopulationID: "pop-delete"}); err == nil {
 		t.Fatal("expected delete population to fail when population is missing")
+	}
+}
+
+func TestBuildReplaySubstrateUsesCEPNamesChain(t *testing.T) {
+	rt, err := buildReplaySubstrate(model.Genome{
+		ID: "replay-sub-chain-0",
+		Substrate: &model.SubstrateConfig{
+			CPPName:  internalsubstrate.DefaultCPPName,
+			CEPName:  internalsubstrate.SetWeightCEPName,
+			CEPNames: []string{internalsubstrate.SetWeightCEPName, internalsubstrate.DefaultCEPName},
+		},
+	}, []string{"o"})
+	if err != nil {
+		t.Fatalf("build replay substrate: %v", err)
+	}
+	if rt == nil {
+		t.Fatal("expected replay substrate runtime")
+	}
+
+	w, err := rt.Step(context.Background(), []float64{1})
+	if err != nil {
+		t.Fatalf("step replay substrate: %v", err)
+	}
+	if len(w) != 1 || w[0] != 2 {
+		t.Fatalf("expected set->delta chain result 2, got=%v", w)
 	}
 }

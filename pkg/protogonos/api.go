@@ -860,6 +860,7 @@ func buildReplaySubstrate(genome model.Genome, outputNeuronIDs []string) (substr
 	spec := substrate.Spec{
 		CPPName:           cfg.CPPName,
 		CEPName:           cfg.CEPName,
+		CEPNames:          append([]string(nil), cfg.CEPNames...),
 		CEPFaninPIDs:      faninPIDs,
 		CEPFaninPIDsByCEP: faninByCEP,
 		Dimensions:        append([]int(nil), cfg.Dimensions...),
