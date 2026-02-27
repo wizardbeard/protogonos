@@ -75,3 +75,16 @@ func TestRegistryValidationAndDuplicates(t *testing.T) {
 		t.Fatalf("expected ErrCEPExists, got: %v", err)
 	}
 }
+
+func TestResolveSetIterativeCEPAlias(t *testing.T) {
+	resetRegistriesForTests()
+	t.Cleanup(resetRegistriesForTests)
+
+	cep, err := ResolveCEP(SetIterativeCEPName)
+	if err != nil {
+		t.Fatalf("resolve set_iterative cep alias: %v", err)
+	}
+	if cep.Name() != DefaultCEPName {
+		t.Fatalf("expected set_iterative alias to resolve delta_weight behavior, got=%s", cep.Name())
+	}
+}

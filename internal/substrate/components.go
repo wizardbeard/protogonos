@@ -6,10 +6,11 @@ import (
 )
 
 const (
-	DefaultCPPName   = "set_weight"
-	DefaultCEPName   = "delta_weight"
-	SetWeightCEPName = "set_weight"
-	SetABCNCEPName   = "set_abcn"
+	DefaultCPPName      = "set_weight"
+	DefaultCEPName      = "delta_weight"
+	SetIterativeCEPName = "set_iterative"
+	SetWeightCEPName    = "set_weight"
+	SetABCNCEPName      = "set_abcn"
 
 	referenceSubstrateWeightLimit = 3.1415
 )
@@ -115,6 +116,9 @@ func initializeDefaultComponents() {
 	}
 	if err := RegisterCEP(DefaultCEPName, func() CEP { return DeltaWeightCEP{} }); err != nil {
 		panic(fmt.Errorf("register default cep: %w", err))
+	}
+	if err := RegisterCEP(SetIterativeCEPName, func() CEP { return DeltaWeightCEP{} }); err != nil {
+		panic(fmt.Errorf("register set_iterative cep: %w", err))
 	}
 	if err := RegisterCEP(SetWeightCEPName, func() CEP { return SetWeightCEP{} }); err != nil {
 		panic(fmt.Errorf("register set_weight cep: %w", err))

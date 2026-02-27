@@ -75,6 +75,38 @@ func TestSimpleRuntimeSetWeightCEP(t *testing.T) {
 	}
 }
 
+func TestSimpleRuntimeSetIterativeCEPAlias(t *testing.T) {
+	resetRegistriesForTests()
+	t.Cleanup(resetRegistriesForTests)
+
+	rt, err := NewSimpleRuntime(Spec{
+		CPPName: DefaultCPPName,
+		CEPName: SetIterativeCEPName,
+		Parameters: map[string]float64{
+			"scale": 0.5,
+		},
+	}, 1)
+	if err != nil {
+		t.Fatalf("new runtime: %v", err)
+	}
+
+	w, err := rt.Step(context.Background(), []float64{1, 3})
+	if err != nil {
+		t.Fatalf("step 1: %v", err)
+	}
+	if len(w) != 1 || w[0] != 0.5 {
+		t.Fatalf("expected iterative alias first step to be 0.5, got=%v", w)
+	}
+
+	w, err = rt.Step(context.Background(), []float64{1, 3})
+	if err != nil {
+		t.Fatalf("step 2: %v", err)
+	}
+	if len(w) != 1 || w[0] != 1.0 {
+		t.Fatalf("expected iterative alias second step to be 1.0, got=%v", w)
+	}
+}
+
 func TestSimpleRuntimeSetWeightCEPSaturatesReferenceLimit(t *testing.T) {
 	resetRegistriesForTests()
 	t.Cleanup(resetRegistriesForTests)
