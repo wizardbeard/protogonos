@@ -1288,6 +1288,7 @@ func TestBenchmarkExperimentEvaluationsAndReport(t *testing.T) {
 		Dir         string                         `json:"dir"`
 		ReportName  string                         `json:"report_name"`
 		Evaluations stats.BenchmarkEvaluationStats `json:"evaluations"`
+		GraphFiles  []string                       `json:"graph_files"`
 	}
 	if err := json.Unmarshal([]byte(reportOut), &reportPayload); err != nil {
 		t.Fatalf("decode report payload: %v", err)
@@ -1301,6 +1302,9 @@ func TestBenchmarkExperimentEvaluationsAndReport(t *testing.T) {
 	if reportPayload.Evaluations.TotalRuns != 2 {
 		t.Fatalf("unexpected report evaluations payload: %+v", reportPayload.Evaluations)
 	}
+	if len(reportPayload.GraphFiles) == 0 {
+		t.Fatalf("expected at least one graph output file: %+v", reportPayload)
+	}
 
 	reportDir := filepath.Join("benchmarks", "experiments", "exp-reporting")
 	for _, name := range []string{
@@ -1308,6 +1312,7 @@ func TestBenchmarkExperimentEvaluationsAndReport(t *testing.T) {
 		"report2_Trace_Acc.json",
 		"report2_Evaluations.json",
 		"report2_Report.json",
+		"graph_xor_report2_Graphs",
 	} {
 		if _, err := os.Stat(filepath.Join(reportDir, name)); err != nil {
 			t.Fatalf("expected report file %s: %v", name, err)

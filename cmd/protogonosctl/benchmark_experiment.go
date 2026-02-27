@@ -278,6 +278,14 @@ func runBenchmarkExperimentReport(args []string) error {
 	if err != nil {
 		return err
 	}
+	graphs, err := stats.BuildBenchmarkerGraphs(benchmarksDir, exp)
+	if err != nil {
+		return err
+	}
+	graphFiles, err := stats.WriteBenchmarkerGraphs(benchmarksDir, exp.ID, report.ReportName+"_Graphs", graphs)
+	if err != nil {
+		return err
+	}
 
 	if *jsonOut {
 		payload := struct {
@@ -285,11 +293,13 @@ func runBenchmarkExperimentReport(args []string) error {
 			Dir         string                         `json:"dir"`
 			ReportName  string                         `json:"report_name"`
 			Evaluations stats.BenchmarkEvaluationStats `json:"evaluations"`
+			GraphFiles  []string                       `json:"graph_files"`
 		}{
 			ID:          exp.ID,
 			Dir:         reportDir,
 			ReportName:  report.ReportName,
 			Evaluations: evalStats,
+			GraphFiles:  append([]string(nil), graphFiles...),
 		}
 		enc := json.NewEncoder(os.Stdout)
 		enc.SetIndent("", "  ")
@@ -297,10 +307,11 @@ func runBenchmarkExperimentReport(args []string) error {
 	}
 
 	fmt.Printf(
-		"benchmark_experiment_report id=%s name=%s dir=%s success=%d/%d success_rate=%.6f\n",
+		"benchmark_experiment_report id=%s name=%s dir=%s graphs=%d success=%d/%d success_rate=%.6f\n",
 		exp.ID,
 		report.ReportName,
 		reportDir,
+		len(graphFiles),
 		evalStats.SuccessRuns,
 		evalStats.TotalRuns,
 		evalStats.SuccessRate,
