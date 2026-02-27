@@ -662,3 +662,46 @@ func TestScalarComponentsRegistered(t *testing.T) {
 		t.Fatalf("resolve llvm alias actuator llvm_phase_ordering_sim: %v", err)
 	}
 }
+
+func TestActuatorReferenceAliasResolution(t *testing.T) {
+	cases := []struct {
+		alias     string
+		canonical string
+		scape     string
+	}{
+		{XORSendOutputActuatorAliasName, XOROutputActuatorName, "xor"},
+		{PBSendOutputActuatorAliasName, Pole2PushActuatorName, "pb_sim"},
+		{DTMSendOutputActuatorAliasName, DTMMoveActuatorName, "dtm_sim"},
+		{TwoWheelsActuatorAliasName, FlatlandTwoWheelsActuatorName, "scape_flatland"},
+		{FXTradeActuatorAliasName, FXTradeActuatorName, "fx"},
+		{ABCPredActuatorAliasName, EpitopesResponseActuatorName, "epitopes_sim"},
+		{GeneralPredictorActuatorAliasName, GTSAPredictActuatorName, "gtsa_sim"},
+		{ChooseOptimizationPhaseActuatorAliasName, LLVMPhaseActuatorName, "llvm_phase_ordering_sim"},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.alias, func(t *testing.T) {
+			if got := CanonicalActuatorName(tc.alias); got != tc.canonical {
+				t.Fatalf("canonical alias mismatch: got=%s want=%s", got, tc.canonical)
+			}
+			aliasActuator, err := ResolveActuator(tc.alias, tc.scape)
+			if err != nil {
+				t.Fatalf("resolve alias actuator %s: %v", tc.alias, err)
+			}
+			canonicalActuator, err := ResolveActuator(tc.canonical, tc.scape)
+			if err != nil {
+				t.Fatalf("resolve canonical actuator %s: %v", tc.canonical, err)
+			}
+			if aliasActuator.Name() != canonicalActuator.Name() {
+				t.Fatalf("alias/canonical mismatch: alias=%s canonical=%s", aliasActuator.Name(), canonicalActuator.Name())
+			}
+			if !ActuatorCompatibleWithScape(tc.alias, tc.scape) {
+				t.Fatalf("expected alias %s to be compatible with scape %s", tc.alias, tc.scape)
+			}
+		})
+	}
+
+	if ActuatorCompatibleWithScape(XORSendOutputActuatorAliasName, "dtm") {
+		t.Fatal("expected xor alias actuator to remain incompatible with dtm")
+	}
+}

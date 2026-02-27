@@ -54,6 +54,36 @@ func (a *scriptedFeedbackActuator) ConsumeSyncFeedback() (ActuatorSyncFeedback, 
 	return feedback, true
 }
 
+func TestCortexRegisteredActuatorResolvesCanonicalAlias(t *testing.T) {
+	genome := model.Genome{
+		ActuatorIDs: []string{protoio.XORSendOutputActuatorAliasName},
+	}
+	aliasActuator := &testActuator{}
+	c, err := NewCortex(
+		"agent-actuator-alias",
+		genome,
+		nil,
+		map[string]protoio.Actuator{
+			protoio.XORSendOutputActuatorAliasName: aliasActuator,
+		},
+		[]string{"i"},
+		[]string{"o"},
+		nil,
+	)
+	if err != nil {
+		t.Fatalf("new cortex: %v", err)
+	}
+
+	gotAlias, ok := c.RegisteredActuator(protoio.XORSendOutputActuatorAliasName)
+	if !ok || gotAlias != aliasActuator {
+		t.Fatalf("expected alias actuator lookup to succeed: ok=%t actuator=%v", ok, gotAlias)
+	}
+	gotCanonical, ok := c.RegisteredActuator(protoio.XOROutputActuatorName)
+	if !ok || gotCanonical != aliasActuator {
+		t.Fatalf("expected canonical actuator lookup to resolve alias registration: ok=%t actuator=%v", ok, gotCanonical)
+	}
+}
+
 func TestCortexTickSensorToActuator(t *testing.T) {
 	genome := model.Genome{
 		SensorIDs:   []string{"s1", "s2"},

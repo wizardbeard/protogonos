@@ -116,7 +116,24 @@ func (c *Cortex) RegisteredActuator(id string) (protoio.Actuator, bool) {
 		return nil, false
 	}
 	a, ok := c.actuators[id]
-	return a, ok
+	if ok {
+		return a, true
+	}
+
+	canonicalID := protoio.CanonicalActuatorName(id)
+	if canonicalID == "" {
+		return nil, false
+	}
+	a, ok = c.actuators[canonicalID]
+	if ok {
+		return a, true
+	}
+	for registeredID, actuator := range c.actuators {
+		if protoio.CanonicalActuatorName(registeredID) == canonicalID {
+			return actuator, true
+		}
+	}
+	return nil, false
 }
 
 func (c *Cortex) Status() CortexStatus {

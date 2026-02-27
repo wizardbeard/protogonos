@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"sort"
+	"strings"
 	"sync"
 
 	"protogonos/internal/scapeid"
@@ -208,26 +209,22 @@ func RegisterActuatorWithSpec(spec ActuatorSpec) error {
 }
 
 func ResolveActuator(name, scape string) (Actuator, error) {
-	actuatorRegistry.mu.RLock()
-	entry, ok := actuatorRegistry.m[name]
-	actuatorRegistry.mu.RUnlock()
+	entry, resolvedName, ok := findRegisteredActuator(name)
 	if !ok {
 		return nil, fmt.Errorf("%w: %s", ErrActuatorNotFound, name)
 	}
-	if err := actuatorCompatibilityError(name, entry, scapeid.Normalize(scape)); err != nil {
+	if err := actuatorCompatibilityError(resolvedName, entry, scapeid.Normalize(scape)); err != nil {
 		return nil, err
 	}
 	return entry.factory(), nil
 }
 
 func ActuatorCompatibleWithScape(name, scape string) bool {
-	actuatorRegistry.mu.RLock()
-	entry, ok := actuatorRegistry.m[name]
-	actuatorRegistry.mu.RUnlock()
+	entry, resolvedName, ok := findRegisteredActuator(name)
 	if !ok {
 		return false
 	}
-	return actuatorCompatibilityError(name, entry, scapeid.Normalize(scape)) == nil
+	return actuatorCompatibilityError(resolvedName, entry, scapeid.Normalize(scape)) == nil
 }
 
 func ListActuatorsForScape(scape string) []string {
@@ -269,6 +266,28 @@ func actuatorCompatibilityError(name string, entry registeredActuator, scape str
 		}
 	}
 	return nil
+}
+
+func findRegisteredActuator(name string) (registeredActuator, string, bool) {
+	lookupName := strings.TrimSpace(name)
+	if lookupName == "" {
+		return registeredActuator{}, "", false
+	}
+
+	actuatorRegistry.mu.RLock()
+	defer actuatorRegistry.mu.RUnlock()
+
+	if entry, ok := actuatorRegistry.m[lookupName]; ok {
+		return entry, lookupName, true
+	}
+
+	canonicalName := CanonicalActuatorName(lookupName)
+	if canonicalName != "" && canonicalName != lookupName {
+		if entry, ok := actuatorRegistry.m[canonicalName]; ok {
+			return entry, canonicalName, true
+		}
+	}
+	return registeredActuator{}, "", false
 }
 
 func resetRegistriesForTests() {
