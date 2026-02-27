@@ -2,6 +2,7 @@ package morphology
 
 import (
 	"fmt"
+	"strings"
 
 	protoio "protogonos/internal/io"
 	"protogonos/internal/model"
@@ -37,14 +38,70 @@ func EnsureScapeCompatibility(scapeName string) error {
 
 func EnsureGenomeIOCompatibility(scapeName string, genome model.Genome) error {
 	scapeName = scapeid.Normalize(scapeName)
+	knownNeuronIDs := make(map[string]struct{}, len(genome.Neurons))
+	for _, neuron := range genome.Neurons {
+		id := strings.TrimSpace(neuron.ID)
+		if id == "" {
+			continue
+		}
+		knownNeuronIDs[id] = struct{}{}
+	}
+	knownSensorIDs := make(map[string]struct{}, len(genome.SensorIDs))
 	for _, sensorName := range genome.SensorIDs {
 		if _, err := protoio.ResolveSensor(sensorName, scapeName); err != nil {
 			return fmt.Errorf("genome %s sensor %s incompatible with scape %s: %w", genome.ID, sensorName, scapeName, err)
 		}
+		knownSensorIDs[sensorName] = struct{}{}
 	}
+	if genome.Substrate != nil {
+		for _, sensorID := range genome.Substrate.CPPIDs {
+			sensorID = strings.TrimSpace(sensorID)
+			if sensorID == "" {
+				continue
+			}
+			knownSensorIDs[sensorID] = struct{}{}
+		}
+	}
+	knownActuatorIDs := make(map[string]struct{}, len(genome.ActuatorIDs))
 	for _, actuatorName := range genome.ActuatorIDs {
 		if _, err := protoio.ResolveActuator(actuatorName, scapeName); err != nil {
 			return fmt.Errorf("genome %s actuator %s incompatible with scape %s: %w", genome.ID, actuatorName, scapeName, err)
+		}
+		knownActuatorIDs[actuatorName] = struct{}{}
+	}
+	if genome.Substrate != nil {
+		for _, actuatorID := range genome.Substrate.CEPIDs {
+			actuatorID = strings.TrimSpace(actuatorID)
+			if actuatorID == "" {
+				continue
+			}
+			knownActuatorIDs[actuatorID] = struct{}{}
+		}
+	}
+	for _, link := range genome.SensorNeuronLinks {
+		sensorID := strings.TrimSpace(link.SensorID)
+		neuronID := strings.TrimSpace(link.NeuronID)
+		if sensorID == "" || neuronID == "" {
+			return fmt.Errorf("genome %s has malformed sensor link: sensor=%q neuron=%q", genome.ID, link.SensorID, link.NeuronID)
+		}
+		if _, ok := knownSensorIDs[sensorID]; !ok {
+			return fmt.Errorf("genome %s sensor link references unknown sensor %s", genome.ID, sensorID)
+		}
+		if _, ok := knownNeuronIDs[neuronID]; !ok {
+			return fmt.Errorf("genome %s sensor link references unknown neuron %s", genome.ID, neuronID)
+		}
+	}
+	for _, link := range genome.NeuronActuatorLinks {
+		neuronID := strings.TrimSpace(link.NeuronID)
+		actuatorID := strings.TrimSpace(link.ActuatorID)
+		if neuronID == "" || actuatorID == "" {
+			return fmt.Errorf("genome %s has malformed actuator link: neuron=%q actuator=%q", genome.ID, link.NeuronID, link.ActuatorID)
+		}
+		if _, ok := knownNeuronIDs[neuronID]; !ok {
+			return fmt.Errorf("genome %s actuator link references unknown neuron %s", genome.ID, neuronID)
+		}
+		if _, ok := knownActuatorIDs[actuatorID]; !ok {
+			return fmt.Errorf("genome %s actuator link references unknown actuator %s", genome.ID, actuatorID)
 		}
 	}
 	return nil

@@ -58,6 +58,7 @@ Status legend:
 
 ## Latest iteration updates
 
+- 2026-02-27: tightened morphology IO-compatibility validation (`EnsureGenomeIOCompatibility`) with explicit endpoint-link integrity checks so `sensor_neuron_links` and `neuron_actuator_links` must reference known sensor/actuator IDs (including substrate CPP/CEP endpoints) and existing neurons.
 - 2026-02-27: restored substrate/IO mutation coverage in the parity acceptance gate by running smoke scapes at `--w-substrate 0.02` in `scripts/done_check.sh` (after cortex IO-topology fixes), replacing the temporary `--w-substrate 0` guard.
 - 2026-02-27: tightened cortex IO-topology coherence so runtime Tick input routing now follows explicit `sensor_neuron_links`, actuator dispatch can follow `neuron_actuator_links`, and step-input width drift is bounded instead of hard-failing, eliminating reproduced `input size mismatch` crashes under IO-structure mutations (validated on `flatland`/`gtsa`/`fx` with `--w-substrate 0.02`).
 - 2026-02-27: hardened parity done-check gate (`scripts/done_check.sh`) so benchmark acceptance now requires `benchmark_summary.json` with `"passed": true` for both benchmark and exported artifacts, and expanded bounded smoke scape coverage to `flatland`, `gtsa`, `fx`, `epitopes`, `dtm`, `pole2-balancing`, and `llvm-phase-ordering` (initially landed with a temporary `--w-substrate 0` guard before IO-topology fixes).

@@ -49,6 +49,7 @@ Status keys:
 
 ## Completed in latest iterations
 
+- Tightened morphology/IO compatibility validation so genomes now undergo link-integrity checks (`sensor_neuron_links` and `neuron_actuator_links` must reference known sensors/actuators and existing neurons, including substrate CPP/CEP endpoint IDs), catching malformed IO topologies earlier in parity flows.
 - Restored parity smoke gate coverage with substrate mutations enabled by running smoke scapes at `--w-substrate 0.02` in `scripts/done_check.sh` (instead of temporarily forcing `0`), so done-check once again exercises mutable IO/substrate mutation paths across `flatland`/`gtsa`/`fx`/`epitopes`/`dtm`/`pole2-balancing`/`llvm-phase-ordering`.
 - Tightened `cortex.erl` IO-topology coherence by routing Tick-time sensor inputs through explicit `sensor_neuron_links`, routing actuator dispatch through `neuron_actuator_links` when present, and allowing bounded step-input width drift without hard failure so IO-structure mutations no longer crash runtime evaluation on input-width mismatches.
 - Hardened parity done-check gating (`scripts/done_check.sh`) to require benchmark summary pass semantics (`"passed": true`) on both benchmark and export artifacts, widened bounded smoke coverage to `flatland`/`gtsa`/`fx`/`epitopes`/`dtm`/`pole2-balancing`/`llvm-phase-ordering`, and documented plateau-safe thresholds (`regression-mimic` at `0.0`, smoke runs at `-0.2`; initial temporary gate used `--w-substrate 0` before IO-topology fixes landed).
