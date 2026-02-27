@@ -40,7 +40,7 @@ This document defines the reproducible acceptance check for the AGENTS.md done c
   - Regression-mimic benchmark uses `--min-improvement 0.0` (plateau-safe guard).
   - Cart-pole-lite benchmark uses `--min-improvement 0.0001`.
 - Parity smoke scapes use `--min-improvement -0.2` to catch severe regressions while keeping bounded smoke runtime.
-- Parity smoke scapes run with `--w-substrate 0` to keep IO surface structure stable during smoke checks.
+- Parity smoke scapes run with `--w-substrate 0.02` so substrate/IO mutation paths remain exercised in gate checks.
 
 ## Notes
 

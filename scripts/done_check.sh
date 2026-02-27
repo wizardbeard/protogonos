@@ -88,13 +88,13 @@ run_benchmark_and_verify "cart-pole-lite" "303" "0.0001" "12" "6" "2" "0.02"
 
 # Expanded parity smoke scapes.
 # For these, we gate against severe regression while keeping run time bounded.
-# IO-structure mutators are disabled to keep seed IO surfaces stable for smoke runs.
-run_benchmark_and_verify "flatland" "404" "-0.2" "6" "3" "2" "0"
-run_benchmark_and_verify "gtsa" "405" "-0.2" "6" "3" "2" "0"
-run_benchmark_and_verify "fx" "406" "-0.2" "6" "3" "2" "0"
-run_benchmark_and_verify "epitopes" "407" "-0.2" "6" "3" "2" "0"
-run_benchmark_and_verify "dtm" "408" "-0.2" "6" "3" "2" "0"
-run_benchmark_and_verify "pole2-balancing" "409" "-0.2" "6" "3" "2" "0"
-run_benchmark_and_verify "llvm-phase-ordering" "410" "-0.2" "6" "3" "2" "0"
+# Substrate/IO mutators remain enabled to exercise mutable topology/runtime paths.
+run_benchmark_and_verify "flatland" "404" "-0.2" "6" "3" "2" "0.02"
+run_benchmark_and_verify "gtsa" "405" "-0.2" "6" "3" "2" "0.02"
+run_benchmark_and_verify "fx" "406" "-0.2" "6" "3" "2" "0.02"
+run_benchmark_and_verify "epitopes" "407" "-0.2" "6" "3" "2" "0.02"
+run_benchmark_and_verify "dtm" "408" "-0.2" "6" "3" "2" "0.02"
+run_benchmark_and_verify "pole2-balancing" "409" "-0.2" "6" "3" "2" "0.02"
+run_benchmark_and_verify "llvm-phase-ordering" "410" "-0.2" "6" "3" "2" "0.02"
 
 echo "[done-check] PASS"
