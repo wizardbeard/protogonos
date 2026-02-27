@@ -15,6 +15,7 @@ import (
 	"protogonos/internal/genotype"
 	protoio "protogonos/internal/io"
 	"protogonos/internal/model"
+	"protogonos/internal/morphology"
 	"protogonos/internal/scape"
 	"protogonos/internal/substrate"
 	"protogonos/internal/tuning"
@@ -2056,6 +2057,9 @@ func (m *PopulationMonitor) mutateFromParent(ctx context.Context, parent model.G
 				continue
 			}
 			return model.Genome{}, LineageRecord{}, opErr
+		}
+		if err := morphology.EnsureGenomeIOCompatibility(m.cfg.Scape.Name(), next); err != nil {
+			continue
 		}
 		mutated = next
 		operationNames = append(operationNames, operationName)

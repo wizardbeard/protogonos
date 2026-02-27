@@ -58,6 +58,33 @@ func (o *flakyNoSynapsesMutation) Apply(_ context.Context, genome model.Genome) 
 	return mutated, nil
 }
 
+type flakyIOIncompatibleMutation struct {
+	name           string
+	failuresBefore int
+	calls          int
+}
+
+func (o *flakyIOIncompatibleMutation) Name() string { return o.name }
+
+func (o *flakyIOIncompatibleMutation) Apply(_ context.Context, genome model.Genome) (model.Genome, error) {
+	o.calls++
+	mutated := genome
+	if o.calls <= o.failuresBefore {
+		mutated.SensorNeuronLinks = append([]model.SensorNeuronLink(nil), genome.SensorNeuronLinks...)
+		mutated.SensorNeuronLinks = append(mutated.SensorNeuronLinks, model.SensorNeuronLink{
+			SensorID: "missing_sensor",
+			NeuronID: "i",
+		})
+		return mutated, nil
+	}
+	if len(mutated.Synapses) == 0 {
+		return model.Genome{}, ErrNoSynapses
+	}
+	mutated.Synapses = append([]model.Synapse(nil), genome.Synapses...)
+	mutated.Synapses[0].Weight += 0.5
+	return mutated, nil
+}
+
 type captureSpeciesSelector struct {
 	gotSpeciesByGenomeID map[string]string
 }
@@ -1442,6 +1469,44 @@ func TestPopulationMonitorMutationRetriesUntilSuccessCount(t *testing.T) {
 	// the child should reach 2.6.
 	if got := child.Synapses[0].Weight; got != 2.6 {
 		t.Fatalf("expected 3 successful mutation applications, got weight=%f want=2.6", got)
+	}
+}
+
+func TestPopulationMonitorMutationRetriesOnIOIncompatibleCandidate(t *testing.T) {
+	parent := newLinearGenome("g3", -0.4)
+	flaky := &flakyIOIncompatibleMutation{name: "flaky_io", failuresBefore: 2}
+
+	monitor, err := NewPopulationMonitor(MonitorConfig{
+		Scape:                oneDimScape{},
+		MutationPolicy:       []WeightedMutation{{Operator: flaky, Weight: 1}},
+		TopologicalMutations: ConstTopologicalMutations{Count: 1},
+		PopulationSize:       2,
+		EliteCount:           1,
+		Generations:          1,
+		Workers:              1,
+		Seed:                 3,
+		InputNeuronIDs:       []string{"i"},
+		OutputNeuronIDs:      []string{"o"},
+	})
+	if err != nil {
+		t.Fatalf("new monitor: %v", err)
+	}
+
+	child, record, err := monitor.mutateFromParent(context.Background(), parent, 0, 0)
+	if err != nil {
+		t.Fatalf("mutateFromParent: %v", err)
+	}
+	if flaky.calls != 3 {
+		t.Fatalf("expected two incompatible retries plus one success, calls=%d", flaky.calls)
+	}
+	if record.Operation != "flaky_io" {
+		t.Fatalf("expected successful mutation operation name, got=%s", record.Operation)
+	}
+	if len(record.Events) != 1 || record.Events[0].Mutation != "flaky_io" {
+		t.Fatalf("expected one successful mutation event, got=%+v", record.Events)
+	}
+	if got, want := child.Synapses[0].Weight, parent.Synapses[0].Weight+0.5; got != want {
+		t.Fatalf("unexpected child weight after successful retry, got=%f want=%f", got, want)
 	}
 }
 

@@ -49,6 +49,7 @@ Status keys:
 
 ## Completed in latest iterations
 
+- Tightened `population_monitor.erl` mutation-loop robustness by validating post-mutation genome IO compatibility before accepting a mutation step; incompatible offspring candidates are now retried within the existing bounded-attempt loop instead of failing later during runtime evaluation.
 - Tightened morphology/IO compatibility validation so genomes now undergo link-integrity checks (`sensor_neuron_links` and `neuron_actuator_links` must reference known sensors/actuators and existing neurons, including substrate CPP/CEP endpoint IDs), catching malformed IO topologies earlier in parity flows.
 - Restored parity smoke gate coverage with substrate mutations enabled by running smoke scapes at `--w-substrate 0.02` in `scripts/done_check.sh` (instead of temporarily forcing `0`), so done-check once again exercises mutable IO/substrate mutation paths across `flatland`/`gtsa`/`fx`/`epitopes`/`dtm`/`pole2-balancing`/`llvm-phase-ordering`.
 - Tightened `cortex.erl` IO-topology coherence by routing Tick-time sensor inputs through explicit `sensor_neuron_links`, routing actuator dispatch through `neuron_actuator_links` when present, and allowing bounded step-input width drift without hard failure so IO-structure mutations no longer crash runtime evaluation on input-width mismatches.
