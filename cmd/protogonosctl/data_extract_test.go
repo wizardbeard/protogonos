@@ -279,3 +279,43 @@ func TestRunDataExtractTableCheckScaleMaxAndSave(t *testing.T) {
 		t.Fatalf("unexpected scaled value row2 col2: %f", got)
 	}
 }
+
+func TestRunDataExtractTableCheckResolutionAndSave(t *testing.T) {
+	tmp := t.TempDir()
+	inPath := filepath.Join(tmp, "in.table.json")
+	outPath := filepath.Join(tmp, "out.table.json")
+	table := dataextract.TableFile{
+		Info: dataextract.TableInfo{Name: "resolution_test", IVL: 1, OVL: 0, TrnEnd: 4, ValEnd: 4, TstEnd: 4},
+		Rows: []dataextract.TableRow{
+			{Index: 1, Inputs: []float64{0}},
+			{Index: 2, Inputs: []float64{0}},
+			{Index: 3, Inputs: []float64{1}},
+			{Index: 4, Inputs: []float64{3}},
+		},
+	}
+	if err := dataextract.WriteTableFile(inPath, table); err != nil {
+		t.Fatalf("write input table: %v", err)
+	}
+
+	err := runDataExtract(context.Background(), []string{
+		"--table-check", inPath,
+		"--table-resolution", "2",
+		"--table-resolution-drop-zero-run", "1",
+		"--table-resolution-asinh=true",
+		"--table-save", outPath,
+	})
+	if err != nil {
+		t.Fatalf("run data-extract table-check resolution: %v", err)
+	}
+
+	resolved, err := dataextract.ReadTableFile(outPath)
+	if err != nil {
+		t.Fatalf("read output table: %v", err)
+	}
+	if len(resolved.Rows) != 1 {
+		t.Fatalf("expected one resolved row, got %d", len(resolved.Rows))
+	}
+	if got := resolved.Rows[0].Inputs[0]; math.Abs(got-math.Asinh(2)) > 1e-9 {
+		t.Fatalf("unexpected resolved value: %f", got)
+	}
+}

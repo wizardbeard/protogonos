@@ -50,6 +50,9 @@ func runDataExtract(_ context.Context, args []string) error {
 	tableScaleAsinh := fs.Bool("table-scale-asinh", false, "apply asinh scaling to table inputs (dg_scale2 analog)")
 	tableBinarize := fs.Bool("table-binarize", false, "binarize table inputs (dg_bin analog)")
 	tableCleanZeroInputs := fs.Bool("table-clean-zero-inputs", false, "remove rows whose input-vector sum is zero (dg_clean analog)")
+	tableResolution := fs.Int("table-resolution", 0, "resolutionator window size for table inputs (deep_gene_full analog)")
+	tableResolutionDropZeroRun := fs.Int("table-resolution-drop-zero-run", 200, "drop zero-input runs longer than this threshold during table resolution")
+	tableResolutionAsinh := fs.Bool("table-resolution-asinh", true, "apply asinh transform to resolved input-window averages")
 	tableStats := fs.Bool("table-stats", false, "print per-input-column min/avg/max stats")
 	tableZeroCounts := fs.Bool("table-zero-counts", false, "print zero/non-zero input counts and ratio")
 	if err := fs.Parse(args); err != nil {
@@ -57,10 +60,13 @@ func runDataExtract(_ context.Context, args []string) error {
 	}
 
 	transformOpts := tableTransformOptions{
-		ScaleMax:        *tableScaleMax,
-		ScaleAsinh:      *tableScaleAsinh,
-		Binarize:        *tableBinarize,
-		CleanZeroInputs: *tableCleanZeroInputs,
+		ScaleMax:           *tableScaleMax,
+		ScaleAsinh:         *tableScaleAsinh,
+		Binarize:           *tableBinarize,
+		CleanZeroInputs:    *tableCleanZeroInputs,
+		Resolution:         *tableResolution,
+		ResolutionDropZero: *tableResolutionDropZeroRun,
+		ResolutionUseAsinh: *tableResolutionAsinh,
 	}
 
 	if strings.TrimSpace(*tableCheck) != "" {
@@ -308,15 +314,23 @@ func parseIndexList(raw string) ([]int, error) {
 }
 
 type tableTransformOptions struct {
-	ScaleMax        bool
-	ScaleAsinh      bool
-	Binarize        bool
-	CleanZeroInputs bool
+	ScaleMax           bool
+	ScaleAsinh         bool
+	Binarize           bool
+	CleanZeroInputs    bool
+	Resolution         int
+	ResolutionDropZero int
+	ResolutionUseAsinh bool
 }
 
 func applyTableTransforms(table *dataextract.TableFile, opts tableTransformOptions) error {
 	if table == nil {
 		return errors.New("table is required")
+	}
+	if opts.Resolution > 1 {
+		if err := dataextract.ResolutionateInputs(table, opts.Resolution, opts.ResolutionDropZero, opts.ResolutionUseAsinh); err != nil {
+			return err
+		}
 	}
 	if opts.ScaleMax {
 		stats, err := dataextract.InputColumnStats(*table)

@@ -148,6 +148,116 @@ func CountZeroInputs(table TableFile) (zeroes, nonZeroes int, ratio float64) {
 	return zeroes, nonZeroes, ratio
 }
 
+func ResolutionateInputs(table *TableFile, resolution int, dropZeroRunOver int, applyAsinh bool) error {
+	if table == nil {
+		return fmt.Errorf("table is required")
+	}
+	if resolution <= 1 {
+		return nil
+	}
+	if len(table.Rows) == 0 {
+		return nil
+	}
+	width := len(table.Rows[0].Inputs)
+	if width == 0 {
+		return fmt.Errorf("table has no numeric input columns")
+	}
+	for _, row := range table.Rows {
+		if len(row.Inputs) != width {
+			return fmt.Errorf(
+				"inconsistent input width at row %d: got=%d want=%d",
+				row.Index,
+				len(row.Inputs),
+				width,
+			)
+		}
+	}
+
+	rows := applyZeroRunFilter(table.Rows, dropZeroRunOver)
+	if len(rows) < resolution {
+		table.Rows = nil
+		table.Info.TrnEnd = 0
+		table.Info.ValEnd = 0
+		table.Info.TstEnd = 0
+		return nil
+	}
+
+	out := make([]TableRow, 0, len(rows)/resolution)
+	for i := 0; i+resolution <= len(rows); i += resolution {
+		window := rows[i : i+resolution]
+		avgInputs := averageInputs(window, width)
+		if applyAsinh {
+			for idx, value := range avgInputs {
+				avgInputs[idx] = math.Log(value + math.Sqrt(value*value+1))
+			}
+		}
+		out = append(out, TableRow{
+			Index:  len(out) + 1,
+			Inputs: avgInputs,
+		})
+	}
+
+	table.Rows = out
+	table.Info.TrnEnd = len(out)
+	if table.Info.ValEnd > 0 {
+		table.Info.ValEnd = minInt(table.Info.ValEnd, len(out))
+	}
+	if table.Info.TstEnd > 0 {
+		table.Info.TstEnd = minInt(table.Info.TstEnd, len(out))
+	}
+	return nil
+}
+
+func applyZeroRunFilter(rows []TableRow, dropZeroRunOver int) []TableRow {
+	if dropZeroRunOver <= 0 || len(rows) == 0 {
+		return append([]TableRow(nil), rows...)
+	}
+	out := make([]TableRow, 0, len(rows))
+	zeroRun := make([]TableRow, 0, dropZeroRunOver+1)
+	flush := func() {
+		if len(zeroRun) == 0 {
+			return
+		}
+		if len(zeroRun) <= dropZeroRunOver {
+			out = append(out, zeroRun...)
+		}
+		zeroRun = zeroRun[:0]
+	}
+
+	for _, row := range rows {
+		if isZeroInputRow(row) {
+			zeroRun = append(zeroRun, row)
+			continue
+		}
+		flush()
+		out = append(out, row)
+	}
+	flush()
+	return out
+}
+
+func averageInputs(rows []TableRow, width int) []float64 {
+	avg := make([]float64, width)
+	for _, row := range rows {
+		for i, value := range row.Inputs {
+			avg[i] += value
+		}
+	}
+	scale := float64(len(rows))
+	for i := range avg {
+		avg[i] /= scale
+	}
+	return avg
+}
+
+func isZeroInputRow(row TableRow) bool {
+	total := 0.0
+	for _, value := range row.Inputs {
+		total += value
+	}
+	return total == 0
+}
+
 func minInt(a, b int) int {
 	if a < b {
 		return a

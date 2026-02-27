@@ -79,3 +79,40 @@ func TestCleanZeroInputRowsReindexes(t *testing.T) {
 		t.Fatalf("unexpected split bounds after clean: %+v", table.Info)
 	}
 }
+
+func TestResolutionateInputsWithZeroRunDropAndAsinh(t *testing.T) {
+	table := TableFile{
+		Info: TableInfo{
+			Name:   "resolution_test",
+			TrnEnd: 5,
+			ValEnd: 5,
+			TstEnd: 5,
+		},
+		Rows: []TableRow{
+			{Index: 1, Inputs: []float64{0, 0}},
+			{Index: 2, Inputs: []float64{0, 0}},
+			{Index: 3, Inputs: []float64{1, 3}},
+			{Index: 4, Inputs: []float64{3, 5}},
+			{Index: 5, Inputs: []float64{10, 10}},
+		},
+	}
+
+	if err := ResolutionateInputs(&table, 2, 1, true); err != nil {
+		t.Fatalf("resolutionate inputs: %v", err)
+	}
+	if len(table.Rows) != 1 {
+		t.Fatalf("expected one resolved row, got %d", len(table.Rows))
+	}
+	if table.Rows[0].Index != 1 {
+		t.Fatalf("expected reindexed resolved row, got %d", table.Rows[0].Index)
+	}
+	if got := table.Rows[0].Inputs[0]; math.Abs(got-math.Asinh(2)) > 1e-9 {
+		t.Fatalf("unexpected resolved col0: %f", got)
+	}
+	if got := table.Rows[0].Inputs[1]; math.Abs(got-math.Asinh(4)) > 1e-9 {
+		t.Fatalf("unexpected resolved col1: %f", got)
+	}
+	if table.Info.TrnEnd != 1 || table.Info.ValEnd != 1 || table.Info.TstEnd != 1 {
+		t.Fatalf("unexpected split bounds after resolutionate: %+v", table.Info)
+	}
+}
