@@ -49,6 +49,7 @@ Status keys:
 
 ## Completed in latest iterations
 
+- Expanded substrate CEP parity surface by registering reference-named CEP modes (`set_weight`, `set_abcn`) and aligning default `delta_weight` control behavior to a bounded thresholded update curve, with dedicated substrate runtime regression coverage.
 - Tightened `population_monitor.erl` mutation-loop robustness by validating post-mutation genome IO compatibility before accepting a mutation step; incompatible offspring candidates are now retried within the existing bounded-attempt loop instead of failing later during runtime evaluation.
 - Tightened morphology/IO compatibility validation so genomes now undergo link-integrity checks (`sensor_neuron_links` and `neuron_actuator_links` must reference known sensors/actuators and existing neurons, including substrate CPP/CEP endpoint IDs), catching malformed IO topologies earlier in parity flows.
 - Restored parity smoke gate coverage with substrate mutations enabled by running smoke scapes at `--w-substrate 0.02` in `scripts/done_check.sh` (instead of temporarily forcing `0`), so done-check once again exercises mutable IO/substrate mutation paths across `flatland`/`gtsa`/`fx`/`epitopes`/`dtm`/`pole2-balancing`/`llvm-phase-ordering`.

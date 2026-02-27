@@ -25,9 +25,9 @@ func TestSimpleRuntimeStep(t *testing.T) {
 	if err != nil {
 		t.Fatalf("step 1: %v", err)
 	}
-	// mean(inputs)=2, scale=0.5 => delta=1
+	// mean(inputs)=2 -> control saturates to 1, then scale=0.5 => delta=0.5.
 	for i, v := range w {
-		if v != 1 {
+		if v != 0.5 {
 			t.Fatalf("unexpected weight[%d]=%f", i, v)
 		}
 	}
@@ -36,11 +36,66 @@ func TestSimpleRuntimeStep(t *testing.T) {
 	if err != nil {
 		t.Fatalf("step 2: %v", err)
 	}
-	// mean(inputs)=2, delta=1, so each weight should now be 2.
+	// mean(inputs)=2 -> control saturates to 1, then scale=0.5 => +0.5 each step.
 	for i, v := range w {
-		if v != 2 {
+		if v != 1 {
 			t.Fatalf("unexpected weight[%d]=%f", i, v)
 		}
+	}
+}
+
+func TestSimpleRuntimeSetWeightCEP(t *testing.T) {
+	resetRegistriesForTests()
+	t.Cleanup(resetRegistriesForTests)
+
+	rt, err := NewSimpleRuntime(Spec{
+		CPPName: DefaultCPPName,
+		CEPName: SetWeightCEPName,
+	}, 1)
+	if err != nil {
+		t.Fatalf("new runtime: %v", err)
+	}
+
+	w, err := rt.Step(context.Background(), []float64{1})
+	if err != nil {
+		t.Fatalf("step 1: %v", err)
+	}
+	if len(w) != 1 || w[0] != 1 {
+		t.Fatalf("expected set_weight to set exact bounded weight to 1, got=%v", w)
+	}
+
+	// set_weight semantics set the value directly instead of accumulating.
+	w, err = rt.Step(context.Background(), []float64{1})
+	if err != nil {
+		t.Fatalf("step 2: %v", err)
+	}
+	if len(w) != 1 || w[0] != 1 {
+		t.Fatalf("expected set_weight to keep bounded weight at 1, got=%v", w)
+	}
+}
+
+func TestSimpleRuntimeSetABCNCEP(t *testing.T) {
+	resetRegistriesForTests()
+	t.Cleanup(resetRegistriesForTests)
+
+	rt, err := NewSimpleRuntime(Spec{
+		CPPName: DefaultCPPName,
+		CEPName: SetABCNCEPName,
+	}, 1)
+	if err != nil {
+		t.Fatalf("new runtime: %v", err)
+	}
+
+	first, err := rt.Step(context.Background(), []float64{1})
+	if err != nil {
+		t.Fatalf("step 1: %v", err)
+	}
+	second, err := rt.Step(context.Background(), []float64{1})
+	if err != nil {
+		t.Fatalf("step 2: %v", err)
+	}
+	if len(first) != 1 || len(second) != 1 || second[0] <= first[0] {
+		t.Fatalf("expected iterative set_abcn surrogate behavior, first=%v second=%v", first, second)
 	}
 }
 
