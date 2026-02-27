@@ -9,6 +9,7 @@ import (
 	"math"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -22,7 +23,7 @@ const (
 
 func runBenchmarkExperiment(ctx context.Context, args []string) error {
 	if len(args) == 0 {
-		return errors.New("benchmark-experiment requires a subcommand: start|continue|show|list|evaluations|report|trace2graph|plot")
+		return errors.New("benchmark-experiment requires a subcommand: start|continue|show|list|evaluations|report|trace2graph|plot|chg-mrph|vector-compare")
 	}
 	switch args[0] {
 	case "start":
@@ -41,6 +42,10 @@ func runBenchmarkExperiment(ctx context.Context, args []string) error {
 		return runBenchmarkExperimentTraceToGraph(args[1:])
 	case "plot":
 		return runBenchmarkExperimentPlot(args[1:])
+	case "chg-mrph":
+		return runBenchmarkExperimentChangeMorphology(args[1:])
+	case "vector-compare":
+		return runBenchmarkExperimentVectorCompare(args[1:])
 	default:
 		return fmt.Errorf("unknown benchmark-experiment subcommand: %s", args[0])
 	}
@@ -494,6 +499,154 @@ func runBenchmarkExperimentPlot(args []string) error {
 		fmt.Printf("%d %g\n", point.Index, point.Value)
 	}
 	return nil
+}
+
+func runBenchmarkExperimentChangeMorphology(args []string) error {
+	fs := flag.NewFlagSet("benchmark-experiment chg-mrph", flag.ContinueOnError)
+	id := fs.String("id", "", "experiment id (updates benchmark args)")
+	runID := fs.String("run-id", "", "run id (updates persisted run config)")
+	scapeName := fs.String("scape", "", "new scape/morphology tag")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	experimentID := strings.TrimSpace(*id)
+	targetRunID := strings.TrimSpace(*runID)
+	newScape := strings.TrimSpace(*scapeName)
+	if newScape == "" {
+		return errors.New("benchmark-experiment chg-mrph requires --scape")
+	}
+	if experimentID == "" && targetRunID == "" {
+		return errors.New("benchmark-experiment chg-mrph requires --id or --run-id")
+	}
+
+	if experimentID != "" {
+		exp, ok, err := stats.ReadBenchmarkExperiment(benchmarksDir, experimentID)
+		if err != nil {
+			return err
+		}
+		if !ok {
+			return fmt.Errorf("benchmark experiment not found: %s", experimentID)
+		}
+		exp.BenchmarkArgs = upsertLongFlagArg(exp.BenchmarkArgs, "scape", newScape)
+		if err := stats.WriteBenchmarkExperiment(benchmarksDir, exp); err != nil {
+			return err
+		}
+		fmt.Printf("benchmark_experiment_chg_mrph id=%s scape=%s\n", exp.ID, newScape)
+	}
+
+	if targetRunID != "" {
+		cfg, ok, err := stats.ReadRunConfig(benchmarksDir, targetRunID)
+		if err != nil {
+			return err
+		}
+		if !ok {
+			return fmt.Errorf("benchmark run config not found: %s", targetRunID)
+		}
+		oldScape := cfg.Scape
+		cfg.Scape = newScape
+		if err := stats.WriteRunConfig(benchmarksDir, targetRunID, cfg); err != nil {
+			return err
+		}
+		entries, err := stats.ListRunIndex(benchmarksDir)
+		if err != nil {
+			return err
+		}
+		for _, entry := range entries {
+			if entry.RunID != targetRunID {
+				continue
+			}
+			entry.Scape = newScape
+			if err := stats.AppendRunIndex(benchmarksDir, entry); err != nil {
+				return err
+			}
+			break
+		}
+		fmt.Printf("benchmark_run_chg_mrph run_id=%s old_scape=%s new_scape=%s\n", targetRunID, oldScape, newScape)
+	}
+	return nil
+}
+
+func runBenchmarkExperimentVectorCompare(args []string) error {
+	fs := flag.NewFlagSet("benchmark-experiment vector-compare", flag.ContinueOnError)
+	vectorA := fs.String("a", "", "vector A as comma-separated values")
+	vectorB := fs.String("b", "", "vector B as comma-separated values")
+	jsonOut := fs.Bool("json", false, "emit vector comparison as JSON")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	a, err := parseFloatVector(*vectorA)
+	if err != nil {
+		return fmt.Errorf("parse --a: %w", err)
+	}
+	b, err := parseFloatVector(*vectorB)
+	if err != nil {
+		return fmt.Errorf("parse --b: %w", err)
+	}
+	result := struct {
+		A  []float64 `json:"a"`
+		B  []float64 `json:"b"`
+		GT bool      `json:"gt"`
+		LT bool      `json:"lt"`
+		EQ bool      `json:"eq"`
+	}{
+		A:  a,
+		B:  b,
+		GT: stats.BenchmarkerVectorGT(a, b),
+		LT: stats.BenchmarkerVectorLT(a, b),
+		EQ: stats.BenchmarkerVectorEQ(a, b),
+	}
+	if *jsonOut {
+		enc := json.NewEncoder(os.Stdout)
+		enc.SetIndent("", "  ")
+		return enc.Encode(result)
+	}
+	fmt.Printf("gt=%t lt=%t eq=%t\n", result.GT, result.LT, result.EQ)
+	return nil
+}
+
+func upsertLongFlagArg(args []string, flagName, value string) []string {
+	normalized := make([]string, 0, len(args)+2)
+	found := false
+	for i := 0; i < len(args); i++ {
+		arg := args[i]
+		switch {
+		case arg == "--"+flagName:
+			if !found {
+				normalized = append(normalized, arg, value)
+				found = true
+			}
+			if i+1 < len(args) {
+				i++
+			}
+		case strings.HasPrefix(arg, "--"+flagName+"="):
+			if !found {
+				normalized = append(normalized, "--"+flagName+"="+value)
+				found = true
+			}
+		default:
+			normalized = append(normalized, arg)
+		}
+	}
+	if !found {
+		normalized = append(normalized, "--"+flagName, value)
+	}
+	return normalized
+}
+
+func parseFloatVector(raw string) ([]float64, error) {
+	parts := strings.Split(strings.TrimSpace(raw), ",")
+	if len(parts) == 0 || strings.TrimSpace(parts[0]) == "" {
+		return nil, errors.New("vector is required")
+	}
+	values := make([]float64, 0, len(parts))
+	for _, part := range parts {
+		value, err := strconv.ParseFloat(strings.TrimSpace(part), 64)
+		if err != nil {
+			return nil, err
+		}
+		values = append(values, value)
+	}
+	return values, nil
 }
 
 func executeBenchmarkExperiment(ctx context.Context, exp *stats.BenchmarkExperiment) error {

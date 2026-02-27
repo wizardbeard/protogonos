@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strconv"
+	"strings"
 
 	"protogonos/internal/model"
 )
@@ -344,6 +345,23 @@ func ReadRunConfig(baseDir, runID string) (RunConfig, bool, error) {
 		return RunConfig{}, false, err
 	}
 	return cfg, true, nil
+}
+
+func WriteRunConfig(baseDir, runID string, cfg RunConfig) error {
+	if strings.TrimSpace(runID) == "" {
+		return fmt.Errorf("run id is required")
+	}
+	if strings.TrimSpace(cfg.RunID) == "" {
+		cfg.RunID = strings.TrimSpace(runID)
+	}
+	if cfg.RunID != strings.TrimSpace(runID) {
+		return fmt.Errorf("run config run id mismatch: got=%s want=%s", cfg.RunID, strings.TrimSpace(runID))
+	}
+	runDir := filepath.Join(baseDir, runID)
+	if err := os.MkdirAll(runDir, 0o755); err != nil {
+		return err
+	}
+	return writeJSON(filepath.Join(runDir, "config.json"), cfg)
 }
 
 func ReadTopGenomes(baseDir, runID string) ([]TopGenome, bool, error) {

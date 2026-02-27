@@ -262,6 +262,31 @@ func TestReadRunConfigAndTopGenomesMissingReturnsNotFound(t *testing.T) {
 	}
 }
 
+func TestWriteRunConfig(t *testing.T) {
+	baseDir := t.TempDir()
+	runID := "write-config-run"
+	cfg := RunConfig{
+		RunID:          runID,
+		Scape:          "xor",
+		PopulationSize: 8,
+		Generations:    2,
+		Seed:           3,
+	}
+	if err := WriteRunConfig(baseDir, runID, cfg); err != nil {
+		t.Fatalf("write run config: %v", err)
+	}
+	loaded, ok, err := ReadRunConfig(baseDir, runID)
+	if err != nil {
+		t.Fatalf("read run config: %v", err)
+	}
+	if !ok {
+		t.Fatal("expected written config to exist")
+	}
+	if loaded.RunID != runID || loaded.Scape != "xor" || loaded.PopulationSize != 8 {
+		t.Fatalf("unexpected loaded run config: %+v", loaded)
+	}
+}
+
 func TestRunIndexEqualTimestampPrefersLaterAppend(t *testing.T) {
 	baseDir := t.TempDir()
 	ts := "2026-02-10T12:00:00Z"

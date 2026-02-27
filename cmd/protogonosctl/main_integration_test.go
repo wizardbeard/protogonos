@@ -1378,6 +1378,55 @@ func TestBenchmarkExperimentEvaluationsAndReport(t *testing.T) {
 	if plotMaxPayload.Points[0].Index != 0 {
 		t.Fatalf("expected max plot to start at 0, got %+v", plotMaxPayload.Points[0])
 	}
+
+	chgOut, err := captureStdout(func() error {
+		return run(context.Background(), []string{"benchmark-experiment", "chg-mrph", "--id", "exp-reporting", "--run-id", "exp-reporting-run-001", "--scape", "regression-mimic"})
+	})
+	if err != nil {
+		t.Fatalf("benchmark-experiment chg-mrph: %v", err)
+	}
+	if !strings.Contains(chgOut, "benchmark_experiment_chg_mrph id=exp-reporting scape=regression-mimic") {
+		t.Fatalf("unexpected chg-mrph output: %s", chgOut)
+	}
+	expAfter, ok, err := stats.ReadBenchmarkExperiment("benchmarks", "exp-reporting")
+	if err != nil {
+		t.Fatalf("read experiment after chg-mrph: %v", err)
+	}
+	if !ok {
+		t.Fatal("expected experiment to exist after chg-mrph")
+	}
+	joinedArgs := strings.Join(expAfter.BenchmarkArgs, " ")
+	if !strings.Contains(joinedArgs, "--scape regression-mimic") && !strings.Contains(joinedArgs, "--scape=regression-mimic") {
+		t.Fatalf("expected updated scape arg in benchmark args: %v", expAfter.BenchmarkArgs)
+	}
+	cfgAfter, ok, err := stats.ReadRunConfig("benchmarks", "exp-reporting-run-001")
+	if err != nil {
+		t.Fatalf("read run config after chg-mrph: %v", err)
+	}
+	if !ok {
+		t.Fatal("expected run config to exist after chg-mrph")
+	}
+	if cfgAfter.Scape != "regression-mimic" {
+		t.Fatalf("expected run config scape update, got %+v", cfgAfter)
+	}
+
+	vectorOut, err := captureStdout(func() error {
+		return run(context.Background(), []string{"benchmark-experiment", "vector-compare", "--a", "1,2", "--b", "1,1", "--json"})
+	})
+	if err != nil {
+		t.Fatalf("benchmark-experiment vector-compare: %v", err)
+	}
+	var vectorPayload struct {
+		GT bool `json:"gt"`
+		LT bool `json:"lt"`
+		EQ bool `json:"eq"`
+	}
+	if err := json.Unmarshal([]byte(vectorOut), &vectorPayload); err != nil {
+		t.Fatalf("decode vector payload: %v", err)
+	}
+	if !vectorPayload.GT || vectorPayload.LT || vectorPayload.EQ {
+		t.Fatalf("unexpected vector comparison payload: %+v", vectorPayload)
+	}
 }
 
 func TestBenchmarkCommandConfigLoadsMap2RecAndAllowsFlagOverrides(t *testing.T) {
