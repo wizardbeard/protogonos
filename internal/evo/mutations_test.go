@@ -1884,6 +1884,9 @@ func TestAddRandomCEPRequiresSubstrateConfig(t *testing.T) {
 		if mutated.Substrate == nil || mutated.Substrate.CEPName == "" {
 			t.Fatal("expected cep mutation on substrate-configured genome")
 		}
+		if len(mutated.Substrate.CEPNames) == 0 || mutated.Substrate.CEPNames[0] != mutated.Substrate.CEPName {
+			t.Fatalf("expected cep-name chain to be synchronized with primary cep name, cep=%q chain=%v", mutated.Substrate.CEPName, mutated.Substrate.CEPNames)
+		}
 		if len(mutated.Neurons) != len(withSubstrate.Neurons)+1 {
 			t.Fatalf("expected helper-neuron scaffold on add_cep, before=%d after=%d", len(withSubstrate.Neurons), len(mutated.Neurons))
 		}
@@ -2084,6 +2087,9 @@ func TestRemoveRandomCPPAndCEP(t *testing.T) {
 	}
 	if cepMutated.Substrate.CEPName != "" {
 		t.Fatalf("expected cleared cep name, got=%q", cepMutated.Substrate.CEPName)
+	}
+	if len(cepMutated.Substrate.CEPNames) != 0 {
+		t.Fatalf("expected cleared cep-name chain, got=%v", cepMutated.Substrate.CEPNames)
 	}
 	if _, err := (&RemoveRandomCPP{}).Apply(context.Background(), model.Genome{}); !errors.Is(err, ErrNoMutationChoice) {
 		t.Fatalf("expected ErrNoMutationChoice for remove cpp without substrate, got %v", err)

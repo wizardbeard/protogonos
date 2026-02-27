@@ -49,6 +49,7 @@ Status keys:
 
 ## Completed in latest iterations
 
+- Tightened `genome_mutator.erl` CEP-selection consistency by synchronizing substrate CEP chain metadata (`CEPName` and `CEPNames`) during `add_cep`/`remove_cep` mutations and substrate default normalization.
 - Expanded substrate CEP parity surface by registering reference-named CEP modes (`set_weight`, `set_abcn`) and aligning default `delta_weight` control behavior to a bounded thresholded update curve, with dedicated substrate runtime regression coverage.
 - Tightened substrate CEP runtime parity by applying reference-style substrate weight saturation (`±3.1415`) on CEP apply paths (`delta_weight`, `set_weight`, `set_abcn`) with explicit runtime regression coverage for saturated set and iterative update behavior.
 - Expanded substrate CEP fan-in parity by adding ordered multi-CEP chain support (`Spec.CEPNames`) in `SimpleRuntime` so CEP application sequencing can mirror reference fan-in command ordering semantics when multiple CEP stages are configured.

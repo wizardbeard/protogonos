@@ -2172,7 +2172,7 @@ func (o *AddRandomCEP) Apply(_ context.Context, genome model.Genome) (model.Geno
 
 	mutated := cloneGenome(genome)
 	currentGeneration := currentGenomeGeneration(mutated)
-	mutated.Substrate.CEPName = selected
+	setPrimarySubstrateCEP(mutated.Substrate, selected)
 	if mutated.Substrate.CPPName == "" {
 		mutated.Substrate.CPPName = substrate.DefaultCPPName
 	}
@@ -2235,7 +2235,7 @@ func (o *RemoveRandomCEP) Apply(_ context.Context, genome model.Genome) (model.G
 		return model.Genome{}, ErrNoMutationChoice
 	}
 	mutated := cloneGenome(genome)
-	mutated.Substrate.CEPName = ""
+	setPrimarySubstrateCEP(mutated.Substrate, "")
 	return mutated, nil
 }
 
@@ -3936,8 +3936,19 @@ func ensureSubstrateConfig(genome *model.Genome) {
 			genome.Substrate.CPPName = substrate.DefaultCPPName
 		}
 		if genome.Substrate.CEPName == "" {
-			genome.Substrate.CEPName = substrate.DefaultCEPName
+			for _, name := range genome.Substrate.CEPNames {
+				trimmed := strings.TrimSpace(name)
+				if trimmed == "" {
+					continue
+				}
+				genome.Substrate.CEPName = trimmed
+				break
+			}
+			if genome.Substrate.CEPName == "" {
+				genome.Substrate.CEPName = substrate.DefaultCEPName
+			}
 		}
+		setPrimarySubstrateCEP(genome.Substrate, genome.Substrate.CEPName)
 		if genome.Substrate.Parameters == nil {
 			genome.Substrate.Parameters = map[string]float64{}
 		}
@@ -3946,7 +3957,32 @@ func ensureSubstrateConfig(genome *model.Genome) {
 	genome.Substrate = &model.SubstrateConfig{
 		CPPName:    substrate.DefaultCPPName,
 		CEPName:    substrate.DefaultCEPName,
+		CEPNames:   []string{substrate.DefaultCEPName},
 		Dimensions: []int{1, 1},
 		Parameters: map[string]float64{},
 	}
+}
+
+func setPrimarySubstrateCEP(cfg *model.SubstrateConfig, name string) {
+	if cfg == nil {
+		return
+	}
+	cfg.CEPName = strings.TrimSpace(name)
+	if cfg.CEPName == "" {
+		cfg.CEPNames = nil
+		return
+	}
+
+	filteredTail := make([]string, 0, len(cfg.CEPNames))
+	for i, existing := range cfg.CEPNames {
+		if i == 0 {
+			continue
+		}
+		trimmed := strings.TrimSpace(existing)
+		if trimmed == "" {
+			continue
+		}
+		filteredTail = append(filteredTail, trimmed)
+	}
+	cfg.CEPNames = append([]string{cfg.CEPName}, filteredTail...)
 }

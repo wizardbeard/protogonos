@@ -58,6 +58,7 @@ Status legend:
 
 ## Latest iteration updates
 
+- 2026-02-27: tightened genome-mutator CEP-selection consistency by synchronizing substrate CEP chain metadata (`CEPName`/`CEPNames`) during `add_cep` and `remove_cep` mutations plus substrate default normalization.
 - 2026-02-27: expanded substrate CEP runtime surface with reference-named modes (`set_weight`, `set_abcn`) and aligned default `delta_weight` updates to thresholded bounded control semantics, with updated substrate runtime tests.
 - 2026-02-27: tightened substrate CEP runtime parity by applying reference-style weight saturation (`±3.1415`) across `delta_weight`/`set_weight`/`set_abcn` CEP apply paths, including explicit saturation regression tests for set and iterative modes.
 - 2026-02-27: expanded substrate CEP fan-in parity by adding ordered CEP chain execution (`Spec.CEPNames`) in `SimpleRuntime`, allowing multi-stage CEP apply ordering analogous to reference CEP fan-in command sequencing.
