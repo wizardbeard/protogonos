@@ -6,6 +6,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"protogonos/internal/dataextract"
 )
 
 func TestRunDataExtractGTSA(t *testing.T) {
@@ -150,5 +152,46 @@ func TestRunDataExtractChrHMM(t *testing.T) {
 	got := string(data)
 	if got != "from,to,tag,extra0,extra1\n100,200,Enh,x,y\n" {
 		t.Fatalf("unexpected chr-hmm output:\n%s", got)
+	}
+}
+
+func TestRunDataExtractWritesTableFile(t *testing.T) {
+	tmp := t.TempDir()
+	in := filepath.Join(tmp, "raw.csv")
+	out := filepath.Join(tmp, "gtsa.csv")
+	tablePath := filepath.Join(tmp, "gtsa.table.json")
+	raw := "t,close\n0,1.1\n1,1.2\n"
+	if err := os.WriteFile(in, []byte(raw), 0o644); err != nil {
+		t.Fatalf("write input: %v", err)
+	}
+
+	err := runDataExtract(context.Background(), []string{
+		"--scape", "gtsa",
+		"--in", in,
+		"--out", out,
+		"--value-col", "close",
+		"--table-out", tablePath,
+		"--table-name", "gtsa_table",
+	})
+	if err != nil {
+		t.Fatalf("run data-extract table-out: %v", err)
+	}
+
+	table, err := dataextract.ReadTableFile(tablePath)
+	if err != nil {
+		t.Fatalf("read table file: %v", err)
+	}
+	if table.Info.Name != "gtsa_table" {
+		t.Fatalf("unexpected table info: %+v", table.Info)
+	}
+	if len(table.Rows) != 2 {
+		t.Fatalf("expected 2 table rows, got %d", len(table.Rows))
+	}
+
+	if err := runDataExtract(context.Background(), []string{
+		"--table-check", tablePath,
+		"--dump-limit", "1",
+	}); err != nil {
+		t.Fatalf("run data-extract table-check: %v", err)
 	}
 }

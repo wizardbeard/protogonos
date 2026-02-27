@@ -6,6 +6,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 
@@ -40,8 +41,32 @@ func runDataExtract(_ context.Context, args []string) error {
 	fromIndex := fs.Int("from-index", 1, "chr-hmm from column index")
 	toIndex := fs.Int("to-index", 2, "chr-hmm to column index")
 	tagIndex := fs.Int("tag-index", 3, "chr-hmm tag column index")
+	tableOut := fs.String("table-out", "", "optional ETS-like table file (.json) output path")
+	tableName := fs.String("table-name", "", "optional table name for --table-out")
+	tableCheck := fs.String("table-check", "", "check/dump existing table file and exit")
+	dumpLimit := fs.Int("dump-limit", 10, "max table rows to print for --table-check")
 	if err := fs.Parse(args); err != nil {
 		return err
+	}
+
+	if strings.TrimSpace(*tableCheck) != "" {
+		table, err := dataextract.ReadTableFile(*tableCheck)
+		if err != nil {
+			return err
+		}
+		fmt.Printf("table_check name=%s rows=%d ivl=%d ovl=%d trn_end=%d val_end=%d tst_end=%d\n",
+			table.Info.Name,
+			len(table.Rows),
+			table.Info.IVL,
+			table.Info.OVL,
+			table.Info.TrnEnd,
+			table.Info.ValEnd,
+			table.Info.TstEnd,
+		)
+		for _, row := range dataextract.DumpTable(table, *dumpLimit) {
+			fmt.Printf("row index=%d inputs=%v targets=%v fields=%v\n", row.Index, row.Inputs, row.Targets, row.Fields)
+		}
+		return nil
 	}
 
 	if strings.TrimSpace(*scapeName) == "" {
@@ -175,6 +200,36 @@ func runDataExtract(_ context.Context, args []string) error {
 	}
 	if err != nil {
 		return err
+	}
+
+	if strings.TrimSpace(*tableOut) != "" {
+		outputCSV, err := os.Open(*outputPath)
+		if err != nil {
+			return err
+		}
+		defer func() {
+			_ = outputCSV.Close()
+		}()
+
+		name := strings.TrimSpace(*tableName)
+		if name == "" {
+			base := filepath.Base(*tableOut)
+			ext := filepath.Ext(base)
+			name = strings.TrimSuffix(base, ext)
+			if name == "" {
+				name = "table"
+			}
+		}
+		table, err := dataextract.BuildTableFromExtractedCSV(outputCSV, dataextract.BuildTableOptions{
+			Scape: strings.ToLower(strings.TrimSpace(*scapeName)),
+			Name:  name,
+		})
+		if err != nil {
+			return err
+		}
+		if err := dataextract.WriteTableFile(*tableOut, table); err != nil {
+			return err
+		}
 	}
 
 	fmt.Printf("data_extract scape=%s in=%s out=%s normalize=%s\n", strings.ToLower(strings.TrimSpace(*scapeName)), *inputPath, *outputPath, strings.ToLower(strings.TrimSpace(*normalize)))
