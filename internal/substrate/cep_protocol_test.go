@@ -1,0 +1,102 @@
+package substrate
+
+import (
+	"errors"
+	"math"
+	"testing"
+)
+
+func TestBuildCEPCommandSetWeight(t *testing.T) {
+	command, err := BuildCEPCommand(SetWeightCEPName, []float64{1}, map[string]float64{"scale": 0.5})
+	if err != nil {
+		t.Fatalf("build set_weight command: %v", err)
+	}
+	if command.Command != SetWeightCEPName {
+		t.Fatalf("unexpected command: %s", command.Command)
+	}
+	if len(command.Signal) != 1 || math.Abs(command.Signal[0]-0.5) > 1e-9 {
+		t.Fatalf("unexpected set_weight signal: %+v", command.Signal)
+	}
+}
+
+func TestBuildCEPCommandDeltaWeightSetIterativeAlias(t *testing.T) {
+	command, err := BuildCEPCommand(DefaultCEPName, []float64{-1}, nil)
+	if err != nil {
+		t.Fatalf("build delta_weight command: %v", err)
+	}
+	if command.Command != SetIterativeCEPName {
+		t.Fatalf("expected set_iterative command, got=%s", command.Command)
+	}
+	if len(command.Signal) != 1 || math.Abs(command.Signal[0]+1) > 1e-9 {
+		t.Fatalf("unexpected delta signal: %+v", command.Signal)
+	}
+}
+
+func TestBuildCEPCommandSetABCNPassThrough(t *testing.T) {
+	output := []float64{0.25, 0.1, 0.2, -0.3, 0.9}
+	command, err := BuildCEPCommand(SetABCNCEPName, output, nil)
+	if err != nil {
+		t.Fatalf("build set_abcn command: %v", err)
+	}
+	if command.Command != SetABCNCEPName {
+		t.Fatalf("unexpected command: %s", command.Command)
+	}
+	if len(command.Signal) != len(output) {
+		t.Fatalf("unexpected set_abcn signal width: got=%d want=%d", len(command.Signal), len(output))
+	}
+	for i := range output {
+		if command.Signal[i] != output[i] {
+			t.Fatalf("unexpected set_abcn signal[%d]: got=%v want=%v", i, command.Signal[i], output[i])
+		}
+	}
+}
+
+func TestCEPProcessForwardOrderedFanIn(t *testing.T) {
+	p, err := NewCEPProcess(SetABCNCEPName, nil, []string{"n1", "n2"})
+	if err != nil {
+		t.Fatalf("new cep process: %v", err)
+	}
+
+	if _, ready, err := p.Forward("n1", []float64{0.2}); err != nil {
+		t.Fatalf("forward n1: %v", err)
+	} else if ready {
+		t.Fatal("unexpected ready after first fan-in message")
+	}
+
+	command, ready, err := p.Forward("n2", []float64{0.8})
+	if err != nil {
+		t.Fatalf("forward n2: %v", err)
+	}
+	if !ready {
+		t.Fatal("expected ready command after full fan-in cycle")
+	}
+	if command.Command != SetABCNCEPName {
+		t.Fatalf("unexpected command: %s", command.Command)
+	}
+	// Output should preserve fan-in order [0.2, 0.8].
+	if len(command.Signal) != 2 || command.Signal[0] != 0.2 || command.Signal[1] != 0.8 {
+		t.Fatalf("unexpected command signal: %+v", command.Signal)
+	}
+}
+
+func TestCEPProcessRejectsUnexpectedSender(t *testing.T) {
+	p, err := NewCEPProcess(DefaultCEPName, nil, []string{"n1", "n2"})
+	if err != nil {
+		t.Fatalf("new cep process: %v", err)
+	}
+
+	if _, _, err := p.Forward("n2", []float64{1}); !errors.Is(err, ErrUnexpectedCEPForwardPID) {
+		t.Fatalf("expected ErrUnexpectedCEPForwardPID, got %v", err)
+	}
+}
+
+func TestCEPProcessTerminate(t *testing.T) {
+	p, err := NewCEPProcess(DefaultCEPName, nil, []string{"n1"})
+	if err != nil {
+		t.Fatalf("new cep process: %v", err)
+	}
+	p.Terminate()
+	if _, _, err := p.Forward("n1", []float64{1}); !errors.Is(err, ErrCEPProcessTerminated) {
+		t.Fatalf("expected ErrCEPProcessTerminated, got %v", err)
+	}
+}
