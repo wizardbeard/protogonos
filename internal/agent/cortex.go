@@ -346,7 +346,19 @@ func (c *Cortex) executeInputMap(ctx context.Context, inputByNeuron map[string]f
 		outputs[i] = values[neuronID]
 	}
 	if c.substrate != nil {
-		substrateOutputs, err := c.substrate.Step(ctx, outputs)
+		var (
+			substrateOutputs []float64
+			err              error
+		)
+		if faninRuntime, ok := c.substrate.(substrate.FaninRuntime); ok {
+			faninSignals := make(map[string]float64, len(c.outputNeuronIDs))
+			for _, neuronID := range c.outputNeuronIDs {
+				faninSignals[neuronID] = values[neuronID]
+			}
+			substrateOutputs, err = faninRuntime.StepWithFanin(ctx, outputs, faninSignals)
+		} else {
+			substrateOutputs, err = c.substrate.Step(ctx, outputs)
+		}
 		if err != nil {
 			return nil, err
 		}

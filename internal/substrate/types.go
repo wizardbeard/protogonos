@@ -37,6 +37,13 @@ type Runtime interface {
 	Weights() []float64
 }
 
+// FaninRuntime is an optional runtime capability that accepts explicit
+// fan-in signal routing keyed by neuron/process IDs.
+type FaninRuntime interface {
+	Runtime
+	StepWithFanin(ctx context.Context, inputs []float64, faninSignals map[string]float64) ([]float64, error)
+}
+
 // StatefulRuntime is an optional runtime capability mirroring substrate
 // lifecycle controls used by the reference runtime (backup/revert/reset).
 type StatefulRuntime interface {

@@ -62,6 +62,14 @@ func NewSimpleRuntime(spec Spec, weightCount int) (*SimpleRuntime, error) {
 }
 
 func (r *SimpleRuntime) Step(ctx context.Context, inputs []float64) ([]float64, error) {
+	return r.step(ctx, inputs, nil)
+}
+
+func (r *SimpleRuntime) StepWithFanin(ctx context.Context, inputs []float64, faninSignals map[string]float64) ([]float64, error) {
+	return r.step(ctx, inputs, faninSignals)
+}
+
+func (r *SimpleRuntime) step(ctx context.Context, inputs []float64, faninSignals map[string]float64) ([]float64, error) {
 	if r.terminated {
 		return nil, ErrSubstrateRuntimeTerminated
 	}
@@ -73,7 +81,7 @@ func (r *SimpleRuntime) Step(ctx context.Context, inputs []float64) ([]float64, 
 	if err != nil {
 		return nil, fmt.Errorf("cpp %s compute: %w", r.cpp.Name(), err)
 	}
-	controlSignals, err := r.computeControlSignals(ctx, inputs, delta)
+	controlSignals, err := r.computeControlSignals(ctx, inputs, delta, faninSignals)
 	if err != nil {
 		return nil, err
 	}
@@ -161,7 +169,11 @@ func (r *SimpleRuntime) Reset() {
 
 const runtimeCPPProcessID = "cpp"
 
-func (r *SimpleRuntime) computeControlSignals(ctx context.Context, inputs []float64, scalar float64) ([]float64, error) {
+func (r *SimpleRuntime) computeControlSignals(ctx context.Context, inputs []float64, scalar float64, faninSignals map[string]float64) ([]float64, error) {
+	if signals, ok := r.controlSignalsFromFaninMap(faninSignals); ok {
+		return signals, nil
+	}
+
 	vectorCPP, ok := r.cpp.(VectorCPP)
 	if !ok {
 		if len(r.cepFaninPIDs) > 1 && len(inputs) == len(r.cepFaninPIDs) && canUseInputFanInSignals(r.ceps) {
@@ -180,6 +192,21 @@ func (r *SimpleRuntime) computeControlSignals(ctx context.Context, inputs []floa
 		return []float64{scalar}, nil
 	}
 	return append([]float64(nil), signals...), nil
+}
+
+func (r *SimpleRuntime) controlSignalsFromFaninMap(faninSignals map[string]float64) ([]float64, bool) {
+	if len(faninSignals) == 0 || len(r.cepFaninPIDs) == 0 {
+		return nil, false
+	}
+	signals := make([]float64, 0, len(r.cepFaninPIDs))
+	for _, pid := range r.cepFaninPIDs {
+		value, ok := faninSignals[pid]
+		if !ok {
+			return nil, false
+		}
+		signals = append(signals, value)
+	}
+	return signals, true
 }
 
 func (r *SimpleRuntime) resolveProcessSignals(faninPIDs []string, controlSignals []float64) ([]float64, error) {

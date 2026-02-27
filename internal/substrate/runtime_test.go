@@ -274,6 +274,34 @@ func TestSimpleRuntimeSetABCNCEPUsesInputFanInSignalsWithoutVectorCPP(t *testing
 	}
 }
 
+func TestSimpleRuntimeSetABCNCEPUsesNamedFanInSignals(t *testing.T) {
+	resetRegistriesForTests()
+	t.Cleanup(resetRegistriesForTests)
+
+	rt, err := NewSimpleRuntime(Spec{
+		CPPName:      DefaultCPPName,
+		CEPName:      SetABCNCEPName,
+		CEPFaninPIDs: []string{"n1", "n2", "n3", "n4", "n5"},
+	}, 1)
+	if err != nil {
+		t.Fatalf("new runtime: %v", err)
+	}
+
+	w, err := rt.StepWithFanin(context.Background(), []float64{0, 0, 0, 0, 0}, map[string]float64{
+		"n1": 1,
+		"n2": 0.2,
+		"n3": 0.5,
+		"n4": -0.1,
+		"n5": 0.8,
+	})
+	if err != nil {
+		t.Fatalf("step 1: %v", err)
+	}
+	if len(w) != 1 || math.Abs(w[0]-0.4) > 1e-9 {
+		t.Fatalf("unexpected named fan-in set_abcn update, got=%v want=0.4", w)
+	}
+}
+
 func TestSimpleRuntimeSetABCNCEPSaturatesReferenceLimit(t *testing.T) {
 	resetRegistriesForTests()
 	t.Cleanup(resetRegistriesForTests)

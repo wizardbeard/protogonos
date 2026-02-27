@@ -71,6 +71,32 @@ func (s *terminableRuntimeStub) Terminate() {
 	s.terminated = true
 }
 
+type faninRuntimeStub struct {
+	stepCalled     bool
+	lastInputs     []float64
+	lastFaninByPID map[string]float64
+}
+
+func (s *faninRuntimeStub) Step(_ context.Context, inputs []float64) ([]float64, error) {
+	s.stepCalled = true
+	out := append([]float64(nil), inputs...)
+	return out, nil
+}
+
+func (s *faninRuntimeStub) StepWithFanin(_ context.Context, inputs []float64, faninSignals map[string]float64) ([]float64, error) {
+	s.lastInputs = append([]float64(nil), inputs...)
+	s.lastFaninByPID = make(map[string]float64, len(faninSignals))
+	for pid, signal := range faninSignals {
+		s.lastFaninByPID[pid] = signal
+	}
+	out := append([]float64(nil), inputs...)
+	return out, nil
+}
+
+func (s *faninRuntimeStub) Weights() []float64 {
+	return nil
+}
+
 func TestCortexRegisteredActuatorResolvesCanonicalAlias(t *testing.T) {
 	genome := model.Genome{
 		ActuatorIDs: []string{protoio.XORSendOutputActuatorAliasName},
@@ -184,6 +210,44 @@ func TestCortexSubstrateTransformsOutputs(t *testing.T) {
 	// Substrate keeps state and applies delta each step: second output should be larger.
 	if len(out2) != 1 || out2[0] <= out1[0] {
 		t.Fatalf("expected substrate-transformed output to increase: out1=%v out2=%v", out1, out2)
+	}
+}
+
+func TestCortexSubstrateFaninRuntimeReceivesNamedSignals(t *testing.T) {
+	genome := model.Genome{
+		Neurons: []model.Neuron{
+			{ID: "i1", Activation: "identity"},
+			{ID: "i2", Activation: "identity"},
+			{ID: "o1", Activation: "identity"},
+			{ID: "o2", Activation: "identity"},
+		},
+		Synapses: []model.Synapse{
+			{From: "i1", To: "o1", Weight: 1.0, Enabled: true},
+			{From: "i2", To: "o2", Weight: 1.0, Enabled: true},
+		},
+	}
+
+	rt := &faninRuntimeStub{}
+	c, err := NewCortex("agent-sub-fanin", genome, nil, nil, []string{"i1", "i2"}, []string{"o1", "o2"}, rt)
+	if err != nil {
+		t.Fatalf("new cortex: %v", err)
+	}
+
+	out, err := c.RunStep(context.Background(), []float64{0.25, 0.75})
+	if err != nil {
+		t.Fatalf("run step: %v", err)
+	}
+	if len(out) != 2 || out[0] != 0.25 || out[1] != 0.75 {
+		t.Fatalf("unexpected output vector: %v", out)
+	}
+	if rt.stepCalled {
+		t.Fatal("expected fanin runtime path to bypass Step")
+	}
+	if len(rt.lastInputs) != 2 || rt.lastInputs[0] != 0.25 || rt.lastInputs[1] != 0.75 {
+		t.Fatalf("unexpected substrate input forwarding: %v", rt.lastInputs)
+	}
+	if len(rt.lastFaninByPID) != 2 || rt.lastFaninByPID["o1"] != 0.25 || rt.lastFaninByPID["o2"] != 0.75 {
+		t.Fatalf("unexpected fan-in signals: %+v", rt.lastFaninByPID)
 	}
 }
 
