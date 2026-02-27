@@ -14,6 +14,7 @@ import (
 	protoio "protogonos/internal/io"
 	"protogonos/internal/model"
 	"protogonos/internal/scape"
+	"protogonos/internal/substrate"
 )
 
 type namedNoopMutation struct {
@@ -113,6 +114,24 @@ func (s *captureSpeciesSelector) PickParentForGenerationWithSpecies(_ *rand.Rand
 type oneDimScape struct{}
 
 func (oneDimScape) Name() string { return "one-dim" }
+
+type populationMonitorVectorCPP struct {
+	name    string
+	signals []float64
+}
+
+func (c populationMonitorVectorCPP) Name() string { return c.name }
+
+func (c populationMonitorVectorCPP) Compute(_ context.Context, _ []float64, _ map[string]float64) (float64, error) {
+	if len(c.signals) == 0 {
+		return 0, nil
+	}
+	return c.signals[0], nil
+}
+
+func (c populationMonitorVectorCPP) ComputeVector(_ context.Context, _ []float64, _ map[string]float64) ([]float64, error) {
+	return append([]float64(nil), c.signals...), nil
+}
 
 func (oneDimScape) Evaluate(ctx context.Context, a scape.Agent) (scape.Fitness, scape.Trace, error) {
 	runner, ok := a.(scape.StepAgent)
@@ -1601,6 +1620,74 @@ func TestPopulationMonitorBuildsSubstrateFromGenomeConfig(t *testing.T) {
 				CEPName:     "delta_weight",
 				WeightCount: 1,
 				Parameters:  map[string]float64{"scale": 1.0},
+			},
+		},
+	}
+
+	monitor, err := NewPopulationMonitor(MonitorConfig{
+		Scape:           oneDimScape{},
+		Mutation:        PerturbWeightAt{Index: 0, Delta: 0},
+		PopulationSize:  1,
+		EliteCount:      1,
+		Generations:     1,
+		Workers:         1,
+		Seed:            1,
+		InputNeuronIDs:  []string{"i"},
+		OutputNeuronIDs: []string{"o"},
+	})
+	if err != nil {
+		t.Fatalf("new monitor: %v", err)
+	}
+
+	result, err := monitor.Run(context.Background(), initial)
+	if err != nil {
+		t.Fatalf("run: %v", err)
+	}
+	if len(result.BestByGeneration) != 1 {
+		t.Fatalf("expected one generation result, got=%d", len(result.BestByGeneration))
+	}
+}
+
+func TestPopulationMonitorBuildSubstrateDerivesCEPFaninFromGenomeLinks(t *testing.T) {
+	cppName := "pm_vector_cpp_cep_fanin"
+	if err := substrate.RegisterCPP(cppName, func() substrate.CPP {
+		return populationMonitorVectorCPP{
+			name:    cppName,
+			signals: []float64{1, 0.2, 0.5, -0.1, 0.8},
+		}
+	}); err != nil {
+		t.Fatalf("register vector cpp: %v", err)
+	}
+
+	initial := []model.Genome{
+		{
+			VersionedRecord: model.VersionedRecord{SchemaVersion: 1, CodecVersion: 1},
+			ID:              "sub-fanin-0",
+			Neurons: []model.Neuron{
+				{ID: "i", Activation: "identity", Bias: 0},
+				{ID: "o", Activation: "identity", Bias: 0},
+				{ID: "n1", Activation: "identity", Bias: 0},
+				{ID: "n2", Activation: "identity", Bias: 0},
+				{ID: "n3", Activation: "identity", Bias: 0},
+				{ID: "n4", Activation: "identity", Bias: 0},
+				{ID: "n5", Activation: "identity", Bias: 0},
+			},
+			Synapses: []model.Synapse{
+				{ID: "s", From: "i", To: "o", Weight: 1, Enabled: true, Recurrent: false},
+			},
+			NeuronActuatorLinks: []model.NeuronActuatorLink{
+				{NeuronID: "n1", ActuatorID: "cep-0"},
+				{NeuronID: "n2", ActuatorID: "cep-0"},
+				{NeuronID: "n3", ActuatorID: "cep-0"},
+				{NeuronID: "n4", ActuatorID: "cep-0"},
+				{NeuronID: "n5", ActuatorID: "cep-0"},
+			},
+			Substrate: &model.SubstrateConfig{
+				CPPName:     cppName,
+				CEPName:     "set_abcn",
+				CEPIDs:      []string{"cep-0"},
+				WeightCount: 1,
+				Parameters:  map[string]float64{},
 			},
 		},
 	}
