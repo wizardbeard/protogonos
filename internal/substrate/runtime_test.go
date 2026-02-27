@@ -252,6 +252,28 @@ func TestSimpleRuntimeSetABCNCEPSupportsVectorFanInSignals(t *testing.T) {
 	}
 }
 
+func TestSimpleRuntimeSetABCNCEPUsesInputFanInSignalsWithoutVectorCPP(t *testing.T) {
+	resetRegistriesForTests()
+	t.Cleanup(resetRegistriesForTests)
+
+	rt, err := NewSimpleRuntime(Spec{
+		CPPName:      DefaultCPPName,
+		CEPName:      SetABCNCEPName,
+		CEPFaninPIDs: []string{"n1", "n2", "n3", "n4", "n5"},
+	}, 1)
+	if err != nil {
+		t.Fatalf("new runtime: %v", err)
+	}
+
+	w, err := rt.Step(context.Background(), []float64{1, 0.2, 0.5, -0.1, 0.8})
+	if err != nil {
+		t.Fatalf("step 1: %v", err)
+	}
+	if len(w) != 1 || math.Abs(w[0]-0.4) > 1e-9 {
+		t.Fatalf("unexpected input fan-in set_abcn update, got=%v want=0.4", w)
+	}
+}
+
 func TestSimpleRuntimeSetABCNCEPSaturatesReferenceLimit(t *testing.T) {
 	resetRegistriesForTests()
 	t.Cleanup(resetRegistriesForTests)
@@ -391,6 +413,28 @@ func TestSimpleRuntimeFallbackForCustomCEP(t *testing.T) {
 	}
 	if len(w) != 1 || math.Abs(w[0]-0.5) > 1e-9 {
 		t.Fatalf("unexpected custom cep fallback update after step 2: %v", w)
+	}
+}
+
+func TestSimpleRuntimeScalarCEPDoesNotUseInputFanInSignals(t *testing.T) {
+	resetRegistriesForTests()
+	t.Cleanup(resetRegistriesForTests)
+
+	rt, err := NewSimpleRuntime(Spec{
+		CPPName:      DefaultCPPName,
+		CEPName:      SetWeightCEPName,
+		CEPFaninPIDs: []string{"n1", "n2"},
+	}, 1)
+	if err != nil {
+		t.Fatalf("new runtime: %v", err)
+	}
+
+	w, err := rt.Step(context.Background(), []float64{1, -1})
+	if err != nil {
+		t.Fatalf("step: %v", err)
+	}
+	if len(w) != 1 || math.Abs(w[0]) > 1e-9 {
+		t.Fatalf("expected scalar set_weight control from cpp mean, got=%v", w)
 	}
 }
 

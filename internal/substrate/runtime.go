@@ -13,14 +13,15 @@ var (
 )
 
 type SimpleRuntime struct {
-	cpp          CPP
-	ceps         []CEP
-	cepProcesses []*CEPProcess
-	cepFaninPIDs []string
-	params       map[string]float64
-	weights      []float64
-	backup       []float64
-	terminated   bool
+	cpp                 CPP
+	ceps                []CEP
+	cepProcesses        []*CEPProcess
+	cepProcessFaninPIDs [][]string
+	cepFaninPIDs        []string
+	params              map[string]float64
+	weights             []float64
+	backup              []float64
+	terminated          bool
 }
 
 func NewSimpleRuntime(spec Spec, weightCount int) (*SimpleRuntime, error) {
@@ -44,17 +45,18 @@ func NewSimpleRuntime(spec Spec, weightCount int) (*SimpleRuntime, error) {
 		params[k] = v
 	}
 	cepFaninPIDs := resolveCEPFaninPIDs(spec.CEPFaninPIDs)
-	cepProcesses, err := buildCEPProcesses(ceps, params, cepFaninPIDs)
+	cepProcesses, cepProcessFaninPIDs, err := buildCEPProcesses(ceps, params, cepFaninPIDs)
 	if err != nil {
 		return nil, err
 	}
 	return &SimpleRuntime{
-		cpp:          cpp,
-		ceps:         ceps,
-		cepProcesses: cepProcesses,
-		cepFaninPIDs: append([]string(nil), cepFaninPIDs...),
-		params:       params,
-		weights:      make([]float64, weightCount),
+		cpp:                 cpp,
+		ceps:                ceps,
+		cepProcesses:        cepProcesses,
+		cepProcessFaninPIDs: cepProcessFaninPIDs,
+		cepFaninPIDs:        append([]string(nil), cepFaninPIDs...),
+		params:              params,
+		weights:             make([]float64, weightCount),
 	}, nil
 }
 
@@ -78,7 +80,11 @@ func (r *SimpleRuntime) Step(ctx context.Context, inputs []float64) ([]float64, 
 		next := r.weights[i]
 		for cepIdx, cep := range r.ceps {
 			if cepIdx < len(r.cepProcesses) && r.cepProcesses[cepIdx] != nil {
-				command, ready, err := r.forwardCEPProcess(r.cepProcesses[cepIdx], controlSignals)
+				faninPIDs := []string{runtimeCPPProcessID}
+				if cepIdx < len(r.cepProcessFaninPIDs) && len(r.cepProcessFaninPIDs[cepIdx]) > 0 {
+					faninPIDs = r.cepProcessFaninPIDs[cepIdx]
+				}
+				command, ready, err := r.forwardCEPProcess(r.cepProcesses[cepIdx], faninPIDs, controlSignals)
 				if err == nil {
 					if !ready {
 						continue
@@ -153,6 +159,9 @@ const runtimeCPPProcessID = "cpp"
 func (r *SimpleRuntime) computeControlSignals(ctx context.Context, inputs []float64, scalar float64) ([]float64, error) {
 	vectorCPP, ok := r.cpp.(VectorCPP)
 	if !ok {
+		if len(r.cepFaninPIDs) > 1 && len(inputs) == len(r.cepFaninPIDs) && canUseInputFanInSignals(r.ceps) {
+			return append([]float64(nil), inputs...), nil
+		}
 		return []float64{scalar}, nil
 	}
 	signals, err := vectorCPP.ComputeVector(ctx, inputs, r.params)
@@ -160,19 +169,22 @@ func (r *SimpleRuntime) computeControlSignals(ctx context.Context, inputs []floa
 		return nil, fmt.Errorf("cpp %s compute vector: %w", r.cpp.Name(), err)
 	}
 	if len(signals) == 0 {
+		if len(r.cepFaninPIDs) > 1 && len(inputs) == len(r.cepFaninPIDs) && canUseInputFanInSignals(r.ceps) {
+			return append([]float64(nil), inputs...), nil
+		}
 		return []float64{scalar}, nil
 	}
 	return append([]float64(nil), signals...), nil
 }
 
-func (r *SimpleRuntime) forwardCEPProcess(process *CEPProcess, signals []float64) (CEPCommand, bool, error) {
-	if len(signals) != len(r.cepFaninPIDs) {
-		return CEPCommand{}, false, fmt.Errorf("%w: cep fan-in signal mismatch expected=%d got=%d", ErrInvalidCEPOutputWidth, len(r.cepFaninPIDs), len(signals))
+func (r *SimpleRuntime) forwardCEPProcess(process *CEPProcess, faninPIDs []string, signals []float64) (CEPCommand, bool, error) {
+	if len(signals) != len(faninPIDs) {
+		return CEPCommand{}, false, fmt.Errorf("%w: cep fan-in signal mismatch expected=%d got=%d", ErrInvalidCEPOutputWidth, len(faninPIDs), len(signals))
 	}
 	var command CEPCommand
 	ready := false
 	for i, signal := range signals {
-		nextCommand, nextReady, err := process.Forward(r.cepFaninPIDs[i], []float64{signal})
+		nextCommand, nextReady, err := process.Forward(faninPIDs[i], []float64{signal})
 		if err != nil {
 			return CEPCommand{}, false, err
 		}
@@ -197,16 +209,41 @@ func resolveCEPFaninPIDs(raw []string) []string {
 	return out
 }
 
-func buildCEPProcesses(ceps []CEP, parameters map[string]float64, faninPIDs []string) ([]*CEPProcess, error) {
-	processes := make([]*CEPProcess, 0, len(ceps))
+func canUseInputFanInSignals(ceps []CEP) bool {
+	if len(ceps) == 0 {
+		return false
+	}
 	for _, cep := range ceps {
-		process, err := NewCEPProcess(cep.Name(), parameters, faninPIDs)
+		if strings.TrimSpace(cep.Name()) != SetABCNCEPName {
+			return false
+		}
+	}
+	return true
+}
+
+func buildCEPProcesses(ceps []CEP, parameters map[string]float64, faninPIDs []string) ([]*CEPProcess, [][]string, error) {
+	processes := make([]*CEPProcess, 0, len(ceps))
+	processFaninPIDs := make([][]string, 0, len(ceps))
+	for _, cep := range ceps {
+		cepFaninPIDs := resolveCEPProcessFaninPIDs(cep.Name(), faninPIDs)
+		process, err := NewCEPProcess(cep.Name(), parameters, cepFaninPIDs)
 		if err != nil {
-			return nil, fmt.Errorf("new cep process for %s: %w", cep.Name(), err)
+			return nil, nil, fmt.Errorf("new cep process for %s: %w", cep.Name(), err)
 		}
 		processes = append(processes, process)
+		processFaninPIDs = append(processFaninPIDs, cepFaninPIDs)
 	}
-	return processes, nil
+	return processes, processFaninPIDs, nil
+}
+
+func resolveCEPProcessFaninPIDs(cepName string, faninPIDs []string) []string {
+	if strings.TrimSpace(cepName) == SetABCNCEPName {
+		return append([]string(nil), faninPIDs...)
+	}
+	if len(faninPIDs) == 0 {
+		return []string{runtimeCPPProcessID}
+	}
+	return []string{faninPIDs[0]}
 }
 
 func resolveCEPChain(spec Spec) ([]CEP, error) {
