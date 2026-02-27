@@ -8,6 +8,12 @@ type CPP interface {
 	Compute(ctx context.Context, inputs []float64, params map[string]float64) (float64, error)
 }
 
+// VectorCPP is an optional CPP capability that produces an ordered control
+// signal vector for CEP fan-in processing.
+type VectorCPP interface {
+	ComputeVector(ctx context.Context, inputs []float64, params map[string]float64) ([]float64, error)
+}
+
 // CEP applies a computed update signal to an existing weight.
 type CEP interface {
 	Name() string
@@ -16,11 +22,12 @@ type CEP interface {
 
 // Spec configures a substrate runtime instance.
 type Spec struct {
-	CPPName    string
-	CEPName    string
-	CEPNames   []string
-	Dimensions []int
-	Parameters map[string]float64
+	CPPName      string
+	CEPName      string
+	CEPNames     []string
+	CEPFaninPIDs []string
+	Dimensions   []int
+	Parameters   map[string]float64
 }
 
 // Runtime executes substrate update steps over an internal weight vector.

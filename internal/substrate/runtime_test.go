@@ -15,6 +15,23 @@ func (customRuntimeCEP) Apply(_ context.Context, current float64, _ float64, _ m
 	return current + 0.25, nil
 }
 
+type vectorRuntimeCPP struct {
+	signals []float64
+}
+
+func (c vectorRuntimeCPP) Name() string { return "vector_runtime_cpp" }
+
+func (c vectorRuntimeCPP) Compute(_ context.Context, _ []float64, _ map[string]float64) (float64, error) {
+	if len(c.signals) == 0 {
+		return 0, nil
+	}
+	return c.signals[0], nil
+}
+
+func (c vectorRuntimeCPP) ComputeVector(_ context.Context, _ []float64, _ map[string]float64) ([]float64, error) {
+	return append([]float64(nil), c.signals...), nil
+}
+
 func TestSimpleRuntimeStep(t *testing.T) {
 	resetRegistriesForTests()
 	t.Cleanup(resetRegistriesForTests)
@@ -207,6 +224,34 @@ func TestSimpleRuntimeSetABCNCEPUsesCoefficientParameters(t *testing.T) {
 	}
 }
 
+func TestSimpleRuntimeSetABCNCEPSupportsVectorFanInSignals(t *testing.T) {
+	resetRegistriesForTests()
+	t.Cleanup(resetRegistriesForTests)
+
+	if err := RegisterCPP("vector_runtime_cpp", func() CPP {
+		return vectorRuntimeCPP{signals: []float64{1, 0.2, 0.5, -0.1, 0.8}}
+	}); err != nil {
+		t.Fatalf("register vector cpp: %v", err)
+	}
+
+	rt, err := NewSimpleRuntime(Spec{
+		CPPName:      "vector_runtime_cpp",
+		CEPName:      SetABCNCEPName,
+		CEPFaninPIDs: []string{"n1", "n2", "n3", "n4", "n5"},
+	}, 1)
+	if err != nil {
+		t.Fatalf("new runtime: %v", err)
+	}
+
+	w, err := rt.Step(context.Background(), []float64{0})
+	if err != nil {
+		t.Fatalf("step 1: %v", err)
+	}
+	if len(w) != 1 || math.Abs(w[0]-0.4) > 1e-9 {
+		t.Fatalf("unexpected vector fan-in set_abcn update, got=%v want=0.4", w)
+	}
+}
+
 func TestSimpleRuntimeSetABCNCEPSaturatesReferenceLimit(t *testing.T) {
 	resetRegistriesForTests()
 	t.Cleanup(resetRegistriesForTests)
@@ -346,6 +391,30 @@ func TestSimpleRuntimeFallbackForCustomCEP(t *testing.T) {
 	}
 	if len(w) != 1 || math.Abs(w[0]-0.5) > 1e-9 {
 		t.Fatalf("unexpected custom cep fallback update after step 2: %v", w)
+	}
+}
+
+func TestSimpleRuntimeCEPFanInSignalMismatch(t *testing.T) {
+	resetRegistriesForTests()
+	t.Cleanup(resetRegistriesForTests)
+
+	if err := RegisterCPP("vector_runtime_cpp", func() CPP {
+		return vectorRuntimeCPP{signals: []float64{0.1, 0.2}}
+	}); err != nil {
+		t.Fatalf("register vector cpp: %v", err)
+	}
+
+	rt, err := NewSimpleRuntime(Spec{
+		CPPName:      "vector_runtime_cpp",
+		CEPName:      SetWeightCEPName,
+		CEPFaninPIDs: []string{"n1"},
+	}, 1)
+	if err != nil {
+		t.Fatalf("new runtime: %v", err)
+	}
+
+	if _, err := rt.Step(context.Background(), []float64{0}); !errors.Is(err, ErrInvalidCEPOutputWidth) {
+		t.Fatalf("expected ErrInvalidCEPOutputWidth, got %v", err)
 	}
 }
 

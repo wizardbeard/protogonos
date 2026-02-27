@@ -16,6 +16,7 @@ type SimpleRuntime struct {
 	cpp          CPP
 	ceps         []CEP
 	cepProcesses []*CEPProcess
+	cepFaninPIDs []string
 	params       map[string]float64
 	weights      []float64
 	backup       []float64
@@ -42,7 +43,8 @@ func NewSimpleRuntime(spec Spec, weightCount int) (*SimpleRuntime, error) {
 	for k, v := range spec.Parameters {
 		params[k] = v
 	}
-	cepProcesses, err := buildCEPProcesses(ceps, params)
+	cepFaninPIDs := resolveCEPFaninPIDs(spec.CEPFaninPIDs)
+	cepProcesses, err := buildCEPProcesses(ceps, params, cepFaninPIDs)
 	if err != nil {
 		return nil, err
 	}
@@ -50,6 +52,7 @@ func NewSimpleRuntime(spec Spec, weightCount int) (*SimpleRuntime, error) {
 		cpp:          cpp,
 		ceps:         ceps,
 		cepProcesses: cepProcesses,
+		cepFaninPIDs: append([]string(nil), cepFaninPIDs...),
 		params:       params,
 		weights:      make([]float64, weightCount),
 	}, nil
@@ -67,11 +70,15 @@ func (r *SimpleRuntime) Step(ctx context.Context, inputs []float64) ([]float64, 
 	if err != nil {
 		return nil, fmt.Errorf("cpp %s compute: %w", r.cpp.Name(), err)
 	}
+	controlSignals, err := r.computeControlSignals(ctx, inputs, delta)
+	if err != nil {
+		return nil, err
+	}
 	for i := range r.weights {
 		next := r.weights[i]
 		for cepIdx, cep := range r.ceps {
 			if cepIdx < len(r.cepProcesses) && r.cepProcesses[cepIdx] != nil {
-				command, ready, err := r.cepProcesses[cepIdx].Forward(runtimeCPPProcessID, []float64{delta})
+				command, ready, err := r.forwardCEPProcess(r.cepProcesses[cepIdx], controlSignals)
 				if err == nil {
 					if !ready {
 						continue
@@ -143,10 +150,57 @@ func (r *SimpleRuntime) Reset() {
 
 const runtimeCPPProcessID = "cpp"
 
-func buildCEPProcesses(ceps []CEP, parameters map[string]float64) ([]*CEPProcess, error) {
+func (r *SimpleRuntime) computeControlSignals(ctx context.Context, inputs []float64, scalar float64) ([]float64, error) {
+	vectorCPP, ok := r.cpp.(VectorCPP)
+	if !ok {
+		return []float64{scalar}, nil
+	}
+	signals, err := vectorCPP.ComputeVector(ctx, inputs, r.params)
+	if err != nil {
+		return nil, fmt.Errorf("cpp %s compute vector: %w", r.cpp.Name(), err)
+	}
+	if len(signals) == 0 {
+		return []float64{scalar}, nil
+	}
+	return append([]float64(nil), signals...), nil
+}
+
+func (r *SimpleRuntime) forwardCEPProcess(process *CEPProcess, signals []float64) (CEPCommand, bool, error) {
+	if len(signals) != len(r.cepFaninPIDs) {
+		return CEPCommand{}, false, fmt.Errorf("%w: cep fan-in signal mismatch expected=%d got=%d", ErrInvalidCEPOutputWidth, len(r.cepFaninPIDs), len(signals))
+	}
+	var command CEPCommand
+	ready := false
+	for i, signal := range signals {
+		nextCommand, nextReady, err := process.Forward(r.cepFaninPIDs[i], []float64{signal})
+		if err != nil {
+			return CEPCommand{}, false, err
+		}
+		command = nextCommand
+		ready = nextReady
+	}
+	return command, ready, nil
+}
+
+func resolveCEPFaninPIDs(raw []string) []string {
+	out := make([]string, 0, len(raw))
+	for _, pid := range raw {
+		trimmed := strings.TrimSpace(pid)
+		if trimmed == "" {
+			continue
+		}
+		out = append(out, trimmed)
+	}
+	if len(out) == 0 {
+		return []string{runtimeCPPProcessID}
+	}
+	return out
+}
+
+func buildCEPProcesses(ceps []CEP, parameters map[string]float64, faninPIDs []string) ([]*CEPProcess, error) {
 	processes := make([]*CEPProcess, 0, len(ceps))
 	for _, cep := range ceps {
-		process, err := NewCEPProcess(cep.Name(), parameters, []string{runtimeCPPProcessID})
+		process, err := NewCEPProcess(cep.Name(), parameters, faninPIDs)
 		if err != nil {
 			return nil, fmt.Errorf("new cep process for %s: %w", cep.Name(), err)
 		}
