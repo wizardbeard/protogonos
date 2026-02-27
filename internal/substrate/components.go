@@ -3,6 +3,7 @@ package substrate
 import (
 	"context"
 	"fmt"
+	"strings"
 )
 
 const (
@@ -14,6 +15,13 @@ const (
 
 	referenceSubstrateWeightLimit = 3.1415
 )
+
+var abcnParamAliases = map[string][]string{
+	"a": {"abcn_a", "a"},
+	"b": {"abcn_b", "b"},
+	"c": {"abcn_c", "c"},
+	"n": {"abcn_n", "n"},
+}
 
 type SetWeightCPP struct{}
 
@@ -59,10 +67,16 @@ func (SetABCNCEP) Name() string {
 }
 
 func (SetABCNCEP) Apply(_ context.Context, current float64, delta float64, params map[string]float64) (float64, error) {
-	// Reference set_abcn applies a richer substrate message. In the simplified
-	// scalar runtime, preserve iterative behavior by applying the same bounded
-	// control signal as delta_weight, including reference-style saturation.
-	return saturateSubstrateWeight(current + cepControlValue(delta, params)), nil
+	control := cepControlValue(delta, params)
+	// Reference set_abcn carries per-link [A,B,C,N] plasticity parameters.
+	// In the simplified scalar runtime, support an optional coefficient-driven
+	// update path when those parameters are present; otherwise keep iterative
+	// delta_weight-equivalent behavior.
+	if a, b, c, n, ok := readABCNParameters(params); ok {
+		deltaWeight := n * (a*control*current + b*control + c*current)
+		return saturateSubstrateWeight(current + deltaWeight), nil
+	}
+	return saturateSubstrateWeight(current + control), nil
 }
 
 func cepControlValue(delta float64, params map[string]float64) float64 {
@@ -104,6 +118,49 @@ func clamp(value, min, max float64) float64 {
 
 func saturateSubstrateWeight(value float64) float64 {
 	return clamp(value, -referenceSubstrateWeightLimit, referenceSubstrateWeightLimit)
+}
+
+func readABCNParameters(params map[string]float64) (a float64, b float64, c float64, n float64, ok bool) {
+	if params == nil {
+		return 0, 0, 0, 0, false
+	}
+
+	var foundA bool
+	if a, foundA = findParameterValue(params, abcnParamAliases["a"]); !foundA {
+		return 0, 0, 0, 0, false
+	}
+	var foundB bool
+	if b, foundB = findParameterValue(params, abcnParamAliases["b"]); !foundB {
+		return 0, 0, 0, 0, false
+	}
+	var foundC bool
+	if c, foundC = findParameterValue(params, abcnParamAliases["c"]); !foundC {
+		return 0, 0, 0, 0, false
+	}
+	var foundN bool
+	if n, foundN = findParameterValue(params, abcnParamAliases["n"]); !foundN {
+		return 0, 0, 0, 0, false
+	}
+	return a, b, c, n, true
+}
+
+func findParameterValue(params map[string]float64, aliases []string) (float64, bool) {
+	for _, alias := range aliases {
+		trimmed := strings.TrimSpace(alias)
+		if trimmed == "" {
+			continue
+		}
+		if value, ok := params[trimmed]; ok {
+			return value, true
+		}
+		upper := strings.ToUpper(trimmed)
+		if upper != trimmed {
+			if value, ok := params[upper]; ok {
+				return value, true
+			}
+		}
+	}
+	return 0, false
 }
 
 func init() {

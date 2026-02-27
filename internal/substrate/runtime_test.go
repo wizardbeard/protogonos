@@ -164,6 +164,41 @@ func TestSimpleRuntimeSetABCNCEP(t *testing.T) {
 	}
 }
 
+func TestSimpleRuntimeSetABCNCEPUsesCoefficientParameters(t *testing.T) {
+	resetRegistriesForTests()
+	t.Cleanup(resetRegistriesForTests)
+
+	rt, err := NewSimpleRuntime(Spec{
+		CPPName: DefaultCPPName,
+		CEPName: SetABCNCEPName,
+		Parameters: map[string]float64{
+			"A": 0.2,
+			"B": 0.5,
+			"C": -0.1,
+			"N": 0.8,
+		},
+	}, 1)
+	if err != nil {
+		t.Fatalf("new runtime: %v", err)
+	}
+
+	first, err := rt.Step(context.Background(), []float64{1})
+	if err != nil {
+		t.Fatalf("step 1: %v", err)
+	}
+	if len(first) != 1 || math.Abs(first[0]-0.4) > 1e-9 {
+		t.Fatalf("unexpected first abcn update, got=%v want=0.4", first)
+	}
+
+	second, err := rt.Step(context.Background(), []float64{1})
+	if err != nil {
+		t.Fatalf("step 2: %v", err)
+	}
+	if len(second) != 1 || math.Abs(second[0]-0.832) > 1e-9 {
+		t.Fatalf("unexpected second abcn update, got=%v want=0.832", second)
+	}
+}
+
 func TestSimpleRuntimeSetABCNCEPSaturatesReferenceLimit(t *testing.T) {
 	resetRegistriesForTests()
 	t.Cleanup(resetRegistriesForTests)
