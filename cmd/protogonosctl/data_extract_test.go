@@ -377,3 +377,76 @@ func TestRunDataExtractGenerateCompetitiveTable(t *testing.T) {
 		t.Fatalf("expected total rows=700, got %d", len(table.Rows))
 	}
 }
+
+func TestRunDataExtractTableInfoOverridesOnWrite(t *testing.T) {
+	tmp := t.TempDir()
+	in := filepath.Join(tmp, "raw.csv")
+	out := filepath.Join(tmp, "gtsa.csv")
+	tablePath := filepath.Join(tmp, "custom.table.json")
+	raw := "t,close\n0,1.1\n1,1.2\n"
+	if err := os.WriteFile(in, []byte(raw), 0o644); err != nil {
+		t.Fatalf("write input: %v", err)
+	}
+
+	err := runDataExtract(context.Background(), []string{
+		"--scape", "gtsa",
+		"--in", in,
+		"--out", out,
+		"--value-col", "close",
+		"--table-out", tablePath,
+		"--table-info-name", "mnist",
+		"--table-info-trn-end", "1",
+		"--table-info-val-end", "2",
+		"--table-info-tst-end", "2",
+		"--table-info-ivl", "1",
+	})
+	if err != nil {
+		t.Fatalf("run data-extract info overrides on write: %v", err)
+	}
+
+	table, err := dataextract.ReadTableFile(tablePath)
+	if err != nil {
+		t.Fatalf("read output table: %v", err)
+	}
+	if table.Info.Name != "mnist" {
+		t.Fatalf("unexpected table name: %+v", table.Info)
+	}
+	if table.Info.IVL != 1 || table.Info.TrnEnd != 1 || table.Info.ValEnd != 2 || table.Info.TstEnd != 2 {
+		t.Fatalf("unexpected table info: %+v", table.Info)
+	}
+}
+
+func TestRunDataExtractTableCheckInferInfoAndSave(t *testing.T) {
+	tmp := t.TempDir()
+	inPath := filepath.Join(tmp, "in.table.json")
+	outPath := filepath.Join(tmp, "out.table.json")
+	table := dataextract.TableFile{
+		Info: dataextract.TableInfo{},
+		Rows: []dataextract.TableRow{
+			{Index: 1, Inputs: []float64{2, 4}},
+			{Index: 2, Inputs: []float64{4, 8}},
+		},
+	}
+	if err := dataextract.WriteTableFile(inPath, table); err != nil {
+		t.Fatalf("write input table: %v", err)
+	}
+
+	err := runDataExtract(context.Background(), []string{
+		"--table-check", inPath,
+		"--table-save", outPath,
+	})
+	if err != nil {
+		t.Fatalf("run data-extract table-check infer: %v", err)
+	}
+
+	updated, err := dataextract.ReadTableFile(outPath)
+	if err != nil {
+		t.Fatalf("read updated table: %v", err)
+	}
+	if updated.Info.Name != "table" {
+		t.Fatalf("expected inferred table name, got %+v", updated.Info)
+	}
+	if updated.Info.IVL != 2 || updated.Info.TrnEnd != 2 {
+		t.Fatalf("unexpected inferred table info: %+v", updated.Info)
+	}
+}

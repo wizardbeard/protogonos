@@ -46,6 +46,13 @@ func runDataExtract(_ context.Context, args []string) error {
 	tableCheck := fs.String("table-check", "", "check/dump existing table file and exit")
 	dumpLimit := fs.Int("dump-limit", 10, "max table rows to print for --table-check")
 	tableSave := fs.String("table-save", "", "write transformed --table-check result to table file path")
+	tableInfoName := fs.String("table-info-name", "", "override table info name")
+	tableInfoIVL := fs.Int("table-info-ivl", -1, "override table info ivl")
+	tableInfoOVL := fs.Int("table-info-ovl", -1, "override table info ovl")
+	tableInfoTrnEnd := fs.Int("table-info-trn-end", -1, "override table info trn_end")
+	tableInfoValEnd := fs.Int("table-info-val-end", -1, "override table info val_end")
+	tableInfoTstEnd := fs.Int("table-info-tst-end", -1, "override table info tst_end")
+	tableInfoInfer := fs.Bool("table-info-infer", true, "infer missing table info fields from row payloads")
 	tableScaleMax := fs.Bool("table-scale-max", false, "scale table input columns by per-column max (dg_scale1 analog)")
 	tableScaleAsinh := fs.Bool("table-scale-asinh", false, "apply asinh scaling to table inputs (dg_scale2 analog)")
 	tableBinarize := fs.Bool("table-binarize", false, "binarize table inputs (dg_bin analog)")
@@ -92,6 +99,15 @@ func runDataExtract(_ context.Context, args []string) error {
 		ResolutionDropZero: *tableResolutionDropZeroRun,
 		ResolutionUseAsinh: *tableResolutionAsinh,
 	}
+	infoPatch := buildTableInfoPatch(
+		*tableInfoInfer,
+		*tableInfoName,
+		*tableInfoIVL,
+		*tableInfoOVL,
+		*tableInfoTrnEnd,
+		*tableInfoValEnd,
+		*tableInfoTstEnd,
+	)
 
 	if strings.TrimSpace(*tableCheck) != "" {
 		table, err := dataextract.ReadTableFile(*tableCheck)
@@ -99,6 +115,9 @@ func runDataExtract(_ context.Context, args []string) error {
 			return err
 		}
 		if err := applyTableTransforms(&table, transformOpts); err != nil {
+			return err
+		}
+		if err := dataextract.ApplyTableInfoPatch(&table, infoPatch); err != nil {
 			return err
 		}
 		if *tableStats {
@@ -291,6 +310,9 @@ func runDataExtract(_ context.Context, args []string) error {
 		if err := applyTableTransforms(&table, transformOpts); err != nil {
 			return err
 		}
+		if err := dataextract.ApplyTableInfoPatch(&table, infoPatch); err != nil {
+			return err
+		}
 		if *tableStats {
 			if err := printTableStats(table); err != nil {
 				return err
@@ -386,4 +408,41 @@ func printTableStats(table dataextract.TableFile) error {
 		fmt.Printf("table_stats col=%d min=%g avg=%g max=%g\n", i, stat.Min, stat.Avg, stat.Max)
 	}
 	return nil
+}
+
+func buildTableInfoPatch(
+	infer bool,
+	name string,
+	ivl int,
+	ovl int,
+	trnEnd int,
+	valEnd int,
+	tstEnd int,
+) dataextract.TableInfoPatch {
+	patch := dataextract.TableInfoPatch{Infer: infer}
+	if strings.TrimSpace(name) != "" {
+		trimmed := strings.TrimSpace(name)
+		patch.Name = &trimmed
+	}
+	if ivl >= 0 {
+		value := ivl
+		patch.IVL = &value
+	}
+	if ovl >= 0 {
+		value := ovl
+		patch.OVL = &value
+	}
+	if trnEnd >= 0 {
+		value := trnEnd
+		patch.TrnEnd = &value
+	}
+	if valEnd >= 0 {
+		value := valEnd
+		patch.ValEnd = &value
+	}
+	if tstEnd >= 0 {
+		value := tstEnd
+		patch.TstEnd = &value
+	}
+	return patch
 }
