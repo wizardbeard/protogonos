@@ -1953,11 +1953,16 @@ func (m *PopulationMonitor) buildSubstrate(genome model.Genome) (substrate.Runti
 		return nil, nil
 	}
 	cfg := genome.Substrate
+	faninByCEP := genotype.ResolveSubstrateCEPFaninPIDsByCEP(genome, m.cfg.OutputNeuronIDs)
+	faninPIDs := genotype.ResolveSubstrateCEPFaninPIDs(genome, m.cfg.OutputNeuronIDs)
+	if flattened := genotype.FlattenSubstrateCEPFaninPIDsByCEP(faninByCEP); len(flattened) > 0 {
+		faninPIDs = flattened
+	}
 	spec := substrate.Spec{
 		CPPName:           cfg.CPPName,
 		CEPName:           cfg.CEPName,
-		CEPFaninPIDs:      genotype.ResolveSubstrateCEPFaninPIDs(genome, m.cfg.OutputNeuronIDs),
-		CEPFaninPIDsByCEP: genotype.ResolveSubstrateCEPFaninPIDsByCEP(genome, m.cfg.OutputNeuronIDs),
+		CEPFaninPIDs:      faninPIDs,
+		CEPFaninPIDsByCEP: faninByCEP,
 		Dimensions:        append([]int(nil), cfg.Dimensions...),
 		Parameters:        map[string]float64{},
 	}

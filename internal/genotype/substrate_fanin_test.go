@@ -121,3 +121,17 @@ func TestResolveSubstrateCEPFaninPIDsByCEPUsesEndpointOrderAndFallback(t *testin
 		t.Fatalf("unexpected fan-in-by-cep ids: got=%v want=%v", got, want)
 	}
 }
+
+func TestFlattenSubstrateCEPFaninPIDsByCEPKeepsOrderedUniqueIDs(t *testing.T) {
+	got := FlattenSubstrateCEPFaninPIDsByCEP([][]string{
+		{"n2", "n1"},
+		{"n1", "o1"},
+		{"o2", "o1"},
+		nil,
+		{""},
+	})
+	want := []string{"n2", "n1", "o1", "o2"}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("unexpected flattened fan-in ids: got=%v want=%v", got, want)
+	}
+}

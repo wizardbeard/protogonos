@@ -130,6 +130,19 @@ func ResolveSubstrateCEPFaninPIDsByCEP(genome model.Genome, fallbackOutputNeuron
 	return out
 }
 
+// FlattenSubstrateCEPFaninPIDsByCEP flattens per-CEP fan-in IDs into a
+// single ordered unique fan-in list.
+func FlattenSubstrateCEPFaninPIDsByCEP(faninByCEP [][]string) []string {
+	if len(faninByCEP) == 0 {
+		return nil
+	}
+	flat := make([]string, 0)
+	for _, fanin := range faninByCEP {
+		flat = append(flat, fanin...)
+	}
+	return uniqueOrderedNonEmptyStrings(flat)
+}
+
 func uniqueOrderedNonEmptyStrings(values []string) []string {
 	if len(values) == 0 {
 		return nil
