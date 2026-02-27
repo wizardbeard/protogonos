@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 )
 
 var (
@@ -12,7 +13,7 @@ var (
 
 type SimpleRuntime struct {
 	cpp     CPP
-	cep     CEP
+	ceps    []CEP
 	params  map[string]float64
 	weights []float64
 	backup  []float64
@@ -25,14 +26,11 @@ func NewSimpleRuntime(spec Spec, weightCount int) (*SimpleRuntime, error) {
 	if spec.CPPName == "" {
 		spec.CPPName = DefaultCPPName
 	}
-	if spec.CEPName == "" {
-		spec.CEPName = DefaultCEPName
-	}
 	cpp, err := ResolveCPP(spec.CPPName)
 	if err != nil {
 		return nil, err
 	}
-	cep, err := ResolveCEP(spec.CEPName)
+	ceps, err := resolveCEPChain(spec)
 	if err != nil {
 		return nil, err
 	}
@@ -43,7 +41,7 @@ func NewSimpleRuntime(spec Spec, weightCount int) (*SimpleRuntime, error) {
 	}
 	return &SimpleRuntime{
 		cpp:     cpp,
-		cep:     cep,
+		ceps:    ceps,
 		params:  params,
 		weights: make([]float64, weightCount),
 	}, nil
@@ -59,11 +57,15 @@ func (r *SimpleRuntime) Step(ctx context.Context, inputs []float64) ([]float64, 
 		return nil, fmt.Errorf("cpp %s compute: %w", r.cpp.Name(), err)
 	}
 	for i := range r.weights {
-		w, err := r.cep.Apply(ctx, r.weights[i], delta, r.params)
-		if err != nil {
-			return nil, fmt.Errorf("cep %s apply: %w", r.cep.Name(), err)
+		next := r.weights[i]
+		for _, cep := range r.ceps {
+			w, err := cep.Apply(ctx, next, delta, r.params)
+			if err != nil {
+				return nil, fmt.Errorf("cep %s apply: %w", cep.Name(), err)
+			}
+			next = w
 		}
-		r.weights[i] = w
+		r.weights[i] = next
 	}
 	return r.Weights(), nil
 }
@@ -93,4 +95,32 @@ func (r *SimpleRuntime) Reset() {
 	for i := range r.weights {
 		r.weights[i] = 0
 	}
+}
+
+func resolveCEPChain(spec Spec) ([]CEP, error) {
+	cepNames := make([]string, 0, len(spec.CEPNames))
+	for _, name := range spec.CEPNames {
+		trimmed := strings.TrimSpace(name)
+		if trimmed == "" {
+			continue
+		}
+		cepNames = append(cepNames, trimmed)
+	}
+	if len(cepNames) == 0 {
+		name := strings.TrimSpace(spec.CEPName)
+		if name == "" {
+			name = DefaultCEPName
+		}
+		cepNames = append(cepNames, name)
+	}
+
+	ceps := make([]CEP, 0, len(cepNames))
+	for _, name := range cepNames {
+		cep, err := ResolveCEP(name)
+		if err != nil {
+			return nil, err
+		}
+		ceps = append(ceps, cep)
+	}
+	return ceps, nil
 }

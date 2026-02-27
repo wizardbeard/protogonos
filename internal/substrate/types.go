@@ -18,6 +18,7 @@ type CEP interface {
 type Spec struct {
 	CPPName    string
 	CEPName    string
+	CEPNames   []string
 	Dimensions []int
 	Parameters map[string]float64
 }

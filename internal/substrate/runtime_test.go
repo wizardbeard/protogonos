@@ -201,6 +201,44 @@ func TestSimpleRuntimeValidation(t *testing.T) {
 	if _, err := NewSimpleRuntime(Spec{CEPName: "missing"}, 1); err == nil {
 		t.Fatal("expected missing cep error")
 	}
+	if _, err := NewSimpleRuntime(Spec{CEPNames: []string{"missing"}}, 1); err == nil {
+		t.Fatal("expected missing cep error in chain")
+	}
+}
+
+func TestSimpleRuntimeCEPChainAppliesInOrder(t *testing.T) {
+	resetRegistriesForTests()
+	t.Cleanup(resetRegistriesForTests)
+
+	setThenDelta, err := NewSimpleRuntime(Spec{
+		CPPName:  DefaultCPPName,
+		CEPNames: []string{SetWeightCEPName, DefaultCEPName},
+	}, 1)
+	if err != nil {
+		t.Fatalf("new runtime set->delta: %v", err)
+	}
+	w1, err := setThenDelta.Step(context.Background(), []float64{1})
+	if err != nil {
+		t.Fatalf("step set->delta: %v", err)
+	}
+	if len(w1) != 1 || w1[0] != 2 {
+		t.Fatalf("expected set->delta chain to produce 2, got=%v", w1)
+	}
+
+	deltaThenSet, err := NewSimpleRuntime(Spec{
+		CPPName:  DefaultCPPName,
+		CEPNames: []string{DefaultCEPName, SetWeightCEPName},
+	}, 1)
+	if err != nil {
+		t.Fatalf("new runtime delta->set: %v", err)
+	}
+	w2, err := deltaThenSet.Step(context.Background(), []float64{1})
+	if err != nil {
+		t.Fatalf("step delta->set: %v", err)
+	}
+	if len(w2) != 1 || w2[0] != 1 {
+		t.Fatalf("expected delta->set chain to produce 1, got=%v", w2)
+	}
 }
 
 func TestSimpleRuntimeBackupRestoreReset(t *testing.T) {
