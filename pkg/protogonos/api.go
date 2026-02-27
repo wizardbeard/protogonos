@@ -853,11 +853,12 @@ func buildReplaySubstrate(genome model.Genome, outputNeuronIDs []string) (substr
 	}
 	cfg := genome.Substrate
 	spec := substrate.Spec{
-		CPPName:      cfg.CPPName,
-		CEPName:      cfg.CEPName,
-		CEPFaninPIDs: genotype.ResolveSubstrateCEPFaninPIDs(genome, outputNeuronIDs),
-		Dimensions:   append([]int(nil), cfg.Dimensions...),
-		Parameters:   map[string]float64{},
+		CPPName:           cfg.CPPName,
+		CEPName:           cfg.CEPName,
+		CEPFaninPIDs:      genotype.ResolveSubstrateCEPFaninPIDs(genome, outputNeuronIDs),
+		CEPFaninPIDsByCEP: genotype.ResolveSubstrateCEPFaninPIDsByCEP(genome, outputNeuronIDs),
+		Dimensions:        append([]int(nil), cfg.Dimensions...),
+		Parameters:        map[string]float64{},
 	}
 	for k, v := range cfg.Parameters {
 		spec.Parameters[k] = v

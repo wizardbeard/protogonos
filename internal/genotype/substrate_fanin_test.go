@@ -76,3 +76,48 @@ func TestResolveSubstrateCEPFaninPIDsPrefersExplicitCEPFaninLinks(t *testing.T) 
 		t.Fatalf("unexpected resolved fan-in ids: got=%v want=%v", got, want)
 	}
 }
+
+func TestSubstrateCEPFaninPIDsByEndpoint(t *testing.T) {
+	genome := model.Genome{
+		Substrate: &model.SubstrateConfig{
+			CEPIDs: []string{"cep-1", "cep-2"},
+		},
+		NeuronActuatorLinks: []model.NeuronActuatorLink{
+			{NeuronID: "n1", ActuatorID: "cep-1"},
+			{NeuronID: "n2", ActuatorID: "cep-2"},
+			{NeuronID: "n3", ActuatorID: "cep-1"},
+			{NeuronID: "n2", ActuatorID: "cep-1"},
+		},
+	}
+
+	got := SubstrateCEPFaninPIDsByEndpoint(genome)
+	want := map[string][]string{
+		"cep-1": {"n1", "n3", "n2"},
+		"cep-2": {"n2"},
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("unexpected endpoint fan-in ids: got=%v want=%v", got, want)
+	}
+}
+
+func TestResolveSubstrateCEPFaninPIDsByCEPUsesEndpointOrderAndFallback(t *testing.T) {
+	genome := model.Genome{
+		Substrate: &model.SubstrateConfig{
+			CEPIDs: []string{"cep-1", "cep-2", "cep-3"},
+		},
+		NeuronActuatorLinks: []model.NeuronActuatorLink{
+			{NeuronID: "n1", ActuatorID: "cep-2"},
+			{NeuronID: "n2", ActuatorID: "cep-1"},
+		},
+	}
+
+	got := ResolveSubstrateCEPFaninPIDsByCEP(genome, []string{"o1", "o2"})
+	want := [][]string{
+		{"n2"},
+		{"n1"},
+		{"o1", "o2"},
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("unexpected fan-in-by-cep ids: got=%v want=%v", got, want)
+	}
+}

@@ -462,6 +462,40 @@ func TestSimpleRuntimeCEPFanInSignalMismatch(t *testing.T) {
 	}
 }
 
+func TestSimpleRuntimeCEPChainUsesPerCEPFanInConfig(t *testing.T) {
+	resetRegistriesForTests()
+	t.Cleanup(resetRegistriesForTests)
+
+	if err := RegisterCPP("vector_runtime_cpp", func() CPP {
+		return vectorRuntimeCPP{signals: []float64{1, 0.2, 0.5, -0.1, 0.8}}
+	}); err != nil {
+		t.Fatalf("register vector cpp: %v", err)
+	}
+
+	rt, err := NewSimpleRuntime(Spec{
+		CPPName: "vector_runtime_cpp",
+		CEPNames: []string{
+			SetABCNCEPName,
+			SetABCNCEPName,
+		},
+		CEPFaninPIDsByCEP: [][]string{
+			{"n1", "n2", "n3", "n4", "n5"},
+			{"n1"},
+		},
+	}, 1)
+	if err != nil {
+		t.Fatalf("new runtime: %v", err)
+	}
+
+	w, err := rt.Step(context.Background(), []float64{0})
+	if err != nil {
+		t.Fatalf("step: %v", err)
+	}
+	if len(w) != 1 || math.Abs(w[0]-1.4) > 1e-9 {
+		t.Fatalf("unexpected per-cep fan-in chain update, got=%v want=1.4", w)
+	}
+}
+
 func TestSimpleRuntimeBackupRestoreReset(t *testing.T) {
 	resetRegistriesForTests()
 	t.Cleanup(resetRegistriesForTests)

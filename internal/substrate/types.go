@@ -22,12 +22,13 @@ type CEP interface {
 
 // Spec configures a substrate runtime instance.
 type Spec struct {
-	CPPName      string
-	CEPName      string
-	CEPNames     []string
-	CEPFaninPIDs []string
-	Dimensions   []int
-	Parameters   map[string]float64
+	CPPName           string
+	CEPName           string
+	CEPNames          []string
+	CEPFaninPIDs      []string
+	CEPFaninPIDsByCEP [][]string
+	Dimensions        []int
+	Parameters        map[string]float64
 }
 
 // Runtime executes substrate update steps over an internal weight vector.
