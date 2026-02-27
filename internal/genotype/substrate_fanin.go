@@ -42,3 +42,35 @@ func SubstrateCEPFaninPIDs(genome model.Genome) []string {
 	}
 	return fanin
 }
+
+// ResolveSubstrateCEPFaninPIDs returns CEP fan-in IDs derived from explicit
+// substrate CEP endpoint links when available, otherwise falls back to ordered
+// output-neuron IDs.
+func ResolveSubstrateCEPFaninPIDs(genome model.Genome, fallbackOutputNeuronIDs []string) []string {
+	if fanin := SubstrateCEPFaninPIDs(genome); len(fanin) > 0 {
+		return fanin
+	}
+	return uniqueOrderedNonEmptyStrings(fallbackOutputNeuronIDs)
+}
+
+func uniqueOrderedNonEmptyStrings(values []string) []string {
+	if len(values) == 0 {
+		return nil
+	}
+	seen := map[string]struct{}{}
+	out := make([]string, 0, len(values))
+	for _, value := range values {
+		if value == "" {
+			continue
+		}
+		if _, exists := seen[value]; exists {
+			continue
+		}
+		seen[value] = struct{}{}
+		out = append(out, value)
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
+}

@@ -42,3 +42,37 @@ func TestSubstrateCEPFaninPIDsReturnsNilWhenNoCEPEndpointLinks(t *testing.T) {
 		t.Fatalf("expected nil fan-in ids, got=%v", got)
 	}
 }
+
+func TestResolveSubstrateCEPFaninPIDsFallsBackToOutputIDs(t *testing.T) {
+	genome := model.Genome{
+		Substrate: &model.SubstrateConfig{
+			CEPIDs: []string{"cep-1"},
+		},
+		NeuronActuatorLinks: []model.NeuronActuatorLink{
+			{NeuronID: "n1", ActuatorID: "out"},
+		},
+	}
+
+	got := ResolveSubstrateCEPFaninPIDs(genome, []string{"o1", "o2", "o1", ""})
+	want := []string{"o1", "o2"}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("unexpected resolved fan-in ids: got=%v want=%v", got, want)
+	}
+}
+
+func TestResolveSubstrateCEPFaninPIDsPrefersExplicitCEPFaninLinks(t *testing.T) {
+	genome := model.Genome{
+		Substrate: &model.SubstrateConfig{
+			CEPIDs: []string{"cep-1"},
+		},
+		NeuronActuatorLinks: []model.NeuronActuatorLink{
+			{NeuronID: "n3", ActuatorID: "cep-1"},
+		},
+	}
+
+	got := ResolveSubstrateCEPFaninPIDs(genome, []string{"o1", "o2"})
+	want := []string{"n3"}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("unexpected resolved fan-in ids: got=%v want=%v", got, want)
+	}
+}

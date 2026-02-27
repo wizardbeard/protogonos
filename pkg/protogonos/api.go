@@ -804,7 +804,7 @@ func buildReplayCortex(scapeName string, genome model.Genome, inputNeuronIDs, ou
 	if err != nil {
 		return nil, err
 	}
-	substrateRuntime, err := buildReplaySubstrate(genome, len(outputNeuronIDs))
+	substrateRuntime, err := buildReplaySubstrate(genome, outputNeuronIDs)
 	if err != nil {
 		return nil, err
 	}
@@ -847,7 +847,7 @@ func buildReplayIO(scapeName string, genome model.Genome) (map[string]protoio.Se
 	return sensors, actuators, nil
 }
 
-func buildReplaySubstrate(genome model.Genome, outputCount int) (substrate.Runtime, error) {
+func buildReplaySubstrate(genome model.Genome, outputNeuronIDs []string) (substrate.Runtime, error) {
 	if genome.Substrate == nil {
 		return nil, nil
 	}
@@ -855,7 +855,7 @@ func buildReplaySubstrate(genome model.Genome, outputCount int) (substrate.Runti
 	spec := substrate.Spec{
 		CPPName:      cfg.CPPName,
 		CEPName:      cfg.CEPName,
-		CEPFaninPIDs: genotype.SubstrateCEPFaninPIDs(genome),
+		CEPFaninPIDs: genotype.ResolveSubstrateCEPFaninPIDs(genome, outputNeuronIDs),
 		Dimensions:   append([]int(nil), cfg.Dimensions...),
 		Parameters:   map[string]float64{},
 	}
@@ -864,7 +864,7 @@ func buildReplaySubstrate(genome model.Genome, outputCount int) (substrate.Runti
 	}
 	weightCount := cfg.WeightCount
 	if weightCount <= 0 {
-		weightCount = outputCount
+		weightCount = len(outputNeuronIDs)
 	}
 	rt, err := substrate.NewSimpleRuntime(spec, weightCount)
 	if err != nil {
