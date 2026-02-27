@@ -53,7 +53,7 @@ Status legend:
 | `substrate_cpp.erl` | substrate CPP runtime | `internal/substrate/components.go` + registry | `partial` | `internal/substrate/components.go`, `internal/substrate/registry.go`, `.ref/src/substrate_cpp.erl` |
 | `substrate_cep.erl` | substrate CEP runtime | `internal/substrate/components.go` + registry | `partial` | `internal/substrate/components.go`, `internal/substrate/registry.go`, `.ref/src/substrate_cep.erl` |
 | `visor.erl` | visualization loop/UI drawing | none | `out-of-scope-now` | `.ref/src/visor.erl` |
-| `epitopes.erl` | experiment/sim utility tooling | `internal/scape/epitopes.go` deterministic scape-level surrogate with table-driven sense/classify sessions, mode windows, optional TickAgent internal-state channels (`epitopes_target`/`epitopes_progress`/`epitopes_margin`) backed by morphology/IO/seed defaults, optional external CSV table ingestion (`LoadEpitopesTableCSV`/`ResetEpitopesTableSource`) for data-driven row sets, ETS-style built-in table-catalog selection (`abc_pred10..20`) exposed through global/runtime selectors plus run-scoped API/CLI/config `epitopes_table_name` (`--epitopes-table`) overrides, explicit simulator/message-protocol parity via `NewEpitopesSimulator` (`Sense`/`Classify`/`State`), and replay utility parity via persisted top-genome benchmark re-evaluation (`Client.EpitopesReplay` / `protogonosctl epitopes-test`) with aggregate summary stats plus best-of-best rerun reporting (`BestReplayFitness`) | `partial` | `internal/scape/epitopes.go`, `internal/scape/epitopes_test.go`, `internal/scape/data_sources.go`, `internal/scape/data_sources_test.go`, `internal/morphology/epitopes.go`, `internal/io/scalar_components.go`, `internal/genotype/lifecycle.go`, `internal/stats/artifacts.go`, `internal/stats/artifacts_test.go`, `pkg/protogonos/api.go`, `pkg/protogonos/api_test.go`, `cmd/protogonosctl/main.go`, `cmd/protogonosctl/main_integration_test.go`, `cmd/protogonosctl/config.go`, `.ref/src/epitopes.erl` |
+| `epitopes.erl` | experiment/sim utility tooling | `internal/scape/epitopes.go` deterministic scape-level surrogate with table-driven sense/classify sessions, mode windows, optional TickAgent internal-state channels (`epitopes_target`/`epitopes_progress`/`epitopes_margin`) backed by morphology/IO/seed defaults, optional external CSV table ingestion (`LoadEpitopesTableCSV`/`ResetEpitopesTableSource`) for data-driven row sets, ETS-style built-in table-catalog selection (`abc_pred10..20`) exposed through global/runtime selectors plus run-scoped API/CLI/config `epitopes_table_name` (`--epitopes-table`) overrides, explicit simulator/message-protocol parity via `NewEpitopesSimulator` (`Sense`/`Classify`/`State`), explicit table-process lifecycle parity via `StartEpitopesTableDB`/`StopEpitopesTableDB`, and `test/1`-style generation-champion replay parity via persisted `trace_acc` artifacts and validation-fitness-selected best-of-best reruns in `Client.EpitopesReplay` / `protogonosctl epitopes-test` | `implemented` | `internal/scape/epitopes.go`, `internal/scape/epitopes_test.go`, `internal/scape/data_sources.go`, `internal/scape/data_sources_test.go`, `internal/morphology/epitopes.go`, `internal/io/scalar_components.go`, `internal/genotype/lifecycle.go`, `internal/evo/population_monitor.go`, `internal/stats/artifacts.go`, `internal/stats/artifacts_test.go`, `pkg/protogonos/api.go`, `pkg/protogonos/api_test.go`, `cmd/protogonosctl/main.go`, `cmd/protogonosctl/main_integration_test.go`, `cmd/protogonosctl/config.go`, `.ref/src/epitopes.erl` |
 | `data_extractor.erl` | dataset ingestion and conversion tooling | baseline extractor workflow via `protogonosctl data-extract` + `internal/dataextract` for GTSA/FX/Epitopes canonical CSV output from raw CSV column selections | `partial` | `cmd/protogonosctl/data_extract.go`, `internal/dataextract/extract.go`, `internal/dataextract/extract_test.go`, `.ref/src/data_extractor.erl` |
 
 ## Latest iteration updates
@@ -68,17 +68,18 @@ Status legend:
 - 2026-02-27: expanded epitopes utility-workflow parity by adding persisted top-genome replay and aggregate benchmark summarization (`Client.EpitopesReplay` / `protogonosctl epitopes-test`) with run-config data-source restoration and mode-aware replay (`benchmark`/`gt`/`validation`/`test`).
 - 2026-02-27: expanded epitopes message-protocol parity by adding explicit simulator session APIs (`NewEpitopesSimulator`, `Sense`, `Classify`, `State`) that mirror reference `sim/1` sense/classify sequencing semantics, including benchmark-window routing and halt/reset cycle behavior.
 - 2026-02-27: expanded epitopes best-champion utility parity by adding explicit best-of-best rerun reporting in replay summaries (`BestReplayFitness`/`BestReplayTable`/`BestReplayTotal`) and surfacing those fields through `protogonosctl epitopes-test` text/JSON output.
+- 2026-02-27: completed epitopes lifecycle/orchestration parity by adding `start()/db()` table-process analogs (`StartEpitopesTableDB`/`StopEpitopesTableDB`) and persisted generation-level `trace_acc` champion artifacts from `population_monitor` so replay now follows reference-style per-generation champion selection and validation-fitness-driven best-of-best reruns.
 
 ## Summary
 
-- `implemented`: 18
-- `partial`: 13
+- `implemented`: 19
+- `partial`: 12
 - `missing`: 0
 - `out-of-scope-now`: 3
 
 Most core AGENTS responsibilities are present, with remaining `partial` modules concentrated in environment/runtime breadth and substrate-family depth. The largest parity gaps are:
 
-1. Full scape behavior depth for complex reference environments (flatland/fx/gtsa/epitopes/llvm family) beyond baseline parity surrogates.
+1. Full scape behavior depth for complex reference environments (flatland/fx/gtsa/llvm family) beyond baseline parity surrogates.
 2. Substrate encoding family behavior depth (`substrate.erl`, `substrate_cpp.erl`, `substrate_cep.erl`).
 
 ## Recommended next parity increments

@@ -31,6 +31,7 @@ type RunResult struct {
 	BestByGeneration      []float64
 	GenerationDiagnostics []GenerationDiagnostics
 	SpeciesHistory        []SpeciesGeneration
+	TraceAcc              []TraceGeneration
 	FinalPopulation       []ScoredGenome
 	Lineage               []LineageRecord
 }
@@ -104,6 +105,20 @@ type TraceSpeciesMetrics struct {
 	ChampionGenomeID  string   `json:"champion_genome_id,omitempty"`
 	ValidationFitness *float64 `json:"validation_fitness,omitempty"`
 	TestFitness       *float64 `json:"test_fitness,omitempty"`
+}
+
+type TraceGeneration struct {
+	Generation int              `json:"generation"`
+	Stats      []TraceStatEntry `json:"stats"`
+}
+
+type TraceStatEntry struct {
+	SpeciesKey        string       `json:"species_key"`
+	ChampionGenomeID  string       `json:"champion_genome_id,omitempty"`
+	ChampionGenome    model.Genome `json:"champion_genome,omitempty"`
+	BestFitness       float64      `json:"best_fitness"`
+	ValidationFitness *float64     `json:"validation_fitness,omitempty"`
+	TestFitness       *float64     `json:"test_fitness,omitempty"`
 }
 
 type LineageRecord struct {
@@ -357,6 +372,7 @@ func (m *PopulationMonitor) Run(ctx context.Context, initial []model.Genome) (Ru
 	bestHistory := make([]float64, 0, m.cfg.Generations)
 	diagnostics := make([]GenerationDiagnostics, 0, m.cfg.Generations)
 	speciesHistory := make([]SpeciesGeneration, 0, m.cfg.Generations)
+	traceAcc := make([]TraceGeneration, 0, m.cfg.Generations)
 	lineage := make([]LineageRecord, 0, len(initial)*(m.cfg.Generations+1))
 	prevSpeciesSet := map[string]struct{}{}
 	evoHistoryByGenomeID := initializeEvoHistoryByGenomeID(population)
@@ -419,6 +435,7 @@ func (m *PopulationMonitor) Run(ctx context.Context, initial []model.Genome) (Ru
 		m.emitStepTraceUpdates()
 		history, currentSet := summarizeSpeciesGeneration(scored, speciesByGenomeID, logicalGeneration+1, prevSpeciesSet)
 		speciesHistory = append(speciesHistory, history)
+		traceAcc = append(traceAcc, buildTraceGeneration(logicalGeneration+1, scored, speciesByGenomeID, m.lastTraceSpecies))
 		prevSpeciesSet = currentSet
 		if m.cfg.OpMode != OpModeGT {
 			break
@@ -452,6 +469,7 @@ func (m *PopulationMonitor) Run(ctx context.Context, initial []model.Genome) (Ru
 		BestByGeneration:      bestHistory,
 		GenerationDiagnostics: diagnostics,
 		SpeciesHistory:        speciesHistory,
+		TraceAcc:              traceAcc,
 		FinalPopulation:       scored,
 		Lineage:               lineage,
 	}
@@ -466,6 +484,7 @@ func (m *PopulationMonitor) runSteadyState(ctx context.Context, initial []model.
 	bestHistory := make([]float64, 0, m.cfg.Generations)
 	diagnostics := make([]GenerationDiagnostics, 0, m.cfg.Generations)
 	speciesHistory := make([]SpeciesGeneration, 0, m.cfg.Generations)
+	traceAcc := make([]TraceGeneration, 0, m.cfg.Generations)
 	lineage := make([]LineageRecord, 0, len(initial)*(m.cfg.Generations+1))
 	prevSpeciesSet := map[string]struct{}{}
 	evoHistoryByGenomeID := initializeEvoHistoryByGenomeID(population)
@@ -529,6 +548,7 @@ func (m *PopulationMonitor) runSteadyState(ctx context.Context, initial []model.
 		m.emitStepTraceUpdates()
 		history, currentSet := summarizeSpeciesGeneration(ranked, speciesByGenomeID, logicalGeneration+1, prevSpeciesSet)
 		speciesHistory = append(speciesHistory, history)
+		traceAcc = append(traceAcc, buildTraceGeneration(logicalGeneration+1, ranked, speciesByGenomeID, m.lastTraceSpecies))
 		prevSpeciesSet = currentSet
 
 		if m.cfg.OpMode != OpModeGT {
@@ -563,6 +583,7 @@ func (m *PopulationMonitor) runSteadyState(ctx context.Context, initial []model.
 		BestByGeneration:      bestHistory,
 		GenerationDiagnostics: diagnostics,
 		SpeciesHistory:        speciesHistory,
+		TraceAcc:              traceAcc,
 		FinalPopulation:       finalScored,
 		Lineage:               lineage,
 	}
@@ -887,6 +908,54 @@ func cloneTraceSpeciesMetrics(in []TraceSpeciesMetrics) []TraceSpeciesMetrics {
 		}
 	}
 	return out
+}
+
+func buildTraceGeneration(
+	generation int,
+	scored []ScoredGenome,
+	speciesByGenomeID map[string]string,
+	species []TraceSpeciesMetrics,
+) TraceGeneration {
+	champions := make(map[string]ScoredGenome, len(species))
+	for _, item := range scored {
+		key := speciesByGenomeID[item.Genome.ID]
+		if key == "" {
+			key = "species:unknown"
+		}
+		champion, ok := champions[key]
+		if !ok || item.Fitness > champion.Fitness {
+			champions[key] = item
+		}
+	}
+
+	stats := make([]TraceStatEntry, 0, len(species))
+	for _, metric := range species {
+		entry := TraceStatEntry{
+			SpeciesKey:       metric.Key,
+			ChampionGenomeID: metric.ChampionGenomeID,
+			BestFitness:      metric.BestFitness,
+		}
+		if metric.ValidationFitness != nil {
+			val := *metric.ValidationFitness
+			entry.ValidationFitness = &val
+		}
+		if metric.TestFitness != nil {
+			val := *metric.TestFitness
+			entry.TestFitness = &val
+		}
+		if champion, ok := champions[metric.Key]; ok {
+			entry.ChampionGenome = genotype.CloneGenome(champion.Genome)
+			if entry.ChampionGenomeID == "" {
+				entry.ChampionGenomeID = champion.Genome.ID
+			}
+		}
+		stats = append(stats, entry)
+	}
+
+	return TraceGeneration{
+		Generation: generation,
+		Stats:      stats,
+	}
 }
 
 func traceCycleMetric(trace scape.Trace) float64 {

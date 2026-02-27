@@ -153,6 +153,7 @@ type EvolutionResult struct {
 	BestByGeneration      []float64
 	GenerationDiagnostics []model.GenerationDiagnostics
 	SpeciesHistory        []model.SpeciesGeneration
+	TraceAcc              []evo.TraceGeneration
 	BestFinalFitness      float64
 	TopFinal              []evo.ScoredGenome
 	Lineage               []evo.LineageRecord
@@ -852,6 +853,7 @@ func (p *Polis) RunEvolution(ctx context.Context, cfg EvolutionConfig) (Evolutio
 		BestByGeneration:      result.BestByGeneration,
 		GenerationDiagnostics: toModelDiagnostics(result.GenerationDiagnostics),
 		SpeciesHistory:        toModelSpeciesHistory(result.SpeciesHistory),
+		TraceAcc:              result.TraceAcc,
 		BestFinalFitness:      bestFinal,
 		TopFinal:              topFinal,
 		Lineage:               result.Lineage,

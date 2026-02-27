@@ -75,6 +75,15 @@ type EpitopesSimulator struct {
 	session *epitopesSession
 }
 
+// EpitopesTableDB mirrors epitopes:start()/db() lifecycle semantics:
+// load table catalog and block until terminate.
+type EpitopesTableDB struct {
+	mu          sync.RWMutex
+	terminated  bool
+	terminateCh chan struct{}
+	doneCh      chan struct{}
+}
+
 var (
 	epitopesSourceMu    sync.RWMutex
 	epitopesSourceState = defaultEpitopesSource()
@@ -82,7 +91,99 @@ var (
 	defaultEpitopesTablesOnce sync.Once
 	defaultEpitopesTablesByID map[string]epitopesTable
 	defaultEpitopesTableNames []string
+
+	epitopesDBMu      sync.Mutex
+	epitopesDBDefault *EpitopesTableDB
 )
+
+// StartEpitopesTableDB starts a singleton table process analogous to epitopes:start()/db().
+func StartEpitopesTableDB() *EpitopesTableDB {
+	ensureDefaultEpitopesTableCatalog()
+
+	epitopesDBMu.Lock()
+	defer epitopesDBMu.Unlock()
+	if epitopesDBDefault != nil && epitopesDBDefault.Running() {
+		return epitopesDBDefault
+	}
+	db := &EpitopesTableDB{
+		terminateCh: make(chan struct{}, 1),
+		doneCh:      make(chan struct{}),
+	}
+	epitopesDBDefault = db
+	go db.loop()
+	return db
+}
+
+// DefaultEpitopesTableDB returns the active table DB process if running.
+func DefaultEpitopesTableDB() (*EpitopesTableDB, bool) {
+	epitopesDBMu.Lock()
+	db := epitopesDBDefault
+	epitopesDBMu.Unlock()
+	if db == nil || !db.Running() {
+		return nil, false
+	}
+	return db, true
+}
+
+// StopEpitopesTableDB terminates the active table DB process.
+func StopEpitopesTableDB() bool {
+	db, ok := DefaultEpitopesTableDB()
+	if !ok {
+		return false
+	}
+	db.Terminate()
+	return true
+}
+
+func (db *EpitopesTableDB) loop() {
+	<-db.terminateCh
+	db.mu.Lock()
+	db.terminated = true
+	close(db.doneCh)
+	db.mu.Unlock()
+
+	epitopesDBMu.Lock()
+	if epitopesDBDefault == db {
+		epitopesDBDefault = nil
+	}
+	epitopesDBMu.Unlock()
+}
+
+// Terminate stops the DB process.
+func (db *EpitopesTableDB) Terminate() {
+	if db == nil {
+		return
+	}
+	db.mu.Lock()
+	defer db.mu.Unlock()
+	if db.terminated {
+		return
+	}
+	select {
+	case db.terminateCh <- struct{}{}:
+	default:
+	}
+}
+
+// Running reports whether the DB process is alive.
+func (db *EpitopesTableDB) Running() bool {
+	if db == nil {
+		return false
+	}
+	db.mu.RLock()
+	defer db.mu.RUnlock()
+	return !db.terminated
+}
+
+// Done returns a channel that closes on DB process termination.
+func (db *EpitopesTableDB) Done() <-chan struct{} {
+	if db == nil {
+		ch := make(chan struct{})
+		close(ch)
+		return ch
+	}
+	return db.doneCh
+}
 
 func (EpitopesScape) Name() string {
 	return "epitopes"

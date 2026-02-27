@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"protogonos/internal/agent"
 	protoio "protogonos/internal/io"
@@ -398,6 +399,61 @@ func TestAvailableEpitopesTableNamesIncludesReferenceDefaults(t *testing.T) {
 			t.Fatalf("unexpected built-in epitopes table order: got=%v want=%v", got, want)
 		}
 	}
+}
+
+func TestEpitopesTableDBLifecycle(t *testing.T) {
+	if stopped := StopEpitopesTableDB(); stopped {
+		t.Cleanup(func() {
+			_ = StopEpitopesTableDB()
+		})
+	}
+	db := StartEpitopesTableDB()
+	if db == nil {
+		t.Fatal("expected non-nil epitopes table db")
+	}
+	if !db.Running() {
+		t.Fatal("expected running epitopes table db after start")
+	}
+	if _, ok := DefaultEpitopesTableDB(); !ok {
+		t.Fatal("expected default epitopes table db to be registered")
+	}
+	if len(AvailableEpitopesTableNames()) == 0 {
+		t.Fatal("expected built-in table catalog to be loaded")
+	}
+
+	db.Terminate()
+	select {
+	case <-db.Done():
+	case <-time.After(250 * time.Millisecond):
+		t.Fatal("expected epitopes table db termination to complete")
+	}
+	if db.Running() {
+		t.Fatal("expected epitopes table db to be stopped")
+	}
+	if _, ok := DefaultEpitopesTableDB(); ok {
+		t.Fatal("expected default epitopes table db to be cleared")
+	}
+}
+
+func TestStartEpitopesTableDBIsIdempotentWhileRunning(t *testing.T) {
+	if stopped := StopEpitopesTableDB(); stopped {
+		t.Cleanup(func() {
+			_ = StopEpitopesTableDB()
+		})
+	}
+	first := StartEpitopesTableDB()
+	if first == nil {
+		t.Fatal("expected first db process")
+	}
+	second := StartEpitopesTableDB()
+	if second == nil {
+		t.Fatal("expected second db process")
+	}
+	if first != second {
+		t.Fatal("expected start to reuse the running default epitopes db process")
+	}
+	first.Terminate()
+	<-first.Done()
 }
 
 func TestEpitopesSimulatorSenseClassifyFlowResetsAfterHalt(t *testing.T) {

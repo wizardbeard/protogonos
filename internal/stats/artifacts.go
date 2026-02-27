@@ -98,11 +98,26 @@ type TopGenome struct {
 	Genome  model.Genome `json:"genome"`
 }
 
+type TraceGeneration struct {
+	Generation int              `json:"generation"`
+	Stats      []TraceStatEntry `json:"stats"`
+}
+
+type TraceStatEntry struct {
+	SpeciesKey        string       `json:"species_key"`
+	ChampionGenomeID  string       `json:"champion_genome_id,omitempty"`
+	ChampionGenome    model.Genome `json:"champion_genome,omitempty"`
+	BestFitness       float64      `json:"best_fitness"`
+	ValidationFitness *float64     `json:"validation_fitness,omitempty"`
+	TestFitness       *float64     `json:"test_fitness,omitempty"`
+}
+
 type RunArtifacts struct {
 	Config                RunConfig                     `json:"config"`
 	BestByGeneration      []float64                     `json:"best_by_generation"`
 	GenerationDiagnostics []model.GenerationDiagnostics `json:"generation_diagnostics,omitempty"`
 	SpeciesHistory        []model.SpeciesGeneration     `json:"species_history,omitempty"`
+	TraceAcc              []TraceGeneration             `json:"trace_acc,omitempty"`
 	FinalBestFitness      float64                       `json:"final_best_fitness"`
 	TopGenomes            []TopGenome                   `json:"top_genomes"`
 	Lineage               []LineageEntry                `json:"lineage"`
@@ -186,6 +201,9 @@ func WriteRunArtifacts(baseDir string, artifacts RunArtifacts) (string, error) {
 		return "", err
 	}
 	if err := writeJSON(filepath.Join(runDir, "species_history.json"), artifacts.SpeciesHistory); err != nil {
+		return "", err
+	}
+	if err := writeJSON(filepath.Join(runDir, "trace_acc.json"), artifacts.TraceAcc); err != nil {
 		return "", err
 	}
 
@@ -275,6 +293,14 @@ func ExportRunArtifacts(baseDir, runID, outDir string) (string, error) {
 			return "", err
 		}
 	}
+	traceAccPath := filepath.Join(src, "trace_acc.json")
+	if _, err := os.Stat(traceAccPath); err == nil {
+		if err := copyFile(traceAccPath, filepath.Join(dst, "trace_acc.json")); err != nil {
+			return "", err
+		}
+	} else if err != nil && !os.IsNotExist(err) {
+		return "", err
+	}
 	comparePath := filepath.Join(src, "compare_tuning.json")
 	if _, err := os.Stat(comparePath); err == nil {
 		if err := copyFile(comparePath, filepath.Join(dst, "compare_tuning.json")); err != nil {
@@ -335,6 +361,23 @@ func ReadTopGenomes(baseDir, runID string) ([]TopGenome, bool, error) {
 		return nil, false, err
 	}
 	return top, true, nil
+}
+
+func ReadTraceAcc(baseDir, runID string) ([]TraceGeneration, bool, error) {
+	path := filepath.Join(baseDir, runID, "trace_acc.json")
+	data, err := os.ReadFile(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, false, nil
+		}
+		return nil, false, err
+	}
+
+	var traceAcc []TraceGeneration
+	if err := json.Unmarshal(data, &traceAcc); err != nil {
+		return nil, false, err
+	}
+	return traceAcc, true, nil
 }
 
 func WriteTuningComparison(runDir string, report TuningComparison) error {

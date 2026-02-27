@@ -950,7 +950,7 @@ func TestScapeSummaryCommandSQLiteReadsPersistedSummary(t *testing.T) {
 	}
 }
 
-func TestEpitopesTestCommandReplaysTopGenomes(t *testing.T) {
+func TestEpitopesTestCommandReplaysGenerationChampions(t *testing.T) {
 	origWD, err := os.Getwd()
 	if err != nil {
 		t.Fatalf("getwd: %v", err)
@@ -971,7 +971,7 @@ func TestEpitopesTestCommandReplaysTopGenomes(t *testing.T) {
 		"--scape", "epitopes",
 		"--epitopes-table", "abc_pred12",
 		"--pop", "6",
-		"--gens", "1",
+		"--gens", "3",
 		"--seed", "46",
 		"--workers", "2",
 	}
@@ -991,7 +991,7 @@ func TestEpitopesTestCommandReplaysTopGenomes(t *testing.T) {
 	if err != nil {
 		t.Fatalf("epitopes-test command: %v", err)
 	}
-	if !strings.Contains(out, "epitopes_test run_id=") || !strings.Contains(out, "mean_over_280=") || !strings.Contains(out, "table=abc_pred12") || !strings.Contains(out, "best_replay=") {
+	if !strings.Contains(out, "epitopes_test run_id=") || !strings.Contains(out, "source=trace_acc") || !strings.Contains(out, "mean_over_280=") || !strings.Contains(out, "table=abc_pred12") || !strings.Contains(out, "best_replay=") {
 		t.Fatalf("unexpected epitopes-test output: %s", out)
 	}
 

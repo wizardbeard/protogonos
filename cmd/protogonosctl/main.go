@@ -1081,9 +1081,10 @@ func runEpitopesTest(ctx context.Context, args []string) error {
 		return enc.Encode(summary)
 	}
 
-	fmt.Printf("epitopes_test run_id=%s mode=%s evaluated=%d table=%s best_genome=%s best_fitness=%.6f best_replay=%.6f best_replay_table=%s best_replay_total=%d mean=%.6f std=%.6f max=%.6f min=%.6f mean_over_280=%.6f\n",
+	fmt.Printf("epitopes_test run_id=%s mode=%s source=%s evaluated=%d table=%s best_genome=%s best_fitness=%.6f best_replay=%.6f best_replay_table=%s best_replay_total=%d mean=%.6f std=%.6f max=%.6f min=%.6f mean_over_280=%.6f\n",
 		summary.RunID,
 		summary.Mode,
+		summary.Source,
 		summary.Evaluated,
 		summary.TableName,
 		summary.BestGenomeID,
@@ -1098,8 +1099,11 @@ func runEpitopesTest(ctx context.Context, args []string) error {
 		summary.MeanOver280,
 	)
 	for _, item := range summary.Items {
-		fmt.Printf("rank=%d genome_id=%s stored_fitness=%.6f replay_fitness=%.6f table=%s total=%d\n",
+		fmt.Printf("rank=%d source=%s generation=%d species=%s genome_id=%s stored_fitness=%.6f replay_fitness=%.6f table=%s total=%d\n",
 			item.Rank,
+			item.Source,
+			item.Generation,
+			item.SpeciesKey,
 			item.GenomeID,
 			item.StoredFitness,
 			item.ReplayFitness,

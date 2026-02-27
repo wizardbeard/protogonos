@@ -36,6 +36,20 @@ func TestWriteAndExportRunArtifacts(t *testing.T) {
 				ExtinctSpecies: nil,
 			},
 		},
+		TraceAcc: []TraceGeneration{
+			{
+				Generation: 1,
+				Stats: []TraceStatEntry{
+					{
+						SpeciesKey:        "sp-1",
+						ChampionGenomeID:  "g1",
+						ChampionGenome:    model.Genome{ID: "g1"},
+						BestFitness:       0.5,
+						ValidationFitness: float64Ptr(0.45),
+					},
+				},
+			},
+		},
 		FinalBestFitness: 0.7,
 		TopGenomes: []TopGenome{{
 			Rank:    1,
@@ -55,7 +69,7 @@ func TestWriteAndExportRunArtifacts(t *testing.T) {
 		t.Fatalf("write artifacts: %v", err)
 	}
 
-	for _, file := range []string{"config.json", "fitness_history.json", "top_genomes.json", "lineage.json", "generation_diagnostics.json", "species_history.json"} {
+	for _, file := range []string{"config.json", "fitness_history.json", "top_genomes.json", "lineage.json", "generation_diagnostics.json", "species_history.json", "trace_acc.json"} {
 		if _, err := os.Stat(filepath.Join(runDir, file)); err != nil {
 			t.Fatalf("expected file %s: %v", file, err)
 		}
@@ -66,7 +80,7 @@ func TestWriteAndExportRunArtifacts(t *testing.T) {
 		t.Fatalf("export artifacts: %v", err)
 	}
 
-	for _, file := range []string{"config.json", "fitness_history.json", "top_genomes.json", "lineage.json", "generation_diagnostics.json", "species_history.json"} {
+	for _, file := range []string{"config.json", "fitness_history.json", "top_genomes.json", "lineage.json", "generation_diagnostics.json", "species_history.json", "trace_acc.json"} {
 		if _, err := os.Stat(filepath.Join(exportedDir, file)); err != nil {
 			t.Fatalf("expected exported file %s: %v", file, err)
 		}
@@ -141,6 +155,17 @@ func TestWriteAndExportRunArtifacts(t *testing.T) {
 	}
 	if len(readTop) != 1 || readTop[0].Genome.ID != "g1" {
 		t.Fatalf("unexpected top genomes payload: %+v", readTop)
+	}
+
+	readTraceAcc, ok, err := ReadTraceAcc(baseDir, runID)
+	if err != nil {
+		t.Fatalf("read trace acc: %v", err)
+	}
+	if !ok {
+		t.Fatalf("expected trace acc to exist for run id %s", runID)
+	}
+	if len(readTraceAcc) != 1 || len(readTraceAcc[0].Stats) != 1 || readTraceAcc[0].Stats[0].ChampionGenomeID != "g1" {
+		t.Fatalf("unexpected trace acc payload: %+v", readTraceAcc)
 	}
 }
 
@@ -229,6 +254,12 @@ func TestReadRunConfigAndTopGenomesMissingReturnsNotFound(t *testing.T) {
 	} else if ok || top != nil {
 		t.Fatalf("expected missing top genomes to report not found, got top=%+v ok=%t", top, ok)
 	}
+
+	if traceAcc, ok, err := ReadTraceAcc(baseDir, "missing-run"); err != nil {
+		t.Fatalf("read missing trace acc: %v", err)
+	} else if ok || traceAcc != nil {
+		t.Fatalf("expected missing trace acc to report not found, got trace_acc=%+v ok=%t", traceAcc, ok)
+	}
 }
 
 func TestRunIndexEqualTimestampPrefersLaterAppend(t *testing.T) {
@@ -289,6 +320,10 @@ func TestReadTuningComparison(t *testing.T) {
 	if got.FinalImprovement != want.FinalImprovement {
 		t.Fatalf("unexpected compare report: got=%+v want=%+v", got, want)
 	}
+}
+
+func float64Ptr(v float64) *float64 {
+	return &v
 }
 
 func TestWriteBenchmarkSeries(t *testing.T) {

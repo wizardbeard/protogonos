@@ -35,6 +35,10 @@ func (a flatlandRunStepAgent) RunStep(_ context.Context, input []float64) ([]flo
 	return []float64{0}, nil
 }
 
+func float64Ptr(v float64) *float64 {
+	return &v
+}
+
 func TestClientRunRunsAndExport(t *testing.T) {
 	base := t.TempDir()
 	benchmarksDir := filepath.Join(base, "benchmarks")
@@ -906,7 +910,7 @@ func TestApplyScapeDataSourcesAppliesEpitopesTableSelectionToContext(t *testing.
 	}
 }
 
-func TestClientEpitopesReplayReplaysTopGenomesFromArtifacts(t *testing.T) {
+func TestClientEpitopesReplayReplaysTraceAccChampionsFromArtifacts(t *testing.T) {
 	base := t.TempDir()
 	client, err := New(Options{
 		StoreKind:     "memory",
@@ -923,7 +927,7 @@ func TestClientEpitopesReplayReplaysTopGenomesFromArtifacts(t *testing.T) {
 	runSummary, err := client.Run(context.Background(), RunRequest{
 		Scape:       "epitopes",
 		Population:  6,
-		Generations: 1,
+		Generations: 3,
 		Seed:        31,
 		Workers:     2,
 	})
@@ -942,8 +946,11 @@ func TestClientEpitopesReplayReplaysTopGenomesFromArtifacts(t *testing.T) {
 	if replay.RunID != runSummary.RunID {
 		t.Fatalf("unexpected replay run id: %+v", replay)
 	}
+	if replay.Source != "trace_acc" {
+		t.Fatalf("expected trace_acc replay source, got %+v", replay)
+	}
 	if replay.Evaluated != 3 || len(replay.Items) != 3 {
-		t.Fatalf("expected 3 replayed genomes, got %+v", replay)
+		t.Fatalf("expected 3 replayed generation champions, got %+v", replay)
 	}
 	if replay.BestGenomeID == "" {
 		t.Fatalf("expected best genome id in replay summary, got %+v", replay)
@@ -993,6 +1000,63 @@ func TestClientEpitopesReplayRejectsNonEpitopesRun(t *testing.T) {
 	})
 	if err == nil || !strings.Contains(err.Error(), "not an epitopes run") {
 		t.Fatalf("expected non-epitopes replay error, got %v", err)
+	}
+}
+
+func TestResolveEpitopesReplayCandidatesPrefersTraceAcc(t *testing.T) {
+	traceAcc := []stats.TraceGeneration{
+		{
+			Generation: 1,
+			Stats: []stats.TraceStatEntry{
+				{
+					SpeciesKey:        "species:a",
+					ChampionGenomeID:  "ga",
+					ChampionGenome:    model.Genome{ID: "ga"},
+					BestFitness:       0.55,
+					ValidationFitness: float64Ptr(0.6),
+				},
+				{
+					SpeciesKey:        "species:b",
+					ChampionGenomeID:  "gb",
+					ChampionGenome:    model.Genome{ID: "gb"},
+					BestFitness:       0.58,
+					ValidationFitness: float64Ptr(0.59),
+				},
+			},
+		},
+	}
+	top := []stats.TopGenome{
+		{Rank: 1, Fitness: 0.9, Genome: model.Genome{ID: "top-1"}},
+	}
+
+	candidates, source, err := resolveEpitopesReplayCandidates(traceAcc, top, 0)
+	if err != nil {
+		t.Fatalf("resolve candidates: %v", err)
+	}
+	if source != "trace_acc" {
+		t.Fatalf("expected trace_acc source, got %s", source)
+	}
+	if len(candidates) != 1 {
+		t.Fatalf("expected one candidate per generation, got %+v", candidates)
+	}
+	if candidates[0].Genome.ID != "ga" {
+		t.Fatalf("expected highest validation-fitness champion ga, got %+v", candidates[0])
+	}
+}
+
+func TestResolveEpitopesReplayCandidatesFallsBackToTopGenomes(t *testing.T) {
+	candidates, source, err := resolveEpitopesReplayCandidates(nil, []stats.TopGenome{
+		{Rank: 1, Fitness: 0.9, Genome: model.Genome{ID: "top-1"}},
+		{Rank: 2, Fitness: 0.8, Genome: model.Genome{ID: "top-2"}},
+	}, 1)
+	if err != nil {
+		t.Fatalf("resolve fallback candidates: %v", err)
+	}
+	if source != "top_genomes" {
+		t.Fatalf("expected top_genomes source, got %s", source)
+	}
+	if len(candidates) != 1 || candidates[0].Genome.ID != "top-1" {
+		t.Fatalf("unexpected fallback candidates: %+v", candidates)
 	}
 }
 

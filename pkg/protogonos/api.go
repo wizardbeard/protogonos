@@ -278,6 +278,9 @@ type EpitopesReplayRequest struct {
 
 type EpitopesReplayItem struct {
 	Rank          int
+	Source        string
+	Generation    int
+	SpeciesKey    string
 	GenomeID      string
 	StoredFitness float64
 	ReplayFitness float64
@@ -289,6 +292,7 @@ type EpitopesReplaySummary struct {
 	RunID             string
 	Scape             string
 	Mode              string
+	Source            string
 	TableName         string
 	Evaluated         int
 	MeanFitness       float64
@@ -644,6 +648,7 @@ func (c *Client) Run(ctx context.Context, req RunRequest) (RunSummary, error) {
 		BestByGeneration:      result.BestByGeneration,
 		GenerationDiagnostics: result.GenerationDiagnostics,
 		SpeciesHistory:        result.SpeciesHistory,
+		TraceAcc:              toStatsTraceAcc(result.TraceAcc),
 		FinalBestFitness:      result.BestFinalFitness,
 		TopGenomes:            top,
 		Lineage:               lineage,
@@ -865,6 +870,38 @@ func buildReplaySubstrate(genome model.Genome, outputCount int) (substrate.Runti
 		return nil, fmt.Errorf("build substrate runtime for genome %s: %w", genome.ID, err)
 	}
 	return rt, nil
+}
+
+func toStatsTraceAcc(in []evo.TraceGeneration) []stats.TraceGeneration {
+	if len(in) == 0 {
+		return nil
+	}
+	out := make([]stats.TraceGeneration, 0, len(in))
+	for _, generation := range in {
+		entry := stats.TraceGeneration{
+			Generation: generation.Generation,
+			Stats:      make([]stats.TraceStatEntry, 0, len(generation.Stats)),
+		}
+		for _, stat := range generation.Stats {
+			item := stats.TraceStatEntry{
+				SpeciesKey:       stat.SpeciesKey,
+				ChampionGenomeID: stat.ChampionGenomeID,
+				ChampionGenome:   genotype.CloneGenome(stat.ChampionGenome),
+				BestFitness:      stat.BestFitness,
+			}
+			if stat.ValidationFitness != nil {
+				val := *stat.ValidationFitness
+				item.ValidationFitness = &val
+			}
+			if stat.TestFitness != nil {
+				val := *stat.TestFitness
+				item.TestFitness = &val
+			}
+			entry.Stats = append(entry.Stats, item)
+		}
+		out = append(out, entry)
+	}
+	return out
 }
 
 func meanStd(values []float64) (float64, float64) {
@@ -1390,20 +1427,6 @@ func (c *Client) EpitopesReplay(ctx context.Context, req EpitopesReplayRequest) 
 		return EpitopesReplaySummary{}, fmt.Errorf("run %s is not an epitopes run (scape=%s)", runID, runCfg.Scape)
 	}
 
-	top, ok, err := stats.ReadTopGenomes(c.benchmarksDir, runID)
-	if err != nil {
-		return EpitopesReplaySummary{}, err
-	}
-	if !ok {
-		return EpitopesReplaySummary{}, fmt.Errorf("top genomes artifact not found for run id: %s", runID)
-	}
-	if len(top) == 0 {
-		return EpitopesReplaySummary{}, fmt.Errorf("top genomes artifact is empty for run id: %s", runID)
-	}
-	if req.Limit > 0 && len(top) > req.Limit {
-		top = top[:req.Limit]
-	}
-
 	p, err := c.ensurePolis(ctx)
 	if err != nil {
 		return EpitopesReplaySummary{}, err
@@ -1425,34 +1448,38 @@ func (c *Client) EpitopesReplay(ctx context.Context, req EpitopesReplayRequest) 
 	if err != nil {
 		return EpitopesReplaySummary{}, err
 	}
+
+	traceAcc, _, err := stats.ReadTraceAcc(c.benchmarksDir, runID)
+	if err != nil {
+		return EpitopesReplaySummary{}, err
+	}
+	top, _, err := stats.ReadTopGenomes(c.benchmarksDir, runID)
+	if err != nil {
+		return EpitopesReplaySummary{}, err
+	}
+	candidates, source, err := resolveEpitopesReplayCandidates(traceAcc, top, req.Limit)
+	if err != nil {
+		return EpitopesReplaySummary{}, err
+	}
+
 	inputNeuronIDs, outputNeuronIDs, err := defaultSeedIONeuronsForScape("epitopes", runCfg.Seed)
 	if err != nil {
 		return EpitopesReplaySummary{}, err
 	}
 
-	values := make([]float64, 0, len(top))
-	items := make([]EpitopesReplayItem, 0, len(top))
-	bestFitness := math.Inf(-1)
-	bestGenomeID := ""
-	var bestGenome model.Genome
-	hasBestGenome := false
+	values := make([]float64, 0, len(candidates))
+	items := make([]EpitopesReplayItem, 0, len(candidates))
 	tableName := ""
-	for _, item := range top {
-		cortex, err := buildReplayCortex("epitopes", item.Genome, inputNeuronIDs, outputNeuronIDs)
+	for _, candidate := range candidates {
+		cortex, err := buildReplayCortex("epitopes", candidate.Genome, inputNeuronIDs, outputNeuronIDs)
 		if err != nil {
-			return EpitopesReplaySummary{}, fmt.Errorf("build replay cortex for genome %s: %w", item.Genome.ID, err)
+			return EpitopesReplaySummary{}, fmt.Errorf("build replay cortex for genome %s: %w", candidate.Genome.ID, err)
 		}
 		fitness, trace, err := modeAware.EvaluateMode(replayCtx, cortex, mode)
 		if err != nil {
-			return EpitopesReplaySummary{}, fmt.Errorf("evaluate replay genome %s: %w", item.Genome.ID, err)
+			return EpitopesReplaySummary{}, fmt.Errorf("evaluate replay genome %s: %w", candidate.Genome.ID, err)
 		}
 		replayFitness := float64(fitness)
-		if replayFitness > bestFitness {
-			bestFitness = replayFitness
-			bestGenomeID = item.Genome.ID
-			bestGenome = item.Genome
-			hasBestGenome = true
-		}
 		currentTableName, _ := trace["table_name"].(string)
 		if tableName == "" && currentTableName != "" {
 			tableName = currentTableName
@@ -1463,9 +1490,12 @@ func (c *Client) EpitopesReplay(ctx context.Context, req EpitopesReplayRequest) 
 		}
 		values = append(values, replayFitness)
 		items = append(items, EpitopesReplayItem{
-			Rank:          item.Rank,
-			GenomeID:      item.Genome.ID,
-			StoredFitness: item.Fitness,
+			Rank:          candidate.Rank,
+			Source:        candidate.Source,
+			Generation:    candidate.Generation,
+			SpeciesKey:    candidate.SpeciesKey,
+			GenomeID:      candidate.Genome.ID,
+			StoredFitness: candidate.StoredFitness,
 			ReplayFitness: replayFitness,
 			TableName:     currentTableName,
 			Total:         total,
@@ -1479,29 +1509,32 @@ func (c *Client) EpitopesReplay(ctx context.Context, req EpitopesReplayRequest) 
 		meanOver280 = meanFitness / 280.0
 	}
 
+	botb := selectBestOfBestCandidate(candidates)
+	if strings.TrimSpace(botb.Genome.ID) == "" {
+		return EpitopesReplaySummary{}, fmt.Errorf("best-of-best candidate not found for run id: %s", runID)
+	}
 	bestReplayFitness := 0.0
 	bestReplayTable := ""
 	bestReplayTotal := 0
-	if hasBestGenome {
-		cortex, err := buildReplayCortex("epitopes", bestGenome, inputNeuronIDs, outputNeuronIDs)
-		if err != nil {
-			return EpitopesReplaySummary{}, fmt.Errorf("build replay cortex for best genome %s: %w", bestGenome.ID, err)
-		}
-		fitness, trace, err := modeAware.EvaluateMode(replayCtx, cortex, mode)
-		if err != nil {
-			return EpitopesReplaySummary{}, fmt.Errorf("evaluate replay best genome %s: %w", bestGenome.ID, err)
-		}
-		bestReplayFitness = float64(fitness)
-		bestReplayTable, _ = trace["table_name"].(string)
-		if v, ok := trace["total"].(int); ok {
-			bestReplayTotal = v
-		}
+	cortex, err := buildReplayCortex("epitopes", botb.Genome, inputNeuronIDs, outputNeuronIDs)
+	if err != nil {
+		return EpitopesReplaySummary{}, fmt.Errorf("build replay cortex for best genome %s: %w", botb.Genome.ID, err)
+	}
+	fitness, trace, err := modeAware.EvaluateMode(replayCtx, cortex, mode)
+	if err != nil {
+		return EpitopesReplaySummary{}, fmt.Errorf("evaluate replay best genome %s: %w", botb.Genome.ID, err)
+	}
+	bestReplayFitness = float64(fitness)
+	bestReplayTable, _ = trace["table_name"].(string)
+	if v, ok := trace["total"].(int); ok {
+		bestReplayTotal = v
 	}
 
 	return EpitopesReplaySummary{
 		RunID:             runID,
 		Scape:             "epitopes",
 		Mode:              mode,
+		Source:            source,
 		TableName:         tableName,
 		Evaluated:         len(items),
 		MeanFitness:       meanFitness,
@@ -1509,13 +1542,123 @@ func (c *Client) EpitopesReplay(ctx context.Context, req EpitopesReplayRequest) 
 		MaxFitness:        maxFitness,
 		MinFitness:        minFitness,
 		MeanOver280:       meanOver280,
-		BestGenomeID:      bestGenomeID,
-		BestFitness:       bestFitness,
+		BestGenomeID:      botb.Genome.ID,
+		BestFitness:       botb.StoredFitness,
 		BestReplayFitness: bestReplayFitness,
 		BestReplayTable:   bestReplayTable,
 		BestReplayTotal:   bestReplayTotal,
 		Items:             items,
 	}, nil
+}
+
+type epitopesReplayCandidate struct {
+	Rank          int
+	Source        string
+	Generation    int
+	SpeciesKey    string
+	StoredFitness float64
+	Genome        model.Genome
+}
+
+func resolveEpitopesReplayCandidates(
+	traceAcc []stats.TraceGeneration,
+	top []stats.TopGenome,
+	limit int,
+) ([]epitopesReplayCandidate, string, error) {
+	candidates := make([]epitopesReplayCandidate, 0, len(traceAcc))
+	for _, generation := range traceAcc {
+		best, ok := selectBestTraceStatEntry(generation.Stats)
+		if !ok {
+			continue
+		}
+		genome := genotype.CloneGenome(best.ChampionGenome)
+		if strings.TrimSpace(genome.ID) == "" {
+			genome.ID = best.ChampionGenomeID
+		}
+		if strings.TrimSpace(genome.ID) == "" {
+			continue
+		}
+		storedFitness := best.BestFitness
+		if best.ValidationFitness != nil {
+			storedFitness = *best.ValidationFitness
+		}
+		candidates = append(candidates, epitopesReplayCandidate{
+			Rank:          len(candidates) + 1,
+			Source:        "trace_acc",
+			Generation:    generation.Generation,
+			SpeciesKey:    best.SpeciesKey,
+			StoredFitness: storedFitness,
+			Genome:        genome,
+		})
+	}
+	if len(candidates) > 0 {
+		if limit > 0 && len(candidates) > limit {
+			candidates = candidates[:limit]
+		}
+		return candidates, "trace_acc", nil
+	}
+
+	if len(top) == 0 {
+		return nil, "", errors.New("epitopes replay requires trace_acc or top_genomes artifacts")
+	}
+	fallback := make([]epitopesReplayCandidate, 0, len(top))
+	for _, item := range top {
+		fallback = append(fallback, epitopesReplayCandidate{
+			Rank:          item.Rank,
+			Source:        "top_genomes",
+			StoredFitness: item.Fitness,
+			Genome:        genotype.CloneGenome(item.Genome),
+		})
+	}
+	if limit > 0 && len(fallback) > limit {
+		fallback = fallback[:limit]
+	}
+	return fallback, "top_genomes", nil
+}
+
+func selectBestTraceStatEntry(statsEntries []stats.TraceStatEntry) (stats.TraceStatEntry, bool) {
+	if len(statsEntries) == 0 {
+		return stats.TraceStatEntry{}, false
+	}
+	best := stats.TraceStatEntry{}
+	bestScore := math.Inf(-1)
+	foundValidation := false
+	for _, entry := range statsEntries {
+		if entry.ValidationFitness == nil {
+			continue
+		}
+		if !foundValidation || *entry.ValidationFitness > bestScore {
+			best = entry
+			bestScore = *entry.ValidationFitness
+			foundValidation = true
+		}
+	}
+	if foundValidation {
+		return best, true
+	}
+
+	best = statsEntries[0]
+	bestScore = best.BestFitness
+	for _, entry := range statsEntries[1:] {
+		if entry.BestFitness > bestScore {
+			best = entry
+			bestScore = entry.BestFitness
+		}
+	}
+	return best, true
+}
+
+func selectBestOfBestCandidate(candidates []epitopesReplayCandidate) epitopesReplayCandidate {
+	if len(candidates) == 0 {
+		return epitopesReplayCandidate{}
+	}
+	best := candidates[0]
+	for _, candidate := range candidates[1:] {
+		if candidate.StoredFitness > best.StoredFitness {
+			best = candidate
+		}
+	}
+	return best
 }
 
 func (c *Client) ScapeSummary(ctx context.Context, scapeName string) (ScapeSummaryItem, error) {
