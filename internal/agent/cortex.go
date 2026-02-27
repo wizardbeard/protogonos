@@ -158,6 +158,9 @@ func (c *Cortex) Reactivate() error {
 
 func (c *Cortex) Terminate() {
 	c.mu.Lock()
+	if managed, ok := c.substrate.(substrate.TerminableRuntime); ok {
+		managed.Terminate()
+	}
 	c.status = CortexStatusTerminated
 	c.mu.Unlock()
 }

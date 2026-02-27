@@ -54,6 +54,23 @@ func (a *scriptedFeedbackActuator) ConsumeSyncFeedback() (ActuatorSyncFeedback, 
 	return feedback, true
 }
 
+type terminableRuntimeStub struct {
+	terminated bool
+}
+
+func (s *terminableRuntimeStub) Step(_ context.Context, inputs []float64) ([]float64, error) {
+	out := append([]float64(nil), inputs...)
+	return out, nil
+}
+
+func (s *terminableRuntimeStub) Weights() []float64 {
+	return nil
+}
+
+func (s *terminableRuntimeStub) Terminate() {
+	s.terminated = true
+}
+
 func TestCortexRegisteredActuatorResolvesCanonicalAlias(t *testing.T) {
 	genome := model.Genome{
 		ActuatorIDs: []string{protoio.XORSendOutputActuatorAliasName},
@@ -755,6 +772,29 @@ func TestCortexTerminateBlocksFurtherExecution(t *testing.T) {
 	}
 	if err := c.Reactivate(); !errors.Is(err, ErrCortexTerminated) {
 		t.Fatalf("expected ErrCortexTerminated on Reactivate, got %v", err)
+	}
+}
+
+func TestCortexTerminateSignalsSubstrateRuntime(t *testing.T) {
+	genome := model.Genome{
+		Neurons: []model.Neuron{
+			{ID: "i", Activation: "identity"},
+			{ID: "o", Activation: "identity"},
+		},
+		Synapses: []model.Synapse{
+			{ID: "s", From: "i", To: "o", Weight: 1, Enabled: true},
+		},
+	}
+
+	rt := &terminableRuntimeStub{}
+	c, err := NewCortex("agent-terminated-substrate", genome, nil, nil, []string{"i"}, []string{"o"}, rt)
+	if err != nil {
+		t.Fatalf("new cortex: %v", err)
+	}
+
+	c.Terminate()
+	if !rt.terminated {
+		t.Fatal("expected cortex terminate to propagate substrate terminate")
 	}
 }
 

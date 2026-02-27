@@ -37,3 +37,10 @@ type StatefulRuntime interface {
 	Restore() error
 	Reset()
 }
+
+// TerminableRuntime is an optional runtime capability mirroring explicit
+// terminate lifecycle semantics from process-oriented substrate actors.
+type TerminableRuntime interface {
+	Runtime
+	Terminate()
+}

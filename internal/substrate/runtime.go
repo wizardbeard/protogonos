@@ -8,15 +8,18 @@ import (
 )
 
 var (
-	ErrNoSubstrateBackup = errors.New("no substrate backup available")
+	ErrNoSubstrateBackup          = errors.New("no substrate backup available")
+	ErrSubstrateRuntimeTerminated = errors.New("substrate runtime terminated")
 )
 
 type SimpleRuntime struct {
-	cpp     CPP
-	ceps    []CEP
-	params  map[string]float64
-	weights []float64
-	backup  []float64
+	cpp          CPP
+	ceps         []CEP
+	cepProcesses []*CEPProcess
+	params       map[string]float64
+	weights      []float64
+	backup       []float64
+	terminated   bool
 }
 
 func NewSimpleRuntime(spec Spec, weightCount int) (*SimpleRuntime, error) {
@@ -39,15 +42,23 @@ func NewSimpleRuntime(spec Spec, weightCount int) (*SimpleRuntime, error) {
 	for k, v := range spec.Parameters {
 		params[k] = v
 	}
+	cepProcesses, err := buildCEPProcesses(ceps, params)
+	if err != nil {
+		return nil, err
+	}
 	return &SimpleRuntime{
-		cpp:     cpp,
-		ceps:    ceps,
-		params:  params,
-		weights: make([]float64, weightCount),
+		cpp:          cpp,
+		ceps:         ceps,
+		cepProcesses: cepProcesses,
+		params:       params,
+		weights:      make([]float64, weightCount),
 	}, nil
 }
 
 func (r *SimpleRuntime) Step(ctx context.Context, inputs []float64) ([]float64, error) {
+	if r.terminated {
+		return nil, ErrSubstrateRuntimeTerminated
+	}
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
@@ -58,18 +69,23 @@ func (r *SimpleRuntime) Step(ctx context.Context, inputs []float64) ([]float64, 
 	}
 	for i := range r.weights {
 		next := r.weights[i]
-		for _, cep := range r.ceps {
-			command, err := BuildCEPCommand(cep.Name(), []float64{delta}, r.params)
-			if err == nil {
-				w, applyErr := ApplyCEPCommand(next, command, r.params)
-				if applyErr != nil {
-					return nil, fmt.Errorf("cep %s apply command %s: %w", cep.Name(), command.Command, applyErr)
+		for cepIdx, cep := range r.ceps {
+			if cepIdx < len(r.cepProcesses) && r.cepProcesses[cepIdx] != nil {
+				command, ready, err := r.cepProcesses[cepIdx].Forward(runtimeCPPProcessID, []float64{delta})
+				if err == nil {
+					if !ready {
+						continue
+					}
+					w, applyErr := ApplyCEPCommand(next, command, r.params)
+					if applyErr != nil {
+						return nil, fmt.Errorf("cep %s apply command %s: %w", cep.Name(), command.Command, applyErr)
+					}
+					next = w
+					continue
 				}
-				next = w
-				continue
-			}
-			if !errors.Is(err, ErrUnsupportedCEPCommand) {
-				return nil, fmt.Errorf("cep %s command build: %w", cep.Name(), err)
+				if !errors.Is(err, ErrUnsupportedCEPCommand) {
+					return nil, fmt.Errorf("cep %s process forward: %w", cep.Name(), err)
+				}
 			}
 
 			// Keep custom CEP compatibility when a CEP name is not part of the
@@ -83,6 +99,19 @@ func (r *SimpleRuntime) Step(ctx context.Context, inputs []float64) ([]float64, 
 		r.weights[i] = next
 	}
 	return r.Weights(), nil
+}
+
+func (r *SimpleRuntime) Terminate() {
+	if r.terminated {
+		return
+	}
+	r.terminated = true
+	for _, process := range r.cepProcesses {
+		if process == nil {
+			continue
+		}
+		process.Terminate()
+	}
 }
 
 func (r *SimpleRuntime) Weights() []float64 {
@@ -110,6 +139,20 @@ func (r *SimpleRuntime) Reset() {
 	for i := range r.weights {
 		r.weights[i] = 0
 	}
+}
+
+const runtimeCPPProcessID = "cpp"
+
+func buildCEPProcesses(ceps []CEP, parameters map[string]float64) ([]*CEPProcess, error) {
+	processes := make([]*CEPProcess, 0, len(ceps))
+	for _, cep := range ceps {
+		process, err := NewCEPProcess(cep.Name(), parameters, []string{runtimeCPPProcessID})
+		if err != nil {
+			return nil, fmt.Errorf("new cep process for %s: %w", cep.Name(), err)
+		}
+		processes = append(processes, process)
+	}
+	return processes, nil
 }
 
 func resolveCEPChain(spec Spec) ([]CEP, error) {

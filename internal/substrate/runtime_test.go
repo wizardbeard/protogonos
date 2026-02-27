@@ -405,3 +405,24 @@ func TestSimpleRuntimeRestoreRequiresBackup(t *testing.T) {
 		t.Fatalf("expected ErrNoSubstrateBackup, got %v", err)
 	}
 }
+
+func TestSimpleRuntimeTerminateBlocksStep(t *testing.T) {
+	resetRegistriesForTests()
+	t.Cleanup(resetRegistriesForTests)
+
+	rt, err := NewSimpleRuntime(Spec{
+		CPPName: DefaultCPPName,
+		CEPName: DefaultCEPName,
+	}, 1)
+	if err != nil {
+		t.Fatalf("new runtime: %v", err)
+	}
+
+	rt.Terminate()
+	if _, err := rt.Step(context.Background(), []float64{1}); !errors.Is(err, ErrSubstrateRuntimeTerminated) {
+		t.Fatalf("expected ErrSubstrateRuntimeTerminated, got %v", err)
+	}
+
+	// Terminate should be idempotent.
+	rt.Terminate()
+}
