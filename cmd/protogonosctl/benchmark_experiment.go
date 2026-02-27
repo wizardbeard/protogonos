@@ -6,6 +6,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"math"
 	"os"
 	"strings"
 	"time"
@@ -20,7 +21,7 @@ const (
 
 func runBenchmarkExperiment(ctx context.Context, args []string) error {
 	if len(args) == 0 {
-		return errors.New("benchmark-experiment requires a subcommand: start|continue|show|list")
+		return errors.New("benchmark-experiment requires a subcommand: start|continue|show|list|evaluations|report")
 	}
 	switch args[0] {
 	case "start":
@@ -31,6 +32,10 @@ func runBenchmarkExperiment(ctx context.Context, args []string) error {
 		return runBenchmarkExperimentShow(args[1:])
 	case "list":
 		return runBenchmarkExperimentList(args[1:])
+	case "evaluations":
+		return runBenchmarkExperimentEvaluations(args[1:])
+	case "report":
+		return runBenchmarkExperimentReport(args[1:])
 	default:
 		return fmt.Errorf("unknown benchmark-experiment subcommand: %s", args[0])
 	}
@@ -185,6 +190,158 @@ func runBenchmarkExperimentList(args []string) error {
 		)
 	}
 	return nil
+}
+
+func runBenchmarkExperimentEvaluations(args []string) error {
+	fs := flag.NewFlagSet("benchmark-experiment evaluations", flag.ContinueOnError)
+	id := fs.String("id", "", "experiment id")
+	fitnessGoal := fs.Float64("fitness-goal", math.NaN(), "optional success fitness goal")
+	evalLimit := fs.Int("evaluations-limit", 0, "optional success evaluation limit (>0)")
+	jsonOut := fs.Bool("json", false, "emit evaluations as JSON")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	setFlags := make(map[string]bool)
+	fs.Visit(func(f *flag.Flag) {
+		setFlags[f.Name] = true
+	})
+
+	exp, evalStats, err := loadBenchmarkExperimentEvaluationStats(strings.TrimSpace(*id), *fitnessGoal, *evalLimit, setFlags)
+	if err != nil {
+		return err
+	}
+	if *jsonOut {
+		payload := struct {
+			ID          string                         `json:"id"`
+			Evaluations stats.BenchmarkEvaluationStats `json:"evaluations"`
+		}{
+			ID:          exp.ID,
+			Evaluations: evalStats,
+		}
+		enc := json.NewEncoder(os.Stdout)
+		enc.SetIndent("", "  ")
+		return enc.Encode(payload)
+	}
+
+	fmt.Printf(
+		"benchmark_experiment_evaluations id=%s success=%d/%d success_rate=%.6f avg=%.6f std=%.6f min=%.6f max=%.6f\n",
+		exp.ID,
+		evalStats.SuccessRuns,
+		evalStats.TotalRuns,
+		evalStats.SuccessRate,
+		evalStats.AvgEvaluations,
+		evalStats.StdEvaluations,
+		evalStats.MinEvaluations,
+		evalStats.MaxEvaluations,
+	)
+	for i, run := range evalStats.Runs {
+		fmt.Printf(
+			"run=%d run_id=%s success=%t evaluations=%d generation=%d final_best=%.6f\n",
+			i+1,
+			run.RunID,
+			run.Success,
+			run.Evaluations,
+			run.ReachedGeneration,
+			run.FinalBest,
+		)
+	}
+	return nil
+}
+
+func runBenchmarkExperimentReport(args []string) error {
+	fs := flag.NewFlagSet("benchmark-experiment report", flag.ContinueOnError)
+	id := fs.String("id", "", "experiment id")
+	name := fs.String("name", "report", "report output prefix")
+	fitnessGoal := fs.Float64("fitness-goal", math.NaN(), "optional success fitness goal")
+	evalLimit := fs.Int("evaluations-limit", 0, "optional success evaluation limit (>0)")
+	jsonOut := fs.Bool("json", false, "emit report metadata as JSON")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	setFlags := make(map[string]bool)
+	fs.Visit(func(f *flag.Flag) {
+		setFlags[f.Name] = true
+	})
+
+	exp, evalStats, err := loadBenchmarkExperimentEvaluationStats(strings.TrimSpace(*id), *fitnessGoal, *evalLimit, setFlags)
+	if err != nil {
+		return err
+	}
+	report := stats.BenchmarkerReport{
+		ExperimentID: exp.ID,
+		ReportName:   strings.TrimSpace(*name),
+		Experiment:   exp,
+		TraceAcc:     append([]stats.BenchmarkSummary(nil), exp.Summaries...),
+		Evaluations:  evalStats,
+	}
+	reportDir, err := stats.WriteBenchmarkerReport(benchmarksDir, report)
+	if err != nil {
+		return err
+	}
+
+	if *jsonOut {
+		payload := struct {
+			ID          string                         `json:"id"`
+			Dir         string                         `json:"dir"`
+			ReportName  string                         `json:"report_name"`
+			Evaluations stats.BenchmarkEvaluationStats `json:"evaluations"`
+		}{
+			ID:          exp.ID,
+			Dir:         reportDir,
+			ReportName:  report.ReportName,
+			Evaluations: evalStats,
+		}
+		enc := json.NewEncoder(os.Stdout)
+		enc.SetIndent("", "  ")
+		return enc.Encode(payload)
+	}
+
+	fmt.Printf(
+		"benchmark_experiment_report id=%s name=%s dir=%s success=%d/%d success_rate=%.6f\n",
+		exp.ID,
+		report.ReportName,
+		reportDir,
+		evalStats.SuccessRuns,
+		evalStats.TotalRuns,
+		evalStats.SuccessRate,
+	)
+	return nil
+}
+
+func loadBenchmarkExperimentEvaluationStats(
+	id string,
+	fitnessGoal float64,
+	evaluationsLimit int,
+	setFlags map[string]bool,
+) (stats.BenchmarkExperiment, stats.BenchmarkEvaluationStats, error) {
+	if id == "" {
+		return stats.BenchmarkExperiment{}, stats.BenchmarkEvaluationStats{}, errors.New("benchmark-experiment requires --id")
+	}
+	exp, ok, err := stats.ReadBenchmarkExperiment(benchmarksDir, id)
+	if err != nil {
+		return stats.BenchmarkExperiment{}, stats.BenchmarkEvaluationStats{}, err
+	}
+	if !ok {
+		return stats.BenchmarkExperiment{}, stats.BenchmarkEvaluationStats{}, fmt.Errorf("benchmark experiment not found: %s", id)
+	}
+	var goalPtr *float64
+	if setFlags["fitness-goal"] {
+		value := fitnessGoal
+		goalPtr = &value
+	}
+	var evalLimitPtr *int
+	if setFlags["evaluations-limit"] {
+		if evaluationsLimit <= 0 {
+			return stats.BenchmarkExperiment{}, stats.BenchmarkEvaluationStats{}, errors.New("benchmark-experiment requires --evaluations-limit > 0 when provided")
+		}
+		value := evaluationsLimit
+		evalLimitPtr = &value
+	}
+	evalStats, err := stats.BuildBenchmarkEvaluationStats(benchmarksDir, exp, goalPtr, evalLimitPtr)
+	if err != nil {
+		return stats.BenchmarkExperiment{}, stats.BenchmarkEvaluationStats{}, err
+	}
+	return exp, evalStats, nil
 }
 
 func executeBenchmarkExperiment(ctx context.Context, exp *stats.BenchmarkExperiment) error {

@@ -1226,6 +1226,95 @@ func TestBenchmarkExperimentContinue(t *testing.T) {
 	}
 }
 
+func TestBenchmarkExperimentEvaluationsAndReport(t *testing.T) {
+	origWD, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("getwd: %v", err)
+	}
+	workdir := t.TempDir()
+	if err := os.Chdir(workdir); err != nil {
+		t.Fatalf("chdir tempdir: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = os.Chdir(origWD)
+	})
+
+	dbPath := filepath.Join(workdir, "protogonos.db")
+	if err := run(context.Background(), []string{
+		"benchmark-experiment", "start",
+		"--id", "exp-reporting",
+		"--runs", "2",
+		"--",
+		"--store", "sqlite",
+		"--db-path", dbPath,
+		"--scape", "xor",
+		"--pop", "6",
+		"--gens", "2",
+		"--seed", "41",
+		"--workers", "2",
+		"--min-improvement", "-1",
+	}); err != nil {
+		t.Fatalf("benchmark-experiment start: %v", err)
+	}
+
+	evalOut, err := captureStdout(func() error {
+		return run(context.Background(), []string{"benchmark-experiment", "evaluations", "--id", "exp-reporting", "--json"})
+	})
+	if err != nil {
+		t.Fatalf("benchmark-experiment evaluations: %v", err)
+	}
+	var evalPayload struct {
+		ID          string                         `json:"id"`
+		Evaluations stats.BenchmarkEvaluationStats `json:"evaluations"`
+	}
+	if err := json.Unmarshal([]byte(evalOut), &evalPayload); err != nil {
+		t.Fatalf("decode evaluations payload: %v", err)
+	}
+	if evalPayload.ID != "exp-reporting" {
+		t.Fatalf("unexpected evaluations id: %+v", evalPayload)
+	}
+	if evalPayload.Evaluations.TotalRuns != 2 || len(evalPayload.Evaluations.Runs) != 2 {
+		t.Fatalf("unexpected evaluations payload: %+v", evalPayload.Evaluations)
+	}
+
+	reportOut, err := captureStdout(func() error {
+		return run(context.Background(), []string{"benchmark-experiment", "report", "--id", "exp-reporting", "--name", "report2", "--json"})
+	})
+	if err != nil {
+		t.Fatalf("benchmark-experiment report: %v", err)
+	}
+	var reportPayload struct {
+		ID          string                         `json:"id"`
+		Dir         string                         `json:"dir"`
+		ReportName  string                         `json:"report_name"`
+		Evaluations stats.BenchmarkEvaluationStats `json:"evaluations"`
+	}
+	if err := json.Unmarshal([]byte(reportOut), &reportPayload); err != nil {
+		t.Fatalf("decode report payload: %v", err)
+	}
+	if reportPayload.ID != "exp-reporting" || reportPayload.ReportName != "report2" {
+		t.Fatalf("unexpected report payload: %+v", reportPayload)
+	}
+	if reportPayload.Dir == "" {
+		t.Fatalf("expected non-empty report directory: %+v", reportPayload)
+	}
+	if reportPayload.Evaluations.TotalRuns != 2 {
+		t.Fatalf("unexpected report evaluations payload: %+v", reportPayload.Evaluations)
+	}
+
+	reportDir := filepath.Join("benchmarks", "experiments", "exp-reporting")
+	for _, name := range []string{
+		"report2_Experiment.json",
+		"report2_Trace_Acc.json",
+		"report2_Evaluations.json",
+		"report2_Report.json",
+	} {
+		if _, err := os.Stat(filepath.Join(reportDir, name)); err != nil {
+			t.Fatalf("expected report file %s: %v", name, err)
+		}
+	}
+}
+
 func TestBenchmarkCommandConfigLoadsMap2RecAndAllowsFlagOverrides(t *testing.T) {
 	origWD, err := os.Getwd()
 	if err != nil {

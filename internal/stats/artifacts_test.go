@@ -343,6 +343,25 @@ func TestWriteBenchmarkSeries(t *testing.T) {
 	if strings.Count(got, "\n") != 3 {
 		t.Fatalf("expected 3 csv lines, got %d", strings.Count(got, "\n"))
 	}
+
+	loaded, ok, err := ReadBenchmarkSeries(filepath.Dir(runDir), filepath.Base(runDir))
+	if err != nil {
+		t.Fatalf("read benchmark series: %v", err)
+	}
+	if !ok {
+		t.Fatalf("expected benchmark series to exist")
+	}
+	if len(loaded) != 2 || loaded[0] != 1.5 || loaded[1] != 1.75 {
+		t.Fatalf("unexpected loaded benchmark series: %v", loaded)
+	}
+
+	missing, ok, err := ReadBenchmarkSeries(t.TempDir(), "missing-run")
+	if err != nil {
+		t.Fatalf("read missing benchmark series: %v", err)
+	}
+	if ok || len(missing) != 0 {
+		t.Fatalf("expected missing benchmark series, got ok=%t values=%v", ok, missing)
+	}
 }
 
 func TestReadBenchmarkSummary(t *testing.T) {

@@ -445,6 +445,50 @@ func WriteBenchmarkSeries(runDir string, bestByGeneration []float64) error {
 	return writer.Error()
 }
 
+func ReadBenchmarkSeries(baseDir, runID string) ([]float64, bool, error) {
+	path := filepath.Join(baseDir, runID, "benchmark_series.csv")
+	file, err := os.Open(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, false, nil
+		}
+		return nil, false, err
+	}
+	defer file.Close()
+
+	reader := csv.NewReader(file)
+	header, err := reader.Read()
+	if err != nil {
+		if err == io.EOF {
+			return []float64{}, true, nil
+		}
+		return nil, false, err
+	}
+	if len(header) < 2 {
+		return nil, false, fmt.Errorf("benchmark series header must have at least 2 columns")
+	}
+
+	series := make([]float64, 0, 128)
+	for {
+		record, err := reader.Read()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return nil, false, err
+		}
+		if len(record) < 2 {
+			return nil, false, fmt.Errorf("benchmark series row must have at least 2 columns")
+		}
+		value, err := strconv.ParseFloat(record[1], 64)
+		if err != nil {
+			return nil, false, err
+		}
+		series = append(series, value)
+	}
+	return series, true, nil
+}
+
 func writeJSON(path string, value any) error {
 	data, err := json.MarshalIndent(value, "", "  ")
 	if err != nil {
