@@ -325,7 +325,7 @@ func buildCEPProcesses(ceps []CEP, parameters map[string]float64, faninPIDs []st
 			baseFanin = faninPIDsByCEP[i]
 		}
 		cepFaninPIDs := resolveCEPProcessFaninPIDs(cep.Name(), baseFanin)
-		process, err := NewCEPProcess(cep.Name(), parameters, cepFaninPIDs)
+		process, err := NewCEPProcessWithID(fmt.Sprintf("cep_%d", i+1), cep.Name(), parameters, cepFaninPIDs)
 		if err != nil {
 			return nil, nil, fmt.Errorf("new cep process for %s: %w", cep.Name(), err)
 		}

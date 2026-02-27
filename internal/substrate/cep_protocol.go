@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"sync/atomic"
 )
 
 var (
@@ -16,6 +17,7 @@ var (
 // CEPCommand mirrors the reference CEP->substrate message shape:
 // {CEP_Pid, Command, Signal}.
 type CEPCommand struct {
+	FromPID string
 	Command string
 	Signal  []float64
 }
@@ -24,6 +26,7 @@ type CEPCommand struct {
 // ordered fan-in accumulation, per-cycle command emission, and explicit
 // terminate behavior.
 type CEPProcess struct {
+	id          string
 	cepName     string
 	parameters  map[string]float64
 	faninPIDs   []string
@@ -32,16 +35,31 @@ type CEPProcess struct {
 	terminated  bool
 }
 
+var cepProcessCounter uint64
+
 func NewCEPProcess(cepName string, parameters map[string]float64, faninPIDs []string) (*CEPProcess, error) {
+	return NewCEPProcessWithID("", cepName, parameters, faninPIDs)
+}
+
+func NewCEPProcessWithID(id string, cepName string, parameters map[string]float64, faninPIDs []string) (*CEPProcess, error) {
 	if len(faninPIDs) == 0 {
 		return nil, fmt.Errorf("fanin pids are required")
 	}
+	processID := strings.TrimSpace(id)
+	if processID == "" {
+		processID = fmt.Sprintf("cep_%d", atomic.AddUint64(&cepProcessCounter, 1))
+	}
 	out := &CEPProcess{
+		id:         processID,
 		cepName:    cepName,
 		parameters: cloneFloatMap(parameters),
 		faninPIDs:  append([]string(nil), faninPIDs...),
 	}
 	return out, nil
+}
+
+func (p *CEPProcess) ID() string {
+	return p.id
 }
 
 func (p *CEPProcess) Terminate() {
@@ -80,6 +98,7 @@ func (p *CEPProcess) Forward(fromPID string, input []float64) (CEPCommand, bool,
 	if err != nil {
 		return CEPCommand{}, false, err
 	}
+	command.FromPID = p.id
 	return command, true, nil
 }
 
