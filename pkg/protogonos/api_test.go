@@ -951,6 +951,15 @@ func TestClientEpitopesReplayReplaysTopGenomesFromArtifacts(t *testing.T) {
 	if replay.TableName != "abc_pred16" {
 		t.Fatalf("expected default epitopes table in replay summary, got %+v", replay)
 	}
+	if replay.BestReplayFitness <= 0 {
+		t.Fatalf("expected best replay fitness in summary, got %+v", replay)
+	}
+	if replay.BestReplayTable != "abc_pred16" {
+		t.Fatalf("expected best replay table in summary, got %+v", replay)
+	}
+	if replay.BestReplayTotal <= 0 {
+		t.Fatalf("expected positive best replay sample count, got %+v", replay)
+	}
 }
 
 func TestClientEpitopesReplayRejectsNonEpitopesRun(t *testing.T) {

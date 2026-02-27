@@ -1081,13 +1081,16 @@ func runEpitopesTest(ctx context.Context, args []string) error {
 		return enc.Encode(summary)
 	}
 
-	fmt.Printf("epitopes_test run_id=%s mode=%s evaluated=%d table=%s best_genome=%s best_fitness=%.6f mean=%.6f std=%.6f max=%.6f min=%.6f mean_over_280=%.6f\n",
+	fmt.Printf("epitopes_test run_id=%s mode=%s evaluated=%d table=%s best_genome=%s best_fitness=%.6f best_replay=%.6f best_replay_table=%s best_replay_total=%d mean=%.6f std=%.6f max=%.6f min=%.6f mean_over_280=%.6f\n",
 		summary.RunID,
 		summary.Mode,
 		summary.Evaluated,
 		summary.TableName,
 		summary.BestGenomeID,
 		summary.BestFitness,
+		summary.BestReplayFitness,
+		summary.BestReplayTable,
+		summary.BestReplayTotal,
 		summary.MeanFitness,
 		summary.StdFitness,
 		summary.MaxFitness,

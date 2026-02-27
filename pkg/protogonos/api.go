@@ -286,19 +286,22 @@ type EpitopesReplayItem struct {
 }
 
 type EpitopesReplaySummary struct {
-	RunID        string
-	Scape        string
-	Mode         string
-	TableName    string
-	Evaluated    int
-	MeanFitness  float64
-	StdFitness   float64
-	MaxFitness   float64
-	MinFitness   float64
-	MeanOver280  float64
-	BestGenomeID string
-	BestFitness  float64
-	Items        []EpitopesReplayItem
+	RunID             string
+	Scape             string
+	Mode              string
+	TableName         string
+	Evaluated         int
+	MeanFitness       float64
+	StdFitness        float64
+	MaxFitness        float64
+	MinFitness        float64
+	MeanOver280       float64
+	BestGenomeID      string
+	BestFitness       float64
+	BestReplayFitness float64
+	BestReplayTable   string
+	BestReplayTotal   int
+	Items             []EpitopesReplayItem
 }
 
 func New(opts Options) (*Client, error) {
@@ -1431,6 +1434,8 @@ func (c *Client) EpitopesReplay(ctx context.Context, req EpitopesReplayRequest) 
 	items := make([]EpitopesReplayItem, 0, len(top))
 	bestFitness := math.Inf(-1)
 	bestGenomeID := ""
+	var bestGenome model.Genome
+	hasBestGenome := false
 	tableName := ""
 	for _, item := range top {
 		cortex, err := buildReplayCortex("epitopes", item.Genome, inputNeuronIDs, outputNeuronIDs)
@@ -1445,6 +1450,8 @@ func (c *Client) EpitopesReplay(ctx context.Context, req EpitopesReplayRequest) 
 		if replayFitness > bestFitness {
 			bestFitness = replayFitness
 			bestGenomeID = item.Genome.ID
+			bestGenome = item.Genome
+			hasBestGenome = true
 		}
 		currentTableName, _ := trace["table_name"].(string)
 		if tableName == "" && currentTableName != "" {
@@ -1472,20 +1479,42 @@ func (c *Client) EpitopesReplay(ctx context.Context, req EpitopesReplayRequest) 
 		meanOver280 = meanFitness / 280.0
 	}
 
+	bestReplayFitness := 0.0
+	bestReplayTable := ""
+	bestReplayTotal := 0
+	if hasBestGenome {
+		cortex, err := buildReplayCortex("epitopes", bestGenome, inputNeuronIDs, outputNeuronIDs)
+		if err != nil {
+			return EpitopesReplaySummary{}, fmt.Errorf("build replay cortex for best genome %s: %w", bestGenome.ID, err)
+		}
+		fitness, trace, err := modeAware.EvaluateMode(replayCtx, cortex, mode)
+		if err != nil {
+			return EpitopesReplaySummary{}, fmt.Errorf("evaluate replay best genome %s: %w", bestGenome.ID, err)
+		}
+		bestReplayFitness = float64(fitness)
+		bestReplayTable, _ = trace["table_name"].(string)
+		if v, ok := trace["total"].(int); ok {
+			bestReplayTotal = v
+		}
+	}
+
 	return EpitopesReplaySummary{
-		RunID:        runID,
-		Scape:        "epitopes",
-		Mode:         mode,
-		TableName:    tableName,
-		Evaluated:    len(items),
-		MeanFitness:  meanFitness,
-		StdFitness:   stdFitness,
-		MaxFitness:   maxFitness,
-		MinFitness:   minFitness,
-		MeanOver280:  meanOver280,
-		BestGenomeID: bestGenomeID,
-		BestFitness:  bestFitness,
-		Items:        items,
+		RunID:             runID,
+		Scape:             "epitopes",
+		Mode:              mode,
+		TableName:         tableName,
+		Evaluated:         len(items),
+		MeanFitness:       meanFitness,
+		StdFitness:        stdFitness,
+		MaxFitness:        maxFitness,
+		MinFitness:        minFitness,
+		MeanOver280:       meanOver280,
+		BestGenomeID:      bestGenomeID,
+		BestFitness:       bestFitness,
+		BestReplayFitness: bestReplayFitness,
+		BestReplayTable:   bestReplayTable,
+		BestReplayTotal:   bestReplayTotal,
+		Items:             items,
 	}, nil
 }
 

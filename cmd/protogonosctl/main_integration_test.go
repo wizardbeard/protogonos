@@ -991,7 +991,7 @@ func TestEpitopesTestCommandReplaysTopGenomes(t *testing.T) {
 	if err != nil {
 		t.Fatalf("epitopes-test command: %v", err)
 	}
-	if !strings.Contains(out, "epitopes_test run_id=") || !strings.Contains(out, "mean_over_280=") || !strings.Contains(out, "table=abc_pred12") {
+	if !strings.Contains(out, "epitopes_test run_id=") || !strings.Contains(out, "mean_over_280=") || !strings.Contains(out, "table=abc_pred12") || !strings.Contains(out, "best_replay=") {
 		t.Fatalf("unexpected epitopes-test output: %s", out)
 	}
 
@@ -1014,6 +1014,9 @@ func TestEpitopesTestCommandReplaysTopGenomes(t *testing.T) {
 	}
 	if _, ok := parsed["BestGenomeID"]; !ok {
 		t.Fatalf("expected BestGenomeID in epitopes-test json output: %v", parsed)
+	}
+	if _, ok := parsed["BestReplayFitness"]; !ok {
+		t.Fatalf("expected BestReplayFitness in epitopes-test json output: %v", parsed)
 	}
 	items, ok := parsed["Items"].([]any)
 	if !ok || len(items) == 0 {
