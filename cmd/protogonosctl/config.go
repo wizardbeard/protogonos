@@ -53,6 +53,9 @@ func loadRunRequestFromConfig(path string) (protoapi.RunRequest, error) {
 	if v, ok := asString(raw["epitopes_csv_path"]); ok {
 		req.EpitopesCSVPath = v
 	}
+	if v, ok := asString(raw["epitopes_table_name"]); ok {
+		req.EpitopesTableName = v
+	}
 	if v, ok := asString(raw["llvm_workflow_json"]); ok {
 		req.LLVMWorkflowJSONPath = v
 	}
@@ -444,6 +447,11 @@ func applyScapeDataConfigFallbacks(req *protoapi.RunRequest, scapeData map[strin
 				req.EpitopesCSVPath = v
 			}
 		}
+		if req.EpitopesTableName == "" {
+			if v, ok := asString(epitopesData["table_name"]); ok {
+				req.EpitopesTableName = v
+			}
+		}
 		if req.EpitopesGTStart == 0 {
 			if v, ok := asInt(epitopesData["gt_start"]); ok {
 				req.EpitopesGTStart = v
@@ -575,6 +583,8 @@ func overrideFromFlags(req *protoapi.RunRequest, set map[string]bool, flagValue 
 			req.FXCSVPath = v.(string)
 		case "epitopes-csv":
 			req.EpitopesCSVPath = v.(string)
+		case "epitopes-table":
+			req.EpitopesTableName = v.(string)
 		case "llvm-workflow-json":
 			req.LLVMWorkflowJSONPath = v.(string)
 		case "epitopes-gt-start":

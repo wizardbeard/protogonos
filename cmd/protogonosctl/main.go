@@ -174,6 +174,7 @@ func runRun(ctx context.Context, args []string) error {
 	gtsaTestEnd := fs.Int("gtsa-test-end", 0, "optional GTSA test_end cutoff for loaded CSV")
 	fxCSV := fs.String("fx-csv", "", "optional FX CSV price-series path")
 	epitopesCSV := fs.String("epitopes-csv", "", "optional epitopes CSV table path")
+	epitopesTable := fs.String("epitopes-table", "", "optional built-in epitopes table name (abc_pred10|abc_pred12|abc_pred14|abc_pred16|abc_pred18|abc_pred20)")
 	llvmWorkflowJSON := fs.String("llvm-workflow-json", "", "optional LLVM workflow JSON path")
 	flatlandScannerProfile := fs.String("flatland-scanner-profile", "", "optional flatland scanner profile override: balanced5|core3|forward5")
 	flatlandScannerSpread := fs.Float64("flatland-scanner-spread", 0, "optional flatland scanner spread override in [0.05,1]")
@@ -258,6 +259,7 @@ func runRun(ctx context.Context, args []string) error {
 			GTSATestEnd:             *gtsaTestEnd,
 			FXCSVPath:               *fxCSV,
 			EpitopesCSVPath:         *epitopesCSV,
+			EpitopesTableName:       *epitopesTable,
 			LLVMWorkflowJSONPath:    *llvmWorkflowJSON,
 			FlatlandScannerProfile:  *flatlandScannerProfile,
 			EpitopesGTStart:         *epitopesGTStart,
@@ -325,6 +327,7 @@ func runRun(ctx context.Context, args []string) error {
 			"gtsa-test-end":             *gtsaTestEnd,
 			"fx-csv":                    *fxCSV,
 			"epitopes-csv":              *epitopesCSV,
+			"epitopes-table":            *epitopesTable,
 			"llvm-workflow-json":        *llvmWorkflowJSON,
 			"epitopes-gt-start":         *epitopesGTStart,
 			"epitopes-gt-end":           *epitopesGTEnd,
@@ -1044,6 +1047,7 @@ func runBenchmark(ctx context.Context, args []string) error {
 	gtsaTestEnd := fs.Int("gtsa-test-end", 0, "optional GTSA test_end cutoff for loaded CSV")
 	fxCSV := fs.String("fx-csv", "", "optional FX CSV price-series path")
 	epitopesCSV := fs.String("epitopes-csv", "", "optional epitopes CSV table path")
+	epitopesTable := fs.String("epitopes-table", "", "optional built-in epitopes table name (abc_pred10|abc_pred12|abc_pred14|abc_pred16|abc_pred18|abc_pred20)")
 	llvmWorkflowJSON := fs.String("llvm-workflow-json", "", "optional LLVM workflow JSON path")
 	flatlandScannerProfile := fs.String("flatland-scanner-profile", "", "optional flatland scanner profile override: balanced5|core3|forward5")
 	flatlandScannerSpread := fs.Float64("flatland-scanner-spread", 0, "optional flatland scanner spread override in [0.05,1]")
@@ -1128,6 +1132,7 @@ func runBenchmark(ctx context.Context, args []string) error {
 			GTSATestEnd:             *gtsaTestEnd,
 			FXCSVPath:               *fxCSV,
 			EpitopesCSVPath:         *epitopesCSV,
+			EpitopesTableName:       *epitopesTable,
 			LLVMWorkflowJSONPath:    *llvmWorkflowJSON,
 			FlatlandScannerProfile:  *flatlandScannerProfile,
 			EpitopesGTStart:         *epitopesGTStart,
@@ -1194,6 +1199,7 @@ func runBenchmark(ctx context.Context, args []string) error {
 			"gtsa-test-end":             *gtsaTestEnd,
 			"fx-csv":                    *fxCSV,
 			"epitopes-csv":              *epitopesCSV,
+			"epitopes-table":            *epitopesTable,
 			"llvm-workflow-json":        *llvmWorkflowJSON,
 			"epitopes-gt-start":         *epitopesGTStart,
 			"epitopes-gt-end":           *epitopesGTEnd,

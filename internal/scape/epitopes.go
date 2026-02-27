@@ -30,8 +30,9 @@ type epitopesWindows struct {
 }
 
 type epitopesSource struct {
-	table   epitopesTable
-	windows epitopesWindows
+	tableName string
+	table     epitopesTable
+	windows   epitopesWindows
 }
 
 // EpitopesTableBounds configures mode windows for a loaded table.
@@ -50,10 +51,26 @@ type EpitopesTableBounds struct {
 var (
 	epitopesSourceMu    sync.RWMutex
 	epitopesSourceState = defaultEpitopesSource()
+
+	defaultEpitopesTablesOnce sync.Once
+	defaultEpitopesTablesByID map[string]epitopesTable
+	defaultEpitopesTableNames []string
 )
 
 func (EpitopesScape) Name() string {
 	return "epitopes"
+}
+
+var defaultEpitopesTableSpecs = []struct {
+	name           string
+	sequenceLength int
+}{
+	{name: "abc_pred10", sequenceLength: 10},
+	{name: "abc_pred12", sequenceLength: 12},
+	{name: "abc_pred14", sequenceLength: 14},
+	{name: "abc_pred16", sequenceLength: 16},
+	{name: "abc_pred18", sequenceLength: 18},
+	{name: "abc_pred20", sequenceLength: 20},
 }
 
 // ResetEpitopesTableSource restores the deterministic built-in epitopes table.
@@ -61,6 +78,24 @@ func ResetEpitopesTableSource() {
 	epitopesSourceMu.Lock()
 	defer epitopesSourceMu.Unlock()
 	epitopesSourceState = defaultEpitopesSource()
+}
+
+// AvailableEpitopesTableNames lists built-in table names that mirror reference ets:file2tab defaults.
+func AvailableEpitopesTableNames() []string {
+	ensureDefaultEpitopesTableCatalog()
+	return append([]string(nil), defaultEpitopesTableNames...)
+}
+
+// SelectEpitopesTableSource selects a built-in table by name and makes it active globally.
+func SelectEpitopesTableSource(tableName string, bounds EpitopesTableBounds) error {
+	source, err := loadDefaultEpitopesSource(tableName, bounds)
+	if err != nil {
+		return err
+	}
+	epitopesSourceMu.Lock()
+	defer epitopesSourceMu.Unlock()
+	epitopesSourceState = source
+	return nil
 }
 
 // LoadEpitopesTableCSV loads epitopes rows from CSV and makes the table active.
@@ -291,7 +326,19 @@ type epitopesModeConfig struct {
 }
 
 func epitopesConfigForMode(mode string, source epitopesSource) (epitopesModeConfig, error) {
-	sequenceLength := source.table.sequenceLength
+	table := source.table
+	tableName := strings.TrimSpace(source.tableName)
+	if tableName == "" {
+		tableName = strings.TrimSpace(table.name)
+	}
+	if tableName == "" {
+		tableName = "epitopes.table"
+	}
+	if strings.TrimSpace(table.name) == "" {
+		table.name = tableName
+	}
+
+	sequenceLength := table.sequenceLength
 	if sequenceLength <= 0 {
 		sequenceLength = 16
 	}
@@ -305,8 +352,8 @@ func epitopesConfigForMode(mode string, source epitopesSource) (epitopesModeConf
 		return epitopesModeConfig{
 			mode:           "gt",
 			opMode:         "gt",
-			tableName:      source.table.name,
-			table:          source.table,
+			tableName:      tableName,
+			table:          table,
 			startIndex:     source.windows.gtStart,
 			endIndex:       source.windows.gtEnd,
 			startBench:     source.windows.benchmarkStart,
@@ -318,8 +365,8 @@ func epitopesConfigForMode(mode string, source epitopesSource) (epitopesModeConf
 		return epitopesModeConfig{
 			mode:           "validation",
 			opMode:         "gt",
-			tableName:      source.table.name,
-			table:          source.table,
+			tableName:      tableName,
+			table:          table,
 			startIndex:     source.windows.validationStart,
 			endIndex:       source.windows.validationEnd,
 			startBench:     source.windows.benchmarkStart,
@@ -331,8 +378,8 @@ func epitopesConfigForMode(mode string, source epitopesSource) (epitopesModeConf
 		return epitopesModeConfig{
 			mode:           "test",
 			opMode:         "gt",
-			tableName:      source.table.name,
-			table:          source.table,
+			tableName:      tableName,
+			table:          table,
 			startIndex:     source.windows.testStart,
 			endIndex:       source.windows.testEnd,
 			startBench:     source.windows.benchmarkStart,
@@ -344,8 +391,8 @@ func epitopesConfigForMode(mode string, source epitopesSource) (epitopesModeConf
 		return epitopesModeConfig{
 			mode:           "benchmark",
 			opMode:         "benchmark",
-			tableName:      source.table.name,
-			table:          source.table,
+			tableName:      tableName,
+			table:          table,
 			startIndex:     source.windows.gtStart,
 			endIndex:       source.windows.gtEnd,
 			startBench:     source.windows.benchmarkStart,
@@ -405,21 +452,92 @@ func defaultEpitopesTable(name string, sequenceLength int) epitopesTable {
 	}
 }
 
-func defaultEpitopesSource() epitopesSource {
-	table := defaultEpitopesTable("abc_pred16", 16)
-	return epitopesSource{
-		table: table,
-		windows: epitopesWindows{
-			gtStart:         1,
-			gtEnd:           64,
-			validationStart: 513,
-			validationEnd:   544,
-			testStart:       1025,
-			testEnd:         1056,
-			benchmarkStart:  841,
-			benchmarkEnd:    1120,
-		},
+func ensureDefaultEpitopesTableCatalog() {
+	defaultEpitopesTablesOnce.Do(func() {
+		defaultEpitopesTablesByID = make(map[string]epitopesTable, len(defaultEpitopesTableSpecs))
+		defaultEpitopesTableNames = make([]string, 0, len(defaultEpitopesTableSpecs))
+		for _, spec := range defaultEpitopesTableSpecs {
+			table := defaultEpitopesTable(spec.name, spec.sequenceLength)
+			defaultEpitopesTablesByID[canonicalEpitopesTableName(spec.name)] = table
+			defaultEpitopesTableNames = append(defaultEpitopesTableNames, table.name)
+		}
+	})
+}
+
+func canonicalEpitopesTableName(name string) string {
+	return strings.ToLower(strings.TrimSpace(name))
+}
+
+func hasAnyEpitopesBounds(bounds EpitopesTableBounds) bool {
+	return bounds.GTStart != 0 ||
+		bounds.GTEnd != 0 ||
+		bounds.ValidationStart != 0 ||
+		bounds.ValidationEnd != 0 ||
+		bounds.TestStart != 0 ||
+		bounds.TestEnd != 0 ||
+		bounds.BenchmarkStart != 0 ||
+		bounds.BenchmarkEnd != 0
+}
+
+func defaultEpitopesWindows() epitopesWindows {
+	return epitopesWindows{
+		gtStart:         1,
+		gtEnd:           64,
+		validationStart: 513,
+		validationEnd:   544,
+		testStart:       1025,
+		testEnd:         1056,
+		benchmarkStart:  841,
+		benchmarkEnd:    1120,
 	}
+}
+
+func defaultEpitopesTableByName(name string) (epitopesTable, bool) {
+	ensureDefaultEpitopesTableCatalog()
+	table, ok := defaultEpitopesTablesByID[canonicalEpitopesTableName(name)]
+	if !ok {
+		return epitopesTable{}, false
+	}
+	return table, true
+}
+
+func loadDefaultEpitopesSource(tableName string, bounds EpitopesTableBounds) (epitopesSource, error) {
+	name := strings.TrimSpace(tableName)
+	if name == "" {
+		name = "abc_pred16"
+	}
+	table, ok := defaultEpitopesTableByName(name)
+	if !ok {
+		return epitopesSource{}, fmt.Errorf("unknown epitopes table %q", tableName)
+	}
+
+	windows := defaultEpitopesWindows()
+	if hasAnyEpitopesBounds(bounds) {
+		var err error
+		windows, err = buildEpitopesWindows(len(table.rows)-1, bounds)
+		if err != nil {
+			return epitopesSource{}, err
+		}
+	}
+
+	return epitopesSource{
+		tableName: table.name,
+		table:     table,
+		windows:   windows,
+	}, nil
+}
+
+func defaultEpitopesSource() epitopesSource {
+	source, err := loadDefaultEpitopesSource("abc_pred16", EpitopesTableBounds{})
+	if err != nil {
+		table := defaultEpitopesTable("abc_pred16", 16)
+		return epitopesSource{
+			tableName: table.name,
+			table:     table,
+			windows:   defaultEpitopesWindows(),
+		}
+	}
+	return source
 }
 
 func currentEpitopesSource(ctx context.Context) epitopesSource {
@@ -432,6 +550,10 @@ func currentEpitopesSource(ctx context.Context) epitopesSource {
 }
 
 func loadEpitopesSourceCSV(path string, bounds EpitopesTableBounds) (epitopesSource, error) {
+	return loadEpitopesSourceCSVWithName(path, bounds, "")
+}
+
+func loadEpitopesSourceCSVWithName(path string, bounds EpitopesTableBounds, tableName string) (epitopesSource, error) {
 	path = strings.TrimSpace(path)
 	if path == "" {
 		return epitopesSource{}, fmt.Errorf("epitopes csv path is required")
@@ -492,8 +614,11 @@ func loadEpitopesSourceCSV(path string, bounds EpitopesTableBounds) (epitopesSou
 		rows = append(rows, parsed)
 	}
 
-	tableName := fmt.Sprintf("epitopes.csv.%s", filepath.Base(path))
-	table, err := buildEpitopesTable(tableName, rows)
+	resolvedTableName := strings.TrimSpace(tableName)
+	if resolvedTableName == "" {
+		resolvedTableName = fmt.Sprintf("epitopes.csv.%s", filepath.Base(path))
+	}
+	table, err := buildEpitopesTable(resolvedTableName, rows)
 	if err != nil {
 		return epitopesSource{}, err
 	}
@@ -501,7 +626,7 @@ func loadEpitopesSourceCSV(path string, bounds EpitopesTableBounds) (epitopesSou
 	if err != nil {
 		return epitopesSource{}, err
 	}
-	return epitopesSource{table: table, windows: windows}, nil
+	return epitopesSource{tableName: table.name, table: table, windows: windows}, nil
 }
 
 func parseEpitopesCSVRow(record []string, fileRow int) (epitopesRow, bool, error) {

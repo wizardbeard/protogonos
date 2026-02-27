@@ -350,3 +350,52 @@ func TestEpitopesScapeLoadTableCSVRejectsInvalidBounds(t *testing.T) {
 		t.Fatalf("expected default epitopes table after rejected load, got %+v", trace)
 	}
 }
+
+func TestSelectEpitopesTableSourceSwitchesBuiltInTable(t *testing.T) {
+	ResetEpitopesTableSource()
+	t.Cleanup(ResetEpitopesTableSource)
+
+	if err := SelectEpitopesTableSource("abc_pred10", EpitopesTableBounds{}); err != nil {
+		t.Fatalf("select epitopes table source: %v", err)
+	}
+
+	scape := EpitopesScape{}
+	copyInput := scriptedStepAgent{
+		id: "copy",
+		fn: func(in []float64) []float64 {
+			if len(in) == 0 {
+				return []float64{0}
+			}
+			return []float64{in[0]}
+		},
+	}
+	_, trace, err := scape.EvaluateMode(context.Background(), copyInput, "benchmark")
+	if err != nil {
+		t.Fatalf("evaluate selected epitopes table: %v", err)
+	}
+	if table, _ := trace["table_name"].(string); table != "abc_pred10" {
+		t.Fatalf("expected selected table abc_pred10, got %+v", trace)
+	}
+	if seqLen, _ := trace["sequence_length"].(int); seqLen != 10 {
+		t.Fatalf("expected selected sequence_length=10, got %+v", trace)
+	}
+}
+
+func TestSelectEpitopesTableSourceRejectsUnknownTable(t *testing.T) {
+	if err := SelectEpitopesTableSource("abc_pred999", EpitopesTableBounds{}); err == nil {
+		t.Fatal("expected unknown built-in table error")
+	}
+}
+
+func TestAvailableEpitopesTableNamesIncludesReferenceDefaults(t *testing.T) {
+	got := AvailableEpitopesTableNames()
+	want := []string{"abc_pred10", "abc_pred12", "abc_pred14", "abc_pred16", "abc_pred18", "abc_pred20"}
+	if len(got) != len(want) {
+		t.Fatalf("unexpected built-in epitopes table count: got=%d want=%d tables=%v", len(got), len(want), got)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Fatalf("unexpected built-in epitopes table order: got=%v want=%v", got, want)
+		}
+	}
+}

@@ -28,8 +28,9 @@ type FXDataSource struct {
 
 // EpitopesDataSource configures an optional epitopes CSV table and windows.
 type EpitopesDataSource struct {
-	CSVPath string
-	Bounds  EpitopesTableBounds
+	CSVPath   string
+	TableName string
+	Bounds    EpitopesTableBounds
 }
 
 // LLVMDataSource configures an optional LLVM workflow JSON file.
@@ -59,8 +60,17 @@ func WithDataSources(ctx context.Context, sources DataSources) (context.Context,
 		ctx = context.WithValue(ctx, fxDataSourceContextKey{}, series)
 	}
 
-	if strings.TrimSpace(sources.Epitopes.CSVPath) != "" {
-		source, err := loadEpitopesSourceCSV(sources.Epitopes.CSVPath, sources.Epitopes.Bounds)
+	epitopesCSVPath := strings.TrimSpace(sources.Epitopes.CSVPath)
+	epitopesTableName := strings.TrimSpace(sources.Epitopes.TableName)
+	switch {
+	case epitopesCSVPath != "":
+		source, err := loadEpitopesSourceCSVWithName(epitopesCSVPath, sources.Epitopes.Bounds, epitopesTableName)
+		if err != nil {
+			return nil, fmt.Errorf("configure epitopes data source: %w", err)
+		}
+		ctx = context.WithValue(ctx, epitopesDataSourceContextKey{}, source)
+	case epitopesTableName != "" || hasAnyEpitopesBounds(sources.Epitopes.Bounds):
+		source, err := loadDefaultEpitopesSource(epitopesTableName, sources.Epitopes.Bounds)
 		if err != nil {
 			return nil, fmt.Errorf("configure epitopes data source: %w", err)
 		}

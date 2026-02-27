@@ -875,6 +875,37 @@ func TestApplyScapeDataSourcesAppliesFlatlandOverridesToContext(t *testing.T) {
 	}
 }
 
+func TestApplyScapeDataSourcesAppliesEpitopesTableSelectionToContext(t *testing.T) {
+	internalscape.ResetEpitopesTableSource()
+	t.Cleanup(internalscape.ResetEpitopesTableSource)
+
+	ctx, err := applyScapeDataSources(context.Background(), RunRequest{
+		EpitopesTableName: "abc_pred12",
+	})
+	if err != nil {
+		t.Fatalf("apply scape data sources: %v", err)
+	}
+
+	epitopes := internalscape.EpitopesScape{}
+	_, scopedTrace, err := epitopes.EvaluateMode(ctx, flatlandRunStepAgent{id: "epitopes-api-ctx"}, "benchmark")
+	if err != nil {
+		t.Fatalf("evaluate scoped epitopes: %v", err)
+	}
+	_, defaultTrace, err := epitopes.EvaluateMode(context.Background(), flatlandRunStepAgent{id: "epitopes-api-default"}, "benchmark")
+	if err != nil {
+		t.Fatalf("evaluate default epitopes: %v", err)
+	}
+	if table, _ := scopedTrace["table_name"].(string); table != "abc_pred12" {
+		t.Fatalf("expected scoped epitopes table abc_pred12, got trace=%+v", scopedTrace)
+	}
+	if seqLen, _ := scopedTrace["sequence_length"].(int); seqLen != 12 {
+		t.Fatalf("expected scoped epitopes sequence_length=12, got trace=%+v", scopedTrace)
+	}
+	if table, _ := defaultTrace["table_name"].(string); table != "abc_pred16" {
+		t.Fatalf("expected default epitopes table abc_pred16, got trace=%+v", defaultTrace)
+	}
+}
+
 func TestClientRunAppliesFXCSVSourceFromRunRequest(t *testing.T) {
 	base := t.TempDir()
 	client, err := New(Options{

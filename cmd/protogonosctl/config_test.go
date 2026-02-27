@@ -159,6 +159,7 @@ func TestLoadRunRequestFromConfigParsesScapeDataSources(t *testing.T) {
 		"gtsa_test_end":       240,
 		"fx_csv_path":         "top-fx.csv",
 		"epitopes_csv_path":   "top-ep.csv",
+		"epitopes_table_name": "top-ep-table",
 		"llvm_workflow_json":  "top-llvm.json",
 		"epitopes_gt_start":   5,
 		"epitopes_gt_end":     25,
@@ -176,6 +177,7 @@ func TestLoadRunRequestFromConfigParsesScapeDataSources(t *testing.T) {
 			},
 			"epitopes": map[string]any{
 				"csv_path":         "nested-ep.csv",
+				"table_name":       "nested-ep-table",
 				"validation_start": 30,
 				"validation_end":   40,
 				"benchmark_start":  80,
@@ -204,7 +206,7 @@ func TestLoadRunRequestFromConfigParsesScapeDataSources(t *testing.T) {
 	if req.FXCSVPath != "top-fx.csv" {
 		t.Fatalf("unexpected fx csv path: %+v", req)
 	}
-	if req.EpitopesCSVPath != "top-ep.csv" || req.EpitopesGTStart != 5 || req.EpitopesGTEnd != 25 || req.EpitopesTestStart != 50 || req.EpitopesTestEnd != 70 {
+	if req.EpitopesCSVPath != "top-ep.csv" || req.EpitopesTableName != "top-ep-table" || req.EpitopesGTStart != 5 || req.EpitopesGTEnd != 25 || req.EpitopesTestStart != 50 || req.EpitopesTestEnd != 70 {
 		t.Fatalf("unexpected epitopes top-level fields: %+v", req)
 	}
 	if req.LLVMWorkflowJSONPath != "top-llvm.json" {
@@ -213,6 +215,32 @@ func TestLoadRunRequestFromConfigParsesScapeDataSources(t *testing.T) {
 	// Nested scape_data fills remaining unset fields.
 	if req.EpitopesValidationStart != 30 || req.EpitopesValidationEnd != 40 || req.EpitopesBenchmarkStart != 80 || req.EpitopesBenchmarkEnd != 110 {
 		t.Fatalf("unexpected nested epitopes fallback fields: %+v", req)
+	}
+}
+
+func TestLoadRunRequestFromConfigParsesNestedEpitopesTableNameFallback(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "run_config_scape_data_epitopes_table.json")
+	payload := map[string]any{
+		"scape_data": map[string]any{
+			"epitopes": map[string]any{
+				"table_name": "abc_pred12",
+			},
+		},
+	}
+	data, err := json.Marshal(payload)
+	if err != nil {
+		t.Fatalf("marshal payload: %v", err)
+	}
+	if err := os.WriteFile(path, data, 0o644); err != nil {
+		t.Fatalf("write config: %v", err)
+	}
+
+	req, err := loadRunRequestFromConfig(path)
+	if err != nil {
+		t.Fatalf("load run request: %v", err)
+	}
+	if req.EpitopesTableName != "abc_pred12" {
+		t.Fatalf("expected nested epitopes table_name fallback, got %+v", req)
 	}
 }
 

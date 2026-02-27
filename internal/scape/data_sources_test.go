@@ -173,3 +173,57 @@ func TestWithDataSourcesScopesEpitopesTableOverridesToContext(t *testing.T) {
 		t.Fatalf("expected default epitopes table name, got %+v", defaultTrace)
 	}
 }
+
+func TestWithDataSourcesScopesEpitopesBuiltInTableSelectionToContext(t *testing.T) {
+	ResetEpitopesTableSource()
+	t.Cleanup(ResetEpitopesTableSource)
+
+	overrideCtx, err := WithDataSources(context.Background(), DataSources{
+		Epitopes: EpitopesDataSource{
+			TableName: "abc_pred20",
+		},
+	})
+	if err != nil {
+		t.Fatalf("with data sources: %v", err)
+	}
+
+	scape := EpitopesScape{}
+	copyInput := scriptedStepAgent{
+		id: "copy-input",
+		fn: func(in []float64) []float64 {
+			if len(in) == 0 {
+				return []float64{0}
+			}
+			return []float64{in[0]}
+		},
+	}
+
+	_, scopedTrace, err := scape.EvaluateMode(overrideCtx, copyInput, "benchmark")
+	if err != nil {
+		t.Fatalf("evaluate scoped epitopes: %v", err)
+	}
+	_, defaultTrace, err := scape.EvaluateMode(context.Background(), copyInput, "benchmark")
+	if err != nil {
+		t.Fatalf("evaluate default epitopes: %v", err)
+	}
+	if table, _ := scopedTrace["table_name"].(string); table != "abc_pred20" {
+		t.Fatalf("expected scoped epitopes table abc_pred20, got %+v", scopedTrace)
+	}
+	if seqLen, _ := scopedTrace["sequence_length"].(int); seqLen != 20 {
+		t.Fatalf("expected scoped sequence_length=20, got %+v", scopedTrace)
+	}
+	if table, _ := defaultTrace["table_name"].(string); table != "abc_pred16" {
+		t.Fatalf("expected default epitopes table abc_pred16, got %+v", defaultTrace)
+	}
+}
+
+func TestWithDataSourcesRejectsUnknownEpitopesTableSelection(t *testing.T) {
+	_, err := WithDataSources(context.Background(), DataSources{
+		Epitopes: EpitopesDataSource{
+			TableName: "abc_pred999",
+		},
+	})
+	if err == nil {
+		t.Fatal("expected unknown epitopes table selection error")
+	}
+}
