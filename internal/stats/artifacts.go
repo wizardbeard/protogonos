@@ -405,6 +405,22 @@ func WriteBenchmarkSummary(runDir string, summary BenchmarkSummary) error {
 	return writeJSON(filepath.Join(runDir, "benchmark_summary.json"), summary)
 }
 
+func ReadBenchmarkSummary(baseDir, runID string) (BenchmarkSummary, bool, error) {
+	path := filepath.Join(baseDir, runID, "benchmark_summary.json")
+	data, err := os.ReadFile(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return BenchmarkSummary{}, false, nil
+		}
+		return BenchmarkSummary{}, false, err
+	}
+	var summary BenchmarkSummary
+	if err := json.Unmarshal(data, &summary); err != nil {
+		return BenchmarkSummary{}, false, err
+	}
+	return summary, true, nil
+}
+
 func WriteBenchmarkSeries(runDir string, bestByGeneration []float64) error {
 	path := filepath.Join(runDir, "benchmark_series.csv")
 	file, err := os.Create(path)

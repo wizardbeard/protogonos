@@ -1086,6 +1086,146 @@ func TestBenchmarkCommandWritesSummary(t *testing.T) {
 	}
 }
 
+func TestBenchmarkExperimentStartListAndShow(t *testing.T) {
+	origWD, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("getwd: %v", err)
+	}
+	workdir := t.TempDir()
+	if err := os.Chdir(workdir); err != nil {
+		t.Fatalf("chdir tempdir: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = os.Chdir(origWD)
+	})
+
+	dbPath := filepath.Join(workdir, "protogonos.db")
+	if err := run(context.Background(), []string{
+		"benchmark-experiment", "start",
+		"--id", "exp-start",
+		"--runs", "2",
+		"--notes", "benchmarker parity",
+		"--",
+		"--store", "sqlite",
+		"--db-path", dbPath,
+		"--scape", "xor",
+		"--pop", "6",
+		"--gens", "2",
+		"--seed", "21",
+		"--workers", "2",
+		"--min-improvement", "-1",
+	}); err != nil {
+		t.Fatalf("benchmark-experiment start: %v", err)
+	}
+
+	exp, ok, err := stats.ReadBenchmarkExperiment("benchmarks", "exp-start")
+	if err != nil {
+		t.Fatalf("read benchmark experiment: %v", err)
+	}
+	if !ok {
+		t.Fatal("expected benchmark experiment to exist")
+	}
+	if exp.ProgressFlag != "completed" {
+		t.Fatalf("expected completed experiment, got %+v", exp)
+	}
+	if exp.RunIndex != 3 || exp.TotalRuns != 2 {
+		t.Fatalf("unexpected run progress: %+v", exp)
+	}
+	if len(exp.RunIDs) != 2 || len(exp.Summaries) != 2 {
+		t.Fatalf("expected 2 run ids/summaries, got %+v", exp)
+	}
+	if exp.RunIDs[0] != "exp-start-run-001" || exp.RunIDs[1] != "exp-start-run-002" {
+		t.Fatalf("unexpected run ids: %+v", exp.RunIDs)
+	}
+
+	listOut, err := captureStdout(func() error {
+		return run(context.Background(), []string{"benchmark-experiment", "list"})
+	})
+	if err != nil {
+		t.Fatalf("benchmark-experiment list: %v", err)
+	}
+	if !strings.Contains(listOut, "id=exp-start") {
+		t.Fatalf("unexpected list output: %s", listOut)
+	}
+
+	showOut, err := captureStdout(func() error {
+		return run(context.Background(), []string{"benchmark-experiment", "show", "--id", "exp-start"})
+	})
+	if err != nil {
+		t.Fatalf("benchmark-experiment show: %v", err)
+	}
+	if !strings.Contains(showOut, "id=exp-start") || !strings.Contains(showOut, "progress=completed") {
+		t.Fatalf("unexpected show output: %s", showOut)
+	}
+}
+
+func TestBenchmarkExperimentContinue(t *testing.T) {
+	origWD, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("getwd: %v", err)
+	}
+	workdir := t.TempDir()
+	if err := os.Chdir(workdir); err != nil {
+		t.Fatalf("chdir tempdir: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = os.Chdir(origWD)
+	})
+
+	dbPath := filepath.Join(workdir, "protogonos.db")
+	benchmarkArgs := []string{
+		"--store", "sqlite",
+		"--db-path", dbPath,
+		"--scape", "xor",
+		"--pop", "6",
+		"--gens", "2",
+		"--seed", "31",
+		"--workers", "2",
+		"--min-improvement", "-1",
+	}
+	if err := run(context.Background(), append([]string{"benchmark", "--run-id", "exp-continue-run-001"}, benchmarkArgs...)); err != nil {
+		t.Fatalf("seed benchmark run: %v", err)
+	}
+	summary, ok, err := stats.ReadBenchmarkSummary("benchmarks", "exp-continue-run-001")
+	if err != nil {
+		t.Fatalf("read seed summary: %v", err)
+	}
+	if !ok {
+		t.Fatal("expected seed benchmark summary")
+	}
+	exp := stats.BenchmarkExperiment{
+		ID:            "exp-continue",
+		Notes:         "resume test",
+		ProgressFlag:  "in_progress",
+		RunIndex:      2,
+		TotalRuns:     2,
+		StartedAtUTC:  "2026-02-27T00:00:00Z",
+		BenchmarkArgs: benchmarkArgs,
+		RunIDs:        []string{"exp-continue-run-001"},
+		Summaries:     []stats.BenchmarkSummary{summary},
+	}
+	if err := stats.WriteBenchmarkExperiment("benchmarks", exp); err != nil {
+		t.Fatalf("write experiment fixture: %v", err)
+	}
+
+	if err := run(context.Background(), []string{"benchmark-experiment", "continue", "--id", "exp-continue"}); err != nil {
+		t.Fatalf("benchmark-experiment continue: %v", err)
+	}
+	got, ok, err := stats.ReadBenchmarkExperiment("benchmarks", "exp-continue")
+	if err != nil {
+		t.Fatalf("read continued experiment: %v", err)
+	}
+	if !ok {
+		t.Fatal("expected continued experiment")
+	}
+	if got.ProgressFlag != "completed" || got.RunIndex != 3 {
+		t.Fatalf("unexpected continued status: %+v", got)
+	}
+	if len(got.RunIDs) != 2 || got.RunIDs[1] != "exp-continue-run-002" {
+		t.Fatalf("unexpected continued run ids: %+v", got.RunIDs)
+	}
+}
+
 func TestBenchmarkCommandConfigLoadsMap2RecAndAllowsFlagOverrides(t *testing.T) {
 	origWD, err := os.Getwd()
 	if err != nil {

@@ -50,6 +50,8 @@ func run(ctx context.Context, args []string) error {
 		return runRun(ctx, args[1:])
 	case "benchmark":
 		return runBenchmark(ctx, args[1:])
+	case "benchmark-experiment":
+		return runBenchmarkExperiment(ctx, args[1:])
 	case "profile":
 		return runProfile(ctx, args[1:])
 	case "runs":
@@ -1762,7 +1764,7 @@ func defaultMutationPolicy(
 }
 
 func usageError(msg string) error {
-	return fmt.Errorf("%s\nusage: protogonosctl <init|reset|start|run|benchmark|profile|runs|lineage|fitness|diagnostics|species|species-diff|monitor|population|top|scape-summary|epitopes-test|export> [flags]", msg)
+	return fmt.Errorf("%s\nusage: protogonosctl <init|reset|start|run|benchmark|benchmark-experiment|profile|runs|lineage|fitness|diagnostics|species|species-diff|monitor|population|top|scape-summary|epitopes-test|export> [flags]", msg)
 }
 
 func selectionFromName(name string) (evo.Selector, error) {

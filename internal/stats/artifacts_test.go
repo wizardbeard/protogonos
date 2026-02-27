@@ -344,3 +344,41 @@ func TestWriteBenchmarkSeries(t *testing.T) {
 		t.Fatalf("expected 3 csv lines, got %d", strings.Count(got, "\n"))
 	}
 }
+
+func TestReadBenchmarkSummary(t *testing.T) {
+	base := t.TempDir()
+	runID := "bench-run"
+	runDir := filepath.Join(base, runID)
+	if err := os.MkdirAll(runDir, 0o755); err != nil {
+		t.Fatalf("mkdir run dir: %v", err)
+	}
+	want := BenchmarkSummary{
+		RunID:          runID,
+		Scape:          "xor",
+		PopulationSize: 8,
+		Generations:    3,
+		Seed:           9,
+		InitialBest:    0.1,
+		FinalBest:      0.2,
+		BestMean:       0.15,
+		BestStd:        0.05,
+		BestMax:        0.2,
+		BestMin:        0.1,
+		Improvement:    0.1,
+		MinImprovement: 0.01,
+		Passed:         true,
+	}
+	if err := WriteBenchmarkSummary(runDir, want); err != nil {
+		t.Fatalf("write benchmark summary: %v", err)
+	}
+	got, ok, err := ReadBenchmarkSummary(base, runID)
+	if err != nil {
+		t.Fatalf("read benchmark summary: %v", err)
+	}
+	if !ok {
+		t.Fatalf("expected benchmark summary to exist")
+	}
+	if got.RunID != want.RunID || got.Scape != want.Scape || got.BestMean != want.BestMean {
+		t.Fatalf("unexpected benchmark summary: %+v", got)
+	}
+}
