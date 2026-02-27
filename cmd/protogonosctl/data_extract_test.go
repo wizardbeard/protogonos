@@ -319,3 +319,61 @@ func TestRunDataExtractTableCheckResolutionAndSave(t *testing.T) {
 		t.Fatalf("unexpected resolved value: %f", got)
 	}
 }
+
+func TestRunDataExtractGenerateCircuitTables(t *testing.T) {
+	tmp := t.TempDir()
+	err := runDataExtract(context.Background(), []string{
+		"--generate-circuit-tests", tmp,
+		"--seed", "7",
+	})
+	if err != nil {
+		t.Fatalf("run data-extract generate-circuit-tests: %v", err)
+	}
+
+	i10o20Path := filepath.Join(tmp, "i10o20.table.json")
+	i10o20, err := dataextract.ReadTableFile(i10o20Path)
+	if err != nil {
+		t.Fatalf("read generated i10o20 table: %v", err)
+	}
+	if i10o20.Info.IVL != 10 || i10o20.Info.OVL != 20 {
+		t.Fatalf("unexpected i10o20 shape: %+v", i10o20.Info)
+	}
+	if len(i10o20.Rows) != 700 {
+		t.Fatalf("expected i10o20 total rows=700, got %d", len(i10o20.Rows))
+	}
+
+	xorPath := filepath.Join(tmp, "xor_bip.table.json")
+	xor, err := dataextract.ReadTableFile(xorPath)
+	if err != nil {
+		t.Fatalf("read generated xor_bip table: %v", err)
+	}
+	if len(xor.Rows) != 4 {
+		t.Fatalf("expected xor rows=4, got %d", len(xor.Rows))
+	}
+}
+
+func TestRunDataExtractGenerateCompetitiveTable(t *testing.T) {
+	tmp := t.TempDir()
+	err := runDataExtract(context.Background(), []string{
+		"--generate-competitive-tests", tmp,
+		"--seed", "11",
+	})
+	if err != nil {
+		t.Fatalf("run data-extract generate-competitive-tests: %v", err)
+	}
+
+	path := filepath.Join(tmp, "i2o0C.table.json")
+	table, err := dataextract.ReadTableFile(path)
+	if err != nil {
+		t.Fatalf("read generated competitive table: %v", err)
+	}
+	if table.Info.Name != "i2o0C" {
+		t.Fatalf("unexpected table info: %+v", table.Info)
+	}
+	if table.Info.TrnEnd != 500 || table.Info.ValEnd != 600 || table.Info.TstEnd != 700 {
+		t.Fatalf("unexpected split bounds: %+v", table.Info)
+	}
+	if len(table.Rows) != 700 {
+		t.Fatalf("expected total rows=700, got %d", len(table.Rows))
+	}
+}

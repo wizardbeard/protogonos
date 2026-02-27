@@ -55,8 +55,32 @@ func runDataExtract(_ context.Context, args []string) error {
 	tableResolutionAsinh := fs.Bool("table-resolution-asinh", true, "apply asinh transform to resolved input-window averages")
 	tableStats := fs.Bool("table-stats", false, "print per-input-column min/avg/max stats")
 	tableZeroCounts := fs.Bool("table-zero-counts", false, "print zero/non-zero input counts and ratio")
+	generateCircuitTestsDir := fs.String("generate-circuit-tests", "", "emit create_CircuitTestFiles analog tables into directory")
+	generateCompetitiveTestsDir := fs.String("generate-competitive-tests", "", "emit create_CompetitiveTestFiles analog table into directory")
+	generateSeed := fs.Int64("seed", 1, "seed for synthetic table generation workflows")
 	if err := fs.Parse(args); err != nil {
 		return err
+	}
+
+	if strings.TrimSpace(*generateCircuitTestsDir) != "" || strings.TrimSpace(*generateCompetitiveTestsDir) != "" {
+		if strings.TrimSpace(*generateCircuitTestsDir) != "" {
+			paths, err := dataextract.WriteNamedTableFiles(strings.TrimSpace(*generateCircuitTestsDir), dataextract.GenerateCircuitTestTables(*generateSeed))
+			if err != nil {
+				return err
+			}
+			fmt.Printf("generated_circuit_tables count=%d dir=%s seed=%d\n", len(paths), strings.TrimSpace(*generateCircuitTestsDir), *generateSeed)
+			for _, path := range paths {
+				fmt.Printf("generated_table path=%s\n", path)
+			}
+		}
+		if strings.TrimSpace(*generateCompetitiveTestsDir) != "" {
+			outPath := filepath.Join(strings.TrimSpace(*generateCompetitiveTestsDir), "i2o0C.table.json")
+			if err := dataextract.WriteTableFile(outPath, dataextract.GenerateCompetitiveTestTable(*generateSeed)); err != nil {
+				return err
+			}
+			fmt.Printf("generated_competitive_table path=%s seed=%d\n", outPath, *generateSeed)
+		}
+		return nil
 	}
 
 	transformOpts := tableTransformOptions{
