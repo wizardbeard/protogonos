@@ -47,11 +47,11 @@ func NewSimpleRuntime(spec Spec, weightCount int) (*SimpleRuntime, error) {
 	}
 	cepFaninPIDsByCEP := normalizeCEPFaninPIDsByCEP(spec.CEPFaninPIDsByCEP)
 	cepFaninPIDs := resolveGlobalCEPFaninPIDs(spec.CEPFaninPIDs, cepFaninPIDsByCEP)
-	cepProcesses, cepProcessFaninPIDs, err := buildCEPProcesses(ceps, params, cepFaninPIDs, cepFaninPIDsByCEP)
+	cepActorInits, cepProcessFaninPIDs, err := buildCEPActorInits(ceps, params, cepFaninPIDs, cepFaninPIDsByCEP)
 	if err != nil {
 		return nil, err
 	}
-	cepActors, err := buildCEPActors(cepProcesses)
+	cepActors, err := buildCEPActors(cepActorInits)
 	if err != nil {
 		return nil, err
 	}
@@ -362,8 +362,15 @@ func canUseInputFanInSignals(ceps []CEP) bool {
 	return true
 }
 
-func buildCEPProcesses(ceps []CEP, parameters map[string]float64, faninPIDs []string, faninPIDsByCEP [][]string) ([]*CEPProcess, [][]string, error) {
-	processes := make([]*CEPProcess, 0, len(ceps))
+type cepActorInit struct {
+	id         string
+	cepName    string
+	parameters map[string]float64
+	faninPIDs  []string
+}
+
+func buildCEPActorInits(ceps []CEP, parameters map[string]float64, faninPIDs []string, faninPIDsByCEP [][]string) ([]cepActorInit, [][]string, error) {
+	inits := make([]cepActorInit, 0, len(ceps))
 	processFaninPIDs := make([][]string, 0, len(ceps))
 	for i, cep := range ceps {
 		baseFanin := faninPIDs
@@ -371,35 +378,35 @@ func buildCEPProcesses(ceps []CEP, parameters map[string]float64, faninPIDs []st
 			baseFanin = faninPIDsByCEP[i]
 		}
 		cepFaninPIDs := resolveCEPProcessFaninPIDs(cep.Name(), baseFanin)
-		process, err := NewCEPProcessWithOwner(fmt.Sprintf("cep_%d", i+1), runtimeExoSelfProcessID, cep.Name(), parameters, cepFaninPIDs)
-		if err != nil {
-			return nil, nil, fmt.Errorf("new cep process for %s: %w", cep.Name(), err)
+		if len(cepFaninPIDs) == 0 {
+			return nil, nil, fmt.Errorf("new cep process for %s: fanin pids are required", cep.Name())
 		}
-		processes = append(processes, process)
+		inits = append(inits, cepActorInit{
+			id:         fmt.Sprintf("cep_%d", i+1),
+			cepName:    cep.Name(),
+			parameters: cloneFloatMap(parameters),
+			faninPIDs:  append([]string(nil), cepFaninPIDs...),
+		})
 		processFaninPIDs = append(processFaninPIDs, cepFaninPIDs)
 	}
-	return processes, processFaninPIDs, nil
+	return inits, processFaninPIDs, nil
 }
 
-func buildCEPActors(processes []*CEPProcess) ([]*CEPActor, error) {
-	if len(processes) == 0 {
+func buildCEPActors(inits []cepActorInit) ([]*CEPActor, error) {
+	if len(inits) == 0 {
 		return nil, nil
 	}
-	actors := make([]*CEPActor, 0, len(processes))
-	for _, process := range processes {
-		if process == nil {
-			actors = append(actors, nil)
-			continue
-		}
+	actors := make([]*CEPActor, 0, len(inits))
+	for _, init := range inits {
 		actor := NewCEPActorWithOwner(runtimeExoSelfProcessID)
 		if _, _, err := actor.Call(CEPInitMessage{
 			FromPID:    runtimeExoSelfProcessID,
-			ID:         process.id,
-			CEPName:    process.cepName,
-			Parameters: process.parameters,
-			FaninPIDs:  process.faninPIDs,
+			ID:         init.id,
+			CEPName:    init.cepName,
+			Parameters: init.parameters,
+			FaninPIDs:  init.faninPIDs,
 		}); err != nil {
-			return nil, fmt.Errorf("init cep actor %s: %w", process.ID(), err)
+			return nil, fmt.Errorf("init cep actor %s: %w", init.id, err)
 		}
 		actors = append(actors, actor)
 	}

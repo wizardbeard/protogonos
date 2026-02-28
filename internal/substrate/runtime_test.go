@@ -546,11 +546,11 @@ func TestSimpleRuntimeStepRequiresCEPActor(t *testing.T) {
 }
 
 func TestBuildCEPActorsInitializesFromPayloadState(t *testing.T) {
-	process, err := NewCEPProcessWithOwner("cep_payload_bootstrap", runtimeExoSelfProcessID, SetABCNCEPName, nil, []string{"n1", "n2"})
-	if err != nil {
-		t.Fatalf("new cep process: %v", err)
-	}
-	actors, err := buildCEPActors([]*CEPProcess{process})
+	actors, err := buildCEPActors([]cepActorInit{{
+		id:        "cep_payload_bootstrap",
+		cepName:   SetABCNCEPName,
+		faninPIDs: []string{"n1", "n2"},
+	}})
 	if err != nil {
 		t.Fatalf("build cep actors: %v", err)
 	}
