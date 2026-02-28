@@ -259,7 +259,8 @@ func NewCEPActorWithOwner(initOwnerPID string) *CEPActor {
 
 func (a *CEPActor) run() {
 	defer close(a.done)
-	for req := range a.inbox {
+	var pending []cepActorRequest
+	handle := func(req cepActorRequest) bool {
 		command, ready, err := a.handleActorMessage(req.message)
 		if err == nil && ready {
 			a.outbox <- command
@@ -282,7 +283,38 @@ func (a *CEPActor) run() {
 			close(req.reply)
 		}
 		if _, ok := req.message.(CEPTerminateMessage); ok && err == nil {
+			return true
+		}
+		return false
+	}
+
+	for {
+		req := <-a.inbox
+		if !a.initialized {
+			if _, ok := req.message.(CEPInitMessage); !ok {
+				if req.reply != nil {
+					req.reply <- cepActorResponse{
+						err: ErrCEPActorUninitialized,
+					}
+					close(req.reply)
+				} else {
+					pending = append(pending, req)
+				}
+				continue
+			}
+		}
+		if handle(req) {
 			return
+		}
+		if !a.initialized || len(pending) == 0 {
+			continue
+		}
+		drainPending := pending
+		pending = nil
+		for _, queued := range drainPending {
+			if handle(queued) {
+				return
+			}
 		}
 	}
 }

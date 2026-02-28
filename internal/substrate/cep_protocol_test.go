@@ -334,9 +334,8 @@ func TestCEPActorInitHandshake(t *testing.T) {
 	if err := actor.Post(CEPForwardMessage{FromPID: "n1", Input: []float64{1}}); err != nil {
 		t.Fatalf("post before init: %v", err)
 	}
-	syncCEPActor(t, actor)
-	if gotErr := actor.NextError(); !errors.Is(gotErr, ErrCEPActorUninitialized) {
-		t.Fatalf("expected ErrCEPActorUninitialized in errbox before init, got %v", gotErr)
+	if gotErr := actor.NextError(); !errors.Is(gotErr, ErrCEPActorNoError) {
+		t.Fatalf("expected ErrCEPActorNoError before init, got %v", gotErr)
 	}
 
 	process, err := NewCEPProcessWithOwner("cep_init", "exo_owner", DefaultCEPName, nil, []string{"n1"})
@@ -354,6 +353,13 @@ func TestCEPActorInitHandshake(t *testing.T) {
 	}
 	if _, _, err := actor.Call(CEPInitMessage{FromPID: "exo_owner", Process: process}); !errors.Is(err, ErrCEPActorAlreadyInitialized) {
 		t.Fatalf("expected ErrCEPActorAlreadyInitialized, got %v", err)
+	}
+
+	// Pre-init forward messages are queued during prep and processed once init
+	// completes, mirroring the reference process mailbox behavior.
+	syncCEPActor(t, actor)
+	if _, err := actor.NextCommand(); err != nil {
+		t.Fatalf("next command for queued pre-init message: %v", err)
 	}
 
 	if err := actor.Post(CEPForwardMessage{FromPID: "n1", Input: []float64{1}}); err != nil {
