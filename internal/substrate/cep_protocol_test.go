@@ -396,6 +396,36 @@ func TestCEPActorIgnoresInitFromNonOwnerPost(t *testing.T) {
 	}
 }
 
+func TestCEPActorInitHandshakeSupportsStatePayload(t *testing.T) {
+	actor := NewCEPActorWithOwner("exo_owner")
+
+	if _, _, err := actor.Call(CEPInitMessage{
+		FromPID: "exo_owner",
+		ID:      "cep_init_payload",
+		CEPName: DefaultCEPName,
+		Parameters: map[string]float64{
+			"scale": 1,
+		},
+		FaninPIDs: []string{"n1"},
+	}); err != nil {
+		t.Fatalf("init from payload: %v", err)
+	}
+	if err := actor.Post(CEPForwardMessage{FromPID: "n1", Input: []float64{1}}); err != nil {
+		t.Fatalf("post after payload init: %v", err)
+	}
+	syncCEPActor(t, actor)
+	command, err := actor.NextCommand()
+	if err != nil {
+		t.Fatalf("next command after payload init: %v", err)
+	}
+	if command.FromPID != "cep_init_payload" {
+		t.Fatalf("unexpected command sender after payload init: %+v", command)
+	}
+	if err := actor.TerminateFrom("exo_owner"); err != nil {
+		t.Fatalf("terminate actor: %v", err)
+	}
+}
+
 func TestCEPActorTerminateAndSubsequentCall(t *testing.T) {
 	process, err := NewCEPProcess(DefaultCEPName, nil, []string{"n1"})
 	if err != nil {

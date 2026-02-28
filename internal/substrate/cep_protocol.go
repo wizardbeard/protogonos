@@ -54,8 +54,12 @@ func (CEPTerminateMessage) isCEPMessage() {}
 // CEPInitMessage mirrors prep-loop state handoff from ExoSelf:
 // `{ExoSelfPid,{Id,CxPid,SubstratePid,CEPName,Parameters,FaninPIds}}`.
 type CEPInitMessage struct {
-	FromPID string
-	Process *CEPProcess
+	FromPID    string
+	ID         string
+	CEPName    string
+	Parameters map[string]float64
+	FaninPIDs  []string
+	Process    *CEPProcess
 }
 
 func (CEPInitMessage) isCEPMessage() {}
@@ -358,10 +362,23 @@ func (a *CEPActor) handleActorMessage(message CEPMessage) (CEPCommand, bool, err
 		if a.initOwnerPID != "" && strings.TrimSpace(msg.FromPID) != a.initOwnerPID {
 			return CEPCommand{}, false, fmt.Errorf("%w: expected=%s got=%s", ErrUnexpectedCEPInitPID, a.initOwnerPID, strings.TrimSpace(msg.FromPID))
 		}
-		if msg.Process == nil {
-			return CEPCommand{}, false, ErrCEPActorInitProcessRequired
+		process := msg.Process
+		if process == nil {
+			faninPIDs := trimCEPFaninPIDs(msg.FaninPIDs)
+			if len(faninPIDs) == 0 {
+				return CEPCommand{}, false, ErrCEPActorInitProcessRequired
+			}
+			cepName := strings.TrimSpace(msg.CEPName)
+			if cepName == "" {
+				cepName = DefaultCEPName
+			}
+			var err error
+			process, err = NewCEPProcessWithOwner(strings.TrimSpace(msg.ID), strings.TrimSpace(msg.FromPID), cepName, msg.Parameters, faninPIDs)
+			if err != nil {
+				return CEPCommand{}, false, err
+			}
 		}
-		a.process = msg.Process
+		a.process = process
 		a.initialized = true
 		return CEPCommand{}, false, nil
 	case CEPSyncMessage:
