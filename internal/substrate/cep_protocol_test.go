@@ -122,14 +122,38 @@ func TestCEPProcessAssignsDefaultID(t *testing.T) {
 	}
 }
 
-func TestCEPProcessRejectsUnexpectedSender(t *testing.T) {
+func TestCEPProcessBuffersOutOfOrderFanIn(t *testing.T) {
+	p, err := NewCEPProcess(SetABCNCEPName, nil, []string{"n1", "n2"})
+	if err != nil {
+		t.Fatalf("new cep process: %v", err)
+	}
+
+	if _, ready, err := p.Forward("n2", []float64{0.8}); err != nil {
+		t.Fatalf("forward n2: %v", err)
+	} else if ready {
+		t.Fatal("unexpected ready after out-of-order n2 message")
+	}
+
+	command, ready, err := p.Forward("n1", []float64{0.2})
+	if err != nil {
+		t.Fatalf("forward n1: %v", err)
+	}
+	if !ready {
+		t.Fatal("expected ready command after matching expected sender catches up")
+	}
+	if len(command.Signal) != 2 || command.Signal[0] != 0.2 || command.Signal[1] != 0.8 {
+		t.Fatalf("unexpected set_abcn signal from buffered out-of-order fan-in: %+v", command.Signal)
+	}
+}
+
+func TestCEPProcessRejectsUnknownSender(t *testing.T) {
 	p, err := NewCEPProcess(DefaultCEPName, nil, []string{"n1", "n2"})
 	if err != nil {
 		t.Fatalf("new cep process: %v", err)
 	}
 
-	if _, _, err := p.Forward("n2", []float64{1}); !errors.Is(err, ErrUnexpectedCEPForwardPID) {
-		t.Fatalf("expected ErrUnexpectedCEPForwardPID, got %v", err)
+	if _, _, err := p.Forward("n3", []float64{1}); !errors.Is(err, ErrUnexpectedCEPForwardPID) {
+		t.Fatalf("expected ErrUnexpectedCEPForwardPID for unknown sender, got %v", err)
 	}
 }
 

@@ -26,13 +26,14 @@ type CEPCommand struct {
 // ordered fan-in accumulation, per-cycle command emission, and explicit
 // terminate behavior.
 type CEPProcess struct {
-	id          string
-	cepName     string
-	parameters  map[string]float64
-	faninPIDs   []string
-	expectedIdx int
-	acc         []float64
-	terminated  bool
+	id           string
+	cepName      string
+	parameters   map[string]float64
+	faninPIDs    []string
+	expectedIdx  int
+	acc          []float64
+	pendingByPID map[string][][]float64
+	terminated   bool
 }
 
 var cepProcessCounter uint64
@@ -50,10 +51,11 @@ func NewCEPProcessWithID(id string, cepName string, parameters map[string]float6
 		processID = fmt.Sprintf("cep_%d", atomic.AddUint64(&cepProcessCounter, 1))
 	}
 	out := &CEPProcess{
-		id:         processID,
-		cepName:    cepName,
-		parameters: cloneFloatMap(parameters),
-		faninPIDs:  append([]string(nil), faninPIDs...),
+		id:           processID,
+		cepName:      cepName,
+		parameters:   cloneFloatMap(parameters),
+		faninPIDs:    append([]string(nil), faninPIDs...),
+		pendingByPID: map[string][][]float64{},
 	}
 	return out, nil
 }
@@ -73,33 +75,60 @@ func (p *CEPProcess) Forward(fromPID string, input []float64) (CEPCommand, bool,
 	if len(p.faninPIDs) == 0 {
 		return CEPCommand{}, false, fmt.Errorf("fanin pids are required")
 	}
-	if p.expectedIdx >= len(p.faninPIDs) {
-		p.expectedIdx = 0
-	}
-	expected := p.faninPIDs[p.expectedIdx]
-	if fromPID != expected {
+	if !containsPID(p.faninPIDs, fromPID) {
+		expected := p.faninPIDs[p.expectedIdx%len(p.faninPIDs)]
 		return CEPCommand{}, false, fmt.Errorf("%w: expected=%s got=%s", ErrUnexpectedCEPForwardPID, expected, fromPID)
 	}
 
-	// Preserve the reference accumulation choreography:
-	// lists:append(Input, Acc), then lists:reverse(Acc) at cycle end.
+	// Preserve selective receive behavior: enqueue all fan-in inputs and
+	// only consume messages when the currently expected sender has pending data.
 	chunk := append([]float64(nil), input...)
-	p.acc = append(chunk, p.acc...)
-	p.expectedIdx++
-	if p.expectedIdx < len(p.faninPIDs) {
-		return CEPCommand{}, false, nil
-	}
+	p.pendingByPID[fromPID] = append(p.pendingByPID[fromPID], chunk)
 
-	proper := reverseFloatSlice(p.acc)
-	p.acc = p.acc[:0]
-	p.expectedIdx = 0
+	for {
+		if p.expectedIdx >= len(p.faninPIDs) {
+			p.expectedIdx = 0
+		}
+		expected := p.faninPIDs[p.expectedIdx]
+		pending := p.pendingByPID[expected]
+		if len(pending) == 0 {
+			return CEPCommand{}, false, nil
+		}
+		next := pending[0]
+		if len(pending) == 1 {
+			delete(p.pendingByPID, expected)
+		} else {
+			p.pendingByPID[expected] = pending[1:]
+		}
 
-	command, err := BuildCEPCommand(p.cepName, proper, p.parameters)
-	if err != nil {
-		return CEPCommand{}, false, err
+		// Preserve the reference accumulation choreography:
+		// lists:append(Input, Acc), then lists:reverse(Acc) at cycle end.
+		p.acc = append(next, p.acc...)
+		p.expectedIdx++
+		if p.expectedIdx < len(p.faninPIDs) {
+			continue
+		}
+
+		proper := reverseFloatSlice(p.acc)
+		p.acc = p.acc[:0]
+		p.expectedIdx = 0
+
+		command, err := BuildCEPCommand(p.cepName, proper, p.parameters)
+		if err != nil {
+			return CEPCommand{}, false, err
+		}
+		command.FromPID = p.id
+		return command, true, nil
 	}
-	command.FromPID = p.id
-	return command, true, nil
+}
+
+func containsPID(pids []string, pid string) bool {
+	for _, item := range pids {
+		if item == pid {
+			return true
+		}
+	}
+	return false
 }
 
 func BuildCEPCommand(cepName string, output []float64, parameters map[string]float64) (CEPCommand, error) {
