@@ -273,9 +273,21 @@ func (r *SimpleRuntime) forwardCEPProcess(actor *CEPActor, process *CEPProcess, 
 			err         error
 		)
 		if actor != nil {
-			nextCommand, nextReady, err = actor.Call(message)
-			if err == nil && nextReady {
+			err = actor.Post(message)
+			if err == nil {
+				nextError := actor.NextError()
+				if nextError != nil && !errors.Is(nextError, ErrCEPActorNoError) {
+					err = nextError
+				}
+			}
+			nextReady = false
+			if err == nil {
 				nextCommand, err = actor.NextCommand()
+				if err == nil {
+					nextReady = true
+				} else if errors.Is(err, ErrCEPActorNoCommandReady) {
+					err = nil
+				}
 			}
 		} else {
 			nextCommand, nextReady, err = process.HandleMessage(message)

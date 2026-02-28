@@ -11,6 +11,7 @@ var (
 	ErrCEPProcessTerminated      = errors.New("cep process terminated")
 	ErrCEPActorTerminated        = errors.New("cep actor terminated")
 	ErrCEPActorNoCommandReady    = errors.New("cep actor command not ready")
+	ErrCEPActorNoError           = errors.New("cep actor no error ready")
 	ErrUnexpectedCEPForwardPID   = errors.New("unexpected cep fan-in sender")
 	ErrUnexpectedCEPTerminatePID = errors.New("unexpected cep terminate sender")
 	ErrInvalidCEPOutputWidth     = errors.New("invalid cep output width")
@@ -200,6 +201,7 @@ type CEPActor struct {
 	process *CEPProcess
 	inbox   chan cepActorRequest
 	outbox  chan CEPCommand
+	errbox  chan error
 	done    chan struct{}
 }
 
@@ -208,6 +210,7 @@ func NewCEPActor(process *CEPProcess) *CEPActor {
 		process: process,
 		inbox:   make(chan cepActorRequest),
 		outbox:  make(chan CEPCommand, 8),
+		errbox:  make(chan error, 8),
 		done:    make(chan struct{}),
 	}
 	go actor.run()
@@ -221,15 +224,45 @@ func (a *CEPActor) run() {
 		if err == nil && ready {
 			a.outbox <- command
 		}
-		req.reply <- cepActorResponse{
-			command: command,
-			ready:   ready,
-			err:     err,
+		if err != nil {
+			select {
+			case a.errbox <- err:
+			default:
+			}
 		}
-		close(req.reply)
+		if req.reply != nil {
+			req.reply <- cepActorResponse{
+				command: command,
+				ready:   ready,
+				err:     err,
+			}
+			close(req.reply)
+		}
 		if _, ok := req.message.(CEPTerminateMessage); ok && err == nil {
 			return
 		}
+	}
+}
+
+func (a *CEPActor) Post(message CEPMessage) error {
+	if message == nil {
+		return ErrInvalidCEPMessage
+	}
+	reply := make(chan cepActorResponse, 1)
+	req := cepActorRequest{
+		message: message,
+		reply:   reply,
+	}
+	select {
+	case <-a.done:
+		return ErrCEPActorTerminated
+	case a.inbox <- req:
+	}
+	select {
+	case <-a.done:
+		return ErrCEPActorTerminated
+	case <-reply:
+		return nil
 	}
 }
 
@@ -263,6 +296,17 @@ func (a *CEPActor) NextCommand() (CEPCommand, error) {
 		return CEPCommand{}, ErrCEPActorTerminated
 	default:
 		return CEPCommand{}, ErrCEPActorNoCommandReady
+	}
+}
+
+func (a *CEPActor) NextError() error {
+	select {
+	case err := <-a.errbox:
+		return err
+	case <-a.done:
+		return ErrCEPActorTerminated
+	default:
+		return ErrCEPActorNoError
 	}
 }
 

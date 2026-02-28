@@ -282,6 +282,39 @@ func TestCEPActorCommandOutbox(t *testing.T) {
 	}
 }
 
+func TestCEPActorPostAndErrorMailbox(t *testing.T) {
+	process, err := NewCEPProcessWithOwner("cep_actor_post", "exo_owner", DefaultCEPName, nil, []string{"n1"})
+	if err != nil {
+		t.Fatalf("new cep process: %v", err)
+	}
+	actor := NewCEPActor(process)
+	t.Cleanup(func() {
+		_ = actor.TerminateFrom("exo_owner")
+	})
+
+	if err := actor.Post(CEPForwardMessage{FromPID: "n2", Input: []float64{1}}); err != nil {
+		t.Fatalf("post invalid sender: %v", err)
+	}
+	gotErr := actor.NextError()
+	if !errors.Is(gotErr, ErrUnexpectedCEPForwardPID) {
+		t.Fatalf("expected ErrUnexpectedCEPForwardPID from errbox, got %v", gotErr)
+	}
+	if gotErr := actor.NextError(); !errors.Is(gotErr, ErrCEPActorNoError) {
+		t.Fatalf("expected ErrCEPActorNoError when errbox empty, got %v", gotErr)
+	}
+
+	if err := actor.Post(CEPForwardMessage{FromPID: "n1", Input: []float64{1}}); err != nil {
+		t.Fatalf("post valid sender: %v", err)
+	}
+	command, err := actor.NextCommand()
+	if err != nil {
+		t.Fatalf("next command after valid post: %v", err)
+	}
+	if command.Command != SetIterativeCEPName {
+		t.Fatalf("unexpected command from post flow: %+v", command)
+	}
+}
+
 func TestCEPActorTerminateAndSubsequentCall(t *testing.T) {
 	process, err := NewCEPProcess(DefaultCEPName, nil, []string{"n1"})
 	if err != nil {
