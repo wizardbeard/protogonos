@@ -16,7 +16,6 @@ var (
 type SimpleRuntime struct {
 	cpp                 CPP
 	ceps                []CEP
-	cepProcesses        []*CEPProcess
 	cepActors           []*CEPActor
 	cepProcessFaninPIDs [][]string
 	cepFaninPIDs        []string
@@ -59,7 +58,6 @@ func NewSimpleRuntime(spec Spec, weightCount int) (*SimpleRuntime, error) {
 	return &SimpleRuntime{
 		cpp:                 cpp,
 		ceps:                ceps,
-		cepProcesses:        cepProcesses,
 		cepActors:           cepActors,
 		cepProcessFaninPIDs: cepProcessFaninPIDs,
 		cepFaninPIDs:        append([]string(nil), cepFaninPIDs...),
@@ -95,11 +93,11 @@ func (r *SimpleRuntime) step(ctx context.Context, inputs []float64, faninSignals
 	for i := range r.weights {
 		next := r.weights[i]
 		for cepIdx, cep := range r.ceps {
-			if cepIdx < len(r.cepProcesses) && r.cepProcesses[cepIdx] != nil {
-				if cepIdx >= len(r.cepActors) || r.cepActors[cepIdx] == nil {
+			if cepIdx < len(r.cepActors) {
+				actor := r.cepActors[cepIdx]
+				if actor == nil {
 					return nil, fmt.Errorf("cep %s process actor: %w", cep.Name(), ErrMissingCEPActor)
 				}
-				actor := r.cepActors[cepIdx]
 				faninPIDs := []string{runtimeCPPProcessID}
 				if cepIdx < len(r.cepProcessFaninPIDs) && len(r.cepProcessFaninPIDs[cepIdx]) > 0 {
 					faninPIDs = r.cepProcessFaninPIDs[cepIdx]
@@ -150,12 +148,6 @@ func (r *SimpleRuntime) Terminate() {
 		if err := actor.TerminateFrom(runtimeExoSelfProcessID); err != nil {
 			continue
 		}
-	}
-	for _, process := range r.cepProcesses {
-		if process == nil || process.terminated {
-			continue
-		}
-		process.Terminate()
 	}
 }
 
