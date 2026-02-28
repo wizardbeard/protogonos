@@ -136,7 +136,7 @@ func (r *SimpleRuntime) Terminate() {
 		if process == nil {
 			continue
 		}
-		process.Terminate()
+		_, _, _ = process.HandleMessage(CEPTerminateMessage{})
 	}
 }
 
@@ -247,7 +247,10 @@ func (r *SimpleRuntime) forwardCEPProcess(process *CEPProcess, faninPIDs []strin
 	var command CEPCommand
 	ready := false
 	for i, signal := range signals {
-		nextCommand, nextReady, err := process.Forward(faninPIDs[i], []float64{signal})
+		nextCommand, nextReady, err := process.HandleMessage(CEPForwardMessage{
+			FromPID: faninPIDs[i],
+			Input:   []float64{signal},
+		})
 		if err != nil {
 			return CEPCommand{}, false, err
 		}

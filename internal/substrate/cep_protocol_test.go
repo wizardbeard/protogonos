@@ -6,6 +6,10 @@ import (
 	"testing"
 )
 
+type invalidCEPMessage struct{}
+
+func (invalidCEPMessage) isCEPMessage() {}
+
 func TestBuildCEPCommandSetWeight(t *testing.T) {
 	command, err := BuildCEPCommand(SetWeightCEPName, []float64{1}, map[string]float64{"scale": 0.5})
 	if err != nil {
@@ -165,5 +169,28 @@ func TestCEPProcessTerminate(t *testing.T) {
 	p.Terminate()
 	if _, _, err := p.Forward("n1", []float64{1}); !errors.Is(err, ErrCEPProcessTerminated) {
 		t.Fatalf("expected ErrCEPProcessTerminated, got %v", err)
+	}
+}
+
+func TestCEPProcessHandleTerminateMessage(t *testing.T) {
+	p, err := NewCEPProcess(DefaultCEPName, nil, []string{"n1"})
+	if err != nil {
+		t.Fatalf("new cep process: %v", err)
+	}
+	if _, _, err := p.HandleMessage(CEPTerminateMessage{}); err != nil {
+		t.Fatalf("handle terminate message: %v", err)
+	}
+	if _, _, err := p.HandleMessage(CEPForwardMessage{FromPID: "n1", Input: []float64{1}}); !errors.Is(err, ErrCEPProcessTerminated) {
+		t.Fatalf("expected ErrCEPProcessTerminated after terminate message, got %v", err)
+	}
+}
+
+func TestCEPProcessRejectsInvalidMessageType(t *testing.T) {
+	p, err := NewCEPProcess(DefaultCEPName, nil, []string{"n1"})
+	if err != nil {
+		t.Fatalf("new cep process: %v", err)
+	}
+	if _, _, err := p.HandleMessage(invalidCEPMessage{}); !errors.Is(err, ErrInvalidCEPMessage) {
+		t.Fatalf("expected ErrInvalidCEPMessage, got %v", err)
 	}
 }

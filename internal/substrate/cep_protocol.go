@@ -12,6 +12,7 @@ var (
 	ErrUnexpectedCEPForwardPID = errors.New("unexpected cep fan-in sender")
 	ErrInvalidCEPOutputWidth   = errors.New("invalid cep output width")
 	ErrUnsupportedCEPCommand   = errors.New("unsupported cep command")
+	ErrInvalidCEPMessage       = errors.New("invalid cep message")
 )
 
 // CEPCommand mirrors the reference CEP->substrate message shape:
@@ -21,6 +22,24 @@ type CEPCommand struct {
 	Command string
 	Signal  []float64
 }
+
+// CEPMessage models the actor-style message protocol consumed by CEPProcess.
+type CEPMessage interface {
+	isCEPMessage()
+}
+
+// CEPForwardMessage mirrors `{FromPid,forward,Input}`.
+type CEPForwardMessage struct {
+	FromPID string
+	Input   []float64
+}
+
+func (CEPForwardMessage) isCEPMessage() {}
+
+// CEPTerminateMessage mirrors `{ExoSelfPid,terminate}`.
+type CEPTerminateMessage struct{}
+
+func (CEPTerminateMessage) isCEPMessage() {}
 
 // CEPProcess is a simplified Go analog of substrate_cep actor loop semantics:
 // ordered fan-in accumulation, per-cycle command emission, and explicit
@@ -68,7 +87,26 @@ func (p *CEPProcess) Terminate() {
 	p.terminated = true
 }
 
+func (p *CEPProcess) HandleMessage(message CEPMessage) (CEPCommand, bool, error) {
+	switch msg := message.(type) {
+	case CEPForwardMessage:
+		return p.handleForward(msg.FromPID, msg.Input)
+	case CEPTerminateMessage:
+		p.Terminate()
+		return CEPCommand{}, false, nil
+	default:
+		return CEPCommand{}, false, ErrInvalidCEPMessage
+	}
+}
+
 func (p *CEPProcess) Forward(fromPID string, input []float64) (CEPCommand, bool, error) {
+	return p.HandleMessage(CEPForwardMessage{
+		FromPID: fromPID,
+		Input:   input,
+	})
+}
+
+func (p *CEPProcess) handleForward(fromPID string, input []float64) (CEPCommand, bool, error) {
 	if p.terminated {
 		return CEPCommand{}, false, ErrCEPProcessTerminated
 	}
