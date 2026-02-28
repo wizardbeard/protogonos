@@ -281,7 +281,11 @@ func (r *SimpleRuntime) forwardCEPProcess(actor *CEPActor, faninPIDs []string, s
 
 	// Synchronize with the actor loop so posted fan-in messages are fully
 	// processed before draining command/error mailboxes.
-	if _, _, err := actor.Call(CEPSyncMessage{}); err != nil {
+	syncID, err := actor.PostSync()
+	if err != nil {
+		return CEPCommand{}, false, err
+	}
+	if err := actor.AwaitSync(syncID); err != nil {
 		return CEPCommand{}, false, err
 	}
 

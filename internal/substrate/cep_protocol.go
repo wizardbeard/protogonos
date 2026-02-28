@@ -62,7 +62,9 @@ func (CEPInitMessage) isCEPMessage() {}
 
 // CEPSyncMessage is a mailbox barrier used to ensure previously posted
 // messages have been processed before draining command/error mailboxes.
-type CEPSyncMessage struct{}
+type CEPSyncMessage struct {
+	SyncID uint64
+}
 
 func (CEPSyncMessage) isCEPMessage() {}
 
@@ -223,6 +225,8 @@ type CEPActor struct {
 	inbox        chan cepActorRequest
 	outbox       chan CEPCommand
 	errbox       chan error
+	syncbox      chan uint64
+	nextSyncID   uint64
 	done         chan struct{}
 }
 
@@ -233,6 +237,7 @@ func NewCEPActor(process *CEPProcess) *CEPActor {
 		inbox:       make(chan cepActorRequest),
 		outbox:      make(chan CEPCommand, 8),
 		errbox:      make(chan error, 8),
+		syncbox:     make(chan uint64, 8),
 		done:        make(chan struct{}),
 	}
 	go actor.run()
@@ -245,6 +250,7 @@ func NewCEPActorWithOwner(initOwnerPID string) *CEPActor {
 		inbox:        make(chan cepActorRequest),
 		outbox:       make(chan CEPCommand, 8),
 		errbox:       make(chan error, 8),
+		syncbox:      make(chan uint64, 8),
 		done:         make(chan struct{}),
 	}
 	go actor.run()
@@ -257,6 +263,9 @@ func (a *CEPActor) run() {
 		command, ready, err := a.handleActorMessage(req.message)
 		if err == nil && ready {
 			a.outbox <- command
+		}
+		if syncMessage, ok := req.message.(CEPSyncMessage); ok && err == nil {
+			a.syncbox <- syncMessage.SyncID
 		}
 		if err != nil {
 			select {
@@ -274,6 +283,27 @@ func (a *CEPActor) run() {
 		}
 		if _, ok := req.message.(CEPTerminateMessage); ok && err == nil {
 			return
+		}
+	}
+}
+
+func (a *CEPActor) PostSync() (uint64, error) {
+	syncID := atomic.AddUint64(&a.nextSyncID, 1)
+	if err := a.Post(CEPSyncMessage{SyncID: syncID}); err != nil {
+		return 0, err
+	}
+	return syncID, nil
+}
+
+func (a *CEPActor) AwaitSync(syncID uint64) error {
+	for {
+		select {
+		case doneID := <-a.syncbox:
+			if doneID == syncID {
+				return nil
+			}
+		case <-a.done:
+			return ErrCEPActorTerminated
 		}
 	}
 }

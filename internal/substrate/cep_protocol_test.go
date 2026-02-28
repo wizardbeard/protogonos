@@ -10,6 +10,17 @@ type invalidCEPMessage struct{}
 
 func (invalidCEPMessage) isCEPMessage() {}
 
+func syncCEPActor(t *testing.T, actor *CEPActor) {
+	t.Helper()
+	syncID, err := actor.PostSync()
+	if err != nil {
+		t.Fatalf("post sync marker: %v", err)
+	}
+	if err := actor.AwaitSync(syncID); err != nil {
+		t.Fatalf("await sync marker: %v", err)
+	}
+}
+
 func TestBuildCEPCommandSetWeight(t *testing.T) {
 	command, err := BuildCEPCommand(SetWeightCEPName, []float64{1}, map[string]float64{"scale": 0.5})
 	if err != nil {
@@ -295,9 +306,7 @@ func TestCEPActorPostAndErrorMailbox(t *testing.T) {
 	if err := actor.Post(CEPForwardMessage{FromPID: "n2", Input: []float64{1}}); err != nil {
 		t.Fatalf("post invalid sender: %v", err)
 	}
-	if _, _, err := actor.Call(CEPSyncMessage{}); err != nil {
-		t.Fatalf("sync after invalid post: %v", err)
-	}
+	syncCEPActor(t, actor)
 	gotErr := actor.NextError()
 	if !errors.Is(gotErr, ErrUnexpectedCEPForwardPID) {
 		t.Fatalf("expected ErrUnexpectedCEPForwardPID from errbox, got %v", gotErr)
@@ -309,9 +318,7 @@ func TestCEPActorPostAndErrorMailbox(t *testing.T) {
 	if err := actor.Post(CEPForwardMessage{FromPID: "n1", Input: []float64{1}}); err != nil {
 		t.Fatalf("post valid sender: %v", err)
 	}
-	if _, _, err := actor.Call(CEPSyncMessage{}); err != nil {
-		t.Fatalf("sync after valid post: %v", err)
-	}
+	syncCEPActor(t, actor)
 	command, err := actor.NextCommand()
 	if err != nil {
 		t.Fatalf("next command after valid post: %v", err)
@@ -327,9 +334,7 @@ func TestCEPActorInitHandshake(t *testing.T) {
 	if err := actor.Post(CEPForwardMessage{FromPID: "n1", Input: []float64{1}}); err != nil {
 		t.Fatalf("post before init: %v", err)
 	}
-	if _, _, err := actor.Call(CEPSyncMessage{}); err != nil {
-		t.Fatalf("sync before init: %v", err)
-	}
+	syncCEPActor(t, actor)
 	if gotErr := actor.NextError(); !errors.Is(gotErr, ErrCEPActorUninitialized) {
 		t.Fatalf("expected ErrCEPActorUninitialized in errbox before init, got %v", gotErr)
 	}
@@ -354,9 +359,7 @@ func TestCEPActorInitHandshake(t *testing.T) {
 	if err := actor.Post(CEPForwardMessage{FromPID: "n1", Input: []float64{1}}); err != nil {
 		t.Fatalf("post after init: %v", err)
 	}
-	if _, _, err := actor.Call(CEPSyncMessage{}); err != nil {
-		t.Fatalf("sync after init+post: %v", err)
-	}
+	syncCEPActor(t, actor)
 	if _, err := actor.NextCommand(); err != nil {
 		t.Fatalf("next command after init+post: %v", err)
 	}
