@@ -545,6 +545,46 @@ func TestSimpleRuntimeStepRequiresCEPActor(t *testing.T) {
 	}
 }
 
+func TestBuildCEPActorsInitializesFromPayloadState(t *testing.T) {
+	process, err := NewCEPProcessWithOwner("cep_payload_bootstrap", runtimeExoSelfProcessID, SetABCNCEPName, nil, []string{"n1", "n2"})
+	if err != nil {
+		t.Fatalf("new cep process: %v", err)
+	}
+	actors, err := buildCEPActors([]*CEPProcess{process})
+	if err != nil {
+		t.Fatalf("build cep actors: %v", err)
+	}
+	if len(actors) != 1 || actors[0] == nil {
+		t.Fatalf("expected one initialized actor, got=%d", len(actors))
+	}
+	actor := actors[0]
+	t.Cleanup(func() {
+		_ = actor.TerminateFrom(runtimeExoSelfProcessID)
+	})
+
+	if err := actor.Post(CEPForwardMessage{FromPID: "n1", Input: []float64{0.2}}); err != nil {
+		t.Fatalf("post n1: %v", err)
+	}
+	if err := actor.Post(CEPForwardMessage{FromPID: "n2", Input: []float64{0.8}}); err != nil {
+		t.Fatalf("post n2: %v", err)
+	}
+	syncID, err := actor.PostSync()
+	if err != nil {
+		t.Fatalf("post sync: %v", err)
+	}
+	if err := actor.AwaitSync(syncID); err != nil {
+		t.Fatalf("await sync: %v", err)
+	}
+
+	command, err := actor.NextCommand()
+	if err != nil {
+		t.Fatalf("next command: %v", err)
+	}
+	if command.FromPID != "cep_payload_bootstrap" || command.Command != SetABCNCEPName {
+		t.Fatalf("unexpected command envelope: %+v", command)
+	}
+}
+
 func TestSimpleRuntimeBackupRestoreReset(t *testing.T) {
 	resetRegistriesForTests()
 	t.Cleanup(resetRegistriesForTests)

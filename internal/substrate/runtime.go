@@ -401,8 +401,11 @@ func buildCEPActors(processes []*CEPProcess) ([]*CEPActor, error) {
 		}
 		actor := NewCEPActorWithOwner(runtimeExoSelfProcessID)
 		if _, _, err := actor.Call(CEPInitMessage{
-			FromPID: runtimeExoSelfProcessID,
-			Process: process,
+			FromPID:    runtimeExoSelfProcessID,
+			ID:         process.id,
+			CEPName:    process.cepName,
+			Parameters: process.parameters,
+			FaninPIDs:  process.faninPIDs,
 		}); err != nil {
 			return nil, fmt.Errorf("init cep actor %s: %w", process.ID(), err)
 		}
