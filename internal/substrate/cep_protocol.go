@@ -161,8 +161,9 @@ func (p *CEPProcess) handleForward(fromPID string, input []float64) (CEPCommand,
 		return CEPCommand{}, false, fmt.Errorf("fanin pids are required")
 	}
 	if !containsPID(p.faninPIDs, fromPID) {
-		expected := p.faninPIDs[p.expectedIdx%len(p.faninPIDs)]
-		return CEPCommand{}, false, fmt.Errorf("%w: expected=%s got=%s", ErrUnexpectedCEPForwardPID, expected, fromPID)
+		// Match Erlang selective receive behavior by ignoring non-member sender
+		// messages instead of treating them as hard process errors.
+		return CEPCommand{}, false, nil
 	}
 
 	// Preserve selective receive behavior: enqueue all fan-in inputs and

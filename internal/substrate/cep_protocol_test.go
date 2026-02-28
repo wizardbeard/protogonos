@@ -161,14 +161,16 @@ func TestCEPProcessBuffersOutOfOrderFanIn(t *testing.T) {
 	}
 }
 
-func TestCEPProcessRejectsUnknownSender(t *testing.T) {
+func TestCEPProcessIgnoresUnknownSender(t *testing.T) {
 	p, err := NewCEPProcess(DefaultCEPName, nil, []string{"n1", "n2"})
 	if err != nil {
 		t.Fatalf("new cep process: %v", err)
 	}
 
-	if _, _, err := p.Forward("n3", []float64{1}); !errors.Is(err, ErrUnexpectedCEPForwardPID) {
-		t.Fatalf("expected ErrUnexpectedCEPForwardPID for unknown sender, got %v", err)
+	if _, ready, err := p.Forward("n3", []float64{1}); err != nil {
+		t.Fatalf("unexpected error for unknown sender: %v", err)
+	} else if ready {
+		t.Fatal("unexpected ready after unknown sender")
 	}
 }
 
@@ -307,12 +309,11 @@ func TestCEPActorPostAndErrorMailbox(t *testing.T) {
 		t.Fatalf("post invalid sender: %v", err)
 	}
 	syncCEPActor(t, actor)
-	gotErr := actor.NextError()
-	if !errors.Is(gotErr, ErrUnexpectedCEPForwardPID) {
-		t.Fatalf("expected ErrUnexpectedCEPForwardPID from errbox, got %v", gotErr)
-	}
 	if gotErr := actor.NextError(); !errors.Is(gotErr, ErrCEPActorNoError) {
 		t.Fatalf("expected ErrCEPActorNoError when errbox empty, got %v", gotErr)
+	}
+	if _, err := actor.NextCommand(); !errors.Is(err, ErrCEPActorNoCommandReady) {
+		t.Fatalf("expected ErrCEPActorNoCommandReady for unknown sender post, got %v", err)
 	}
 
 	if err := actor.Post(CEPForwardMessage{FromPID: "n1", Input: []float64{1}}); err != nil {
