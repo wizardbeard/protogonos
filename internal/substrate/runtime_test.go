@@ -524,6 +524,27 @@ func TestSimpleRuntimeCEPChainUsesPerCEPFanInConfig(t *testing.T) {
 	}
 }
 
+func TestSimpleRuntimeStepRequiresCEPActor(t *testing.T) {
+	resetRegistriesForTests()
+	t.Cleanup(resetRegistriesForTests)
+
+	rt, err := NewSimpleRuntime(Spec{
+		CPPName: DefaultCPPName,
+		CEPName: DefaultCEPName,
+	}, 1)
+	if err != nil {
+		t.Fatalf("new runtime: %v", err)
+	}
+	if len(rt.cepActors) == 0 {
+		t.Fatal("expected cep actor to be initialized")
+	}
+	rt.cepActors[0] = nil
+
+	if _, err := rt.Step(context.Background(), []float64{1}); !errors.Is(err, ErrMissingCEPActor) {
+		t.Fatalf("expected ErrMissingCEPActor, got %v", err)
+	}
+}
+
 func TestSimpleRuntimeBackupRestoreReset(t *testing.T) {
 	resetRegistriesForTests()
 	t.Cleanup(resetRegistriesForTests)

@@ -10,6 +10,7 @@ import (
 var (
 	ErrNoSubstrateBackup          = errors.New("no substrate backup available")
 	ErrSubstrateRuntimeTerminated = errors.New("substrate runtime terminated")
+	ErrMissingCEPActor            = errors.New("missing cep actor")
 )
 
 type SimpleRuntime struct {
@@ -95,10 +96,10 @@ func (r *SimpleRuntime) step(ctx context.Context, inputs []float64, faninSignals
 		next := r.weights[i]
 		for cepIdx, cep := range r.ceps {
 			if cepIdx < len(r.cepProcesses) && r.cepProcesses[cepIdx] != nil {
-				var actor *CEPActor
-				if cepIdx < len(r.cepActors) {
-					actor = r.cepActors[cepIdx]
+				if cepIdx >= len(r.cepActors) || r.cepActors[cepIdx] == nil {
+					return nil, fmt.Errorf("cep %s process actor: %w", cep.Name(), ErrMissingCEPActor)
 				}
+				actor := r.cepActors[cepIdx]
 				faninPIDs := []string{runtimeCPPProcessID}
 				if cepIdx < len(r.cepProcessFaninPIDs) && len(r.cepProcessFaninPIDs[cepIdx]) > 0 {
 					faninPIDs = r.cepProcessFaninPIDs[cepIdx]
@@ -107,7 +108,7 @@ func (r *SimpleRuntime) step(ctx context.Context, inputs []float64, faninSignals
 				if signalErr != nil {
 					return nil, fmt.Errorf("cep %s process signals: %w", cep.Name(), signalErr)
 				}
-				command, ready, err := r.forwardCEPProcess(actor, r.cepProcesses[cepIdx], faninPIDs, processSignals)
+				command, ready, err := r.forwardCEPProcess(actor, faninPIDs, processSignals)
 				if err == nil {
 					if !ready {
 						continue
@@ -259,9 +260,12 @@ func (r *SimpleRuntime) resolveProcessSignals(faninPIDs []string, controlSignals
 	return out, nil
 }
 
-func (r *SimpleRuntime) forwardCEPProcess(actor *CEPActor, process *CEPProcess, faninPIDs []string, signals []float64) (CEPCommand, bool, error) {
+func (r *SimpleRuntime) forwardCEPProcess(actor *CEPActor, faninPIDs []string, signals []float64) (CEPCommand, bool, error) {
 	if len(signals) != len(faninPIDs) {
 		return CEPCommand{}, false, fmt.Errorf("%w: cep fan-in signal mismatch expected=%d got=%d", ErrInvalidCEPOutputWidth, len(faninPIDs), len(signals))
+	}
+	if actor == nil {
+		return CEPCommand{}, false, ErrMissingCEPActor
 	}
 	var command CEPCommand
 	ready := false
@@ -270,30 +274,22 @@ func (r *SimpleRuntime) forwardCEPProcess(actor *CEPActor, process *CEPProcess, 
 			FromPID: faninPIDs[i],
 			Input:   []float64{signal},
 		}
-		var (
-			nextCommand CEPCommand
-			nextReady   bool
-			err         error
-		)
-		if actor != nil {
-			err = actor.Post(message)
-			if err == nil {
-				nextError := actor.NextError()
-				if nextError != nil && !errors.Is(nextError, ErrCEPActorNoError) {
-					err = nextError
-				}
+		err := actor.Post(message)
+		if err == nil {
+			nextError := actor.NextError()
+			if nextError != nil && !errors.Is(nextError, ErrCEPActorNoError) {
+				err = nextError
 			}
-			nextReady = false
-			if err == nil {
-				nextCommand, err = actor.NextCommand()
-				if err == nil {
-					nextReady = true
-				} else if errors.Is(err, ErrCEPActorNoCommandReady) {
-					err = nil
-				}
-			}
-		} else {
-			nextCommand, nextReady, err = process.HandleMessage(message)
+		}
+		if err != nil {
+			return CEPCommand{}, false, err
+		}
+		nextReady := false
+		nextCommand, err := actor.NextCommand()
+		if err == nil {
+			nextReady = true
+		} else if errors.Is(err, ErrCEPActorNoCommandReady) {
+			err = nil
 		}
 		if err != nil {
 			return CEPCommand{}, false, err
