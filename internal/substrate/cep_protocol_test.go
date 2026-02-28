@@ -375,6 +375,27 @@ func TestCEPActorInitHandshake(t *testing.T) {
 	}
 }
 
+func TestCEPActorIgnoresInitFromNonOwnerPost(t *testing.T) {
+	actor := NewCEPActorWithOwner("exo_owner")
+
+	process, err := NewCEPProcessWithOwner("cep_init_ignore", "exo_owner", DefaultCEPName, nil, []string{"n1"})
+	if err != nil {
+		t.Fatalf("new cep process: %v", err)
+	}
+	if err := actor.Post(CEPInitMessage{FromPID: "wrong", Process: process}); err != nil {
+		t.Fatalf("post non-owner init: %v", err)
+	}
+	if gotErr := actor.NextError(); !errors.Is(gotErr, ErrCEPActorNoError) {
+		t.Fatalf("expected ErrCEPActorNoError after non-owner init post, got %v", gotErr)
+	}
+	if _, _, err := actor.Call(CEPInitMessage{FromPID: "exo_owner", Process: process}); err != nil {
+		t.Fatalf("expected owner init success after ignored non-owner post, got %v", err)
+	}
+	if err := actor.TerminateFrom("exo_owner"); err != nil {
+		t.Fatalf("terminate actor: %v", err)
+	}
+}
+
 func TestCEPActorTerminateAndSubsequentCall(t *testing.T) {
 	process, err := NewCEPProcess(DefaultCEPName, nil, []string{"n1"})
 	if err != nil {

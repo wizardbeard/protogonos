@@ -294,7 +294,13 @@ func (a *CEPActor) run() {
 	for {
 		req := <-a.inbox
 		if !a.initialized {
-			if _, ok := req.message.(CEPInitMessage); !ok {
+			if initMessage, ok := req.message.(CEPInitMessage); ok {
+				if a.initOwnerPID != "" && strings.TrimSpace(initMessage.FromPID) != a.initOwnerPID && req.reply == nil {
+					// Match selective receive owner matching for async prep
+					// messages by ignoring non-owner init payloads.
+					continue
+				}
+			} else {
 				if req.reply != nil {
 					req.reply <- cepActorResponse{
 						err: ErrCEPActorUninitialized,
