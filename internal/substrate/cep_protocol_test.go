@@ -194,3 +194,49 @@ func TestCEPProcessRejectsInvalidMessageType(t *testing.T) {
 		t.Fatalf("expected ErrInvalidCEPMessage, got %v", err)
 	}
 }
+
+func TestCEPActorForwardRoundTrip(t *testing.T) {
+	process, err := NewCEPProcessWithID("cep_actor_test", SetABCNCEPName, nil, []string{"n1", "n2"})
+	if err != nil {
+		t.Fatalf("new cep process: %v", err)
+	}
+	actor := NewCEPActor(process)
+	t.Cleanup(func() {
+		_ = actor.Terminate()
+	})
+
+	if _, ready, err := actor.Call(CEPForwardMessage{FromPID: "n2", Input: []float64{0.8}}); err != nil {
+		t.Fatalf("forward n2: %v", err)
+	} else if ready {
+		t.Fatal("unexpected ready after first out-of-order sender")
+	}
+
+	command, ready, err := actor.Call(CEPForwardMessage{FromPID: "n1", Input: []float64{0.2}})
+	if err != nil {
+		t.Fatalf("forward n1: %v", err)
+	}
+	if !ready {
+		t.Fatal("expected ready command after completing fan-in cycle")
+	}
+	if command.FromPID != "cep_actor_test" || command.Command != SetABCNCEPName {
+		t.Fatalf("unexpected command envelope: %+v", command)
+	}
+	if len(command.Signal) != 2 || command.Signal[0] != 0.2 || command.Signal[1] != 0.8 {
+		t.Fatalf("unexpected command signal ordering: %+v", command.Signal)
+	}
+}
+
+func TestCEPActorTerminateAndSubsequentCall(t *testing.T) {
+	process, err := NewCEPProcess(DefaultCEPName, nil, []string{"n1"})
+	if err != nil {
+		t.Fatalf("new cep process: %v", err)
+	}
+	actor := NewCEPActor(process)
+
+	if err := actor.Terminate(); err != nil {
+		t.Fatalf("terminate actor: %v", err)
+	}
+	if _, _, err := actor.Call(CEPForwardMessage{FromPID: "n1", Input: []float64{1}}); !errors.Is(err, ErrCEPActorTerminated) {
+		t.Fatalf("expected ErrCEPActorTerminated after terminate, got %v", err)
+	}
+}

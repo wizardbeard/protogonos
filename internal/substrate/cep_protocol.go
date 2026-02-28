@@ -9,6 +9,7 @@ import (
 
 var (
 	ErrCEPProcessTerminated    = errors.New("cep process terminated")
+	ErrCEPActorTerminated      = errors.New("cep actor terminated")
 	ErrUnexpectedCEPForwardPID = errors.New("unexpected cep fan-in sender")
 	ErrInvalidCEPOutputWidth   = errors.New("invalid cep output width")
 	ErrUnsupportedCEPCommand   = errors.New("unsupported cep command")
@@ -40,6 +41,17 @@ func (CEPForwardMessage) isCEPMessage() {}
 type CEPTerminateMessage struct{}
 
 func (CEPTerminateMessage) isCEPMessage() {}
+
+type cepActorRequest struct {
+	message CEPMessage
+	reply   chan cepActorResponse
+}
+
+type cepActorResponse struct {
+	command CEPCommand
+	ready   bool
+	err     error
+}
 
 // CEPProcess is a simplified Go analog of substrate_cep actor loop semantics:
 // ordered fan-in accumulation, per-cycle command emission, and explicit
@@ -167,6 +179,71 @@ func containsPID(pids []string, pid string) bool {
 		}
 	}
 	return false
+}
+
+// CEPActor is a mailbox-backed CEP process runner mirroring Erlang receive-loop
+// control flow while preserving the same command semantics.
+type CEPActor struct {
+	process *CEPProcess
+	inbox   chan cepActorRequest
+	done    chan struct{}
+}
+
+func NewCEPActor(process *CEPProcess) *CEPActor {
+	actor := &CEPActor{
+		process: process,
+		inbox:   make(chan cepActorRequest),
+		done:    make(chan struct{}),
+	}
+	go actor.run()
+	return actor
+}
+
+func (a *CEPActor) run() {
+	defer close(a.done)
+	for req := range a.inbox {
+		command, ready, err := a.process.HandleMessage(req.message)
+		req.reply <- cepActorResponse{
+			command: command,
+			ready:   ready,
+			err:     err,
+		}
+		close(req.reply)
+		if _, ok := req.message.(CEPTerminateMessage); ok {
+			return
+		}
+	}
+}
+
+func (a *CEPActor) Call(message CEPMessage) (CEPCommand, bool, error) {
+	if message == nil {
+		return CEPCommand{}, false, ErrInvalidCEPMessage
+	}
+	reply := make(chan cepActorResponse, 1)
+	req := cepActorRequest{
+		message: message,
+		reply:   reply,
+	}
+	select {
+	case <-a.done:
+		return CEPCommand{}, false, ErrCEPActorTerminated
+	case a.inbox <- req:
+	}
+	select {
+	case <-a.done:
+		return CEPCommand{}, false, ErrCEPActorTerminated
+	case response := <-reply:
+		return response.command, response.ready, response.err
+	}
+}
+
+func (a *CEPActor) Terminate() error {
+	_, _, err := a.Call(CEPTerminateMessage{})
+	if err != nil && !errors.Is(err, ErrCEPActorTerminated) {
+		return err
+	}
+	<-a.done
+	return nil
 }
 
 func BuildCEPCommand(cepName string, output []float64, parameters map[string]float64) (CEPCommand, error) {
