@@ -8,12 +8,13 @@ import (
 )
 
 var (
-	ErrCEPProcessTerminated    = errors.New("cep process terminated")
-	ErrCEPActorTerminated      = errors.New("cep actor terminated")
-	ErrUnexpectedCEPForwardPID = errors.New("unexpected cep fan-in sender")
-	ErrInvalidCEPOutputWidth   = errors.New("invalid cep output width")
-	ErrUnsupportedCEPCommand   = errors.New("unsupported cep command")
-	ErrInvalidCEPMessage       = errors.New("invalid cep message")
+	ErrCEPProcessTerminated      = errors.New("cep process terminated")
+	ErrCEPActorTerminated        = errors.New("cep actor terminated")
+	ErrUnexpectedCEPForwardPID   = errors.New("unexpected cep fan-in sender")
+	ErrUnexpectedCEPTerminatePID = errors.New("unexpected cep terminate sender")
+	ErrInvalidCEPOutputWidth     = errors.New("invalid cep output width")
+	ErrUnsupportedCEPCommand     = errors.New("unsupported cep command")
+	ErrInvalidCEPMessage         = errors.New("invalid cep message")
 )
 
 // CEPCommand mirrors the reference CEP->substrate message shape:
@@ -38,7 +39,9 @@ type CEPForwardMessage struct {
 func (CEPForwardMessage) isCEPMessage() {}
 
 // CEPTerminateMessage mirrors `{ExoSelfPid,terminate}`.
-type CEPTerminateMessage struct{}
+type CEPTerminateMessage struct {
+	FromPID string
+}
 
 func (CEPTerminateMessage) isCEPMessage() {}
 
@@ -58,6 +61,7 @@ type cepActorResponse struct {
 // terminate behavior.
 type CEPProcess struct {
 	id           string
+	terminatePID string
 	cepName      string
 	parameters   map[string]float64
 	faninPIDs    []string
@@ -70,10 +74,14 @@ type CEPProcess struct {
 var cepProcessCounter uint64
 
 func NewCEPProcess(cepName string, parameters map[string]float64, faninPIDs []string) (*CEPProcess, error) {
-	return NewCEPProcessWithID("", cepName, parameters, faninPIDs)
+	return NewCEPProcessWithOwner("", "", cepName, parameters, faninPIDs)
 }
 
 func NewCEPProcessWithID(id string, cepName string, parameters map[string]float64, faninPIDs []string) (*CEPProcess, error) {
+	return NewCEPProcessWithOwner(id, "", cepName, parameters, faninPIDs)
+}
+
+func NewCEPProcessWithOwner(id string, terminatePID string, cepName string, parameters map[string]float64, faninPIDs []string) (*CEPProcess, error) {
 	if len(faninPIDs) == 0 {
 		return nil, fmt.Errorf("fanin pids are required")
 	}
@@ -83,6 +91,7 @@ func NewCEPProcessWithID(id string, cepName string, parameters map[string]float6
 	}
 	out := &CEPProcess{
 		id:           processID,
+		terminatePID: strings.TrimSpace(terminatePID),
 		cepName:      cepName,
 		parameters:   cloneFloatMap(parameters),
 		faninPIDs:    append([]string(nil), faninPIDs...),
@@ -104,6 +113,9 @@ func (p *CEPProcess) HandleMessage(message CEPMessage) (CEPCommand, bool, error)
 	case CEPForwardMessage:
 		return p.handleForward(msg.FromPID, msg.Input)
 	case CEPTerminateMessage:
+		if p.terminatePID != "" && strings.TrimSpace(msg.FromPID) != p.terminatePID {
+			return CEPCommand{}, false, fmt.Errorf("%w: expected=%s got=%s", ErrUnexpectedCEPTerminatePID, p.terminatePID, strings.TrimSpace(msg.FromPID))
+		}
 		p.Terminate()
 		return CEPCommand{}, false, nil
 	default:
@@ -209,7 +221,7 @@ func (a *CEPActor) run() {
 			err:     err,
 		}
 		close(req.reply)
-		if _, ok := req.message.(CEPTerminateMessage); ok {
+		if _, ok := req.message.(CEPTerminateMessage); ok && err == nil {
 			return
 		}
 	}
@@ -238,7 +250,11 @@ func (a *CEPActor) Call(message CEPMessage) (CEPCommand, bool, error) {
 }
 
 func (a *CEPActor) Terminate() error {
-	_, _, err := a.Call(CEPTerminateMessage{})
+	return a.TerminateFrom("")
+}
+
+func (a *CEPActor) TerminateFrom(fromPID string) error {
+	_, _, err := a.Call(CEPTerminateMessage{FromPID: fromPID})
 	if err != nil && !errors.Is(err, ErrCEPActorTerminated) {
 		return err
 	}

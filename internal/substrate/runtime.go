@@ -143,7 +143,7 @@ func (r *SimpleRuntime) Terminate() {
 		if actor == nil {
 			continue
 		}
-		if err := actor.Terminate(); err != nil {
+		if err := actor.TerminateFrom(runtimeExoSelfProcessID); err != nil {
 			continue
 		}
 	}
@@ -183,6 +183,7 @@ func (r *SimpleRuntime) Reset() {
 }
 
 const runtimeCPPProcessID = "cpp"
+const runtimeExoSelfProcessID = "exoself"
 
 func (r *SimpleRuntime) computeControlSignals(ctx context.Context, inputs []float64, scalar float64, faninSignals map[string]float64) ([]float64, error) {
 	if signals, ok := r.controlSignalsFromFaninMap(faninSignals); ok {
@@ -353,7 +354,7 @@ func buildCEPProcesses(ceps []CEP, parameters map[string]float64, faninPIDs []st
 			baseFanin = faninPIDsByCEP[i]
 		}
 		cepFaninPIDs := resolveCEPProcessFaninPIDs(cep.Name(), baseFanin)
-		process, err := NewCEPProcessWithID(fmt.Sprintf("cep_%d", i+1), cep.Name(), parameters, cepFaninPIDs)
+		process, err := NewCEPProcessWithOwner(fmt.Sprintf("cep_%d", i+1), runtimeExoSelfProcessID, cep.Name(), parameters, cepFaninPIDs)
 		if err != nil {
 			return nil, nil, fmt.Errorf("new cep process for %s: %w", cep.Name(), err)
 		}

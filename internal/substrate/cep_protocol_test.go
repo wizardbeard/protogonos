@@ -177,11 +177,31 @@ func TestCEPProcessHandleTerminateMessage(t *testing.T) {
 	if err != nil {
 		t.Fatalf("new cep process: %v", err)
 	}
-	if _, _, err := p.HandleMessage(CEPTerminateMessage{}); err != nil {
+	if _, _, err := p.HandleMessage(CEPTerminateMessage{FromPID: "exoself"}); err != nil {
 		t.Fatalf("handle terminate message: %v", err)
 	}
 	if _, _, err := p.HandleMessage(CEPForwardMessage{FromPID: "n1", Input: []float64{1}}); !errors.Is(err, ErrCEPProcessTerminated) {
 		t.Fatalf("expected ErrCEPProcessTerminated after terminate message, got %v", err)
+	}
+}
+
+func TestCEPProcessTerminateSenderConstraint(t *testing.T) {
+	p, err := NewCEPProcessWithOwner("cep_owner", "exo_owner", DefaultCEPName, nil, []string{"n1"})
+	if err != nil {
+		t.Fatalf("new cep process: %v", err)
+	}
+
+	if _, _, err := p.HandleMessage(CEPTerminateMessage{FromPID: "wrong"}); !errors.Is(err, ErrUnexpectedCEPTerminatePID) {
+		t.Fatalf("expected ErrUnexpectedCEPTerminatePID, got %v", err)
+	}
+	if _, _, err := p.Forward("n1", []float64{1}); err != nil {
+		t.Fatalf("expected process to remain active after wrong terminate sender, got %v", err)
+	}
+	if _, _, err := p.HandleMessage(CEPTerminateMessage{FromPID: "exo_owner"}); err != nil {
+		t.Fatalf("terminate with expected sender: %v", err)
+	}
+	if _, _, err := p.Forward("n1", []float64{1}); !errors.Is(err, ErrCEPProcessTerminated) {
+		t.Fatalf("expected ErrCEPProcessTerminated after owner terminate, got %v", err)
 	}
 }
 
@@ -238,5 +258,26 @@ func TestCEPActorTerminateAndSubsequentCall(t *testing.T) {
 	}
 	if _, _, err := actor.Call(CEPForwardMessage{FromPID: "n1", Input: []float64{1}}); !errors.Is(err, ErrCEPActorTerminated) {
 		t.Fatalf("expected ErrCEPActorTerminated after terminate, got %v", err)
+	}
+}
+
+func TestCEPActorTerminateSenderConstraint(t *testing.T) {
+	process, err := NewCEPProcessWithOwner("cep_actor_owner", "exo_owner", DefaultCEPName, nil, []string{"n1"})
+	if err != nil {
+		t.Fatalf("new cep process: %v", err)
+	}
+	actor := NewCEPActor(process)
+
+	if err := actor.TerminateFrom("wrong"); !errors.Is(err, ErrUnexpectedCEPTerminatePID) {
+		t.Fatalf("expected ErrUnexpectedCEPTerminatePID, got %v", err)
+	}
+	if _, _, err := actor.Call(CEPForwardMessage{FromPID: "n1", Input: []float64{1}}); err != nil {
+		t.Fatalf("expected actor active after wrong terminate sender, got %v", err)
+	}
+	if err := actor.TerminateFrom("exo_owner"); err != nil {
+		t.Fatalf("terminate with expected sender: %v", err)
+	}
+	if _, _, err := actor.Call(CEPForwardMessage{FromPID: "n1", Input: []float64{1}}); !errors.Is(err, ErrCEPActorTerminated) {
+		t.Fatalf("expected ErrCEPActorTerminated after owner terminate, got %v", err)
 	}
 }
