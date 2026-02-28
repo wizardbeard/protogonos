@@ -137,7 +137,9 @@ func (p *CEPProcess) HandleMessage(message CEPMessage) (CEPCommand, bool, error)
 		return p.handleForward(msg.FromPID, msg.Input)
 	case CEPTerminateMessage:
 		if p.terminatePID != "" && strings.TrimSpace(msg.FromPID) != p.terminatePID {
-			return CEPCommand{}, false, fmt.Errorf("%w: expected=%s got=%s", ErrUnexpectedCEPTerminatePID, p.terminatePID, strings.TrimSpace(msg.FromPID))
+			// Match selective receive behavior by ignoring terminate messages
+			// that do not match the configured ExoSelf sender.
+			return CEPCommand{}, false, nil
 		}
 		p.Terminate()
 		return CEPCommand{}, false, nil
@@ -283,7 +285,7 @@ func (a *CEPActor) run() {
 			}
 			close(req.reply)
 		}
-		if _, ok := req.message.(CEPTerminateMessage); ok && err == nil {
+		if _, ok := req.message.(CEPTerminateMessage); ok && err == nil && a.process != nil && a.process.terminated {
 			return true
 		}
 		return false
@@ -430,6 +432,9 @@ func (a *CEPActor) Terminate() error {
 }
 
 func (a *CEPActor) TerminateFrom(fromPID string) error {
+	if a.process != nil && a.process.terminatePID != "" && strings.TrimSpace(fromPID) != a.process.terminatePID {
+		return fmt.Errorf("%w: expected=%s got=%s", ErrUnexpectedCEPTerminatePID, a.process.terminatePID, strings.TrimSpace(fromPID))
+	}
 	_, _, err := a.Call(CEPTerminateMessage{FromPID: fromPID})
 	if err != nil && !errors.Is(err, ErrCEPActorTerminated) {
 		return err

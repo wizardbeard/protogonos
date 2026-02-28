@@ -204,8 +204,8 @@ func TestCEPProcessTerminateSenderConstraint(t *testing.T) {
 		t.Fatalf("new cep process: %v", err)
 	}
 
-	if _, _, err := p.HandleMessage(CEPTerminateMessage{FromPID: "wrong"}); !errors.Is(err, ErrUnexpectedCEPTerminatePID) {
-		t.Fatalf("expected ErrUnexpectedCEPTerminatePID, got %v", err)
+	if _, _, err := p.HandleMessage(CEPTerminateMessage{FromPID: "wrong"}); err != nil {
+		t.Fatalf("unexpected terminate error for non-owner sender: %v", err)
 	}
 	if _, _, err := p.Forward("n1", []float64{1}); err != nil {
 		t.Fatalf("expected process to remain active after wrong terminate sender, got %v", err)
@@ -408,5 +408,27 @@ func TestCEPActorTerminateSenderConstraint(t *testing.T) {
 	}
 	if _, _, err := actor.Call(CEPForwardMessage{FromPID: "n1", Input: []float64{1}}); !errors.Is(err, ErrCEPActorTerminated) {
 		t.Fatalf("expected ErrCEPActorTerminated after owner terminate, got %v", err)
+	}
+}
+
+func TestCEPActorIgnoresTerminateFromNonOwnerPost(t *testing.T) {
+	process, err := NewCEPProcessWithOwner("cep_actor_owner_post", "exo_owner", DefaultCEPName, nil, []string{"n1"})
+	if err != nil {
+		t.Fatalf("new cep process: %v", err)
+	}
+	actor := NewCEPActor(process)
+	t.Cleanup(func() {
+		_ = actor.TerminateFrom("exo_owner")
+	})
+
+	if err := actor.Post(CEPTerminateMessage{FromPID: "wrong"}); err != nil {
+		t.Fatalf("post terminate from non-owner: %v", err)
+	}
+	syncCEPActor(t, actor)
+	if gotErr := actor.NextError(); !errors.Is(gotErr, ErrCEPActorNoError) {
+		t.Fatalf("expected ErrCEPActorNoError after ignored non-owner terminate, got %v", gotErr)
+	}
+	if _, _, err := actor.Call(CEPForwardMessage{FromPID: "n1", Input: []float64{1}}); err != nil {
+		t.Fatalf("expected actor active after non-owner terminate post, got %v", err)
 	}
 }
