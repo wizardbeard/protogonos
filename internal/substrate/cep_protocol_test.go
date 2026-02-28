@@ -315,6 +315,44 @@ func TestCEPActorPostAndErrorMailbox(t *testing.T) {
 	}
 }
 
+func TestCEPActorInitHandshake(t *testing.T) {
+	actor := NewCEPActorWithOwner("exo_owner")
+
+	if err := actor.Post(CEPForwardMessage{FromPID: "n1", Input: []float64{1}}); err != nil {
+		t.Fatalf("post before init: %v", err)
+	}
+	if gotErr := actor.NextError(); !errors.Is(gotErr, ErrCEPActorUninitialized) {
+		t.Fatalf("expected ErrCEPActorUninitialized in errbox before init, got %v", gotErr)
+	}
+
+	process, err := NewCEPProcessWithOwner("cep_init", "exo_owner", DefaultCEPName, nil, []string{"n1"})
+	if err != nil {
+		t.Fatalf("new cep process: %v", err)
+	}
+	if _, _, err := actor.Call(CEPInitMessage{FromPID: "wrong", Process: process}); !errors.Is(err, ErrUnexpectedCEPInitPID) {
+		t.Fatalf("expected ErrUnexpectedCEPInitPID, got %v", err)
+	}
+	if _, _, err := actor.Call(CEPInitMessage{FromPID: "exo_owner", Process: nil}); !errors.Is(err, ErrCEPActorInitProcessRequired) {
+		t.Fatalf("expected ErrCEPActorInitProcessRequired, got %v", err)
+	}
+	if _, _, err := actor.Call(CEPInitMessage{FromPID: "exo_owner", Process: process}); err != nil {
+		t.Fatalf("expected init success from owner, got %v", err)
+	}
+	if _, _, err := actor.Call(CEPInitMessage{FromPID: "exo_owner", Process: process}); !errors.Is(err, ErrCEPActorAlreadyInitialized) {
+		t.Fatalf("expected ErrCEPActorAlreadyInitialized, got %v", err)
+	}
+
+	if err := actor.Post(CEPForwardMessage{FromPID: "n1", Input: []float64{1}}); err != nil {
+		t.Fatalf("post after init: %v", err)
+	}
+	if _, err := actor.NextCommand(); err != nil {
+		t.Fatalf("next command after init+post: %v", err)
+	}
+	if err := actor.TerminateFrom("exo_owner"); err != nil {
+		t.Fatalf("terminate actor: %v", err)
+	}
+}
+
 func TestCEPActorTerminateAndSubsequentCall(t *testing.T) {
 	process, err := NewCEPProcess(DefaultCEPName, nil, []string{"n1"})
 	if err != nil {

@@ -8,15 +8,19 @@ import (
 )
 
 var (
-	ErrCEPProcessTerminated      = errors.New("cep process terminated")
-	ErrCEPActorTerminated        = errors.New("cep actor terminated")
-	ErrCEPActorNoCommandReady    = errors.New("cep actor command not ready")
-	ErrCEPActorNoError           = errors.New("cep actor no error ready")
-	ErrUnexpectedCEPForwardPID   = errors.New("unexpected cep fan-in sender")
-	ErrUnexpectedCEPTerminatePID = errors.New("unexpected cep terminate sender")
-	ErrInvalidCEPOutputWidth     = errors.New("invalid cep output width")
-	ErrUnsupportedCEPCommand     = errors.New("unsupported cep command")
-	ErrInvalidCEPMessage         = errors.New("invalid cep message")
+	ErrCEPProcessTerminated        = errors.New("cep process terminated")
+	ErrCEPActorTerminated          = errors.New("cep actor terminated")
+	ErrCEPActorNoCommandReady      = errors.New("cep actor command not ready")
+	ErrCEPActorNoError             = errors.New("cep actor no error ready")
+	ErrCEPActorUninitialized       = errors.New("cep actor uninitialized")
+	ErrCEPActorAlreadyInitialized  = errors.New("cep actor already initialized")
+	ErrCEPActorInitProcessRequired = errors.New("cep actor init process required")
+	ErrUnexpectedCEPInitPID        = errors.New("unexpected cep init sender")
+	ErrUnexpectedCEPForwardPID     = errors.New("unexpected cep fan-in sender")
+	ErrUnexpectedCEPTerminatePID   = errors.New("unexpected cep terminate sender")
+	ErrInvalidCEPOutputWidth       = errors.New("invalid cep output width")
+	ErrUnsupportedCEPCommand       = errors.New("unsupported cep command")
+	ErrInvalidCEPMessage           = errors.New("invalid cep message")
 )
 
 // CEPCommand mirrors the reference CEP->substrate message shape:
@@ -46,6 +50,15 @@ type CEPTerminateMessage struct {
 }
 
 func (CEPTerminateMessage) isCEPMessage() {}
+
+// CEPInitMessage mirrors prep-loop state handoff from ExoSelf:
+// `{ExoSelfPid,{Id,CxPid,SubstratePid,CEPName,Parameters,FaninPIds}}`.
+type CEPInitMessage struct {
+	FromPID string
+	Process *CEPProcess
+}
+
+func (CEPInitMessage) isCEPMessage() {}
 
 type cepActorRequest struct {
 	message CEPMessage
@@ -198,20 +211,35 @@ func containsPID(pids []string, pid string) bool {
 // CEPActor is a mailbox-backed CEP process runner mirroring Erlang receive-loop
 // control flow while preserving the same command semantics.
 type CEPActor struct {
-	process *CEPProcess
-	inbox   chan cepActorRequest
-	outbox  chan CEPCommand
-	errbox  chan error
-	done    chan struct{}
+	process      *CEPProcess
+	initOwnerPID string
+	initialized  bool
+	inbox        chan cepActorRequest
+	outbox       chan CEPCommand
+	errbox       chan error
+	done         chan struct{}
 }
 
 func NewCEPActor(process *CEPProcess) *CEPActor {
 	actor := &CEPActor{
-		process: process,
-		inbox:   make(chan cepActorRequest),
-		outbox:  make(chan CEPCommand, 8),
-		errbox:  make(chan error, 8),
-		done:    make(chan struct{}),
+		process:     process,
+		initialized: process != nil,
+		inbox:       make(chan cepActorRequest),
+		outbox:      make(chan CEPCommand, 8),
+		errbox:      make(chan error, 8),
+		done:        make(chan struct{}),
+	}
+	go actor.run()
+	return actor
+}
+
+func NewCEPActorWithOwner(initOwnerPID string) *CEPActor {
+	actor := &CEPActor{
+		initOwnerPID: strings.TrimSpace(initOwnerPID),
+		inbox:        make(chan cepActorRequest),
+		outbox:       make(chan CEPCommand, 8),
+		errbox:       make(chan error, 8),
+		done:         make(chan struct{}),
 	}
 	go actor.run()
 	return actor
@@ -220,7 +248,7 @@ func NewCEPActor(process *CEPProcess) *CEPActor {
 func (a *CEPActor) run() {
 	defer close(a.done)
 	for req := range a.inbox {
-		command, ready, err := a.process.HandleMessage(req.message)
+		command, ready, err := a.handleActorMessage(req.message)
 		if err == nil && ready {
 			a.outbox <- command
 		}
@@ -241,6 +269,29 @@ func (a *CEPActor) run() {
 		if _, ok := req.message.(CEPTerminateMessage); ok && err == nil {
 			return
 		}
+	}
+}
+
+func (a *CEPActor) handleActorMessage(message CEPMessage) (CEPCommand, bool, error) {
+	switch msg := message.(type) {
+	case CEPInitMessage:
+		if a.initialized {
+			return CEPCommand{}, false, ErrCEPActorAlreadyInitialized
+		}
+		if a.initOwnerPID != "" && strings.TrimSpace(msg.FromPID) != a.initOwnerPID {
+			return CEPCommand{}, false, fmt.Errorf("%w: expected=%s got=%s", ErrUnexpectedCEPInitPID, a.initOwnerPID, strings.TrimSpace(msg.FromPID))
+		}
+		if msg.Process == nil {
+			return CEPCommand{}, false, ErrCEPActorInitProcessRequired
+		}
+		a.process = msg.Process
+		a.initialized = true
+		return CEPCommand{}, false, nil
+	default:
+		if !a.initialized || a.process == nil {
+			return CEPCommand{}, false, ErrCEPActorUninitialized
+		}
+		return a.process.HandleMessage(message)
 	}
 }
 

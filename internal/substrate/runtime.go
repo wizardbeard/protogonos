@@ -51,7 +51,10 @@ func NewSimpleRuntime(spec Spec, weightCount int) (*SimpleRuntime, error) {
 	if err != nil {
 		return nil, err
 	}
-	cepActors := buildCEPActors(cepProcesses)
+	cepActors, err := buildCEPActors(cepProcesses)
+	if err != nil {
+		return nil, err
+	}
 	return &SimpleRuntime{
 		cpp:                 cpp,
 		ceps:                ceps,
@@ -379,9 +382,9 @@ func buildCEPProcesses(ceps []CEP, parameters map[string]float64, faninPIDs []st
 	return processes, processFaninPIDs, nil
 }
 
-func buildCEPActors(processes []*CEPProcess) []*CEPActor {
+func buildCEPActors(processes []*CEPProcess) ([]*CEPActor, error) {
 	if len(processes) == 0 {
-		return nil
+		return nil, nil
 	}
 	actors := make([]*CEPActor, 0, len(processes))
 	for _, process := range processes {
@@ -389,9 +392,16 @@ func buildCEPActors(processes []*CEPProcess) []*CEPActor {
 			actors = append(actors, nil)
 			continue
 		}
-		actors = append(actors, NewCEPActor(process))
+		actor := NewCEPActorWithOwner(runtimeExoSelfProcessID)
+		if _, _, err := actor.Call(CEPInitMessage{
+			FromPID: runtimeExoSelfProcessID,
+			Process: process,
+		}); err != nil {
+			return nil, fmt.Errorf("init cep actor %s: %w", process.ID(), err)
+		}
+		actors = append(actors, actor)
 	}
-	return actors
+	return actors, nil
 }
 
 func resolveCEPProcessFaninPIDs(cepName string, faninPIDs []string) []string {
