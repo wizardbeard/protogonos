@@ -10,6 +10,7 @@ import (
 var (
 	ErrCEPProcessTerminated      = errors.New("cep process terminated")
 	ErrCEPActorTerminated        = errors.New("cep actor terminated")
+	ErrCEPActorNoCommandReady    = errors.New("cep actor command not ready")
 	ErrUnexpectedCEPForwardPID   = errors.New("unexpected cep fan-in sender")
 	ErrUnexpectedCEPTerminatePID = errors.New("unexpected cep terminate sender")
 	ErrInvalidCEPOutputWidth     = errors.New("invalid cep output width")
@@ -198,6 +199,7 @@ func containsPID(pids []string, pid string) bool {
 type CEPActor struct {
 	process *CEPProcess
 	inbox   chan cepActorRequest
+	outbox  chan CEPCommand
 	done    chan struct{}
 }
 
@@ -205,6 +207,7 @@ func NewCEPActor(process *CEPProcess) *CEPActor {
 	actor := &CEPActor{
 		process: process,
 		inbox:   make(chan cepActorRequest),
+		outbox:  make(chan CEPCommand, 8),
 		done:    make(chan struct{}),
 	}
 	go actor.run()
@@ -215,6 +218,9 @@ func (a *CEPActor) run() {
 	defer close(a.done)
 	for req := range a.inbox {
 		command, ready, err := a.process.HandleMessage(req.message)
+		if err == nil && ready {
+			a.outbox <- command
+		}
 		req.reply <- cepActorResponse{
 			command: command,
 			ready:   ready,
@@ -246,6 +252,17 @@ func (a *CEPActor) Call(message CEPMessage) (CEPCommand, bool, error) {
 		return CEPCommand{}, false, ErrCEPActorTerminated
 	case response := <-reply:
 		return response.command, response.ready, response.err
+	}
+}
+
+func (a *CEPActor) NextCommand() (CEPCommand, error) {
+	select {
+	case command := <-a.outbox:
+		return command, nil
+	case <-a.done:
+		return CEPCommand{}, ErrCEPActorTerminated
+	default:
+		return CEPCommand{}, ErrCEPActorNoCommandReady
 	}
 }
 

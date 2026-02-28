@@ -274,6 +274,9 @@ func (r *SimpleRuntime) forwardCEPProcess(actor *CEPActor, process *CEPProcess, 
 		)
 		if actor != nil {
 			nextCommand, nextReady, err = actor.Call(message)
+			if err == nil && nextReady {
+				nextCommand, err = actor.NextCommand()
+			}
 		} else {
 			nextCommand, nextReady, err = process.HandleMessage(message)
 		}
