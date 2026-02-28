@@ -60,6 +60,12 @@ type CEPInitMessage struct {
 
 func (CEPInitMessage) isCEPMessage() {}
 
+// CEPSyncMessage is a mailbox barrier used to ensure previously posted
+// messages have been processed before draining command/error mailboxes.
+type CEPSyncMessage struct{}
+
+func (CEPSyncMessage) isCEPMessage() {}
+
 type cepActorRequest struct {
 	message CEPMessage
 	reply   chan cepActorResponse
@@ -287,6 +293,8 @@ func (a *CEPActor) handleActorMessage(message CEPMessage) (CEPCommand, bool, err
 		a.process = msg.Process
 		a.initialized = true
 		return CEPCommand{}, false, nil
+	case CEPSyncMessage:
+		return CEPCommand{}, false, nil
 	default:
 		if !a.initialized || a.process == nil {
 			return CEPCommand{}, false, ErrCEPActorUninitialized
@@ -299,20 +307,13 @@ func (a *CEPActor) Post(message CEPMessage) error {
 	if message == nil {
 		return ErrInvalidCEPMessage
 	}
-	reply := make(chan cepActorResponse, 1)
 	req := cepActorRequest{
 		message: message,
-		reply:   reply,
 	}
 	select {
 	case <-a.done:
 		return ErrCEPActorTerminated
 	case a.inbox <- req:
-	}
-	select {
-	case <-a.done:
-		return ErrCEPActorTerminated
-	case <-reply:
 		return nil
 	}
 }

@@ -274,30 +274,37 @@ func (r *SimpleRuntime) forwardCEPProcess(actor *CEPActor, faninPIDs []string, s
 			FromPID: faninPIDs[i],
 			Input:   []float64{signal},
 		}
-		err := actor.Post(message)
-		if err == nil {
-			nextError := actor.NextError()
-			if nextError != nil && !errors.Is(nextError, ErrCEPActorNoError) {
-				err = nextError
-			}
-		}
-		if err != nil {
+		if err := actor.Post(message); err != nil {
 			return CEPCommand{}, false, err
 		}
-		nextReady := false
-		nextCommand, err := actor.NextCommand()
-		if err == nil {
-			nextReady = true
-		} else if errors.Is(err, ErrCEPActorNoCommandReady) {
-			err = nil
-		}
-		if err != nil {
-			return CEPCommand{}, false, err
-		}
-		command = nextCommand
-		ready = nextReady
 	}
-	return command, ready, nil
+
+	// Synchronize with the actor loop so posted fan-in messages are fully
+	// processed before draining command/error mailboxes.
+	if _, _, err := actor.Call(CEPSyncMessage{}); err != nil {
+		return CEPCommand{}, false, err
+	}
+
+	for {
+		nextErr := actor.NextError()
+		if errors.Is(nextErr, ErrCEPActorNoError) {
+			break
+		}
+		if nextErr != nil {
+			return CEPCommand{}, false, nextErr
+		}
+	}
+
+	nextCommand, err := actor.NextCommand()
+	if err == nil {
+		command = nextCommand
+		ready = true
+		return command, ready, nil
+	}
+	if errors.Is(err, ErrCEPActorNoCommandReady) {
+		return CEPCommand{}, false, nil
+	}
+	return CEPCommand{}, false, err
 }
 
 func trimCEPFaninPIDs(raw []string) []string {

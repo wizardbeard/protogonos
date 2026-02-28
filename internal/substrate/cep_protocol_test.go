@@ -295,6 +295,9 @@ func TestCEPActorPostAndErrorMailbox(t *testing.T) {
 	if err := actor.Post(CEPForwardMessage{FromPID: "n2", Input: []float64{1}}); err != nil {
 		t.Fatalf("post invalid sender: %v", err)
 	}
+	if _, _, err := actor.Call(CEPSyncMessage{}); err != nil {
+		t.Fatalf("sync after invalid post: %v", err)
+	}
 	gotErr := actor.NextError()
 	if !errors.Is(gotErr, ErrUnexpectedCEPForwardPID) {
 		t.Fatalf("expected ErrUnexpectedCEPForwardPID from errbox, got %v", gotErr)
@@ -305,6 +308,9 @@ func TestCEPActorPostAndErrorMailbox(t *testing.T) {
 
 	if err := actor.Post(CEPForwardMessage{FromPID: "n1", Input: []float64{1}}); err != nil {
 		t.Fatalf("post valid sender: %v", err)
+	}
+	if _, _, err := actor.Call(CEPSyncMessage{}); err != nil {
+		t.Fatalf("sync after valid post: %v", err)
 	}
 	command, err := actor.NextCommand()
 	if err != nil {
@@ -320,6 +326,9 @@ func TestCEPActorInitHandshake(t *testing.T) {
 
 	if err := actor.Post(CEPForwardMessage{FromPID: "n1", Input: []float64{1}}); err != nil {
 		t.Fatalf("post before init: %v", err)
+	}
+	if _, _, err := actor.Call(CEPSyncMessage{}); err != nil {
+		t.Fatalf("sync before init: %v", err)
 	}
 	if gotErr := actor.NextError(); !errors.Is(gotErr, ErrCEPActorUninitialized) {
 		t.Fatalf("expected ErrCEPActorUninitialized in errbox before init, got %v", gotErr)
@@ -344,6 +353,9 @@ func TestCEPActorInitHandshake(t *testing.T) {
 
 	if err := actor.Post(CEPForwardMessage{FromPID: "n1", Input: []float64{1}}); err != nil {
 		t.Fatalf("post after init: %v", err)
+	}
+	if _, _, err := actor.Call(CEPSyncMessage{}); err != nil {
+		t.Fatalf("sync after init+post: %v", err)
 	}
 	if _, err := actor.NextCommand(); err != nil {
 		t.Fatalf("next command after init+post: %v", err)
