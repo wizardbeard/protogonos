@@ -11,6 +11,8 @@ var (
 	ErrNoSubstrateBackup          = errors.New("no substrate backup available")
 	ErrSubstrateRuntimeTerminated = errors.New("substrate runtime terminated")
 	ErrMissingCEPActor            = errors.New("missing cep actor")
+	ErrUnexpectedCEPCommandSender = errors.New("unexpected cep command sender")
+	ErrUnexpectedCEPCommandTarget = errors.New("unexpected cep command target")
 )
 
 type SimpleRuntime struct {
@@ -18,6 +20,7 @@ type SimpleRuntime struct {
 	ceps                []CEP
 	cepActors           []*CEPActor
 	cepActorsByWeight   [][]*CEPActor
+	cepActorInits       []cepActorInit
 	cepProcessFaninPIDs [][]string
 	cepFaninPIDs        []string
 	params              map[string]float64
@@ -65,6 +68,7 @@ func NewSimpleRuntime(spec Spec, weightCount int) (*SimpleRuntime, error) {
 		ceps:                ceps,
 		cepActors:           cepActors,
 		cepActorsByWeight:   cepActorPool,
+		cepActorInits:       cloneCEPActorInits(cepActorInits),
 		cepProcessFaninPIDs: cepProcessFaninPIDs,
 		cepFaninPIDs:        append([]string(nil), cepFaninPIDs...),
 		params:              params,
@@ -101,6 +105,7 @@ func (r *SimpleRuntime) step(ctx context.Context, inputs []float64, faninSignals
 		if i < len(r.cepActorsByWeight) && len(r.cepActorsByWeight[i]) > 0 {
 			actors = r.cepActorsByWeight[i]
 		}
+		expectedInits := scopeCEPActorInitsForWeight(r.cepActorInits, i)
 		next := r.weights[i]
 		for cepIdx, cep := range r.ceps {
 			if cepIdx < len(actors) {
@@ -120,6 +125,11 @@ func (r *SimpleRuntime) step(ctx context.Context, inputs []float64, faninSignals
 				if err == nil {
 					if !ready {
 						continue
+					}
+					if cepIdx < len(expectedInits) {
+						if envelopeErr := validateCEPCommandEnvelope(command, expectedInits[cepIdx]); envelopeErr != nil {
+							return nil, fmt.Errorf("cep %s command envelope: %w", cep.Name(), envelopeErr)
+						}
 					}
 					w, applyErr := ApplyCEPCommand(next, command, r.params)
 					if applyErr != nil {
@@ -491,6 +501,32 @@ func scopeCEPActorInitsForWeight(inits []cepActorInit, weightIdx int) []cepActor
 		out = append(out, scoped)
 	}
 	return out
+}
+
+func cloneCEPActorInits(inits []cepActorInit) []cepActorInit {
+	if len(inits) == 0 {
+		return nil
+	}
+	out := make([]cepActorInit, 0, len(inits))
+	for _, init := range inits {
+		cloned := init
+		cloned.parameters = cloneFloatMap(init.parameters)
+		cloned.faninPIDs = append([]string(nil), init.faninPIDs...)
+		out = append(out, cloned)
+	}
+	return out
+}
+
+func validateCEPCommandEnvelope(command CEPCommand, expected cepActorInit) error {
+	expectedSender := strings.TrimSpace(expected.id)
+	if expectedSender != "" && strings.TrimSpace(command.FromPID) != expectedSender {
+		return fmt.Errorf("%w: expected=%s got=%s", ErrUnexpectedCEPCommandSender, expectedSender, strings.TrimSpace(command.FromPID))
+	}
+	expectedTarget := strings.TrimSpace(expected.substratePID)
+	if expectedTarget != "" && strings.TrimSpace(command.ToPID) != expectedTarget {
+		return fmt.Errorf("%w: expected=%s got=%s", ErrUnexpectedCEPCommandTarget, expectedTarget, strings.TrimSpace(command.ToPID))
+	}
+	return nil
 }
 
 func resolveCEPProcessFaninPIDs(cepName string, faninPIDs []string) []string {

@@ -545,6 +545,77 @@ func TestSimpleRuntimeStepRequiresCEPActor(t *testing.T) {
 	}
 }
 
+func TestSimpleRuntimeStepValidatesCEPCommandSenderEnvelope(t *testing.T) {
+	resetRegistriesForTests()
+	t.Cleanup(resetRegistriesForTests)
+
+	rt, err := NewSimpleRuntime(Spec{
+		CPPName: DefaultCPPName,
+		CEPName: DefaultCEPName,
+	}, 1)
+	if err != nil {
+		t.Fatalf("new runtime: %v", err)
+	}
+	if len(rt.cepActorsByWeight) == 0 || len(rt.cepActorsByWeight[0]) == 0 {
+		t.Fatal("expected cep actor pool to be initialized")
+	}
+	_ = rt.cepActorsByWeight[0][0].TerminateFrom(runtimeExoSelfProcessID)
+
+	process, err := NewCEPProcessWithOwner("cep_unexpected_sender", runtimeExoSelfProcessID, DefaultCEPName, nil, []string{runtimeCPPProcessID})
+	if err != nil {
+		t.Fatalf("new cep process: %v", err)
+	}
+	process.substratePID = "substrate_w1"
+	actor := NewCEPActor(process)
+	t.Cleanup(func() {
+		_ = actor.TerminateFrom(runtimeExoSelfProcessID)
+	})
+	rt.cepActorsByWeight[0][0] = actor
+	rt.cepActors[0] = actor
+
+	if _, err := rt.Step(context.Background(), []float64{1}); !errors.Is(err, ErrUnexpectedCEPCommandSender) {
+		t.Fatalf("expected ErrUnexpectedCEPCommandSender, got %v", err)
+	}
+}
+
+func TestSimpleRuntimeStepValidatesCEPCommandTargetEnvelope(t *testing.T) {
+	resetRegistriesForTests()
+	t.Cleanup(resetRegistriesForTests)
+
+	rt, err := NewSimpleRuntime(Spec{
+		CPPName: DefaultCPPName,
+		CEPName: DefaultCEPName,
+	}, 1)
+	if err != nil {
+		t.Fatalf("new runtime: %v", err)
+	}
+	if len(rt.cepActorsByWeight) == 0 || len(rt.cepActorsByWeight[0]) == 0 {
+		t.Fatal("expected cep actor pool to be initialized")
+	}
+	_ = rt.cepActorsByWeight[0][0].TerminateFrom(runtimeExoSelfProcessID)
+
+	expectedInits := scopeCEPActorInitsForWeight(rt.cepActorInits, 0)
+	if len(expectedInits) == 0 {
+		t.Fatal("expected scoped actor init metadata")
+	}
+
+	process, err := NewCEPProcessWithOwner(expectedInits[0].id, runtimeExoSelfProcessID, DefaultCEPName, nil, []string{runtimeCPPProcessID})
+	if err != nil {
+		t.Fatalf("new cep process: %v", err)
+	}
+	process.substratePID = "substrate_wrong_target"
+	actor := NewCEPActor(process)
+	t.Cleanup(func() {
+		_ = actor.TerminateFrom(runtimeExoSelfProcessID)
+	})
+	rt.cepActorsByWeight[0][0] = actor
+	rt.cepActors[0] = actor
+
+	if _, err := rt.Step(context.Background(), []float64{1}); !errors.Is(err, ErrUnexpectedCEPCommandTarget) {
+		t.Fatalf("expected ErrUnexpectedCEPCommandTarget, got %v", err)
+	}
+}
+
 func TestSimpleRuntimeBuildsPerWeightCEPActorPool(t *testing.T) {
 	resetRegistriesForTests()
 	t.Cleanup(resetRegistriesForTests)
