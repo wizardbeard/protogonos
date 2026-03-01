@@ -545,6 +545,34 @@ func TestSimpleRuntimeStepRequiresCEPActor(t *testing.T) {
 	}
 }
 
+func TestSimpleRuntimeBuildsPerWeightCEPActorPool(t *testing.T) {
+	resetRegistriesForTests()
+	t.Cleanup(resetRegistriesForTests)
+
+	rt, err := NewSimpleRuntime(Spec{
+		CPPName: DefaultCPPName,
+		CEPName: DefaultCEPName,
+	}, 3)
+	if err != nil {
+		t.Fatalf("new runtime: %v", err)
+	}
+	if len(rt.cepActorsByWeight) != 3 {
+		t.Fatalf("expected actor pool per weight, got=%d", len(rt.cepActorsByWeight))
+	}
+	if len(rt.cepActorsByWeight[0]) == 0 || rt.cepActorsByWeight[0][0] == nil {
+		t.Fatal("expected first weight actor set initialized")
+	}
+	if len(rt.cepActorsByWeight[1]) == 0 || rt.cepActorsByWeight[1][0] == nil {
+		t.Fatal("expected second weight actor set initialized")
+	}
+	if rt.cepActorsByWeight[0][0] == rt.cepActorsByWeight[1][0] {
+		t.Fatal("expected distinct actor instances per weight")
+	}
+	if len(rt.cepActors) == 0 || rt.cepActors[0] != rt.cepActorsByWeight[0][0] {
+		t.Fatal("expected compatibility actor view to mirror first weight actor set")
+	}
+}
+
 func TestBuildCEPActorsInitializesFromPayloadState(t *testing.T) {
 	actors, err := buildCEPActors([]cepActorInit{{
 		id:        "cep_payload_bootstrap",

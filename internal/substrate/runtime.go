@@ -17,6 +17,7 @@ type SimpleRuntime struct {
 	cpp                 CPP
 	ceps                []CEP
 	cepActors           []*CEPActor
+	cepActorsByWeight   [][]*CEPActor
 	cepProcessFaninPIDs [][]string
 	cepFaninPIDs        []string
 	params              map[string]float64
@@ -51,14 +52,19 @@ func NewSimpleRuntime(spec Spec, weightCount int) (*SimpleRuntime, error) {
 	if err != nil {
 		return nil, err
 	}
-	cepActors, err := buildCEPActors(cepActorInits)
+	cepActorPool, err := buildCEPActorPool(cepActorInits, weightCount)
 	if err != nil {
 		return nil, err
+	}
+	var cepActors []*CEPActor
+	if len(cepActorPool) > 0 {
+		cepActors = cepActorPool[0]
 	}
 	return &SimpleRuntime{
 		cpp:                 cpp,
 		ceps:                ceps,
 		cepActors:           cepActors,
+		cepActorsByWeight:   cepActorPool,
 		cepProcessFaninPIDs: cepProcessFaninPIDs,
 		cepFaninPIDs:        append([]string(nil), cepFaninPIDs...),
 		params:              params,
@@ -91,10 +97,14 @@ func (r *SimpleRuntime) step(ctx context.Context, inputs []float64, faninSignals
 		return nil, err
 	}
 	for i := range r.weights {
+		actors := r.cepActors
+		if i < len(r.cepActorsByWeight) && len(r.cepActorsByWeight[i]) > 0 {
+			actors = r.cepActorsByWeight[i]
+		}
 		next := r.weights[i]
 		for cepIdx, cep := range r.ceps {
-			if cepIdx < len(r.cepActors) {
-				actor := r.cepActors[cepIdx]
+			if cepIdx < len(actors) {
+				actor := actors[cepIdx]
 				if actor == nil {
 					return nil, fmt.Errorf("cep %s process actor: %w", cep.Name(), ErrMissingCEPActor)
 				}
@@ -141,13 +151,27 @@ func (r *SimpleRuntime) Terminate() {
 		return
 	}
 	r.terminated = true
+	terminated := map[*CEPActor]struct{}{}
+	if len(r.cepActorsByWeight) > 0 {
+		for _, actors := range r.cepActorsByWeight {
+			for _, actor := range actors {
+				if actor == nil {
+					continue
+				}
+				if _, exists := terminated[actor]; exists {
+					continue
+				}
+				terminated[actor] = struct{}{}
+				_ = actor.TerminateFrom(runtimeExoSelfProcessID)
+			}
+		}
+		return
+	}
 	for _, actor := range r.cepActors {
 		if actor == nil {
 			continue
 		}
-		if err := actor.TerminateFrom(runtimeExoSelfProcessID); err != nil {
-			continue
-		}
+		_ = actor.TerminateFrom(runtimeExoSelfProcessID)
 	}
 }
 
@@ -411,6 +435,29 @@ func buildCEPActors(inits []cepActorInit) ([]*CEPActor, error) {
 		actors = append(actors, actor)
 	}
 	return actors, nil
+}
+
+func buildCEPActorPool(inits []cepActorInit, weightCount int) ([][]*CEPActor, error) {
+	if len(inits) == 0 {
+		return nil, nil
+	}
+	pool := make([][]*CEPActor, 0, weightCount)
+	for weightIdx := 0; weightIdx < weightCount; weightIdx++ {
+		actors, err := buildCEPActors(inits)
+		if err != nil {
+			for _, actorSet := range pool {
+				for _, actor := range actorSet {
+					if actor == nil {
+						continue
+					}
+					_ = actor.TerminateFrom(runtimeExoSelfProcessID)
+				}
+			}
+			return nil, err
+		}
+		pool = append(pool, actors)
+	}
+	return pool, nil
 }
 
 func resolveCEPProcessFaninPIDs(cepName string, faninPIDs []string) []string {
