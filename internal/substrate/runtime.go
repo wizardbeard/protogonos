@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"sync"
 )
 
 var (
@@ -13,6 +14,7 @@ var (
 	ErrMissingCEPActor            = errors.New("missing cep actor")
 	ErrMissingSubstrateMailbox    = errors.New("missing substrate mailbox")
 	ErrMissingCEPFaninRelay       = errors.New("missing cep fan-in relay")
+	ErrCEPFaninRelayTerminated    = errors.New("cep fan-in relay terminated")
 	ErrUnexpectedCEPCommandSender = errors.New("unexpected cep command sender")
 	ErrUnexpectedCEPCommandTarget = errors.New("unexpected cep command target")
 )
@@ -190,6 +192,16 @@ func (r *SimpleRuntime) Terminate() {
 				_ = actor.TerminateFrom(runtimeExoSelfProcessID)
 			}
 		}
+		for _, weightRelays := range r.cepFaninRelays {
+			for _, cepRelays := range weightRelays {
+				for _, relay := range cepRelays {
+					if relay == nil {
+						continue
+					}
+					relay.Terminate()
+				}
+			}
+		}
 		return
 	}
 	for _, actor := range r.cepActors {
@@ -197,6 +209,16 @@ func (r *SimpleRuntime) Terminate() {
 			continue
 		}
 		_ = actor.TerminateFrom(runtimeExoSelfProcessID)
+	}
+	for _, weightRelays := range r.cepFaninRelays {
+		for _, cepRelays := range weightRelays {
+			for _, relay := range cepRelays {
+				if relay == nil {
+					continue
+				}
+				relay.Terminate()
+			}
+		}
 	}
 }
 
@@ -373,13 +395,43 @@ type CEPFaninRelay struct {
 	id      string
 	fromPID string
 	actor   *CEPActor
+	inbox   chan cepFaninRelayRequest
+	stop    chan struct{}
+	done    chan struct{}
+	closeMu sync.Once
+}
+
+type cepFaninRelayRequest struct {
+	input []float64
+	reply chan error
 }
 
 func NewCEPFaninRelay(id, fromPID string, actor *CEPActor) *CEPFaninRelay {
-	return &CEPFaninRelay{
+	relay := &CEPFaninRelay{
 		id:      strings.TrimSpace(id),
 		fromPID: strings.TrimSpace(fromPID),
 		actor:   actor,
+		inbox:   make(chan cepFaninRelayRequest),
+		stop:    make(chan struct{}),
+		done:    make(chan struct{}),
+	}
+	go relay.run()
+	return relay
+}
+
+func (r *CEPFaninRelay) run() {
+	defer close(r.done)
+	for {
+		select {
+		case <-r.stop:
+			return
+		case request := <-r.inbox:
+			err := r.forward(request.input)
+			if request.reply != nil {
+				request.reply <- err
+				close(request.reply)
+			}
+		}
 	}
 }
 
@@ -401,6 +453,37 @@ func (r *CEPFaninRelay) Post(input []float64) error {
 	if r == nil {
 		return ErrMissingCEPFaninRelay
 	}
+	reply := make(chan error, 1)
+	req := cepFaninRelayRequest{
+		input: append([]float64(nil), input...),
+		reply: reply,
+	}
+	select {
+	case <-r.stop:
+		return ErrCEPFaninRelayTerminated
+	case <-r.done:
+		return ErrCEPFaninRelayTerminated
+	case r.inbox <- req:
+	}
+	select {
+	case <-r.done:
+		return ErrCEPFaninRelayTerminated
+	case err := <-reply:
+		return err
+	}
+}
+
+func (r *CEPFaninRelay) Terminate() {
+	if r == nil {
+		return
+	}
+	r.closeMu.Do(func() {
+		close(r.stop)
+		<-r.done
+	})
+}
+
+func (r *CEPFaninRelay) forward(input []float64) error {
 	if r.actor == nil {
 		return ErrMissingCEPActor
 	}

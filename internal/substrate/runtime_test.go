@@ -832,6 +832,41 @@ func TestSimpleRuntimeStepRequiresCEPFaninRelay(t *testing.T) {
 	}
 }
 
+func TestCEPFaninRelayMailboxForwardAndTerminate(t *testing.T) {
+	process, err := NewCEPProcessWithID("cep_fanin_relay", DefaultCEPName, nil, []string{"n1"})
+	if err != nil {
+		t.Fatalf("new cep process: %v", err)
+	}
+	actor := NewCEPActor(process)
+	t.Cleanup(func() {
+		_ = actor.TerminateFrom(runtimeExoSelfProcessID)
+	})
+
+	relay := NewCEPFaninRelay("fanin_1", "n1", actor)
+	if err := relay.Post([]float64{1}); err != nil {
+		t.Fatalf("relay post: %v", err)
+	}
+	syncID, err := actor.PostSync()
+	if err != nil {
+		t.Fatalf("post sync: %v", err)
+	}
+	if err := actor.AwaitSync(syncID); err != nil {
+		t.Fatalf("await sync: %v", err)
+	}
+	command, err := actor.NextCommand()
+	if err != nil {
+		t.Fatalf("next command: %v", err)
+	}
+	if command.FromPID != "cep_fanin_relay" || command.Command != SetIterativeCEPName {
+		t.Fatalf("unexpected command envelope from relay-forwarded post: %+v", command)
+	}
+
+	relay.Terminate()
+	if err := relay.Post([]float64{1}); !errors.Is(err, ErrCEPFaninRelayTerminated) {
+		t.Fatalf("expected ErrCEPFaninRelayTerminated after relay stop, got %v", err)
+	}
+}
+
 func TestSimpleRuntimeBackupRestoreReset(t *testing.T) {
 	resetRegistriesForTests()
 	t.Cleanup(resetRegistriesForTests)
