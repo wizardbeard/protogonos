@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strings"
 	"sync"
+	"sync/atomic"
 )
 
 var (
@@ -13,6 +14,7 @@ var (
 	ErrSubstrateRuntimeTerminated = errors.New("substrate runtime terminated")
 	ErrMissingCEPActor            = errors.New("missing cep actor")
 	ErrMissingSubstrateMailbox    = errors.New("missing substrate mailbox")
+	ErrSubstrateMailboxTerminated = errors.New("substrate mailbox terminated")
 	ErrMissingCEPFaninRelay       = errors.New("missing cep fan-in relay")
 	ErrCEPFaninRelayTerminated    = errors.New("cep fan-in relay terminated")
 	ErrUnexpectedCEPCommandSender = errors.New("unexpected cep command sender")
@@ -202,6 +204,12 @@ func (r *SimpleRuntime) Terminate() {
 				}
 			}
 		}
+		for _, mailbox := range r.substrateMailboxes {
+			if mailbox == nil {
+				continue
+			}
+			mailbox.Terminate()
+		}
 		return
 	}
 	for _, actor := range r.cepActors {
@@ -219,6 +227,12 @@ func (r *SimpleRuntime) Terminate() {
 				relay.Terminate()
 			}
 		}
+	}
+	for _, mailbox := range r.substrateMailboxes {
+		if mailbox == nil {
+			continue
+		}
+		mailbox.Terminate()
 	}
 }
 
@@ -672,12 +686,63 @@ func cloneCEPActorInits(inits []cepActorInit) []cepActorInit {
 }
 
 type substrateCommandMailbox struct {
-	id       string
-	commands []CEPCommand
+	id          string
+	inbox       chan substrateMailboxMessage
+	outbox      chan CEPCommand
+	syncbox     chan uint64
+	nextSyncID  uint64
+	pendingSync map[uint64]struct{}
+	pendingMu   sync.Mutex
+	stop        chan struct{}
+	done        chan struct{}
+	closeMu     sync.Once
 }
 
+type substrateMailboxMessage interface {
+	isSubstrateMailboxMessage()
+}
+
+type substrateMailboxCommand struct {
+	command CEPCommand
+}
+
+func (substrateMailboxCommand) isSubstrateMailboxMessage() {}
+
+type substrateMailboxSync struct {
+	syncID uint64
+}
+
+func (substrateMailboxSync) isSubstrateMailboxMessage() {}
+
 func newSubstrateCommandMailbox(id string) *substrateCommandMailbox {
-	return &substrateCommandMailbox{id: strings.TrimSpace(id)}
+	mailbox := &substrateCommandMailbox{
+		id:          strings.TrimSpace(id),
+		inbox:       make(chan substrateMailboxMessage),
+		outbox:      make(chan CEPCommand, 32),
+		syncbox:     make(chan uint64, 32),
+		pendingSync: map[uint64]struct{}{},
+		stop:        make(chan struct{}),
+		done:        make(chan struct{}),
+	}
+	go mailbox.run()
+	return mailbox
+}
+
+func (m *substrateCommandMailbox) run() {
+	defer close(m.done)
+	for {
+		select {
+		case <-m.stop:
+			return
+		case message := <-m.inbox:
+			switch msg := message.(type) {
+			case substrateMailboxCommand:
+				m.outbox <- msg.command
+			case substrateMailboxSync:
+				m.syncbox <- msg.syncID
+			}
+		}
+	}
 }
 
 func (m *substrateCommandMailbox) ID() string {
@@ -687,20 +752,113 @@ func (m *substrateCommandMailbox) ID() string {
 	return m.id
 }
 
-func (m *substrateCommandMailbox) Post(command CEPCommand) {
+func (m *substrateCommandMailbox) Post(command CEPCommand) error {
 	if m == nil {
-		return
+		return ErrMissingSubstrateMailbox
 	}
-	m.commands = append(m.commands, command)
+	message := substrateMailboxCommand{command: command}
+	select {
+	case <-m.stop:
+		return ErrSubstrateMailboxTerminated
+	case <-m.done:
+		return ErrSubstrateMailboxTerminated
+	case m.inbox <- message:
+		return nil
+	}
 }
 
 func (m *substrateCommandMailbox) Drain() []CEPCommand {
-	if m == nil || len(m.commands) == 0 {
+	if m == nil {
 		return nil
 	}
-	out := append([]CEPCommand(nil), m.commands...)
-	m.commands = m.commands[:0]
-	return out
+	out := make([]CEPCommand, 0, 8)
+	for {
+		select {
+		case command := <-m.outbox:
+			out = append(out, command)
+		default:
+			return out
+		}
+	}
+}
+
+func (m *substrateCommandMailbox) PostSync() (uint64, error) {
+	if m == nil {
+		return 0, ErrMissingSubstrateMailbox
+	}
+	syncID := atomic.AddUint64(&m.nextSyncID, 1)
+	message := substrateMailboxSync{syncID: syncID}
+	select {
+	case <-m.stop:
+		return 0, ErrSubstrateMailboxTerminated
+	case <-m.done:
+		return 0, ErrSubstrateMailboxTerminated
+	case m.inbox <- message:
+		return syncID, nil
+	}
+}
+
+func (m *substrateCommandMailbox) AwaitSync(syncID uint64) error {
+	if m == nil {
+		return ErrMissingSubstrateMailbox
+	}
+	if m.consumePendingSync(syncID) {
+		return nil
+	}
+	for {
+		select {
+		case doneID := <-m.syncbox:
+			if doneID == syncID {
+				return nil
+			}
+			m.storePendingSync(doneID)
+		case <-m.stop:
+			return ErrSubstrateMailboxTerminated
+		case <-m.done:
+			return ErrSubstrateMailboxTerminated
+		}
+	}
+}
+
+func (m *substrateCommandMailbox) consumePendingSync(syncID uint64) bool {
+	m.pendingMu.Lock()
+	defer m.pendingMu.Unlock()
+	if _, ok := m.pendingSync[syncID]; !ok {
+		return false
+	}
+	delete(m.pendingSync, syncID)
+	return true
+}
+
+func (m *substrateCommandMailbox) storePendingSync(syncID uint64) {
+	if syncID == 0 {
+		return
+	}
+	m.pendingMu.Lock()
+	m.pendingSync[syncID] = struct{}{}
+	m.pendingMu.Unlock()
+}
+
+func (m *substrateCommandMailbox) Terminate() {
+	if m == nil {
+		return
+	}
+	m.closeMu.Do(func() {
+		close(m.stop)
+		<-m.done
+	})
+}
+
+func (m *substrateCommandMailbox) IsTerminated() bool {
+	if m == nil {
+		return true
+	}
+	select {
+	case <-m.done:
+		return true
+	default:
+		return false
+	}
 }
 
 func buildSubstrateCommandMailboxPool(inits []cepActorInit, weightCount int) []*substrateCommandMailbox {
@@ -755,8 +913,7 @@ func (r *SimpleRuntime) postSubstrateCommand(weightIdx int, command CEPCommand) 
 	if target != "" && strings.TrimSpace(command.ToPID) != target {
 		return fmt.Errorf("%w: expected=%s got=%s", ErrUnexpectedCEPCommandTarget, target, strings.TrimSpace(command.ToPID))
 	}
-	mailbox.Post(command)
-	return nil
+	return mailbox.Post(command)
 }
 
 func (r *SimpleRuntime) applySubstrateMailbox(weightIdx int, current float64) (float64, error) {
@@ -767,11 +924,18 @@ func (r *SimpleRuntime) applySubstrateMailbox(weightIdx int, current float64) (f
 	if mailbox == nil {
 		return 0, ErrMissingSubstrateMailbox
 	}
+	syncID, err := mailbox.PostSync()
+	if err != nil {
+		return 0, err
+	}
+	if err := mailbox.AwaitSync(syncID); err != nil {
+		return 0, err
+	}
 	next := current
 	for _, command := range mailbox.Drain() {
-		updated, err := ApplyCEPCommand(next, command, r.params)
-		if err != nil {
-			return 0, err
+		updated, applyErr := ApplyCEPCommand(next, command, r.params)
+		if applyErr != nil {
+			return 0, applyErr
 		}
 		next = updated
 	}

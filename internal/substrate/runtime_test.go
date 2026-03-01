@@ -811,6 +811,55 @@ func TestSimpleRuntimeStepRequiresSubstrateMailbox(t *testing.T) {
 	}
 }
 
+func TestSubstrateCommandMailboxActorSyncAndTerminate(t *testing.T) {
+	mailbox := newSubstrateCommandMailbox("substrate_w1")
+	commandA := CEPCommand{
+		FromPID: "cep_a",
+		ToPID:   "substrate_w1",
+		Command: SetIterativeCEPName,
+		Signal:  []float64{0.1},
+	}
+	commandB := CEPCommand{
+		FromPID: "cep_b",
+		ToPID:   "substrate_w1",
+		Command: SetIterativeCEPName,
+		Signal:  []float64{0.2},
+	}
+
+	if err := mailbox.Post(commandA); err != nil {
+		t.Fatalf("post commandA: %v", err)
+	}
+	if err := mailbox.Post(commandB); err != nil {
+		t.Fatalf("post commandB: %v", err)
+	}
+	syncID, err := mailbox.PostSync()
+	if err != nil {
+		t.Fatalf("post sync: %v", err)
+	}
+	if err := mailbox.AwaitSync(syncID); err != nil {
+		t.Fatalf("await sync: %v", err)
+	}
+
+	commands := mailbox.Drain()
+	if len(commands) != 2 {
+		t.Fatalf("expected 2 commands in mailbox, got=%d", len(commands))
+	}
+	if commands[0].FromPID != "cep_a" || commands[1].FromPID != "cep_b" {
+		t.Fatalf("unexpected command ordering from mailbox actor: %+v", commands)
+	}
+
+	mailbox.Terminate()
+	if !mailbox.IsTerminated() {
+		t.Fatal("expected mailbox terminated state")
+	}
+	if err := mailbox.Post(commandA); !errors.Is(err, ErrSubstrateMailboxTerminated) {
+		t.Fatalf("expected ErrSubstrateMailboxTerminated from post after terminate, got %v", err)
+	}
+	if _, err := mailbox.PostSync(); !errors.Is(err, ErrSubstrateMailboxTerminated) {
+		t.Fatalf("expected ErrSubstrateMailboxTerminated from post sync after terminate, got %v", err)
+	}
+}
+
 func TestSimpleRuntimeStepRequiresCEPFaninRelay(t *testing.T) {
 	resetRegistriesForTests()
 	t.Cleanup(resetRegistriesForTests)
