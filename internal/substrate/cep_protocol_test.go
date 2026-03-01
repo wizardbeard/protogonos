@@ -4,6 +4,7 @@ import (
 	"errors"
 	"math"
 	"testing"
+	"time"
 )
 
 type invalidCEPMessage struct{}
@@ -18,6 +19,43 @@ func syncCEPActor(t *testing.T, actor *CEPActor) {
 	}
 	if err := actor.AwaitSync(syncID); err != nil {
 		t.Fatalf("await sync marker: %v", err)
+	}
+}
+
+func TestCEPActorAwaitSyncPreservesOutOfOrderMarkers(t *testing.T) {
+	process, err := NewCEPProcessWithID("cep_actor_sync", DefaultCEPName, nil, []string{"n1"})
+	if err != nil {
+		t.Fatalf("new cep process: %v", err)
+	}
+	actor := NewCEPActor(process)
+	t.Cleanup(func() {
+		_ = actor.Terminate()
+	})
+
+	first, err := actor.PostSync()
+	if err != nil {
+		t.Fatalf("post first sync marker: %v", err)
+	}
+	second, err := actor.PostSync()
+	if err != nil {
+		t.Fatalf("post second sync marker: %v", err)
+	}
+	if err := actor.AwaitSync(second); err != nil {
+		t.Fatalf("await second sync marker: %v", err)
+	}
+
+	done := make(chan error, 1)
+	go func() {
+		done <- actor.AwaitSync(first)
+	}()
+
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatalf("await first sync marker after out-of-order await: %v", err)
+		}
+	case <-time.After(500 * time.Millisecond):
+		t.Fatal("timed out waiting for preserved first sync marker")
 	}
 }
 

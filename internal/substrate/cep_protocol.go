@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"sync"
 	"sync/atomic"
 )
 
@@ -234,6 +235,8 @@ type CEPActor struct {
 	errbox       chan error
 	syncbox      chan uint64
 	nextSyncID   uint64
+	pendingSync  map[uint64]struct{}
+	pendingMu    sync.Mutex
 	done         chan struct{}
 }
 
@@ -245,6 +248,7 @@ func NewCEPActor(process *CEPProcess) *CEPActor {
 		outbox:      make(chan CEPCommand, 8),
 		errbox:      make(chan error, 8),
 		syncbox:     make(chan uint64, 8),
+		pendingSync: map[uint64]struct{}{},
 		done:        make(chan struct{}),
 	}
 	go actor.run()
@@ -258,6 +262,7 @@ func NewCEPActorWithOwner(initOwnerPID string) *CEPActor {
 		outbox:       make(chan CEPCommand, 8),
 		errbox:       make(chan error, 8),
 		syncbox:      make(chan uint64, 8),
+		pendingSync:  map[uint64]struct{}{},
 		done:         make(chan struct{}),
 	}
 	go actor.run()
@@ -341,16 +346,52 @@ func (a *CEPActor) PostSync() (uint64, error) {
 }
 
 func (a *CEPActor) AwaitSync(syncID uint64) error {
+	if a.consumePendingSync(syncID) {
+		return nil
+	}
 	for {
 		select {
 		case doneID := <-a.syncbox:
 			if doneID == syncID {
 				return nil
 			}
+			a.storePendingSync(doneID)
 		case <-a.done:
-			return ErrCEPActorTerminated
+			if a.consumePendingSync(syncID) {
+				return nil
+			}
+			for {
+				select {
+				case doneID := <-a.syncbox:
+					if doneID == syncID {
+						return nil
+					}
+					a.storePendingSync(doneID)
+				default:
+					return ErrCEPActorTerminated
+				}
+			}
 		}
 	}
+}
+
+func (a *CEPActor) consumePendingSync(syncID uint64) bool {
+	a.pendingMu.Lock()
+	defer a.pendingMu.Unlock()
+	if _, ok := a.pendingSync[syncID]; !ok {
+		return false
+	}
+	delete(a.pendingSync, syncID)
+	return true
+}
+
+func (a *CEPActor) storePendingSync(syncID uint64) {
+	if syncID == 0 {
+		return
+	}
+	a.pendingMu.Lock()
+	a.pendingSync[syncID] = struct{}{}
+	a.pendingMu.Unlock()
 }
 
 func (a *CEPActor) handleActorMessage(message CEPMessage) (CEPCommand, bool, error) {
