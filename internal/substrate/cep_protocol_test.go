@@ -215,6 +215,60 @@ func TestCEPProcessIgnoresUnknownSender(t *testing.T) {
 	}
 }
 
+func TestCEPProcessRetainsUnmatchedMailboxMessages(t *testing.T) {
+	p, err := NewCEPProcessWithID("cep_pending_mailbox", SetABCNCEPName, nil, []string{"n1", "n2"})
+	if err != nil {
+		t.Fatalf("new cep process: %v", err)
+	}
+
+	if _, ready, err := p.Forward("noise", []float64{9}); err != nil {
+		t.Fatalf("unexpected error for unknown sender: %v", err)
+	} else if ready {
+		t.Fatal("unexpected ready after unknown sender")
+	}
+	if len(p.pending) != 1 || p.pending[0].fromPID != "noise" {
+		t.Fatalf("expected unknown sender message retained in pending mailbox, got=%+v", p.pending)
+	}
+
+	if _, ready, err := p.Forward("n2", []float64{0.8}); err != nil {
+		t.Fatalf("forward n2: %v", err)
+	} else if ready {
+		t.Fatal("unexpected ready after out-of-order n2 message")
+	}
+	command, ready, err := p.Forward("n1", []float64{0.2})
+	if err != nil {
+		t.Fatalf("forward n1: %v", err)
+	}
+	if !ready {
+		t.Fatal("expected ready command after matching fan-in cycle")
+	}
+	if len(command.Signal) != 2 || command.Signal[0] != 0.2 || command.Signal[1] != 0.8 {
+		t.Fatalf("unexpected command signal after selective receive scan: %+v", command.Signal)
+	}
+	if len(p.pending) != 1 || p.pending[0].fromPID != "noise" {
+		t.Fatalf("expected unmatched unknown message to remain pending after cycle, got=%+v", p.pending)
+	}
+
+	if _, ready, err := p.Forward("n1", []float64{0.3}); err != nil {
+		t.Fatalf("forward n1 cycle2: %v", err)
+	} else if ready {
+		t.Fatal("unexpected ready after first sender in second cycle")
+	}
+	command, ready, err = p.Forward("n2", []float64{0.7})
+	if err != nil {
+		t.Fatalf("forward n2 cycle2: %v", err)
+	}
+	if !ready {
+		t.Fatal("expected ready command in second cycle")
+	}
+	if len(command.Signal) != 2 || command.Signal[0] != 0.3 || command.Signal[1] != 0.7 {
+		t.Fatalf("unexpected second-cycle command signal: %+v", command.Signal)
+	}
+	if len(p.pending) != 1 || p.pending[0].fromPID != "noise" {
+		t.Fatalf("expected unmatched message to persist across cycles, got=%+v", p.pending)
+	}
+}
+
 func TestCEPProcessTerminate(t *testing.T) {
 	p, err := NewCEPProcess(DefaultCEPName, nil, []string{"n1"})
 	if err != nil {

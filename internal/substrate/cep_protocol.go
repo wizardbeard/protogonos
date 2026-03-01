@@ -100,8 +100,13 @@ type CEPProcess struct {
 	faninPIDs    []string
 	expectedIdx  int
 	acc          []float64
-	pendingByPID map[string][][]float64
+	pending      []pendingForward
 	terminated   bool
+}
+
+type pendingForward struct {
+	fromPID string
+	input   []float64
 }
 
 var cepProcessCounter uint64
@@ -128,7 +133,6 @@ func NewCEPProcessWithOwner(id string, terminatePID string, cepName string, para
 		cepName:      cepName,
 		parameters:   cloneFloatMap(parameters),
 		faninPIDs:    append([]string(nil), faninPIDs...),
-		pendingByPID: map[string][][]float64{},
 	}
 	return out, nil
 }
@@ -172,36 +176,26 @@ func (p *CEPProcess) handleForward(fromPID string, input []float64) (CEPCommand,
 	if len(p.faninPIDs) == 0 {
 		return CEPCommand{}, false, fmt.Errorf("fanin pids are required")
 	}
-	if !containsPID(p.faninPIDs, fromPID) {
-		// Match Erlang selective receive behavior by ignoring non-member sender
-		// messages instead of treating them as hard process errors.
-		return CEPCommand{}, false, nil
-	}
-
-	// Preserve selective receive behavior: enqueue all fan-in inputs and
-	// only consume messages when the currently expected sender has pending data.
-	chunk := append([]float64(nil), input...)
-	p.pendingByPID[fromPID] = append(p.pendingByPID[fromPID], chunk)
+	p.pending = append(p.pending, pendingForward{
+		fromPID: fromPID,
+		input:   append([]float64(nil), input...),
+	})
 
 	for {
 		if p.expectedIdx >= len(p.faninPIDs) {
 			p.expectedIdx = 0
 		}
 		expected := p.faninPIDs[p.expectedIdx]
-		pending := p.pendingByPID[expected]
-		if len(pending) == 0 {
+		idx := p.findPendingBySender(expected)
+		if idx < 0 {
 			return CEPCommand{}, false, nil
 		}
-		next := pending[0]
-		if len(pending) == 1 {
-			delete(p.pendingByPID, expected)
-		} else {
-			p.pendingByPID[expected] = pending[1:]
-		}
+		next := p.pending[idx]
+		p.pending = append(p.pending[:idx], p.pending[idx+1:]...)
 
 		// Preserve the reference accumulation choreography:
 		// lists:append(Input, Acc), then lists:reverse(Acc) at cycle end.
-		p.acc = append(next, p.acc...)
+		p.acc = append(next.input, p.acc...)
 		p.expectedIdx++
 		if p.expectedIdx < len(p.faninPIDs) {
 			continue
@@ -219,6 +213,15 @@ func (p *CEPProcess) handleForward(fromPID string, input []float64) (CEPCommand,
 		command.ToPID = p.substratePID
 		return command, true, nil
 	}
+}
+
+func (p *CEPProcess) findPendingBySender(sender string) int {
+	for idx, msg := range p.pending {
+		if msg.fromPID == sender {
+			return idx
+		}
+	}
+	return -1
 }
 
 func containsPID(pids []string, pid string) bool {
