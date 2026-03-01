@@ -12,6 +12,7 @@ var (
 	ErrSubstrateRuntimeTerminated = errors.New("substrate runtime terminated")
 	ErrMissingCEPActor            = errors.New("missing cep actor")
 	ErrMissingSubstrateMailbox    = errors.New("missing substrate mailbox")
+	ErrMissingCEPFaninRelay       = errors.New("missing cep fan-in relay")
 	ErrUnexpectedCEPCommandSender = errors.New("unexpected cep command sender")
 	ErrUnexpectedCEPCommandTarget = errors.New("unexpected cep command target")
 )
@@ -22,6 +23,7 @@ type SimpleRuntime struct {
 	cepActors           []*CEPActor
 	cepActorsByWeight   [][]*CEPActor
 	cepActorInits       []cepActorInit
+	cepFaninRelays      [][][]*CEPFaninRelay
 	substrateMailboxes  []*substrateCommandMailbox
 	cepProcessFaninPIDs [][]string
 	cepFaninPIDs        []string
@@ -61,6 +63,7 @@ func NewSimpleRuntime(spec Spec, weightCount int) (*SimpleRuntime, error) {
 	if err != nil {
 		return nil, err
 	}
+	cepFaninRelays := buildCEPFaninRelayPool(cepActorPool, cepProcessFaninPIDs)
 	substrateMailboxes := buildSubstrateCommandMailboxPool(cepActorInits, weightCount)
 	var cepActors []*CEPActor
 	if len(cepActorPool) > 0 {
@@ -72,6 +75,7 @@ func NewSimpleRuntime(spec Spec, weightCount int) (*SimpleRuntime, error) {
 		cepActors:           cepActors,
 		cepActorsByWeight:   cepActorPool,
 		cepActorInits:       cloneCEPActorInits(cepActorInits),
+		cepFaninRelays:      cepFaninRelays,
 		substrateMailboxes:  substrateMailboxes,
 		cepProcessFaninPIDs: cepProcessFaninPIDs,
 		cepFaninPIDs:        append([]string(nil), cepFaninPIDs...),
@@ -117,6 +121,10 @@ func (r *SimpleRuntime) step(ctx context.Context, inputs []float64, faninSignals
 				if actor == nil {
 					return nil, fmt.Errorf("cep %s process actor: %w", cep.Name(), ErrMissingCEPActor)
 				}
+				var relays []*CEPFaninRelay
+				if i < len(r.cepFaninRelays) && cepIdx < len(r.cepFaninRelays[i]) {
+					relays = r.cepFaninRelays[i][cepIdx]
+				}
 				faninPIDs := []string{runtimeCPPProcessID}
 				if cepIdx < len(r.cepProcessFaninPIDs) && len(r.cepProcessFaninPIDs[cepIdx]) > 0 {
 					faninPIDs = r.cepProcessFaninPIDs[cepIdx]
@@ -125,7 +133,7 @@ func (r *SimpleRuntime) step(ctx context.Context, inputs []float64, faninSignals
 				if signalErr != nil {
 					return nil, fmt.Errorf("cep %s process signals: %w", cep.Name(), signalErr)
 				}
-				command, ready, err := r.forwardCEPProcess(actor, faninPIDs, processSignals)
+				command, ready, err := r.forwardCEPProcess(actor, relays, faninPIDs, processSignals)
 				if err == nil {
 					if !ready {
 						continue
@@ -295,7 +303,7 @@ func (r *SimpleRuntime) resolveProcessSignals(faninPIDs []string, controlSignals
 	return out, nil
 }
 
-func (r *SimpleRuntime) forwardCEPProcess(actor *CEPActor, faninPIDs []string, signals []float64) (CEPCommand, bool, error) {
+func (r *SimpleRuntime) forwardCEPProcess(actor *CEPActor, relays []*CEPFaninRelay, faninPIDs []string, signals []float64) (CEPCommand, bool, error) {
 	if len(signals) != len(faninPIDs) {
 		return CEPCommand{}, false, fmt.Errorf("%w: cep fan-in signal mismatch expected=%d got=%d", ErrInvalidCEPOutputWidth, len(faninPIDs), len(signals))
 	}
@@ -304,13 +312,28 @@ func (r *SimpleRuntime) forwardCEPProcess(actor *CEPActor, faninPIDs []string, s
 	}
 	var command CEPCommand
 	ready := false
-	for i, signal := range signals {
-		message := CEPForwardMessage{
-			FromPID: faninPIDs[i],
-			Input:   []float64{signal},
+	if len(relays) > 0 {
+		if len(relays) != len(faninPIDs) {
+			return CEPCommand{}, false, fmt.Errorf("%w: fan-in relay mismatch expected=%d got=%d", ErrMissingCEPFaninRelay, len(faninPIDs), len(relays))
 		}
-		if err := actor.Post(message); err != nil {
-			return CEPCommand{}, false, err
+		for i, signal := range signals {
+			relay := relays[i]
+			if relay == nil {
+				return CEPCommand{}, false, fmt.Errorf("%w: nil fan-in relay at index=%d", ErrMissingCEPFaninRelay, i)
+			}
+			if err := relay.Post([]float64{signal}); err != nil {
+				return CEPCommand{}, false, err
+			}
+		}
+	} else {
+		for i, signal := range signals {
+			message := CEPForwardMessage{
+				FromPID: faninPIDs[i],
+				Input:   []float64{signal},
+			}
+			if err := actor.Post(message); err != nil {
+				return CEPCommand{}, false, err
+			}
 		}
 	}
 
@@ -344,6 +367,47 @@ func (r *SimpleRuntime) forwardCEPProcess(actor *CEPActor, faninPIDs []string, s
 		return CEPCommand{}, false, nil
 	}
 	return CEPCommand{}, false, err
+}
+
+type CEPFaninRelay struct {
+	id      string
+	fromPID string
+	actor   *CEPActor
+}
+
+func NewCEPFaninRelay(id, fromPID string, actor *CEPActor) *CEPFaninRelay {
+	return &CEPFaninRelay{
+		id:      strings.TrimSpace(id),
+		fromPID: strings.TrimSpace(fromPID),
+		actor:   actor,
+	}
+}
+
+func (r *CEPFaninRelay) ID() string {
+	if r == nil {
+		return ""
+	}
+	return r.id
+}
+
+func (r *CEPFaninRelay) FromPID() string {
+	if r == nil {
+		return ""
+	}
+	return r.fromPID
+}
+
+func (r *CEPFaninRelay) Post(input []float64) error {
+	if r == nil {
+		return ErrMissingCEPFaninRelay
+	}
+	if r.actor == nil {
+		return ErrMissingCEPActor
+	}
+	return r.actor.Post(CEPForwardMessage{
+		FromPID: r.fromPID,
+		Input:   append([]float64(nil), input...),
+	})
 }
 
 func trimCEPFaninPIDs(raw []string) []string {
@@ -568,6 +632,30 @@ func buildSubstrateCommandMailboxPool(inits []cepActorInit, weightCount int) []*
 			substratePID = strings.TrimSpace(scoped[0].substratePID)
 		}
 		pool = append(pool, newSubstrateCommandMailbox(substratePID))
+	}
+	return pool
+}
+
+func buildCEPFaninRelayPool(cepActorPool [][]*CEPActor, cepProcessFaninPIDs [][]string) [][][]*CEPFaninRelay {
+	if len(cepActorPool) == 0 {
+		return nil
+	}
+	pool := make([][][]*CEPFaninRelay, 0, len(cepActorPool))
+	for weightIdx, actorSet := range cepActorPool {
+		weightRelays := make([][]*CEPFaninRelay, 0, len(actorSet))
+		for cepIdx, actor := range actorSet {
+			faninPIDs := []string{runtimeCPPProcessID}
+			if cepIdx < len(cepProcessFaninPIDs) && len(cepProcessFaninPIDs[cepIdx]) > 0 {
+				faninPIDs = cepProcessFaninPIDs[cepIdx]
+			}
+			cepRelays := make([]*CEPFaninRelay, 0, len(faninPIDs))
+			for faninIdx, faninPID := range faninPIDs {
+				relayID := fmt.Sprintf("fanin_%d_cep_%d_w%d", faninIdx+1, cepIdx+1, weightIdx+1)
+				cepRelays = append(cepRelays, NewCEPFaninRelay(relayID, faninPID, actor))
+			}
+			weightRelays = append(weightRelays, cepRelays)
+		}
+		pool = append(pool, weightRelays)
 	}
 	return pool
 }

@@ -572,6 +572,12 @@ func TestSimpleRuntimeStepValidatesCEPCommandSenderEnvelope(t *testing.T) {
 	})
 	rt.cepActorsByWeight[0][0] = actor
 	rt.cepActors[0] = actor
+	if len(rt.cepFaninRelays) == 0 || len(rt.cepFaninRelays[0]) == 0 || len(rt.cepFaninRelays[0][0]) == 0 {
+		t.Fatal("expected cep fan-in relay topology to be initialized")
+	}
+	relayID := rt.cepFaninRelays[0][0][0].ID()
+	relayFrom := rt.cepFaninRelays[0][0][0].FromPID()
+	rt.cepFaninRelays[0][0][0] = NewCEPFaninRelay(relayID, relayFrom, actor)
 
 	if _, err := rt.Step(context.Background(), []float64{1}); !errors.Is(err, ErrUnexpectedCEPCommandSender) {
 		t.Fatalf("expected ErrUnexpectedCEPCommandSender, got %v", err)
@@ -610,6 +616,12 @@ func TestSimpleRuntimeStepValidatesCEPCommandTargetEnvelope(t *testing.T) {
 	})
 	rt.cepActorsByWeight[0][0] = actor
 	rt.cepActors[0] = actor
+	if len(rt.cepFaninRelays) == 0 || len(rt.cepFaninRelays[0]) == 0 || len(rt.cepFaninRelays[0][0]) == 0 {
+		t.Fatal("expected cep fan-in relay topology to be initialized")
+	}
+	relayID := rt.cepFaninRelays[0][0][0].ID()
+	relayFrom := rt.cepFaninRelays[0][0][0].FromPID()
+	rt.cepFaninRelays[0][0][0] = NewCEPFaninRelay(relayID, relayFrom, actor)
 
 	if _, err := rt.Step(context.Background(), []float64{1}); !errors.Is(err, ErrUnexpectedCEPCommandTarget) {
 		t.Fatalf("expected ErrUnexpectedCEPCommandTarget, got %v", err)
@@ -641,6 +653,21 @@ func TestSimpleRuntimeBuildsPerWeightCEPActorPool(t *testing.T) {
 	}
 	if len(rt.cepActors) == 0 || rt.cepActors[0] != rt.cepActorsByWeight[0][0] {
 		t.Fatal("expected compatibility actor view to mirror first weight actor set")
+	}
+	if len(rt.cepFaninRelays) != 3 {
+		t.Fatalf("expected fan-in relay pool per weight, got=%d", len(rt.cepFaninRelays))
+	}
+	if len(rt.cepFaninRelays[0]) == 0 || len(rt.cepFaninRelays[0][0]) == 0 || rt.cepFaninRelays[0][0][0] == nil {
+		t.Fatal("expected first weight fan-in relay set initialized")
+	}
+	if len(rt.cepFaninRelays[1]) == 0 || len(rt.cepFaninRelays[1][0]) == 0 || rt.cepFaninRelays[1][0][0] == nil {
+		t.Fatal("expected second weight fan-in relay set initialized")
+	}
+	if rt.cepFaninRelays[0][0][0] == rt.cepFaninRelays[1][0][0] {
+		t.Fatal("expected distinct fan-in relay instances per weight")
+	}
+	if rt.cepFaninRelays[0][0][0].FromPID() != runtimeCPPProcessID {
+		t.Fatalf("unexpected fan-in relay sender pid: got=%q", rt.cepFaninRelays[0][0][0].FromPID())
 	}
 	if len(rt.substrateMailboxes) != 3 {
 		t.Fatalf("expected substrate mailbox pool per weight, got=%d", len(rt.substrateMailboxes))
@@ -781,6 +808,27 @@ func TestSimpleRuntimeStepRequiresSubstrateMailbox(t *testing.T) {
 
 	if _, err := rt.Step(context.Background(), []float64{1}); !errors.Is(err, ErrMissingSubstrateMailbox) {
 		t.Fatalf("expected ErrMissingSubstrateMailbox, got %v", err)
+	}
+}
+
+func TestSimpleRuntimeStepRequiresCEPFaninRelay(t *testing.T) {
+	resetRegistriesForTests()
+	t.Cleanup(resetRegistriesForTests)
+
+	rt, err := NewSimpleRuntime(Spec{
+		CPPName: DefaultCPPName,
+		CEPName: DefaultCEPName,
+	}, 1)
+	if err != nil {
+		t.Fatalf("new runtime: %v", err)
+	}
+	if len(rt.cepFaninRelays) == 0 || len(rt.cepFaninRelays[0]) == 0 || len(rt.cepFaninRelays[0][0]) == 0 {
+		t.Fatal("expected cep fan-in relay topology initialized")
+	}
+	rt.cepFaninRelays[0][0][0] = nil
+
+	if _, err := rt.Step(context.Background(), []float64{1}); !errors.Is(err, ErrMissingCEPFaninRelay) {
+		t.Fatalf("expected ErrMissingCEPFaninRelay, got %v", err)
 	}
 }
 
