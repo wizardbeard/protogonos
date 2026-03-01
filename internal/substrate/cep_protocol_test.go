@@ -73,6 +73,9 @@ func TestBuildCEPCommandSetWeight(t *testing.T) {
 	if command.FromPID != "" {
 		t.Fatalf("expected BuildCEPCommand to leave sender unset, got=%q", command.FromPID)
 	}
+	if command.ToPID != "" {
+		t.Fatalf("expected BuildCEPCommand to leave target unset, got=%q", command.ToPID)
+	}
 }
 
 func TestBuildCEPCommandDeltaWeightSetIterativeAlias(t *testing.T) {

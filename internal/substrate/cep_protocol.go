@@ -28,6 +28,7 @@ var (
 // {CEP_Pid, Command, Signal}.
 type CEPCommand struct {
 	FromPID string
+	ToPID   string
 	Command string
 	Signal  []float64
 }
@@ -55,12 +56,14 @@ func (CEPTerminateMessage) isCEPMessage() {}
 // CEPInitMessage mirrors prep-loop state handoff from ExoSelf:
 // `{ExoSelfPid,{Id,CxPid,SubstratePid,CEPName,Parameters,FaninPIds}}`.
 type CEPInitMessage struct {
-	FromPID    string
-	ID         string
-	CEPName    string
-	Parameters map[string]float64
-	FaninPIDs  []string
-	Process    *CEPProcess
+	FromPID      string
+	ID           string
+	CxPID        string
+	SubstratePID string
+	CEPName      string
+	Parameters   map[string]float64
+	FaninPIDs    []string
+	Process      *CEPProcess
 }
 
 func (CEPInitMessage) isCEPMessage() {}
@@ -89,6 +92,8 @@ type cepActorResponse struct {
 // terminate behavior.
 type CEPProcess struct {
 	id           string
+	cxPID        string
+	substratePID string
 	terminatePID string
 	cepName      string
 	parameters   map[string]float64
@@ -211,6 +216,7 @@ func (p *CEPProcess) handleForward(fromPID string, input []float64) (CEPCommand,
 			return CEPCommand{}, false, err
 		}
 		command.FromPID = p.id
+		command.ToPID = p.substratePID
 		return command, true, nil
 	}
 }
@@ -420,6 +426,8 @@ func (a *CEPActor) handleActorMessage(message CEPMessage) (CEPCommand, bool, err
 			}
 		}
 		a.process = process
+		a.process.cxPID = strings.TrimSpace(msg.CxPID)
+		a.process.substratePID = strings.TrimSpace(msg.SubstratePID)
 		a.initialized = true
 		return CEPCommand{}, false, nil
 	case CEPSyncMessage:

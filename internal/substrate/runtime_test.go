@@ -575,9 +575,10 @@ func TestSimpleRuntimeBuildsPerWeightCEPActorPool(t *testing.T) {
 
 func TestBuildCEPActorPoolScopesProcessIDsPerWeight(t *testing.T) {
 	inits := []cepActorInit{{
-		id:        "cep_scope",
-		cepName:   DefaultCEPName,
-		faninPIDs: []string{"n1"},
+		id:           "cep_scope",
+		substratePID: "substrate_scope",
+		cepName:      DefaultCEPName,
+		faninPIDs:    []string{"n1"},
 	}}
 	pool, err := buildCEPActorPool(inits, 2)
 	if err != nil {
@@ -630,13 +631,20 @@ func TestBuildCEPActorPoolScopesProcessIDsPerWeight(t *testing.T) {
 	if commandW1.FromPID != "cep_scope_w1" || commandW2.FromPID != "cep_scope_w2" {
 		t.Fatalf("unexpected scoped CEP process IDs: w1=%q w2=%q", commandW1.FromPID, commandW2.FromPID)
 	}
+	if commandW1.ToPID == commandW2.ToPID {
+		t.Fatalf("expected distinct scoped substrate target PIDs per weight, got same=%q", commandW1.ToPID)
+	}
+	if commandW1.ToPID != "substrate_scope_w1" || commandW2.ToPID != "substrate_scope_w2" {
+		t.Fatalf("unexpected scoped substrate target PIDs: w1=%q w2=%q", commandW1.ToPID, commandW2.ToPID)
+	}
 }
 
 func TestBuildCEPActorsInitializesFromPayloadState(t *testing.T) {
 	actors, err := buildCEPActors([]cepActorInit{{
-		id:        "cep_payload_bootstrap",
-		cepName:   SetABCNCEPName,
-		faninPIDs: []string{"n1", "n2"},
+		id:           "cep_payload_bootstrap",
+		substratePID: "substrate_payload",
+		cepName:      SetABCNCEPName,
+		faninPIDs:    []string{"n1", "n2"},
 	}})
 	if err != nil {
 		t.Fatalf("build cep actors: %v", err)
@@ -669,6 +677,9 @@ func TestBuildCEPActorsInitializesFromPayloadState(t *testing.T) {
 	}
 	if command.FromPID != "cep_payload_bootstrap" || command.Command != SetABCNCEPName {
 		t.Fatalf("unexpected command envelope: %+v", command)
+	}
+	if command.ToPID != "substrate_payload" {
+		t.Fatalf("unexpected command target pid: got=%q want=%q", command.ToPID, "substrate_payload")
 	}
 }
 

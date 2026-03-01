@@ -203,6 +203,8 @@ func (r *SimpleRuntime) Reset() {
 }
 
 const runtimeCPPProcessID = "cpp"
+const runtimeCortexProcessID = "cortex"
+const runtimeSubstrateProcessID = "substrate"
 const runtimeExoSelfProcessID = "exoself"
 
 func (r *SimpleRuntime) computeControlSignals(ctx context.Context, inputs []float64, scalar float64, faninSignals map[string]float64) ([]float64, error) {
@@ -387,10 +389,12 @@ func canUseInputFanInSignals(ceps []CEP) bool {
 }
 
 type cepActorInit struct {
-	id         string
-	cepName    string
-	parameters map[string]float64
-	faninPIDs  []string
+	id           string
+	cxPID        string
+	substratePID string
+	cepName      string
+	parameters   map[string]float64
+	faninPIDs    []string
 }
 
 func buildCEPActorInits(ceps []CEP, parameters map[string]float64, faninPIDs []string, faninPIDsByCEP [][]string) ([]cepActorInit, [][]string, error) {
@@ -406,10 +410,12 @@ func buildCEPActorInits(ceps []CEP, parameters map[string]float64, faninPIDs []s
 			return nil, nil, fmt.Errorf("new cep process for %s: fanin pids are required", cep.Name())
 		}
 		inits = append(inits, cepActorInit{
-			id:         fmt.Sprintf("cep_%d", i+1),
-			cepName:    cep.Name(),
-			parameters: cloneFloatMap(parameters),
-			faninPIDs:  append([]string(nil), cepFaninPIDs...),
+			id:           fmt.Sprintf("cep_%d", i+1),
+			cxPID:        runtimeCortexProcessID,
+			substratePID: runtimeSubstrateProcessID,
+			cepName:      cep.Name(),
+			parameters:   cloneFloatMap(parameters),
+			faninPIDs:    append([]string(nil), cepFaninPIDs...),
 		})
 		processFaninPIDs = append(processFaninPIDs, cepFaninPIDs)
 	}
@@ -424,11 +430,13 @@ func buildCEPActors(inits []cepActorInit) ([]*CEPActor, error) {
 	for _, init := range inits {
 		actor := NewCEPActorWithOwner(runtimeExoSelfProcessID)
 		if _, _, err := actor.Call(CEPInitMessage{
-			FromPID:    runtimeExoSelfProcessID,
-			ID:         init.id,
-			CEPName:    init.cepName,
-			Parameters: init.parameters,
-			FaninPIDs:  init.faninPIDs,
+			FromPID:      runtimeExoSelfProcessID,
+			ID:           init.id,
+			CxPID:        init.cxPID,
+			SubstratePID: init.substratePID,
+			CEPName:      init.cepName,
+			Parameters:   init.parameters,
+			FaninPIDs:    init.faninPIDs,
 		}); err != nil {
 			return nil, fmt.Errorf("init cep actor %s: %w", init.id, err)
 		}
@@ -469,6 +477,12 @@ func scopeCEPActorInitsForWeight(inits []cepActorInit, weightIdx int) []cepActor
 		scoped := init
 		scoped.parameters = cloneFloatMap(init.parameters)
 		scoped.faninPIDs = append([]string(nil), init.faninPIDs...)
+		scoped.cxPID = strings.TrimSpace(init.cxPID)
+		baseSubstrateID := strings.TrimSpace(init.substratePID)
+		if baseSubstrateID == "" {
+			baseSubstrateID = runtimeSubstrateProcessID
+		}
+		scoped.substratePID = fmt.Sprintf("%s_w%d", baseSubstrateID, weightIdx+1)
 		baseID := strings.TrimSpace(scoped.id)
 		if baseID == "" {
 			baseID = fmt.Sprintf("cep_%d", len(out)+1)
