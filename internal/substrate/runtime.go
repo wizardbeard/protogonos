@@ -361,6 +361,16 @@ func (r *SimpleRuntime) forwardCEPProcess(actor *CEPActor, relays []*CEPFaninRel
 				return CEPCommand{}, false, err
 			}
 		}
+		for i := range relays {
+			relay := relays[i]
+			syncID, err := relay.PostSync()
+			if err != nil {
+				return CEPCommand{}, false, err
+			}
+			if err := relay.AwaitSync(syncID); err != nil {
+				return CEPCommand{}, false, err
+			}
+		}
 	} else {
 		for i, signal := range signals {
 			message := CEPForwardMessage{
@@ -406,28 +416,35 @@ func (r *SimpleRuntime) forwardCEPProcess(actor *CEPActor, relays []*CEPFaninRel
 }
 
 type CEPFaninRelay struct {
-	id      string
-	fromPID string
-	actor   *CEPActor
-	inbox   chan cepFaninRelayRequest
-	stop    chan struct{}
-	done    chan struct{}
-	closeMu sync.Once
+	id          string
+	fromPID     string
+	actor       *CEPActor
+	inbox       chan cepFaninRelayRequest
+	syncbox     chan uint64
+	nextSyncID  uint64
+	pendingSync map[uint64]struct{}
+	pendingMu   sync.Mutex
+	stop        chan struct{}
+	done        chan struct{}
+	closeMu     sync.Once
 }
 
 type cepFaninRelayRequest struct {
-	input []float64
-	reply chan error
+	input  []float64
+	syncID uint64
+	isSync bool
 }
 
 func NewCEPFaninRelay(id, fromPID string, actor *CEPActor) *CEPFaninRelay {
 	relay := &CEPFaninRelay{
-		id:      strings.TrimSpace(id),
-		fromPID: strings.TrimSpace(fromPID),
-		actor:   actor,
-		inbox:   make(chan cepFaninRelayRequest),
-		stop:    make(chan struct{}),
-		done:    make(chan struct{}),
+		id:          strings.TrimSpace(id),
+		fromPID:     strings.TrimSpace(fromPID),
+		actor:       actor,
+		inbox:       make(chan cepFaninRelayRequest),
+		syncbox:     make(chan uint64, 16),
+		pendingSync: map[uint64]struct{}{},
+		stop:        make(chan struct{}),
+		done:        make(chan struct{}),
 	}
 	go relay.run()
 	return relay
@@ -440,11 +457,11 @@ func (r *CEPFaninRelay) run() {
 		case <-r.stop:
 			return
 		case request := <-r.inbox:
-			err := r.forward(request.input)
-			if request.reply != nil {
-				request.reply <- err
-				close(request.reply)
+			if request.isSync {
+				r.syncbox <- request.syncID
+				continue
 			}
+			_ = r.forward(request.input)
 		}
 	}
 }
@@ -467,10 +484,11 @@ func (r *CEPFaninRelay) Post(input []float64) error {
 	if r == nil {
 		return ErrMissingCEPFaninRelay
 	}
-	reply := make(chan error, 1)
+	if r.actor == nil {
+		return ErrMissingCEPActor
+	}
 	req := cepFaninRelayRequest{
 		input: append([]float64(nil), input...),
-		reply: reply,
 	}
 	select {
 	case <-r.stop:
@@ -478,13 +496,68 @@ func (r *CEPFaninRelay) Post(input []float64) error {
 	case <-r.done:
 		return ErrCEPFaninRelayTerminated
 	case r.inbox <- req:
+		return nil
+	}
+}
+
+func (r *CEPFaninRelay) PostSync() (uint64, error) {
+	if r == nil {
+		return 0, ErrMissingCEPFaninRelay
+	}
+	syncID := atomic.AddUint64(&r.nextSyncID, 1)
+	req := cepFaninRelayRequest{
+		syncID: syncID,
+		isSync: true,
 	}
 	select {
+	case <-r.stop:
+		return 0, ErrCEPFaninRelayTerminated
 	case <-r.done:
-		return ErrCEPFaninRelayTerminated
-	case err := <-reply:
-		return err
+		return 0, ErrCEPFaninRelayTerminated
+	case r.inbox <- req:
+		return syncID, nil
 	}
+}
+
+func (r *CEPFaninRelay) AwaitSync(syncID uint64) error {
+	if r == nil {
+		return ErrMissingCEPFaninRelay
+	}
+	if r.consumePendingSync(syncID) {
+		return nil
+	}
+	for {
+		select {
+		case doneID := <-r.syncbox:
+			if doneID == syncID {
+				return nil
+			}
+			r.storePendingSync(doneID)
+		case <-r.stop:
+			return ErrCEPFaninRelayTerminated
+		case <-r.done:
+			return ErrCEPFaninRelayTerminated
+		}
+	}
+}
+
+func (r *CEPFaninRelay) consumePendingSync(syncID uint64) bool {
+	r.pendingMu.Lock()
+	defer r.pendingMu.Unlock()
+	if _, ok := r.pendingSync[syncID]; !ok {
+		return false
+	}
+	delete(r.pendingSync, syncID)
+	return true
+}
+
+func (r *CEPFaninRelay) storePendingSync(syncID uint64) {
+	if syncID == 0 {
+		return
+	}
+	r.pendingMu.Lock()
+	r.pendingSync[syncID] = struct{}{}
+	r.pendingMu.Unlock()
 }
 
 func (r *CEPFaninRelay) Terminate() {

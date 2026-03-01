@@ -895,7 +895,14 @@ func TestCEPFaninRelayMailboxForwardAndTerminate(t *testing.T) {
 	if err := relay.Post([]float64{1}); err != nil {
 		t.Fatalf("relay post: %v", err)
 	}
-	syncID, err := actor.PostSync()
+	syncID, err := relay.PostSync()
+	if err != nil {
+		t.Fatalf("relay post sync: %v", err)
+	}
+	if err := relay.AwaitSync(syncID); err != nil {
+		t.Fatalf("relay await sync: %v", err)
+	}
+	syncID, err = actor.PostSync()
 	if err != nil {
 		t.Fatalf("post sync: %v", err)
 	}
@@ -913,6 +920,9 @@ func TestCEPFaninRelayMailboxForwardAndTerminate(t *testing.T) {
 	relay.Terminate()
 	if err := relay.Post([]float64{1}); !errors.Is(err, ErrCEPFaninRelayTerminated) {
 		t.Fatalf("expected ErrCEPFaninRelayTerminated after relay stop, got %v", err)
+	}
+	if _, err := relay.PostSync(); !errors.Is(err, ErrCEPFaninRelayTerminated) {
+		t.Fatalf("expected ErrCEPFaninRelayTerminated from relay post sync after stop, got %v", err)
 	}
 }
 

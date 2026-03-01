@@ -58,6 +58,7 @@ Status legend:
 
 ## Latest iteration updates
 
+- 2026-03-01: tightened substrate CEP relay-message semantics by making fan-in relay posting enqueue-only with explicit relay sync barriers (`PostSync`/`AwaitSync`) before CEP actor mailbox sync.
 - 2026-03-01: tightened substrate CEP substrate-process fidelity by making per-weight substrate command mailboxes mailbox-backed goroutine actors with sync-barrier drain/apply semantics and explicit termination.
 - 2026-03-01: tightened substrate CEP relay-process fidelity by making fan-in relays mailbox-backed goroutine actors with explicit termination semantics instead of direct wrapper forwarding.
 - 2026-03-01: expanded substrate CEP process topology by adding per-weight/per-CEP fan-in relay actors (`CEPFaninRelay`) so runtime signal flow traverses explicit fan-in relays before CEP actor mailboxes.
