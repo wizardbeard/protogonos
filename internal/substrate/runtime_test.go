@@ -573,6 +573,65 @@ func TestSimpleRuntimeBuildsPerWeightCEPActorPool(t *testing.T) {
 	}
 }
 
+func TestBuildCEPActorPoolScopesProcessIDsPerWeight(t *testing.T) {
+	inits := []cepActorInit{{
+		id:        "cep_scope",
+		cepName:   DefaultCEPName,
+		faninPIDs: []string{"n1"},
+	}}
+	pool, err := buildCEPActorPool(inits, 2)
+	if err != nil {
+		t.Fatalf("build cep actor pool: %v", err)
+	}
+	if len(pool) != 2 || len(pool[0]) == 0 || len(pool[1]) == 0 {
+		t.Fatalf("unexpected actor pool shape: %+v", pool)
+	}
+
+	actorW1 := pool[0][0]
+	actorW2 := pool[1][0]
+	t.Cleanup(func() {
+		_ = actorW1.TerminateFrom(runtimeExoSelfProcessID)
+		_ = actorW2.TerminateFrom(runtimeExoSelfProcessID)
+	})
+
+	if err := actorW1.Post(CEPForwardMessage{FromPID: "n1", Input: []float64{1}}); err != nil {
+		t.Fatalf("post w1: %v", err)
+	}
+	syncID, err := actorW1.PostSync()
+	if err != nil {
+		t.Fatalf("post sync w1: %v", err)
+	}
+	if err := actorW1.AwaitSync(syncID); err != nil {
+		t.Fatalf("await sync w1: %v", err)
+	}
+	commandW1, err := actorW1.NextCommand()
+	if err != nil {
+		t.Fatalf("next command w1: %v", err)
+	}
+
+	if err := actorW2.Post(CEPForwardMessage{FromPID: "n1", Input: []float64{1}}); err != nil {
+		t.Fatalf("post w2: %v", err)
+	}
+	syncID, err = actorW2.PostSync()
+	if err != nil {
+		t.Fatalf("post sync w2: %v", err)
+	}
+	if err := actorW2.AwaitSync(syncID); err != nil {
+		t.Fatalf("await sync w2: %v", err)
+	}
+	commandW2, err := actorW2.NextCommand()
+	if err != nil {
+		t.Fatalf("next command w2: %v", err)
+	}
+
+	if commandW1.FromPID == commandW2.FromPID {
+		t.Fatalf("expected distinct scoped CEP process IDs per weight, got same=%q", commandW1.FromPID)
+	}
+	if commandW1.FromPID != "cep_scope_w1" || commandW2.FromPID != "cep_scope_w2" {
+		t.Fatalf("unexpected scoped CEP process IDs: w1=%q w2=%q", commandW1.FromPID, commandW2.FromPID)
+	}
+}
+
 func TestBuildCEPActorsInitializesFromPayloadState(t *testing.T) {
 	actors, err := buildCEPActors([]cepActorInit{{
 		id:        "cep_payload_bootstrap",

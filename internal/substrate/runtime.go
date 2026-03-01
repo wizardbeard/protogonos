@@ -443,7 +443,7 @@ func buildCEPActorPool(inits []cepActorInit, weightCount int) ([][]*CEPActor, er
 	}
 	pool := make([][]*CEPActor, 0, weightCount)
 	for weightIdx := 0; weightIdx < weightCount; weightIdx++ {
-		actors, err := buildCEPActors(inits)
+		actors, err := buildCEPActors(scopeCEPActorInitsForWeight(inits, weightIdx))
 		if err != nil {
 			for _, actorSet := range pool {
 				for _, actor := range actorSet {
@@ -458,6 +458,25 @@ func buildCEPActorPool(inits []cepActorInit, weightCount int) ([][]*CEPActor, er
 		pool = append(pool, actors)
 	}
 	return pool, nil
+}
+
+func scopeCEPActorInitsForWeight(inits []cepActorInit, weightIdx int) []cepActorInit {
+	if len(inits) == 0 {
+		return nil
+	}
+	out := make([]cepActorInit, 0, len(inits))
+	for _, init := range inits {
+		scoped := init
+		scoped.parameters = cloneFloatMap(init.parameters)
+		scoped.faninPIDs = append([]string(nil), init.faninPIDs...)
+		baseID := strings.TrimSpace(scoped.id)
+		if baseID == "" {
+			baseID = fmt.Sprintf("cep_%d", len(out)+1)
+		}
+		scoped.id = fmt.Sprintf("%s_w%d", baseID, weightIdx+1)
+		out = append(out, scoped)
+	}
+	return out
 }
 
 func resolveCEPProcessFaninPIDs(cepName string, faninPIDs []string) []string {
