@@ -11,6 +11,7 @@ var (
 	ErrNoSubstrateBackup          = errors.New("no substrate backup available")
 	ErrSubstrateRuntimeTerminated = errors.New("substrate runtime terminated")
 	ErrMissingCEPActor            = errors.New("missing cep actor")
+	ErrMissingSubstrateMailbox    = errors.New("missing substrate mailbox")
 	ErrUnexpectedCEPCommandSender = errors.New("unexpected cep command sender")
 	ErrUnexpectedCEPCommandTarget = errors.New("unexpected cep command target")
 )
@@ -21,6 +22,7 @@ type SimpleRuntime struct {
 	cepActors           []*CEPActor
 	cepActorsByWeight   [][]*CEPActor
 	cepActorInits       []cepActorInit
+	substrateMailboxes  []*substrateCommandMailbox
 	cepProcessFaninPIDs [][]string
 	cepFaninPIDs        []string
 	params              map[string]float64
@@ -59,6 +61,7 @@ func NewSimpleRuntime(spec Spec, weightCount int) (*SimpleRuntime, error) {
 	if err != nil {
 		return nil, err
 	}
+	substrateMailboxes := buildSubstrateCommandMailboxPool(cepActorInits, weightCount)
 	var cepActors []*CEPActor
 	if len(cepActorPool) > 0 {
 		cepActors = cepActorPool[0]
@@ -69,6 +72,7 @@ func NewSimpleRuntime(spec Spec, weightCount int) (*SimpleRuntime, error) {
 		cepActors:           cepActors,
 		cepActorsByWeight:   cepActorPool,
 		cepActorInits:       cloneCEPActorInits(cepActorInits),
+		substrateMailboxes:  substrateMailboxes,
 		cepProcessFaninPIDs: cepProcessFaninPIDs,
 		cepFaninPIDs:        append([]string(nil), cepFaninPIDs...),
 		params:              params,
@@ -131,9 +135,12 @@ func (r *SimpleRuntime) step(ctx context.Context, inputs []float64, faninSignals
 							return nil, fmt.Errorf("cep %s command envelope: %w", cep.Name(), envelopeErr)
 						}
 					}
-					w, applyErr := ApplyCEPCommand(next, command, r.params)
+					if postErr := r.postSubstrateCommand(i, command); postErr != nil {
+						return nil, fmt.Errorf("cep %s mailbox post: %w", cep.Name(), postErr)
+					}
+					w, applyErr := r.applySubstrateMailbox(i, next)
 					if applyErr != nil {
-						return nil, fmt.Errorf("cep %s apply command %s: %w", cep.Name(), command.Command, applyErr)
+						return nil, fmt.Errorf("cep %s apply mailbox commands: %w", cep.Name(), applyErr)
 					}
 					next = w
 					continue
@@ -515,6 +522,89 @@ func cloneCEPActorInits(inits []cepActorInit) []cepActorInit {
 		out = append(out, cloned)
 	}
 	return out
+}
+
+type substrateCommandMailbox struct {
+	id       string
+	commands []CEPCommand
+}
+
+func newSubstrateCommandMailbox(id string) *substrateCommandMailbox {
+	return &substrateCommandMailbox{id: strings.TrimSpace(id)}
+}
+
+func (m *substrateCommandMailbox) ID() string {
+	if m == nil {
+		return ""
+	}
+	return m.id
+}
+
+func (m *substrateCommandMailbox) Post(command CEPCommand) {
+	if m == nil {
+		return
+	}
+	m.commands = append(m.commands, command)
+}
+
+func (m *substrateCommandMailbox) Drain() []CEPCommand {
+	if m == nil || len(m.commands) == 0 {
+		return nil
+	}
+	out := append([]CEPCommand(nil), m.commands...)
+	m.commands = m.commands[:0]
+	return out
+}
+
+func buildSubstrateCommandMailboxPool(inits []cepActorInit, weightCount int) []*substrateCommandMailbox {
+	if weightCount <= 0 {
+		return nil
+	}
+	pool := make([]*substrateCommandMailbox, 0, weightCount)
+	for weightIdx := 0; weightIdx < weightCount; weightIdx++ {
+		scoped := scopeCEPActorInitsForWeight(inits, weightIdx)
+		substratePID := fmt.Sprintf("%s_w%d", runtimeSubstrateProcessID, weightIdx+1)
+		if len(scoped) > 0 && strings.TrimSpace(scoped[0].substratePID) != "" {
+			substratePID = strings.TrimSpace(scoped[0].substratePID)
+		}
+		pool = append(pool, newSubstrateCommandMailbox(substratePID))
+	}
+	return pool
+}
+
+func (r *SimpleRuntime) postSubstrateCommand(weightIdx int, command CEPCommand) error {
+	if weightIdx < 0 || weightIdx >= len(r.substrateMailboxes) {
+		return ErrMissingSubstrateMailbox
+	}
+	mailbox := r.substrateMailboxes[weightIdx]
+	if mailbox == nil {
+		return ErrMissingSubstrateMailbox
+	}
+	target := strings.TrimSpace(mailbox.ID())
+	if target != "" && strings.TrimSpace(command.ToPID) != target {
+		return fmt.Errorf("%w: expected=%s got=%s", ErrUnexpectedCEPCommandTarget, target, strings.TrimSpace(command.ToPID))
+	}
+	mailbox.Post(command)
+	return nil
+}
+
+func (r *SimpleRuntime) applySubstrateMailbox(weightIdx int, current float64) (float64, error) {
+	if weightIdx < 0 || weightIdx >= len(r.substrateMailboxes) {
+		return 0, ErrMissingSubstrateMailbox
+	}
+	mailbox := r.substrateMailboxes[weightIdx]
+	if mailbox == nil {
+		return 0, ErrMissingSubstrateMailbox
+	}
+	next := current
+	for _, command := range mailbox.Drain() {
+		updated, err := ApplyCEPCommand(next, command, r.params)
+		if err != nil {
+			return 0, err
+		}
+		next = updated
+	}
+	return next, nil
 }
 
 func validateCEPCommandEnvelope(command CEPCommand, expected cepActorInit) error {

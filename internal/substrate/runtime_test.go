@@ -642,6 +642,15 @@ func TestSimpleRuntimeBuildsPerWeightCEPActorPool(t *testing.T) {
 	if len(rt.cepActors) == 0 || rt.cepActors[0] != rt.cepActorsByWeight[0][0] {
 		t.Fatal("expected compatibility actor view to mirror first weight actor set")
 	}
+	if len(rt.substrateMailboxes) != 3 {
+		t.Fatalf("expected substrate mailbox pool per weight, got=%d", len(rt.substrateMailboxes))
+	}
+	if rt.substrateMailboxes[0] == nil || rt.substrateMailboxes[1] == nil {
+		t.Fatal("expected substrate mailboxes initialized")
+	}
+	if rt.substrateMailboxes[0].ID() == rt.substrateMailboxes[1].ID() {
+		t.Fatalf("expected distinct substrate mailbox IDs per weight, got=%q", rt.substrateMailboxes[0].ID())
+	}
 }
 
 func TestBuildCEPActorPoolScopesProcessIDsPerWeight(t *testing.T) {
@@ -751,6 +760,27 @@ func TestBuildCEPActorsInitializesFromPayloadState(t *testing.T) {
 	}
 	if command.ToPID != "substrate_payload" {
 		t.Fatalf("unexpected command target pid: got=%q want=%q", command.ToPID, "substrate_payload")
+	}
+}
+
+func TestSimpleRuntimeStepRequiresSubstrateMailbox(t *testing.T) {
+	resetRegistriesForTests()
+	t.Cleanup(resetRegistriesForTests)
+
+	rt, err := NewSimpleRuntime(Spec{
+		CPPName: DefaultCPPName,
+		CEPName: DefaultCEPName,
+	}, 1)
+	if err != nil {
+		t.Fatalf("new runtime: %v", err)
+	}
+	if len(rt.substrateMailboxes) == 0 {
+		t.Fatal("expected substrate mailbox to be initialized")
+	}
+	rt.substrateMailboxes[0] = nil
+
+	if _, err := rt.Step(context.Background(), []float64{1}); !errors.Is(err, ErrMissingSubstrateMailbox) {
+		t.Fatalf("expected ErrMissingSubstrateMailbox, got %v", err)
 	}
 }
 
