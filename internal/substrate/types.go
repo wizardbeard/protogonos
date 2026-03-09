@@ -25,6 +25,7 @@ type Spec struct {
 	CPPName           string
 	CEPName           string
 	CEPNames          []string
+	CEPIDs            []string
 	CEPFaninPIDs      []string
 	CEPFaninPIDsByCEP [][]string
 	Dimensions        []int

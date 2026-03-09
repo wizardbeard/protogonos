@@ -734,6 +734,63 @@ func TestSimpleRuntimeBuildsPerWeightCEPActorPool(t *testing.T) {
 	}
 }
 
+func TestSimpleRuntimeUsesConfiguredCEPIDs(t *testing.T) {
+	resetRegistriesForTests()
+	t.Cleanup(resetRegistriesForTests)
+
+	rt, err := NewSimpleRuntime(Spec{
+		CPPName: DefaultCPPName,
+		CEPName: DefaultCEPName,
+		CEPIDs:  []string{"cep_custom_runtime"},
+		Parameters: map[string]float64{
+			"scale": 1,
+		},
+	}, 1)
+	if err != nil {
+		t.Fatalf("new runtime: %v", err)
+	}
+
+	if len(rt.cepActorInits) == 0 {
+		t.Fatal("expected cep actor init metadata")
+	}
+	if rt.cepActorInits[0].id != "cep_custom_runtime" {
+		t.Fatalf("expected configured cep id, got=%q", rt.cepActorInits[0].id)
+	}
+
+	w, err := rt.Step(context.Background(), []float64{1})
+	if err != nil {
+		t.Fatalf("step: %v", err)
+	}
+	if len(w) != 1 || w[0] != 1 {
+		t.Fatalf("unexpected runtime step output with configured cep id: %v", w)
+	}
+}
+
+func TestBuildCEPActorInitsDeduplicatesConfiguredCEPIDs(t *testing.T) {
+	inits, fanin, err := buildCEPActorInits(
+		[]CEP{DeltaWeightCEP{}, SetWeightCEP{}, SetABCNCEP{}},
+		nil,
+		[]string{"n1"},
+		nil,
+		[]string{"cep_dup", "cep_dup", ""},
+	)
+	if err != nil {
+		t.Fatalf("build cep actor inits: %v", err)
+	}
+	if len(inits) != 3 || len(fanin) != 3 {
+		t.Fatalf("unexpected init shape: inits=%d fanin=%d", len(inits), len(fanin))
+	}
+	if inits[0].id != "cep_dup" {
+		t.Fatalf("unexpected first configured id: %q", inits[0].id)
+	}
+	if inits[1].id != "cep_dup_2" {
+		t.Fatalf("expected deduped second configured id, got=%q", inits[1].id)
+	}
+	if inits[2].id != "cep_3" {
+		t.Fatalf("expected fallback generated id for empty configured entry, got=%q", inits[2].id)
+	}
+}
+
 func TestBuildCEPActorPoolScopesProcessIDsPerWeight(t *testing.T) {
 	inits := []cepActorInit{{
 		id:           "cep_scope",

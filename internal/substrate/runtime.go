@@ -63,7 +63,7 @@ func NewSimpleRuntime(spec Spec, weightCount int) (*SimpleRuntime, error) {
 	}
 	cepFaninPIDsByCEP := normalizeCEPFaninPIDsByCEP(spec.CEPFaninPIDsByCEP)
 	cepFaninPIDs := resolveGlobalCEPFaninPIDs(spec.CEPFaninPIDs, cepFaninPIDsByCEP)
-	cepActorInits, cepProcessFaninPIDs, err := buildCEPActorInits(ceps, params, cepFaninPIDs, cepFaninPIDsByCEP)
+	cepActorInits, cepProcessFaninPIDs, err := buildCEPActorInits(ceps, params, cepFaninPIDs, cepFaninPIDsByCEP, spec.CEPIDs)
 	if err != nil {
 		return nil, err
 	}
@@ -865,9 +865,10 @@ type cepActorInit struct {
 	faninPIDs    []string
 }
 
-func buildCEPActorInits(ceps []CEP, parameters map[string]float64, faninPIDs []string, faninPIDsByCEP [][]string) ([]cepActorInit, [][]string, error) {
+func buildCEPActorInits(ceps []CEP, parameters map[string]float64, faninPIDs []string, faninPIDsByCEP [][]string, cepIDs []string) ([]cepActorInit, [][]string, error) {
 	inits := make([]cepActorInit, 0, len(ceps))
 	processFaninPIDs := make([][]string, 0, len(ceps))
+	allocatedIDs := map[string]int{}
 	for i, cep := range ceps {
 		baseFanin := faninPIDs
 		if i < len(faninPIDsByCEP) && len(faninPIDsByCEP[i]) > 0 {
@@ -877,8 +878,9 @@ func buildCEPActorInits(ceps []CEP, parameters map[string]float64, faninPIDs []s
 		if len(cepFaninPIDs) == 0 {
 			return nil, nil, fmt.Errorf("new cep process for %s: fanin pids are required", cep.Name())
 		}
+		processID := allocateCEPProcessID(cepIDs, i, allocatedIDs)
 		inits = append(inits, cepActorInit{
-			id:           fmt.Sprintf("cep_%d", i+1),
+			id:           processID,
 			cxPID:        runtimeCortexProcessID,
 			substratePID: runtimeSubstrateProcessID,
 			cepName:      cep.Name(),
@@ -888,6 +890,25 @@ func buildCEPActorInits(ceps []CEP, parameters map[string]float64, faninPIDs []s
 		processFaninPIDs = append(processFaninPIDs, cepFaninPIDs)
 	}
 	return inits, processFaninPIDs, nil
+}
+
+func allocateCEPProcessID(cepIDs []string, idx int, used map[string]int) string {
+	baseID := fmt.Sprintf("cep_%d", idx+1)
+	if idx < len(cepIDs) {
+		if trimmed := strings.TrimSpace(cepIDs[idx]); trimmed != "" {
+			baseID = trimmed
+		}
+	}
+	if used == nil {
+		return baseID
+	}
+	if count, exists := used[baseID]; exists {
+		next := count + 1
+		used[baseID] = next
+		return fmt.Sprintf("%s_%d", baseID, next)
+	}
+	used[baseID] = 1
+	return baseID
 }
 
 func buildCEPActors(inits []cepActorInit) ([]*CEPActor, error) {
