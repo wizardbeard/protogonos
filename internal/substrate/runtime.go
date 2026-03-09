@@ -17,6 +17,9 @@ var (
 	ErrSubstrateMailboxTerminated = errors.New("substrate mailbox terminated")
 	ErrMissingCEPFaninRelay       = errors.New("missing cep fan-in relay")
 	ErrCEPFaninRelayTerminated    = errors.New("cep fan-in relay terminated")
+	ErrMissingCEPCommandRelay     = errors.New("missing cep command relay")
+	ErrCEPCommandRelayTerminated  = errors.New("cep command relay terminated")
+	ErrCEPCommandRelayNoError     = errors.New("cep command relay no error")
 	ErrUnexpectedCEPCommandSender = errors.New("unexpected cep command sender")
 	ErrUnexpectedCEPCommandTarget = errors.New("unexpected cep command target")
 )
@@ -28,6 +31,7 @@ type SimpleRuntime struct {
 	cepActorsByWeight   [][]*CEPActor
 	cepActorInits       []cepActorInit
 	cepFaninRelays      [][][]*CEPFaninRelay
+	cepCommandRelays    [][]*CEPCommandRelay
 	substrateMailboxes  []*substrateCommandMailbox
 	cepProcessFaninPIDs [][]string
 	cepFaninPIDs        []string
@@ -69,6 +73,7 @@ func NewSimpleRuntime(spec Spec, weightCount int) (*SimpleRuntime, error) {
 	}
 	cepFaninRelays := buildCEPFaninRelayPool(cepActorPool, cepProcessFaninPIDs)
 	substrateMailboxes := buildSubstrateCommandMailboxPool(cepActorInits, weightCount)
+	cepCommandRelays := buildCEPCommandRelayPool(cepActorInits, substrateMailboxes)
 	var cepActors []*CEPActor
 	if len(cepActorPool) > 0 {
 		cepActors = cepActorPool[0]
@@ -80,6 +85,7 @@ func NewSimpleRuntime(spec Spec, weightCount int) (*SimpleRuntime, error) {
 		cepActorsByWeight:   cepActorPool,
 		cepActorInits:       cloneCEPActorInits(cepActorInits),
 		cepFaninRelays:      cepFaninRelays,
+		cepCommandRelays:    cepCommandRelays,
 		substrateMailboxes:  substrateMailboxes,
 		cepProcessFaninPIDs: cepProcessFaninPIDs,
 		cepFaninPIDs:        append([]string(nil), cepFaninPIDs...),
@@ -147,8 +153,8 @@ func (r *SimpleRuntime) step(ctx context.Context, inputs []float64, faninSignals
 							return nil, fmt.Errorf("cep %s command envelope: %w", cep.Name(), envelopeErr)
 						}
 					}
-					if postErr := r.postSubstrateCommand(i, command); postErr != nil {
-						return nil, fmt.Errorf("cep %s mailbox post: %w", cep.Name(), postErr)
+					if routeErr := r.routeCEPCommand(i, cepIdx, command); routeErr != nil {
+						return nil, fmt.Errorf("cep %s command relay: %w", cep.Name(), routeErr)
 					}
 					w, applyErr := r.applySubstrateMailbox(i, next)
 					if applyErr != nil {
@@ -204,6 +210,14 @@ func (r *SimpleRuntime) Terminate() {
 				}
 			}
 		}
+		for _, weightRelays := range r.cepCommandRelays {
+			for _, relay := range weightRelays {
+				if relay == nil {
+					continue
+				}
+				relay.Terminate()
+			}
+		}
 		for _, mailbox := range r.substrateMailboxes {
 			if mailbox == nil {
 				continue
@@ -226,6 +240,14 @@ func (r *SimpleRuntime) Terminate() {
 				}
 				relay.Terminate()
 			}
+		}
+	}
+	for _, weightRelays := range r.cepCommandRelays {
+		for _, relay := range weightRelays {
+			if relay == nil {
+				continue
+			}
+			relay.Terminate()
 		}
 	}
 	for _, mailbox := range r.substrateMailboxes {
@@ -578,6 +600,199 @@ func (r *CEPFaninRelay) forward(input []float64) error {
 		FromPID: r.fromPID,
 		Input:   append([]float64(nil), input...),
 	})
+}
+
+type CEPCommandRelay struct {
+	id          string
+	toPID       string
+	mailbox     *substrateCommandMailbox
+	inbox       chan cepCommandRelayRequest
+	errbox      chan error
+	syncbox     chan uint64
+	nextSyncID  uint64
+	pendingSync map[uint64]struct{}
+	pendingMu   sync.Mutex
+	stop        chan struct{}
+	done        chan struct{}
+	closeMu     sync.Once
+}
+
+type cepCommandRelayRequest struct {
+	command CEPCommand
+	syncID  uint64
+	isSync  bool
+}
+
+func NewCEPCommandRelay(id, toPID string, mailbox *substrateCommandMailbox) *CEPCommandRelay {
+	relay := &CEPCommandRelay{
+		id:          strings.TrimSpace(id),
+		toPID:       strings.TrimSpace(toPID),
+		mailbox:     mailbox,
+		inbox:       make(chan cepCommandRelayRequest),
+		errbox:      make(chan error, 16),
+		syncbox:     make(chan uint64, 16),
+		pendingSync: map[uint64]struct{}{},
+		stop:        make(chan struct{}),
+		done:        make(chan struct{}),
+	}
+	go relay.run()
+	return relay
+}
+
+func (r *CEPCommandRelay) run() {
+	defer close(r.done)
+	for {
+		select {
+		case <-r.stop:
+			return
+		case request := <-r.inbox:
+			if request.isSync {
+				r.syncbox <- request.syncID
+				continue
+			}
+			if err := r.forward(request.command); err != nil {
+				select {
+				case r.errbox <- err:
+				default:
+				}
+			}
+		}
+	}
+}
+
+func (r *CEPCommandRelay) ID() string {
+	if r == nil {
+		return ""
+	}
+	return r.id
+}
+
+func (r *CEPCommandRelay) ToPID() string {
+	if r == nil {
+		return ""
+	}
+	return r.toPID
+}
+
+func (r *CEPCommandRelay) Post(command CEPCommand) error {
+	if r == nil {
+		return ErrMissingCEPCommandRelay
+	}
+	request := cepCommandRelayRequest{
+		command: CEPCommand{
+			FromPID: command.FromPID,
+			ToPID:   command.ToPID,
+			Command: command.Command,
+			Signal:  append([]float64(nil), command.Signal...),
+		},
+	}
+	select {
+	case <-r.stop:
+		return ErrCEPCommandRelayTerminated
+	case <-r.done:
+		return ErrCEPCommandRelayTerminated
+	case r.inbox <- request:
+		return nil
+	}
+}
+
+func (r *CEPCommandRelay) PostSync() (uint64, error) {
+	if r == nil {
+		return 0, ErrMissingCEPCommandRelay
+	}
+	syncID := atomic.AddUint64(&r.nextSyncID, 1)
+	request := cepCommandRelayRequest{
+		syncID: syncID,
+		isSync: true,
+	}
+	select {
+	case <-r.stop:
+		return 0, ErrCEPCommandRelayTerminated
+	case <-r.done:
+		return 0, ErrCEPCommandRelayTerminated
+	case r.inbox <- request:
+		return syncID, nil
+	}
+}
+
+func (r *CEPCommandRelay) AwaitSync(syncID uint64) error {
+	if r == nil {
+		return ErrMissingCEPCommandRelay
+	}
+	if r.consumePendingSync(syncID) {
+		return nil
+	}
+	for {
+		select {
+		case doneID := <-r.syncbox:
+			if doneID == syncID {
+				return nil
+			}
+			r.storePendingSync(doneID)
+		case <-r.stop:
+			return ErrCEPCommandRelayTerminated
+		case <-r.done:
+			return ErrCEPCommandRelayTerminated
+		}
+	}
+}
+
+func (r *CEPCommandRelay) consumePendingSync(syncID uint64) bool {
+	r.pendingMu.Lock()
+	defer r.pendingMu.Unlock()
+	if _, ok := r.pendingSync[syncID]; !ok {
+		return false
+	}
+	delete(r.pendingSync, syncID)
+	return true
+}
+
+func (r *CEPCommandRelay) storePendingSync(syncID uint64) {
+	if syncID == 0 {
+		return
+	}
+	r.pendingMu.Lock()
+	r.pendingSync[syncID] = struct{}{}
+	r.pendingMu.Unlock()
+}
+
+func (r *CEPCommandRelay) NextError() error {
+	if r == nil {
+		return ErrMissingCEPCommandRelay
+	}
+	select {
+	case err := <-r.errbox:
+		if err == nil {
+			return ErrCEPCommandRelayNoError
+		}
+		return err
+	default:
+		return ErrCEPCommandRelayNoError
+	}
+}
+
+func (r *CEPCommandRelay) Terminate() {
+	if r == nil {
+		return
+	}
+	r.closeMu.Do(func() {
+		close(r.stop)
+		<-r.done
+	})
+}
+
+func (r *CEPCommandRelay) forward(command CEPCommand) error {
+	if r.mailbox == nil {
+		return ErrMissingSubstrateMailbox
+	}
+	target := strings.TrimSpace(r.toPID)
+	if target == "" {
+		target = strings.TrimSpace(r.mailbox.ID())
+	}
+	if target != "" && strings.TrimSpace(command.ToPID) != target {
+		return fmt.Errorf("%w: expected=%s got=%s", ErrUnexpectedCEPCommandTarget, target, strings.TrimSpace(command.ToPID))
+	}
+	return r.mailbox.Post(command)
 }
 
 func trimCEPFaninPIDs(raw []string) []string {
@@ -972,6 +1187,60 @@ func buildCEPFaninRelayPool(cepActorPool [][]*CEPActor, cepProcessFaninPIDs [][]
 		pool = append(pool, weightRelays)
 	}
 	return pool
+}
+
+func buildCEPCommandRelayPool(inits []cepActorInit, mailboxes []*substrateCommandMailbox) [][]*CEPCommandRelay {
+	if len(inits) == 0 || len(mailboxes) == 0 {
+		return nil
+	}
+	pool := make([][]*CEPCommandRelay, 0, len(mailboxes))
+	for weightIdx, mailbox := range mailboxes {
+		scoped := scopeCEPActorInitsForWeight(inits, weightIdx)
+		weightRelays := make([]*CEPCommandRelay, 0, len(scoped))
+		for cepIdx, init := range scoped {
+			relayID := fmt.Sprintf("command_cep_%d_w%d", cepIdx+1, weightIdx+1)
+			targetPID := strings.TrimSpace(init.substratePID)
+			if targetPID == "" && mailbox != nil {
+				targetPID = strings.TrimSpace(mailbox.ID())
+			}
+			weightRelays = append(weightRelays, NewCEPCommandRelay(relayID, targetPID, mailbox))
+		}
+		pool = append(pool, weightRelays)
+	}
+	return pool
+}
+
+func (r *SimpleRuntime) routeCEPCommand(weightIdx int, cepIdx int, command CEPCommand) error {
+	if weightIdx < 0 || weightIdx >= len(r.cepCommandRelays) {
+		return ErrMissingCEPCommandRelay
+	}
+	weightRelays := r.cepCommandRelays[weightIdx]
+	if cepIdx < 0 || cepIdx >= len(weightRelays) {
+		return ErrMissingCEPCommandRelay
+	}
+	relay := weightRelays[cepIdx]
+	if relay == nil {
+		return ErrMissingCEPCommandRelay
+	}
+	if err := relay.Post(command); err != nil {
+		return err
+	}
+	syncID, err := relay.PostSync()
+	if err != nil {
+		return err
+	}
+	if err := relay.AwaitSync(syncID); err != nil {
+		return err
+	}
+	for {
+		nextErr := relay.NextError()
+		if errors.Is(nextErr, ErrCEPCommandRelayNoError) {
+			return nil
+		}
+		if nextErr != nil {
+			return nextErr
+		}
+	}
 }
 
 func (r *SimpleRuntime) postSubstrateCommand(weightIdx int, command CEPCommand) error {

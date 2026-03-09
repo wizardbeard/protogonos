@@ -678,6 +678,24 @@ func TestSimpleRuntimeBuildsPerWeightCEPActorPool(t *testing.T) {
 	if rt.substrateMailboxes[0].ID() == rt.substrateMailboxes[1].ID() {
 		t.Fatalf("expected distinct substrate mailbox IDs per weight, got=%q", rt.substrateMailboxes[0].ID())
 	}
+	if len(rt.cepCommandRelays) != 3 {
+		t.Fatalf("expected cep command relay pool per weight, got=%d", len(rt.cepCommandRelays))
+	}
+	if len(rt.cepCommandRelays[0]) == 0 || rt.cepCommandRelays[0][0] == nil {
+		t.Fatal("expected first weight cep command relay initialized")
+	}
+	if len(rt.cepCommandRelays[1]) == 0 || rt.cepCommandRelays[1][0] == nil {
+		t.Fatal("expected second weight cep command relay initialized")
+	}
+	if rt.cepCommandRelays[0][0] == rt.cepCommandRelays[1][0] {
+		t.Fatal("expected distinct cep command relay instances per weight")
+	}
+	if rt.cepCommandRelays[0][0].ToPID() != rt.substrateMailboxes[0].ID() {
+		t.Fatalf("unexpected first command relay target: got=%q want=%q", rt.cepCommandRelays[0][0].ToPID(), rt.substrateMailboxes[0].ID())
+	}
+	if rt.cepCommandRelays[1][0].ToPID() != rt.substrateMailboxes[1].ID() {
+		t.Fatalf("unexpected second command relay target: got=%q want=%q", rt.cepCommandRelays[1][0].ToPID(), rt.substrateMailboxes[1].ID())
+	}
 }
 
 func TestBuildCEPActorPoolScopesProcessIDsPerWeight(t *testing.T) {
@@ -881,6 +899,27 @@ func TestSimpleRuntimeStepRequiresCEPFaninRelay(t *testing.T) {
 	}
 }
 
+func TestSimpleRuntimeStepRequiresCEPCommandRelay(t *testing.T) {
+	resetRegistriesForTests()
+	t.Cleanup(resetRegistriesForTests)
+
+	rt, err := NewSimpleRuntime(Spec{
+		CPPName: DefaultCPPName,
+		CEPName: DefaultCEPName,
+	}, 1)
+	if err != nil {
+		t.Fatalf("new runtime: %v", err)
+	}
+	if len(rt.cepCommandRelays) == 0 || len(rt.cepCommandRelays[0]) == 0 {
+		t.Fatal("expected cep command relay topology initialized")
+	}
+	rt.cepCommandRelays[0][0] = nil
+
+	if _, err := rt.Step(context.Background(), []float64{1}); !errors.Is(err, ErrMissingCEPCommandRelay) {
+		t.Fatalf("expected ErrMissingCEPCommandRelay, got %v", err)
+	}
+}
+
 func TestCEPFaninRelayMailboxForwardAndTerminate(t *testing.T) {
 	process, err := NewCEPProcessWithID("cep_fanin_relay", DefaultCEPName, nil, []string{"n1"})
 	if err != nil {
@@ -924,6 +963,74 @@ func TestCEPFaninRelayMailboxForwardAndTerminate(t *testing.T) {
 	if _, err := relay.PostSync(); !errors.Is(err, ErrCEPFaninRelayTerminated) {
 		t.Fatalf("expected ErrCEPFaninRelayTerminated from relay post sync after stop, got %v", err)
 	}
+}
+
+func TestCEPCommandRelayMailboxForwardAndTerminate(t *testing.T) {
+	mailbox := newSubstrateCommandMailbox("substrate_w1")
+	relay := NewCEPCommandRelay("command_cep_1_w1", "substrate_w1", mailbox)
+
+	command := CEPCommand{
+		FromPID: "cep_1_w1",
+		ToPID:   "substrate_w1",
+		Command: SetIterativeCEPName,
+		Signal:  []float64{0.5},
+	}
+	if err := relay.Post(command); err != nil {
+		t.Fatalf("relay post: %v", err)
+	}
+	syncID, err := relay.PostSync()
+	if err != nil {
+		t.Fatalf("relay post sync: %v", err)
+	}
+	if err := relay.AwaitSync(syncID); err != nil {
+		t.Fatalf("relay await sync: %v", err)
+	}
+	if err := relay.NextError(); !errors.Is(err, ErrCEPCommandRelayNoError) {
+		t.Fatalf("expected no relay forwarding errors, got %v", err)
+	}
+
+	mailboxSyncID, err := mailbox.PostSync()
+	if err != nil {
+		t.Fatalf("mailbox post sync: %v", err)
+	}
+	if err := mailbox.AwaitSync(mailboxSyncID); err != nil {
+		t.Fatalf("mailbox await sync: %v", err)
+	}
+	commands := mailbox.Drain()
+	if len(commands) != 1 {
+		t.Fatalf("expected one command forwarded through relay, got=%d", len(commands))
+	}
+	if commands[0].FromPID != "cep_1_w1" || commands[0].ToPID != "substrate_w1" {
+		t.Fatalf("unexpected forwarded command envelope: %+v", commands[0])
+	}
+
+	if err := relay.Post(CEPCommand{
+		FromPID: "cep_1_w1",
+		ToPID:   "substrate_wrong",
+		Command: SetIterativeCEPName,
+		Signal:  []float64{0.1},
+	}); err != nil {
+		t.Fatalf("relay post wrong target command: %v", err)
+	}
+	syncID, err = relay.PostSync()
+	if err != nil {
+		t.Fatalf("relay post sync wrong target: %v", err)
+	}
+	if err := relay.AwaitSync(syncID); err != nil {
+		t.Fatalf("relay await sync wrong target: %v", err)
+	}
+	if err := relay.NextError(); !errors.Is(err, ErrUnexpectedCEPCommandTarget) {
+		t.Fatalf("expected ErrUnexpectedCEPCommandTarget relay error, got %v", err)
+	}
+
+	relay.Terminate()
+	if err := relay.Post(command); !errors.Is(err, ErrCEPCommandRelayTerminated) {
+		t.Fatalf("expected ErrCEPCommandRelayTerminated after relay stop, got %v", err)
+	}
+	if _, err := relay.PostSync(); !errors.Is(err, ErrCEPCommandRelayTerminated) {
+		t.Fatalf("expected ErrCEPCommandRelayTerminated from relay post sync after stop, got %v", err)
+	}
+	mailbox.Terminate()
 }
 
 func TestSimpleRuntimeBackupRestoreReset(t *testing.T) {
