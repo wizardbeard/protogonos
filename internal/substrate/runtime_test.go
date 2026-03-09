@@ -302,6 +302,42 @@ func TestSimpleRuntimeSetABCNCEPUsesNamedFanInSignals(t *testing.T) {
 	}
 }
 
+func TestSimpleRuntimeWeightExpressionCEPUsesNamedFanInSignals(t *testing.T) {
+	resetRegistriesForTests()
+	t.Cleanup(resetRegistriesForTests)
+
+	rt, err := NewSimpleRuntime(Spec{
+		CPPName:      DefaultCPPName,
+		CEPName:      WeightExpressionCEPName,
+		CEPFaninPIDs: []string{"n1", "n2"},
+	}, 1)
+	if err != nil {
+		t.Fatalf("new runtime: %v", err)
+	}
+
+	w, err := rt.StepWithFanin(context.Background(), []float64{0, 0}, map[string]float64{
+		"n1": 0.75,
+		"n2": 1,
+	})
+	if err != nil {
+		t.Fatalf("step positive expression: %v", err)
+	}
+	if len(w) != 1 || math.Abs(w[0]-0.75) > 1e-9 {
+		t.Fatalf("unexpected weight_expression result for positive expression, got=%v want=0.75", w)
+	}
+
+	w, err = rt.StepWithFanin(context.Background(), []float64{0, 0}, map[string]float64{
+		"n1": 0.75,
+		"n2": -1,
+	})
+	if err != nil {
+		t.Fatalf("step nonpositive expression: %v", err)
+	}
+	if len(w) != 1 || w[0] != 0 {
+		t.Fatalf("unexpected weight_expression result for nonpositive expression, got=%v want=0", w)
+	}
+}
+
 func TestSimpleRuntimeSetABCNCEPSaturatesReferenceLimit(t *testing.T) {
 	resetRegistriesForTests()
 	t.Cleanup(resetRegistriesForTests)

@@ -7,11 +7,12 @@ import (
 )
 
 const (
-	DefaultCPPName      = "set_weight"
-	DefaultCEPName      = "delta_weight"
-	SetIterativeCEPName = "set_iterative"
-	SetWeightCEPName    = "set_weight"
-	SetABCNCEPName      = "set_abcn"
+	DefaultCPPName          = "set_weight"
+	DefaultCEPName          = "delta_weight"
+	SetIterativeCEPName     = "set_iterative"
+	SetWeightCEPName        = "set_weight"
+	SetABCNCEPName          = "set_abcn"
+	WeightExpressionCEPName = "weight_expression"
 
 	referenceSubstrateWeightLimit = 3.1415
 )
@@ -77,6 +78,25 @@ func (SetABCNCEP) Apply(_ context.Context, current float64, delta float64, param
 		return saturateSubstrateWeight(current + deltaWeight), nil
 	}
 	return saturateSubstrateWeight(current + control), nil
+}
+
+type WeightExpressionCEP struct{}
+
+func (WeightExpressionCEP) Name() string {
+	return WeightExpressionCEPName
+}
+
+func (WeightExpressionCEP) Apply(_ context.Context, _ float64, delta float64, params map[string]float64) (float64, error) {
+	expression := 1.0
+	if params != nil {
+		if value, ok := findParameterValue(params, []string{"expression", "expr"}); ok {
+			expression = value
+		}
+	}
+	if expression <= 0 {
+		return 0, nil
+	}
+	return saturateSubstrateWeight(delta), nil
 }
 
 func cepControlValue(delta float64, params map[string]float64) float64 {
@@ -182,5 +202,8 @@ func initializeDefaultComponents() {
 	}
 	if err := RegisterCEP(SetABCNCEPName, func() CEP { return SetABCNCEP{} }); err != nil {
 		panic(fmt.Errorf("register set_abcn cep: %w", err))
+	}
+	if err := RegisterCEP(WeightExpressionCEPName, func() CEP { return WeightExpressionCEP{} }); err != nil {
+		panic(fmt.Errorf("register weight_expression cep: %w", err))
 	}
 }

@@ -110,6 +110,25 @@ func TestBuildCEPCommandSetABCNPassThrough(t *testing.T) {
 	}
 }
 
+func TestBuildCEPCommandWeightExpressionPassThrough(t *testing.T) {
+	output := []float64{0.75, 1}
+	command, err := BuildCEPCommand(WeightExpressionCEPName, output, nil)
+	if err != nil {
+		t.Fatalf("build weight_expression command: %v", err)
+	}
+	if command.Command != WeightExpressionCEPName {
+		t.Fatalf("unexpected command: %s", command.Command)
+	}
+	if len(command.Signal) != len(output) {
+		t.Fatalf("unexpected weight_expression signal width: got=%d want=%d", len(command.Signal), len(output))
+	}
+	for i := range output {
+		if command.Signal[i] != output[i] {
+			t.Fatalf("unexpected weight_expression signal[%d]: got=%v want=%v", i, command.Signal[i], output[i])
+		}
+	}
+}
+
 func TestApplyCEPCommandSetABCNUsesSignalCoefficients(t *testing.T) {
 	next, err := ApplyCEPCommand(
 		0.0,
@@ -124,6 +143,38 @@ func TestApplyCEPCommandSetABCNUsesSignalCoefficients(t *testing.T) {
 	}
 	if math.Abs(next-0.4) > 1e-9 {
 		t.Fatalf("unexpected set_abcn command result: got=%v want=0.4", next)
+	}
+}
+
+func TestApplyCEPCommandWeightExpression(t *testing.T) {
+	next, err := ApplyCEPCommand(
+		0.0,
+		CEPCommand{
+			Command: WeightExpressionCEPName,
+			Signal:  []float64{10, 1},
+		},
+		nil,
+	)
+	if err != nil {
+		t.Fatalf("apply weight_expression command positive expression: %v", err)
+	}
+	if math.Abs(next-referenceSubstrateWeightLimit) > 1e-9 {
+		t.Fatalf("unexpected positive-expression result: got=%v want=%v", next, referenceSubstrateWeightLimit)
+	}
+
+	next, err = ApplyCEPCommand(
+		0.0,
+		CEPCommand{
+			Command: WeightExpressionCEPName,
+			Signal:  []float64{0.75, -1},
+		},
+		nil,
+	)
+	if err != nil {
+		t.Fatalf("apply weight_expression command nonpositive expression: %v", err)
+	}
+	if next != 0 {
+		t.Fatalf("unexpected nonpositive-expression result: got=%v want=0", next)
 	}
 }
 

@@ -847,7 +847,9 @@ func canUseInputFanInSignals(ceps []CEP) bool {
 		return false
 	}
 	for _, cep := range ceps {
-		if strings.TrimSpace(cep.Name()) != SetABCNCEPName {
+		switch strings.TrimSpace(cep.Name()) {
+		case SetABCNCEPName, WeightExpressionCEPName:
+		default:
 			return false
 		}
 	}
@@ -1297,7 +1299,8 @@ func validateCEPCommandEnvelope(command CEPCommand, expected cepActorInit) error
 }
 
 func resolveCEPProcessFaninPIDs(cepName string, faninPIDs []string) []string {
-	if strings.TrimSpace(cepName) == SetABCNCEPName {
+	switch strings.TrimSpace(cepName) {
+	case SetABCNCEPName, WeightExpressionCEPName:
 		return append([]string(nil), faninPIDs...)
 	}
 	if len(faninPIDs) == 0 {

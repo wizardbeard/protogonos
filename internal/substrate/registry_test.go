@@ -88,3 +88,16 @@ func TestResolveSetIterativeCEPAlias(t *testing.T) {
 		t.Fatalf("expected set_iterative alias to resolve delta_weight behavior, got=%s", cep.Name())
 	}
 }
+
+func TestResolveWeightExpressionCEP(t *testing.T) {
+	resetRegistriesForTests()
+	t.Cleanup(resetRegistriesForTests)
+
+	cep, err := ResolveCEP(WeightExpressionCEPName)
+	if err != nil {
+		t.Fatalf("resolve weight_expression cep: %v", err)
+	}
+	if cep.Name() != WeightExpressionCEPName {
+		t.Fatalf("expected weight_expression CEP name, got=%s", cep.Name())
+	}
+}

@@ -534,6 +534,14 @@ func BuildCEPCommand(cepName string, output []float64, parameters map[string]flo
 			Command: SetABCNCEPName,
 			Signal:  append([]float64(nil), output...),
 		}, nil
+	case WeightExpressionCEPName:
+		if len(output) != 2 {
+			return CEPCommand{}, fmt.Errorf("%w: weight_expression expects 2 signals, got=%d", ErrInvalidCEPOutputWidth, len(output))
+		}
+		return CEPCommand{
+			Command: WeightExpressionCEPName,
+			Signal:  append([]float64(nil), output...),
+		}, nil
 	case DefaultCEPName, SetIterativeCEPName:
 		if len(output) != 1 {
 			return CEPCommand{}, fmt.Errorf("%w: delta_weight expects 1 signal, got=%d", ErrInvalidCEPOutputWidth, len(output))
@@ -575,6 +583,14 @@ func ApplyCEPCommand(current float64, command CEPCommand, parameters map[string]
 			params["N"] = command.Signal[4]
 		}
 		return (SetABCNCEP{}).Apply(nil, current, command.Signal[0], params)
+	case WeightExpressionCEPName:
+		if len(command.Signal) != 2 {
+			return 0, fmt.Errorf("%w: weight_expression expects 2 signals, got=%d", ErrInvalidCEPOutputWidth, len(command.Signal))
+		}
+		if command.Signal[1] > 0 {
+			return saturateSubstrateWeight(command.Signal[0]), nil
+		}
+		return 0, nil
 	default:
 		return 0, fmt.Errorf("%w: %s", ErrUnsupportedCEPCommand, command.Command)
 	}
