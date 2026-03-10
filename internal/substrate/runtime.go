@@ -1344,7 +1344,13 @@ func resolveCEPChain(spec Spec) ([]CEP, error) {
 		if name == "" {
 			name = DefaultCEPName
 		}
-		cepNames = append(cepNames, name)
+		cepCount := countNonEmptyStrings(spec.CEPIDs)
+		if cepCount == 0 {
+			cepCount = 1
+		}
+		for i := 0; i < cepCount; i++ {
+			cepNames = append(cepNames, name)
+		}
 	}
 
 	ceps := make([]CEP, 0, len(cepNames))
@@ -1356,4 +1362,15 @@ func resolveCEPChain(spec Spec) ([]CEP, error) {
 		ceps = append(ceps, cep)
 	}
 	return ceps, nil
+}
+
+func countNonEmptyStrings(values []string) int {
+	count := 0
+	for _, value := range values {
+		if strings.TrimSpace(value) == "" {
+			continue
+		}
+		count++
+	}
+	return count
 }

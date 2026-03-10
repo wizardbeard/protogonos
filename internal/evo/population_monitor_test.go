@@ -1688,6 +1688,46 @@ func TestPopulationMonitorBuildSubstrateUsesCEPNamesChain(t *testing.T) {
 	}
 }
 
+func TestPopulationMonitorBuildSubstrateExpandsCEPChainFromCEPIDs(t *testing.T) {
+	monitor, err := NewPopulationMonitor(MonitorConfig{
+		Scape:           oneDimScape{},
+		Mutation:        PerturbWeightAt{Index: 0, Delta: 0},
+		PopulationSize:  1,
+		EliteCount:      1,
+		Generations:     1,
+		Workers:         1,
+		Seed:            1,
+		InputNeuronIDs:  []string{"i"},
+		OutputNeuronIDs: []string{"o"},
+	})
+	if err != nil {
+		t.Fatalf("new monitor: %v", err)
+	}
+
+	rt, err := monitor.buildSubstrate(model.Genome{
+		ID: "sub-ids-chain-0",
+		Substrate: &model.SubstrateConfig{
+			CPPName: substrate.DefaultCPPName,
+			CEPName: substrate.DefaultCEPName,
+			CEPIDs:  []string{"cep_1", "cep_2"},
+		},
+	})
+	if err != nil {
+		t.Fatalf("build substrate: %v", err)
+	}
+	if rt == nil {
+		t.Fatal("expected substrate runtime")
+	}
+
+	w, err := rt.Step(context.Background(), []float64{1})
+	if err != nil {
+		t.Fatalf("step: %v", err)
+	}
+	if len(w) != 1 || w[0] != 2 {
+		t.Fatalf("expected delta chain expanded from cep ids to produce 2, got=%v", w)
+	}
+}
+
 func TestPopulationMonitorBuildSubstrateDerivesCEPFaninFromGenomeLinks(t *testing.T) {
 	cppName := "pm_vector_cpp_cep_fanin"
 	if err := substrate.RegisterCPP(cppName, func() substrate.CPP {

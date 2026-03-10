@@ -1710,3 +1710,28 @@ func TestBuildReplaySubstrateUsesCEPNamesChain(t *testing.T) {
 		t.Fatalf("expected set->delta chain result 2, got=%v", w)
 	}
 }
+
+func TestBuildReplaySubstrateExpandsCEPChainFromCEPIDs(t *testing.T) {
+	rt, err := buildReplaySubstrate(model.Genome{
+		ID: "replay-sub-ids-chain-0",
+		Substrate: &model.SubstrateConfig{
+			CPPName: internalsubstrate.DefaultCPPName,
+			CEPName: internalsubstrate.DefaultCEPName,
+			CEPIDs:  []string{"cep_1", "cep_2"},
+		},
+	}, []string{"o"})
+	if err != nil {
+		t.Fatalf("build replay substrate: %v", err)
+	}
+	if rt == nil {
+		t.Fatal("expected replay substrate runtime")
+	}
+
+	w, err := rt.Step(context.Background(), []float64{1})
+	if err != nil {
+		t.Fatalf("step replay substrate: %v", err)
+	}
+	if len(w) != 1 || w[0] != 2 {
+		t.Fatalf("expected delta chain expanded from cep ids to produce 2, got=%v", w)
+	}
+}

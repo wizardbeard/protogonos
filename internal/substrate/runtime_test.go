@@ -447,6 +447,56 @@ func TestSimpleRuntimeCEPChainAppliesInOrder(t *testing.T) {
 	}
 }
 
+func TestResolveCEPChainExpandsPrimaryCEPByCEPIDs(t *testing.T) {
+	resetRegistriesForTests()
+	t.Cleanup(resetRegistriesForTests)
+
+	chain, err := resolveCEPChain(Spec{
+		CEPName: DefaultCEPName,
+		CEPIDs:  []string{"cep_a", "cep_b", ""},
+	})
+	if err != nil {
+		t.Fatalf("resolve cep chain: %v", err)
+	}
+	if len(chain) != 2 {
+		t.Fatalf("expected cep chain length from non-empty cep ids, got=%d", len(chain))
+	}
+	if chain[0].Name() != DefaultCEPName || chain[1].Name() != DefaultCEPName {
+		t.Fatalf("unexpected expanded cep chain names: %q %q", chain[0].Name(), chain[1].Name())
+	}
+}
+
+func TestSimpleRuntimeExpandsPrimaryCEPByCEPIDs(t *testing.T) {
+	resetRegistriesForTests()
+	t.Cleanup(resetRegistriesForTests)
+
+	rt, err := NewSimpleRuntime(Spec{
+		CPPName: DefaultCPPName,
+		CEPName: DefaultCEPName,
+		CEPIDs:  []string{"cep_1", "cep_2"},
+	}, 1)
+	if err != nil {
+		t.Fatalf("new runtime: %v", err)
+	}
+	if len(rt.ceps) != 2 {
+		t.Fatalf("expected expanded cep chain length 2, got=%d", len(rt.ceps))
+	}
+	if len(rt.cepActorInits) != 2 {
+		t.Fatalf("expected actor init count to follow expanded cep chain, got=%d", len(rt.cepActorInits))
+	}
+	if rt.cepActorInits[0].id != "cep_1" || rt.cepActorInits[1].id != "cep_2" {
+		t.Fatalf("unexpected expanded cep actor ids: %q %q", rt.cepActorInits[0].id, rt.cepActorInits[1].id)
+	}
+
+	w, err := rt.Step(context.Background(), []float64{1})
+	if err != nil {
+		t.Fatalf("step: %v", err)
+	}
+	if len(w) != 1 || w[0] != 2 {
+		t.Fatalf("expected two-stage delta chain from cep ids to produce 2, got=%v", w)
+	}
+}
+
 func TestSimpleRuntimeFallbackForCustomCEP(t *testing.T) {
 	resetRegistriesForTests()
 	t.Cleanup(resetRegistriesForTests)
