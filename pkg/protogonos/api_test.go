@@ -1736,6 +1736,32 @@ func TestBuildReplaySubstrateExpandsCEPChainFromCEPIDs(t *testing.T) {
 	}
 }
 
+func TestBuildReplaySubstrateExpandsSingularCEPNamesByCEPIDs(t *testing.T) {
+	rt, err := buildReplaySubstrate(model.Genome{
+		ID: "replay-sub-singular-chain-0",
+		Substrate: &model.SubstrateConfig{
+			CPPName:  internalsubstrate.DefaultCPPName,
+			CEPName:  internalsubstrate.DefaultCEPName,
+			CEPNames: []string{internalsubstrate.SetWeightCEPName},
+			CEPIDs:   []string{"cep_1", "cep_2"},
+		},
+	}, []string{"o"})
+	if err != nil {
+		t.Fatalf("build replay substrate: %v", err)
+	}
+	if rt == nil {
+		t.Fatal("expected replay substrate runtime")
+	}
+
+	w, err := rt.Step(context.Background(), []float64{1})
+	if err != nil {
+		t.Fatalf("step replay substrate: %v", err)
+	}
+	if len(w) != 1 || w[0] != 1 {
+		t.Fatalf("expected singular cep-name chain expanded by cep ids to remain 1, got=%v", w)
+	}
+}
+
 func TestBuildReplaySubstrateKeepsOutputFallbackOverCPPIDs(t *testing.T) {
 	rt, err := buildReplaySubstrate(model.Genome{
 		ID: "replay-sub-cpp-fanin-0",

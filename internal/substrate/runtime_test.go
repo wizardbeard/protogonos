@@ -500,6 +500,28 @@ func TestResolveCEPChainExpandsPrimaryCEPByCEPIDs(t *testing.T) {
 	}
 }
 
+func TestResolveCEPChainExpandsSingularCEPNamesByCEPIDs(t *testing.T) {
+	resetRegistriesForTests()
+	t.Cleanup(resetRegistriesForTests)
+
+	chain, err := resolveCEPChain(Spec{
+		CEPName:  DefaultCEPName,
+		CEPNames: []string{SetWeightCEPName},
+		CEPIDs:   []string{"cep_a", "cep_b", "cep_c"},
+	})
+	if err != nil {
+		t.Fatalf("resolve cep chain: %v", err)
+	}
+	if len(chain) != 3 {
+		t.Fatalf("expected expanded cep chain length from cep ids, got=%d", len(chain))
+	}
+	for i, cep := range chain {
+		if cep.Name() != SetWeightCEPName {
+			t.Fatalf("unexpected cep chain name at idx=%d, got=%q want=%q", i, cep.Name(), SetWeightCEPName)
+		}
+	}
+}
+
 func TestSimpleRuntimeExpandsPrimaryCEPByCEPIDs(t *testing.T) {
 	resetRegistriesForTests()
 	t.Cleanup(resetRegistriesForTests)
@@ -528,6 +550,35 @@ func TestSimpleRuntimeExpandsPrimaryCEPByCEPIDs(t *testing.T) {
 	}
 	if len(w) != 1 || w[0] != 2 {
 		t.Fatalf("expected two-stage delta chain from cep ids to produce 2, got=%v", w)
+	}
+}
+
+func TestSimpleRuntimeExpandsSingularCEPNamesByCEPIDs(t *testing.T) {
+	resetRegistriesForTests()
+	t.Cleanup(resetRegistriesForTests)
+
+	rt, err := NewSimpleRuntime(Spec{
+		CPPName:  DefaultCPPName,
+		CEPName:  DefaultCEPName,
+		CEPNames: []string{SetWeightCEPName},
+		CEPIDs:   []string{"cep_1", "cep_2"},
+	}, 1)
+	if err != nil {
+		t.Fatalf("new runtime: %v", err)
+	}
+	if len(rt.ceps) != 2 {
+		t.Fatalf("expected expanded cep chain length 2 from cep ids, got=%d", len(rt.ceps))
+	}
+	if rt.ceps[0].Name() != SetWeightCEPName || rt.ceps[1].Name() != SetWeightCEPName {
+		t.Fatalf("unexpected expanded singular cep-names chain: %q %q", rt.ceps[0].Name(), rt.ceps[1].Name())
+	}
+
+	w, err := rt.Step(context.Background(), []float64{1})
+	if err != nil {
+		t.Fatalf("step: %v", err)
+	}
+	if len(w) != 1 || w[0] != 1 {
+		t.Fatalf("expected two-stage set-weight chain to remain 1, got=%v", w)
 	}
 }
 

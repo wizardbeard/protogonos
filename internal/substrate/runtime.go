@@ -1353,17 +1353,22 @@ func resolveCEPChain(spec Spec) ([]CEP, error) {
 		}
 		cepNames = append(cepNames, trimmed)
 	}
+	cepCount := countNonEmptyStrings(spec.CEPIDs)
 	if len(cepNames) == 0 {
 		name := strings.TrimSpace(spec.CEPName)
 		if name == "" {
 			name = DefaultCEPName
 		}
-		cepCount := countNonEmptyStrings(spec.CEPIDs)
 		if cepCount == 0 {
 			cepCount = 1
 		}
 		for i := 0; i < cepCount; i++ {
 			cepNames = append(cepNames, name)
+		}
+	} else if cepCount > len(cepNames) {
+		fallbackName := cepNames[len(cepNames)-1]
+		for len(cepNames) < cepCount {
+			cepNames = append(cepNames, fallbackName)
 		}
 	}
 
