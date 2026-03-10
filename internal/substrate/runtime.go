@@ -62,7 +62,7 @@ func NewSimpleRuntime(spec Spec, weightCount int) (*SimpleRuntime, error) {
 		params[k] = v
 	}
 	cepFaninPIDsByCEP := normalizeCEPFaninPIDsByCEP(spec.CEPFaninPIDsByCEP)
-	cepFaninPIDs := resolveGlobalCEPFaninPIDs(spec.CEPFaninPIDs, cepFaninPIDsByCEP)
+	cepFaninPIDs := resolveGlobalCEPFaninPIDs(spec.CEPFaninPIDs, cepFaninPIDsByCEP, spec.CPPIDs)
 	cepActorInits, cepProcessFaninPIDs, err := buildCEPActorInits(ceps, params, cepFaninPIDs, cepFaninPIDsByCEP, spec.CEPIDs)
 	if err != nil {
 		return nil, err
@@ -829,7 +829,7 @@ func normalizeCEPFaninPIDsByCEP(raw [][]string) [][]string {
 	return out
 }
 
-func resolveGlobalCEPFaninPIDs(global []string, byCEP [][]string) []string {
+func resolveGlobalCEPFaninPIDs(global []string, byCEP [][]string, cppIDs []string) []string {
 	if trimmed := trimCEPFaninPIDs(global); len(trimmed) > 0 {
 		return trimmed
 	}
@@ -839,7 +839,21 @@ func resolveGlobalCEPFaninPIDs(global []string, byCEP [][]string) []string {
 		}
 		return append([]string(nil), fanin...)
 	}
+	if cppID := firstNonEmptyString(cppIDs); cppID != "" {
+		return []string{cppID}
+	}
 	return []string{runtimeCPPProcessID}
+}
+
+func firstNonEmptyString(values []string) string {
+	for _, value := range values {
+		trimmed := strings.TrimSpace(value)
+		if trimmed == "" {
+			continue
+		}
+		return trimmed
+	}
+	return ""
 }
 
 func canUseInputFanInSignals(ceps []CEP) bool {

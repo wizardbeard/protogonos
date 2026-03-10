@@ -1728,6 +1728,52 @@ func TestPopulationMonitorBuildSubstrateExpandsCEPChainFromCEPIDs(t *testing.T) 
 	}
 }
 
+func TestPopulationMonitorBuildSubstrateKeepsOutputFallbackOverCPPIDs(t *testing.T) {
+	monitor, err := NewPopulationMonitor(MonitorConfig{
+		Scape:           oneDimScape{},
+		Mutation:        PerturbWeightAt{Index: 0, Delta: 0},
+		PopulationSize:  1,
+		EliteCount:      1,
+		Generations:     1,
+		Workers:         1,
+		Seed:            1,
+		InputNeuronIDs:  []string{"i"},
+		OutputNeuronIDs: []string{"o"},
+	})
+	if err != nil {
+		t.Fatalf("new monitor: %v", err)
+	}
+
+	rt, err := monitor.buildSubstrate(model.Genome{
+		ID: "sub-cpp-fanin-0",
+		Substrate: &model.SubstrateConfig{
+			CPPName:     substrate.DefaultCPPName,
+			CPPIDs:      []string{"cpp_endpoint_1"},
+			CEPName:     substrate.DefaultCEPName,
+			WeightCount: 1,
+		},
+	})
+	if err != nil {
+		t.Fatalf("build substrate: %v", err)
+	}
+	if rt == nil {
+		t.Fatal("expected substrate runtime")
+	}
+	faninRT, ok := rt.(substrate.FaninRuntime)
+	if !ok {
+		t.Fatalf("expected fanin-capable runtime, got %T", rt)
+	}
+	w, err := faninRT.StepWithFanin(context.Background(), []float64{0}, map[string]float64{
+		"o": 1,
+	})
+	if err != nil {
+		t.Fatalf("step with output fallback fan-in: %v", err)
+	}
+	if len(w) != 1 || w[0] != 1 {
+		t.Fatalf("expected output fallback fan-in to drive update to 1, got=%v", w)
+	}
+}
+
 func TestPopulationMonitorBuildSubstrateDerivesCEPFaninFromGenomeLinks(t *testing.T) {
 	cppName := "pm_vector_cpp_cep_fanin"
 	if err := substrate.RegisterCPP(cppName, func() substrate.CPP {

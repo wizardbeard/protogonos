@@ -1960,6 +1960,7 @@ func (m *PopulationMonitor) buildSubstrate(genome model.Genome) (substrate.Runti
 	}
 	spec := substrate.Spec{
 		CPPName:           cfg.CPPName,
+		CPPIDs:            append([]string(nil), cfg.CPPIDs...),
 		CEPName:           cfg.CEPName,
 		CEPNames:          append([]string(nil), cfg.CEPNames...),
 		CEPIDs:            append([]string(nil), cfg.CEPIDs...),

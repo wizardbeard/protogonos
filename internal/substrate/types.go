@@ -23,6 +23,7 @@ type CEP interface {
 // Spec configures a substrate runtime instance.
 type Spec struct {
 	CPPName           string
+	CPPIDs            []string
 	CEPName           string
 	CEPNames          []string
 	CEPIDs            []string

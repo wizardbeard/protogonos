@@ -412,6 +412,13 @@ func TestSimpleRuntimeValidation(t *testing.T) {
 	}
 }
 
+func TestResolveGlobalCEPFaninPIDsUsesCPPIDsFallback(t *testing.T) {
+	got := resolveGlobalCEPFaninPIDs(nil, nil, []string{"", "cpp_endpoint_1", "cpp_endpoint_2"})
+	if len(got) != 1 || got[0] != "cpp_endpoint_1" {
+		t.Fatalf("expected cpp-id fallback fan-in pid, got=%v", got)
+	}
+}
+
 func TestSimpleRuntimeCEPChainAppliesInOrder(t *testing.T) {
 	resetRegistriesForTests()
 	t.Cleanup(resetRegistriesForTests)
@@ -444,6 +451,33 @@ func TestSimpleRuntimeCEPChainAppliesInOrder(t *testing.T) {
 	}
 	if len(w2) != 1 || w2[0] != 1 {
 		t.Fatalf("expected delta->set chain to produce 1, got=%v", w2)
+	}
+}
+
+func TestSimpleRuntimeUsesConfiguredCPPIDAsDefaultFaninPID(t *testing.T) {
+	resetRegistriesForTests()
+	t.Cleanup(resetRegistriesForTests)
+
+	rt, err := NewSimpleRuntime(Spec{
+		CPPName: DefaultCPPName,
+		CPPIDs:  []string{"cpp_endpoint_1"},
+		CEPName: DefaultCEPName,
+	}, 1)
+	if err != nil {
+		t.Fatalf("new runtime: %v", err)
+	}
+	if len(rt.cepFaninPIDs) != 1 || rt.cepFaninPIDs[0] != "cpp_endpoint_1" {
+		t.Fatalf("expected runtime fan-in pid from cpp ids, got=%v", rt.cepFaninPIDs)
+	}
+
+	w, err := rt.StepWithFanin(context.Background(), []float64{0}, map[string]float64{
+		"cpp_endpoint_1": 1,
+	})
+	if err != nil {
+		t.Fatalf("step with named cpp fan-in pid: %v", err)
+	}
+	if len(w) != 1 || w[0] != 1 {
+		t.Fatalf("expected named cpp fan-in pid to drive update to 1, got=%v", w)
 	}
 }
 

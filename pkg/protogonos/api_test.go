@@ -1735,3 +1735,34 @@ func TestBuildReplaySubstrateExpandsCEPChainFromCEPIDs(t *testing.T) {
 		t.Fatalf("expected delta chain expanded from cep ids to produce 2, got=%v", w)
 	}
 }
+
+func TestBuildReplaySubstrateKeepsOutputFallbackOverCPPIDs(t *testing.T) {
+	rt, err := buildReplaySubstrate(model.Genome{
+		ID: "replay-sub-cpp-fanin-0",
+		Substrate: &model.SubstrateConfig{
+			CPPName:     internalsubstrate.DefaultCPPName,
+			CPPIDs:      []string{"cpp_endpoint_1"},
+			CEPName:     internalsubstrate.DefaultCEPName,
+			WeightCount: 1,
+		},
+	}, []string{"o"})
+	if err != nil {
+		t.Fatalf("build replay substrate: %v", err)
+	}
+	if rt == nil {
+		t.Fatal("expected replay substrate runtime")
+	}
+	faninRT, ok := rt.(internalsubstrate.FaninRuntime)
+	if !ok {
+		t.Fatalf("expected fanin-capable runtime, got %T", rt)
+	}
+	w, err := faninRT.StepWithFanin(context.Background(), []float64{0}, map[string]float64{
+		"o": 1,
+	})
+	if err != nil {
+		t.Fatalf("step replay substrate with output fallback fan-in: %v", err)
+	}
+	if len(w) != 1 || w[0] != 1 {
+		t.Fatalf("expected output fallback fan-in update to 1, got=%v", w)
+	}
+}
