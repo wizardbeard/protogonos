@@ -302,6 +302,40 @@ func TestSimpleRuntimeSetABCNCEPUsesNamedFanInSignals(t *testing.T) {
 	}
 }
 
+func TestSimpleRuntimeSetABCNCEPPersistsSignalCoefficientsAcrossCEPStages(t *testing.T) {
+	resetRegistriesForTests()
+	t.Cleanup(resetRegistriesForTests)
+
+	rt, err := NewSimpleRuntime(Spec{
+		CPPName: DefaultCPPName,
+		CEPNames: []string{
+			SetABCNCEPName,
+			SetABCNCEPName,
+		},
+		CEPFaninPIDsByCEP: [][]string{
+			{"n1", "n2", "n3", "n4", "n5"},
+			{"n1"},
+		},
+	}, 1)
+	if err != nil {
+		t.Fatalf("new runtime: %v", err)
+	}
+
+	w, err := rt.StepWithFanin(context.Background(), []float64{0, 0, 0, 0, 0}, map[string]float64{
+		"n1": 1,
+		"n2": 0.2,
+		"n3": 0.5,
+		"n4": -0.1,
+		"n5": 0.8,
+	})
+	if err != nil {
+		t.Fatalf("step 1: %v", err)
+	}
+	if len(w) != 1 || math.Abs(w[0]-0.832) > 1e-9 {
+		t.Fatalf("unexpected persisted-coefficient set_abcn stage update, got=%v want=0.832", w)
+	}
+}
+
 func TestSimpleRuntimeWeightExpressionCEPUsesNamedFanInSignals(t *testing.T) {
 	resetRegistriesForTests()
 	t.Cleanup(resetRegistriesForTests)
@@ -690,8 +724,8 @@ func TestSimpleRuntimeCEPChainUsesPerCEPFanInConfig(t *testing.T) {
 	if err != nil {
 		t.Fatalf("step: %v", err)
 	}
-	if len(w) != 1 || math.Abs(w[0]-1.4) > 1e-9 {
-		t.Fatalf("unexpected per-cep fan-in chain update, got=%v want=1.4", w)
+	if len(w) != 1 || math.Abs(w[0]-0.832) > 1e-9 {
+		t.Fatalf("unexpected per-cep fan-in chain update, got=%v want=0.832", w)
 	}
 }
 

@@ -36,6 +36,7 @@ type SimpleRuntime struct {
 	cepProcessFaninPIDs [][]string
 	cepFaninPIDs        []string
 	params              map[string]float64
+	weightParams        []map[string]float64
 	weights             []float64
 	backup              []float64
 	terminated          bool
@@ -78,6 +79,10 @@ func NewSimpleRuntime(spec Spec, weightCount int) (*SimpleRuntime, error) {
 	if len(cepActorPool) > 0 {
 		cepActors = cepActorPool[0]
 	}
+	weightParams := make([]map[string]float64, weightCount)
+	for i := range weightParams {
+		weightParams[i] = cloneFloatMap(params)
+	}
 	return &SimpleRuntime{
 		cpp:                 cpp,
 		ceps:                ceps,
@@ -90,6 +95,7 @@ func NewSimpleRuntime(spec Spec, weightCount int) (*SimpleRuntime, error) {
 		cepProcessFaninPIDs: cepProcessFaninPIDs,
 		cepFaninPIDs:        append([]string(nil), cepFaninPIDs...),
 		params:              params,
+		weightParams:        weightParams,
 		weights:             make([]float64, weightCount),
 	}, nil
 }
@@ -1311,12 +1317,20 @@ func (r *SimpleRuntime) applySubstrateMailbox(weightIdx int, current float64) (f
 		return 0, err
 	}
 	next := current
+	parameters := cloneFloatMap(r.params)
+	if weightIdx >= 0 && weightIdx < len(r.weightParams) && len(r.weightParams[weightIdx]) > 0 {
+		parameters = cloneFloatMap(r.weightParams[weightIdx])
+	}
 	for _, command := range mailbox.Drain() {
-		updated, applyErr := ApplyCEPCommand(next, command, r.params)
+		updated, nextParams, applyErr := ApplyCEPCommandWithParameters(next, command, parameters)
 		if applyErr != nil {
 			return 0, applyErr
 		}
 		next = updated
+		parameters = nextParams
+	}
+	if weightIdx >= 0 && weightIdx < len(r.weightParams) {
+		r.weightParams[weightIdx] = cloneFloatMap(parameters)
 	}
 	return next, nil
 }

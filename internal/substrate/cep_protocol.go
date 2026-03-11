@@ -557,42 +557,48 @@ func BuildCEPCommand(cepName string, output []float64, parameters map[string]flo
 }
 
 func ApplyCEPCommand(current float64, command CEPCommand, parameters map[string]float64) (float64, error) {
+	next, _, err := ApplyCEPCommandWithParameters(current, command, parameters)
+	return next, err
+}
+
+func ApplyCEPCommandWithParameters(current float64, command CEPCommand, parameters map[string]float64) (float64, map[string]float64, error) {
+	persistentParams := cloneFloatMap(parameters)
 	switch strings.TrimSpace(command.Command) {
 	case SetWeightCEPName:
 		if len(command.Signal) != 1 {
-			return 0, fmt.Errorf("%w: set_weight expects 1 signal, got=%d", ErrInvalidCEPOutputWidth, len(command.Signal))
+			return 0, persistentParams, fmt.Errorf("%w: set_weight expects 1 signal, got=%d", ErrInvalidCEPOutputWidth, len(command.Signal))
 		}
-		return saturateSubstrateWeight(command.Signal[0]), nil
+		return saturateSubstrateWeight(command.Signal[0]), persistentParams, nil
 	case SetIterativeCEPName, DefaultCEPName:
 		if len(command.Signal) != 1 {
-			return 0, fmt.Errorf("%w: set_iterative expects 1 signal, got=%d", ErrInvalidCEPOutputWidth, len(command.Signal))
+			return 0, persistentParams, fmt.Errorf("%w: set_iterative expects 1 signal, got=%d", ErrInvalidCEPOutputWidth, len(command.Signal))
 		}
-		return saturateSubstrateWeight(current + command.Signal[0]), nil
+		return saturateSubstrateWeight(current + command.Signal[0]), persistentParams, nil
 	case SetABCNCEPName:
 		if len(command.Signal) == 0 {
-			return 0, fmt.Errorf("%w: set_abcn expects at least 1 signal, got=0", ErrInvalidCEPOutputWidth)
+			return 0, persistentParams, fmt.Errorf("%w: set_abcn expects at least 1 signal, got=0", ErrInvalidCEPOutputWidth)
 		}
-		params := cloneFloatMap(parameters)
 		if len(command.Signal) >= 5 {
-			if params == nil {
-				params = map[string]float64{}
+			if persistentParams == nil {
+				persistentParams = map[string]float64{}
 			}
-			params["A"] = command.Signal[1]
-			params["B"] = command.Signal[2]
-			params["C"] = command.Signal[3]
-			params["N"] = command.Signal[4]
+			persistentParams["A"] = command.Signal[1]
+			persistentParams["B"] = command.Signal[2]
+			persistentParams["C"] = command.Signal[3]
+			persistentParams["N"] = command.Signal[4]
 		}
-		return (SetABCNCEP{}).Apply(nil, current, command.Signal[0], params)
+		next, err := (SetABCNCEP{}).Apply(nil, current, command.Signal[0], persistentParams)
+		return next, persistentParams, err
 	case WeightExpressionCEPName:
 		if len(command.Signal) != 2 {
-			return 0, fmt.Errorf("%w: weight_expression expects 2 signals, got=%d", ErrInvalidCEPOutputWidth, len(command.Signal))
+			return 0, persistentParams, fmt.Errorf("%w: weight_expression expects 2 signals, got=%d", ErrInvalidCEPOutputWidth, len(command.Signal))
 		}
 		if command.Signal[1] > 0 {
-			return saturateSubstrateWeight(command.Signal[0]), nil
+			return saturateSubstrateWeight(command.Signal[0]), persistentParams, nil
 		}
-		return 0, nil
+		return 0, persistentParams, nil
 	default:
-		return 0, fmt.Errorf("%w: %s", ErrUnsupportedCEPCommand, command.Command)
+		return 0, persistentParams, fmt.Errorf("%w: %s", ErrUnsupportedCEPCommand, command.Command)
 	}
 }
 

@@ -146,6 +146,47 @@ func TestApplyCEPCommandSetABCNUsesSignalCoefficients(t *testing.T) {
 	}
 }
 
+func TestApplyCEPCommandWithParametersSetABCNPersistsSignalCoefficients(t *testing.T) {
+	current := 0.0
+	params := map[string]float64{}
+
+	next, updated, err := ApplyCEPCommandWithParameters(
+		current,
+		CEPCommand{
+			Command: SetABCNCEPName,
+			Signal:  []float64{1, 0.2, 0.5, -0.1, 0.8},
+		},
+		params,
+	)
+	if err != nil {
+		t.Fatalf("apply set_abcn command with coefficients: %v", err)
+	}
+	if math.Abs(next-0.4) > 1e-9 {
+		t.Fatalf("unexpected coefficient update result: got=%v want=0.4", next)
+	}
+	if updated["A"] != 0.2 || updated["B"] != 0.5 || updated["C"] != -0.1 || updated["N"] != 0.8 {
+		t.Fatalf("expected coefficient parameters to persist, got=%v", updated)
+	}
+
+	next, updated, err = ApplyCEPCommandWithParameters(
+		next,
+		CEPCommand{
+			Command: SetABCNCEPName,
+			Signal:  []float64{1},
+		},
+		updated,
+	)
+	if err != nil {
+		t.Fatalf("apply set_abcn command with persisted coefficients: %v", err)
+	}
+	if math.Abs(next-0.832) > 1e-9 {
+		t.Fatalf("unexpected persisted-coefficient update result: got=%v want=0.832", next)
+	}
+	if updated["A"] != 0.2 || updated["B"] != 0.5 || updated["C"] != -0.1 || updated["N"] != 0.8 {
+		t.Fatalf("expected coefficient parameters to remain persisted, got=%v", updated)
+	}
+}
+
 func TestApplyCEPCommandWeightExpression(t *testing.T) {
 	next, err := ApplyCEPCommand(
 		0.0,
