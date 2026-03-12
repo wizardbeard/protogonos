@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"math"
+	"reflect"
 	"testing"
 )
 
@@ -453,6 +454,19 @@ func TestResolveGlobalCEPFaninPIDsUsesCPPIDsFallback(t *testing.T) {
 	}
 }
 
+func TestResolveGlobalCEPFaninPIDsFlattensPerCEPUnion(t *testing.T) {
+	got := resolveGlobalCEPFaninPIDs(nil, [][]string{
+		{"n2", "n1"},
+		{"n1", "o1"},
+		{"", "o2"},
+		nil,
+	}, nil)
+	want := []string{"n2", "n1", "o1", "o2"}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("unexpected flattened global fan-in ids: got=%v want=%v", got, want)
+	}
+}
+
 func TestSimpleRuntimeCEPChainAppliesInOrder(t *testing.T) {
 	resetRegistriesForTests()
 	t.Cleanup(resetRegistriesForTests)
@@ -726,6 +740,39 @@ func TestSimpleRuntimeCEPChainUsesPerCEPFanInConfig(t *testing.T) {
 	}
 	if len(w) != 1 || math.Abs(w[0]-0.832) > 1e-9 {
 		t.Fatalf("unexpected per-cep fan-in chain update, got=%v want=0.832", w)
+	}
+}
+
+func TestSimpleRuntimeStepWithFaninUsesFlattenedPerCEPFanInUnion(t *testing.T) {
+	resetRegistriesForTests()
+	t.Cleanup(resetRegistriesForTests)
+
+	rt, err := NewSimpleRuntime(Spec{
+		CPPName: DefaultCPPName,
+		CEPNames: []string{
+			WeightExpressionCEPName,
+			WeightExpressionCEPName,
+		},
+		CEPFaninPIDsByCEP: [][]string{
+			{"n1", "n2"},
+			{"n3", "n4"},
+		},
+	}, 1)
+	if err != nil {
+		t.Fatalf("new runtime: %v", err)
+	}
+
+	w, err := rt.StepWithFanin(context.Background(), []float64{0, 0, 0, 0}, map[string]float64{
+		"n1": 0.5,
+		"n2": 1.0,
+		"n3": 0.75,
+		"n4": 1.0,
+	})
+	if err != nil {
+		t.Fatalf("step with flattened per-cep fan-in union: %v", err)
+	}
+	if len(w) != 1 || math.Abs(w[0]-0.75) > 1e-9 {
+		t.Fatalf("unexpected flattened per-cep fan-in union result, got=%v want=0.75", w)
 	}
 }
 

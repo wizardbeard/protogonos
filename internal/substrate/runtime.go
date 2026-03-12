@@ -845,16 +845,38 @@ func resolveGlobalCEPFaninPIDs(global []string, byCEP [][]string, cppIDs []strin
 	if trimmed := trimCEPFaninPIDs(global); len(trimmed) > 0 {
 		return trimmed
 	}
-	for _, fanin := range byCEP {
-		if len(fanin) == 0 {
-			continue
-		}
-		return append([]string(nil), fanin...)
+	if flattened := flattenCEPFaninPIDsByCEP(byCEP); len(flattened) > 0 {
+		return flattened
 	}
 	if cppID := firstNonEmptyString(cppIDs); cppID != "" {
 		return []string{cppID}
 	}
 	return []string{runtimeCPPProcessID}
+}
+
+func flattenCEPFaninPIDsByCEP(byCEP [][]string) []string {
+	if len(byCEP) == 0 {
+		return nil
+	}
+	seen := map[string]struct{}{}
+	out := make([]string, 0)
+	for _, fanin := range byCEP {
+		for _, pid := range fanin {
+			trimmed := strings.TrimSpace(pid)
+			if trimmed == "" {
+				continue
+			}
+			if _, exists := seen[trimmed]; exists {
+				continue
+			}
+			seen[trimmed] = struct{}{}
+			out = append(out, trimmed)
+		}
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
 }
 
 func firstNonEmptyString(values []string) string {
