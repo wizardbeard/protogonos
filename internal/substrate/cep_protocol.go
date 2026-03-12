@@ -613,6 +613,17 @@ func cloneFloatMap(in map[string]float64) map[string]float64 {
 	return out
 }
 
+func cloneWeightParamSet(in []map[string]float64) []map[string]float64 {
+	if len(in) == 0 {
+		return nil
+	}
+	out := make([]map[string]float64, len(in))
+	for i := range in {
+		out[i] = cloneFloatMap(in[i])
+	}
+	return out
+}
+
 func reverseFloatSlice(values []float64) []float64 {
 	if len(values) == 0 {
 		return nil

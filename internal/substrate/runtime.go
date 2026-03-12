@@ -39,6 +39,7 @@ type SimpleRuntime struct {
 	weightParams        []map[string]float64
 	weights             []float64
 	backup              []float64
+	backupWeightParams  []map[string]float64
 	terminated          bool
 }
 
@@ -272,6 +273,7 @@ func (r *SimpleRuntime) Weights() []float64 {
 
 func (r *SimpleRuntime) Backup() {
 	r.backup = r.Weights()
+	r.backupWeightParams = cloneWeightParamSet(r.weightParams)
 }
 
 func (r *SimpleRuntime) Restore() error {
@@ -282,12 +284,16 @@ func (r *SimpleRuntime) Restore() error {
 		r.weights = make([]float64, len(r.backup))
 	}
 	copy(r.weights, r.backup)
+	r.weightParams = cloneWeightParamSet(r.backupWeightParams)
 	return nil
 }
 
 func (r *SimpleRuntime) Reset() {
 	for i := range r.weights {
 		r.weights[i] = 0
+	}
+	for i := range r.weightParams {
+		r.weightParams[i] = cloneFloatMap(r.params)
 	}
 }
 

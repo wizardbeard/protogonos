@@ -1352,6 +1352,102 @@ func TestSimpleRuntimeRestoreRequiresBackup(t *testing.T) {
 	}
 }
 
+func TestSimpleRuntimeBackupRestoreIncludesPersistentWeightParameters(t *testing.T) {
+	resetRegistriesForTests()
+	t.Cleanup(resetRegistriesForTests)
+
+	rt, err := NewSimpleRuntime(Spec{
+		CPPName:      DefaultCPPName,
+		CEPName:      SetABCNCEPName,
+		CEPFaninPIDs: []string{"n1", "n2", "n3", "n4", "n5"},
+	}, 1)
+	if err != nil {
+		t.Fatalf("new runtime: %v", err)
+	}
+
+	first, err := rt.StepWithFanin(context.Background(), []float64{0, 0, 0, 0, 0}, map[string]float64{
+		"n1": 1,
+		"n2": 0.2,
+		"n3": 0.5,
+		"n4": -0.1,
+		"n5": 0.8,
+	})
+	if err != nil {
+		t.Fatalf("step with initial coefficients: %v", err)
+	}
+	if len(first) != 1 || math.Abs(first[0]-0.4) > 1e-9 {
+		t.Fatalf("unexpected initial weight update: got=%v want=0.4", first)
+	}
+
+	rt.Backup()
+
+	second, err := rt.StepWithFanin(context.Background(), []float64{0, 0, 0, 0, 0}, map[string]float64{
+		"n1": 1,
+		"n2": 1.0,
+		"n3": 0.0,
+		"n4": 0.0,
+		"n5": 1.0,
+	})
+	if err != nil {
+		t.Fatalf("step with replacement coefficients: %v", err)
+	}
+	if len(second) != 1 || math.Abs(second[0]-0.8) > 1e-9 {
+		t.Fatalf("unexpected replacement-coefficient update: got=%v want=0.8", second)
+	}
+
+	if err := rt.Restore(); err != nil {
+		t.Fatalf("restore: %v", err)
+	}
+	if len(rt.weightParams) != 1 {
+		t.Fatalf("expected one restored weight-parameter set, got=%d", len(rt.weightParams))
+	}
+	restored := rt.weightParams[0]
+	if restored["A"] != 0.2 || restored["B"] != 0.5 || restored["C"] != -0.1 || restored["N"] != 0.8 {
+		t.Fatalf("expected restore to recover persisted coefficients, got=%v", restored)
+	}
+}
+
+func TestSimpleRuntimeResetClearsPersistentWeightParametersToBaseConfig(t *testing.T) {
+	resetRegistriesForTests()
+	t.Cleanup(resetRegistriesForTests)
+
+	rt, err := NewSimpleRuntime(Spec{
+		CPPName:      DefaultCPPName,
+		CEPName:      SetABCNCEPName,
+		CEPFaninPIDs: []string{"n1", "n2", "n3", "n4", "n5"},
+	}, 1)
+	if err != nil {
+		t.Fatalf("new runtime: %v", err)
+	}
+
+	updated, err := rt.StepWithFanin(context.Background(), []float64{0, 0, 0, 0, 0}, map[string]float64{
+		"n1": 1,
+		"n2": 0.2,
+		"n3": 0.5,
+		"n4": -0.1,
+		"n5": 0.8,
+	})
+	if err != nil {
+		t.Fatalf("step with coefficient update: %v", err)
+	}
+	if len(updated) != 1 || math.Abs(updated[0]-0.4) > 1e-9 {
+		t.Fatalf("unexpected coefficient update result: got=%v want=0.4", updated)
+	}
+
+	rt.Reset()
+
+	resetWeights := rt.Weights()
+	if len(resetWeights) != 1 || resetWeights[0] != 0 {
+		t.Fatalf("expected reset weights to be zeroed, got=%v", resetWeights)
+	}
+	if len(rt.weightParams) != 1 {
+		t.Fatalf("expected one reset weight-parameter set, got=%d", len(rt.weightParams))
+	}
+	if rt.weightParams[0] != nil {
+		t.Fatalf("expected reset to clear persisted coefficients back to base config, got=%v", rt.weightParams[0])
+	}
+}
+
 func TestSimpleRuntimeTerminateBlocksStep(t *testing.T) {
 	resetRegistriesForTests()
 	t.Cleanup(resetRegistriesForTests)
