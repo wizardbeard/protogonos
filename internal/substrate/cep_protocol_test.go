@@ -110,6 +110,15 @@ func TestBuildCEPCommandSetABCNPassThrough(t *testing.T) {
 	}
 }
 
+func TestBuildCEPCommandSetABCNRejectsMalformedWidths(t *testing.T) {
+	for _, width := range []int{0, 2, 3, 4, 6} {
+		output := make([]float64, width)
+		if _, err := BuildCEPCommand(SetABCNCEPName, output, nil); !errors.Is(err, ErrInvalidCEPOutputWidth) {
+			t.Fatalf("expected ErrInvalidCEPOutputWidth for set_abcn width=%d, got %v", width, err)
+		}
+	}
+}
+
 func TestBuildCEPCommandWeightExpressionPassThrough(t *testing.T) {
 	output := []float64{0.75, 1}
 	command, err := BuildCEPCommand(WeightExpressionCEPName, output, nil)
@@ -143,6 +152,18 @@ func TestApplyCEPCommandSetABCNUsesSignalCoefficients(t *testing.T) {
 	}
 	if math.Abs(next-0.4) > 1e-9 {
 		t.Fatalf("unexpected set_abcn command result: got=%v want=0.4", next)
+	}
+}
+
+func TestApplyCEPCommandSetABCNRejectsMalformedWidths(t *testing.T) {
+	for _, width := range []int{0, 2, 3, 4, 6} {
+		command := CEPCommand{
+			Command: SetABCNCEPName,
+			Signal:  make([]float64, width),
+		}
+		if _, err := ApplyCEPCommand(0, command, nil); !errors.Is(err, ErrInvalidCEPOutputWidth) {
+			t.Fatalf("expected ErrInvalidCEPOutputWidth for set_abcn width=%d, got %v", width, err)
+		}
 	}
 }
 
@@ -220,7 +241,7 @@ func TestApplyCEPCommandWeightExpression(t *testing.T) {
 }
 
 func TestCEPProcessForwardOrderedFanIn(t *testing.T) {
-	p, err := NewCEPProcessWithID("cep_test", SetABCNCEPName, nil, []string{"n1", "n2"})
+	p, err := NewCEPProcessWithID("cep_test", WeightExpressionCEPName, nil, []string{"n1", "n2"})
 	if err != nil {
 		t.Fatalf("new cep process: %v", err)
 	}
@@ -238,7 +259,7 @@ func TestCEPProcessForwardOrderedFanIn(t *testing.T) {
 	if !ready {
 		t.Fatal("expected ready command after full fan-in cycle")
 	}
-	if command.Command != SetABCNCEPName {
+	if command.Command != WeightExpressionCEPName {
 		t.Fatalf("unexpected command: %s", command.Command)
 	}
 	if command.FromPID != "cep_test" {
@@ -271,7 +292,7 @@ func TestCEPProcessAssignsDefaultID(t *testing.T) {
 }
 
 func TestCEPProcessBuffersOutOfOrderFanIn(t *testing.T) {
-	p, err := NewCEPProcess(SetABCNCEPName, nil, []string{"n1", "n2"})
+	p, err := NewCEPProcess(WeightExpressionCEPName, nil, []string{"n1", "n2"})
 	if err != nil {
 		t.Fatalf("new cep process: %v", err)
 	}
@@ -290,7 +311,7 @@ func TestCEPProcessBuffersOutOfOrderFanIn(t *testing.T) {
 		t.Fatal("expected ready command after matching expected sender catches up")
 	}
 	if len(command.Signal) != 2 || command.Signal[0] != 0.2 || command.Signal[1] != 0.8 {
-		t.Fatalf("unexpected set_abcn signal from buffered out-of-order fan-in: %+v", command.Signal)
+		t.Fatalf("unexpected weight_expression signal from buffered out-of-order fan-in: %+v", command.Signal)
 	}
 }
 
@@ -308,7 +329,7 @@ func TestCEPProcessIgnoresUnknownSender(t *testing.T) {
 }
 
 func TestCEPProcessRetainsUnmatchedMailboxMessages(t *testing.T) {
-	p, err := NewCEPProcessWithID("cep_pending_mailbox", SetABCNCEPName, nil, []string{"n1", "n2"})
+	p, err := NewCEPProcessWithID("cep_pending_mailbox", WeightExpressionCEPName, nil, []string{"n1", "n2"})
 	if err != nil {
 		t.Fatalf("new cep process: %v", err)
 	}
@@ -416,7 +437,7 @@ func TestCEPProcessRejectsInvalidMessageType(t *testing.T) {
 }
 
 func TestCEPActorForwardRoundTrip(t *testing.T) {
-	process, err := NewCEPProcessWithID("cep_actor_test", SetABCNCEPName, nil, []string{"n1", "n2"})
+	process, err := NewCEPProcessWithID("cep_actor_test", WeightExpressionCEPName, nil, []string{"n1", "n2"})
 	if err != nil {
 		t.Fatalf("new cep process: %v", err)
 	}
@@ -438,7 +459,7 @@ func TestCEPActorForwardRoundTrip(t *testing.T) {
 	if !ready {
 		t.Fatal("expected ready command after completing fan-in cycle")
 	}
-	if command.FromPID != "cep_actor_test" || command.Command != SetABCNCEPName {
+	if command.FromPID != "cep_actor_test" || command.Command != WeightExpressionCEPName {
 		t.Fatalf("unexpected command envelope: %+v", command)
 	}
 	if len(command.Signal) != 2 || command.Signal[0] != 0.2 || command.Signal[1] != 0.8 {
@@ -447,7 +468,7 @@ func TestCEPActorForwardRoundTrip(t *testing.T) {
 }
 
 func TestCEPActorCommandOutbox(t *testing.T) {
-	process, err := NewCEPProcessWithID("cep_actor_outbox", SetABCNCEPName, nil, []string{"n1", "n2"})
+	process, err := NewCEPProcessWithID("cep_actor_outbox", WeightExpressionCEPName, nil, []string{"n1", "n2"})
 	if err != nil {
 		t.Fatalf("new cep process: %v", err)
 	}
@@ -471,7 +492,7 @@ func TestCEPActorCommandOutbox(t *testing.T) {
 	if err != nil {
 		t.Fatalf("next command: %v", err)
 	}
-	if command.FromPID != "cep_actor_outbox" || command.Command != SetABCNCEPName {
+	if command.FromPID != "cep_actor_outbox" || command.Command != WeightExpressionCEPName {
 		t.Fatalf("unexpected outbox command envelope: %+v", command)
 	}
 	if len(command.Signal) != 2 || command.Signal[0] != 0.2 || command.Signal[1] != 0.8 {

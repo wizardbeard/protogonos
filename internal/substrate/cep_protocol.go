@@ -530,6 +530,9 @@ func BuildCEPCommand(cepName string, output []float64, parameters map[string]flo
 			Signal:  []float64{weight},
 		}, nil
 	case SetABCNCEPName:
+		if !isValidSetABCNWidth(len(output)) {
+			return CEPCommand{}, fmt.Errorf("%w: set_abcn expects 1 or 5 signals, got=%d", ErrInvalidCEPOutputWidth, len(output))
+		}
 		return CEPCommand{
 			Command: SetABCNCEPName,
 			Signal:  append([]float64(nil), output...),
@@ -575,8 +578,8 @@ func ApplyCEPCommandWithParameters(current float64, command CEPCommand, paramete
 		}
 		return saturateSubstrateWeight(current + command.Signal[0]), persistentParams, nil
 	case SetABCNCEPName:
-		if len(command.Signal) == 0 {
-			return 0, persistentParams, fmt.Errorf("%w: set_abcn expects at least 1 signal, got=0", ErrInvalidCEPOutputWidth)
+		if !isValidSetABCNWidth(len(command.Signal)) {
+			return 0, persistentParams, fmt.Errorf("%w: set_abcn expects 1 or 5 signals, got=%d", ErrInvalidCEPOutputWidth, len(command.Signal))
 		}
 		if len(command.Signal) >= 5 {
 			if persistentParams == nil {
@@ -611,6 +614,10 @@ func cloneFloatMap(in map[string]float64) map[string]float64 {
 		out[k] = v
 	}
 	return out
+}
+
+func isValidSetABCNWidth(width int) bool {
+	return width == 1 || width == 5
 }
 
 func cloneWeightParamSet(in []map[string]float64) []map[string]float64 {

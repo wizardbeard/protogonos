@@ -1030,7 +1030,7 @@ func TestBuildCEPActorsInitializesFromPayloadState(t *testing.T) {
 	actors, err := buildCEPActors([]cepActorInit{{
 		id:           "cep_payload_bootstrap",
 		substratePID: "substrate_payload",
-		cepName:      SetABCNCEPName,
+		cepName:      WeightExpressionCEPName,
 		faninPIDs:    []string{"n1", "n2"},
 	}})
 	if err != nil {
@@ -1062,7 +1062,7 @@ func TestBuildCEPActorsInitializesFromPayloadState(t *testing.T) {
 	if err != nil {
 		t.Fatalf("next command: %v", err)
 	}
-	if command.FromPID != "cep_payload_bootstrap" || command.Command != SetABCNCEPName {
+	if command.FromPID != "cep_payload_bootstrap" || command.Command != WeightExpressionCEPName {
 		t.Fatalf("unexpected command envelope: %+v", command)
 	}
 	if command.ToPID != "substrate_payload" {
