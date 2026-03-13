@@ -64,7 +64,7 @@ func NewSimpleRuntime(spec Spec, weightCount int) (*SimpleRuntime, error) {
 		params[k] = v
 	}
 	cepFaninPIDsByCEP := normalizeCEPFaninPIDsByCEP(spec.CEPFaninPIDsByCEP)
-	cepFaninPIDs := resolveGlobalCEPFaninPIDs(spec.CEPFaninPIDs, cepFaninPIDsByCEP, spec.CPPIDs)
+	cepFaninPIDs := resolveGlobalCEPFaninPIDs(spec.CEPFaninPIDs, cepFaninPIDsByCEP, spec.CPPIDs, ceps)
 	cepActorInits, cepProcessFaninPIDs, err := buildCEPActorInits(ceps, params, cepFaninPIDs, cepFaninPIDsByCEP, spec.CEPIDs)
 	if err != nil {
 		return nil, err
@@ -841,15 +841,15 @@ func normalizeCEPFaninPIDsByCEP(raw [][]string) [][]string {
 	return out
 }
 
-func resolveGlobalCEPFaninPIDs(global []string, byCEP [][]string, cppIDs []string) []string {
+func resolveGlobalCEPFaninPIDs(global []string, byCEP [][]string, cppIDs []string, ceps []CEP) []string {
 	if trimmed := trimCEPFaninPIDs(global); len(trimmed) > 0 {
 		return trimmed
 	}
 	if flattened := flattenCEPFaninPIDsByCEP(byCEP); len(flattened) > 0 {
 		return flattened
 	}
-	if cppID := firstNonEmptyString(cppIDs); cppID != "" {
-		return []string{cppID}
+	if fallback := resolveCPPFallbackFaninPIDs(cppIDs, ceps); len(fallback) > 0 {
+		return fallback
 	}
 	return []string{runtimeCPPProcessID}
 }
@@ -890,6 +890,17 @@ func firstNonEmptyString(values []string) string {
 	return ""
 }
 
+func resolveCPPFallbackFaninPIDs(cppIDs []string, ceps []CEP) []string {
+	trimmed := trimCEPFaninPIDs(cppIDs)
+	if len(trimmed) == 0 {
+		return nil
+	}
+	if requiresMultiSignalFanin(ceps) {
+		return trimmed
+	}
+	return []string{trimmed[0]}
+}
+
 func canUseInputFanInSignals(ceps []CEP) bool {
 	if len(ceps) == 0 {
 		return false
@@ -902,6 +913,19 @@ func canUseInputFanInSignals(ceps []CEP) bool {
 		}
 	}
 	return true
+}
+
+func requiresMultiSignalFanin(ceps []CEP) bool {
+	if len(ceps) == 0 {
+		return false
+	}
+	for _, cep := range ceps {
+		switch strings.TrimSpace(cep.Name()) {
+		case SetABCNCEPName, WeightExpressionCEPName:
+			return true
+		}
+	}
+	return false
 }
 
 type cepActorInit struct {

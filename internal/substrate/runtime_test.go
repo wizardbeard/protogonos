@@ -448,7 +448,7 @@ func TestSimpleRuntimeValidation(t *testing.T) {
 }
 
 func TestResolveGlobalCEPFaninPIDsUsesCPPIDsFallback(t *testing.T) {
-	got := resolveGlobalCEPFaninPIDs(nil, nil, []string{"", "cpp_endpoint_1", "cpp_endpoint_2"})
+	got := resolveGlobalCEPFaninPIDs(nil, nil, []string{"", "cpp_endpoint_1", "cpp_endpoint_2"}, []CEP{DeltaWeightCEP{}})
 	if len(got) != 1 || got[0] != "cpp_endpoint_1" {
 		t.Fatalf("expected cpp-id fallback fan-in pid, got=%v", got)
 	}
@@ -460,10 +460,18 @@ func TestResolveGlobalCEPFaninPIDsFlattensPerCEPUnion(t *testing.T) {
 		{"n1", "o1"},
 		{"", "o2"},
 		nil,
-	}, nil)
+	}, nil, nil)
 	want := []string{"n2", "n1", "o1", "o2"}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("unexpected flattened global fan-in ids: got=%v want=%v", got, want)
+	}
+}
+
+func TestResolveGlobalCEPFaninPIDsUsesAllCPPIDsForMultiSignalCEP(t *testing.T) {
+	got := resolveGlobalCEPFaninPIDs(nil, nil, []string{"", "cpp_endpoint_1", "cpp_endpoint_2"}, []CEP{WeightExpressionCEP{}})
+	want := []string{"cpp_endpoint_1", "cpp_endpoint_2"}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("unexpected cpp-id multi-signal fallback fan-in ids: got=%v want=%v", got, want)
 	}
 }
 
@@ -526,6 +534,35 @@ func TestSimpleRuntimeUsesConfiguredCPPIDAsDefaultFaninPID(t *testing.T) {
 	}
 	if len(w) != 1 || w[0] != 1 {
 		t.Fatalf("expected named cpp fan-in pid to drive update to 1, got=%v", w)
+	}
+}
+
+func TestSimpleRuntimeUsesAllConfiguredCPPIDsForMultiSignalCEP(t *testing.T) {
+	resetRegistriesForTests()
+	t.Cleanup(resetRegistriesForTests)
+
+	rt, err := NewSimpleRuntime(Spec{
+		CPPName: DefaultCPPName,
+		CPPIDs:  []string{"cpp_endpoint_1", "cpp_endpoint_2"},
+		CEPName: WeightExpressionCEPName,
+	}, 1)
+	if err != nil {
+		t.Fatalf("new runtime: %v", err)
+	}
+	wantFanin := []string{"cpp_endpoint_1", "cpp_endpoint_2"}
+	if !reflect.DeepEqual(rt.cepFaninPIDs, wantFanin) {
+		t.Fatalf("expected runtime multi-signal fan-in ids from cpp ids, got=%v want=%v", rt.cepFaninPIDs, wantFanin)
+	}
+
+	w, err := rt.StepWithFanin(context.Background(), []float64{0, 0}, map[string]float64{
+		"cpp_endpoint_1": 0.75,
+		"cpp_endpoint_2": 1.0,
+	})
+	if err != nil {
+		t.Fatalf("step with named cpp fan-in ids: %v", err)
+	}
+	if len(w) != 1 || math.Abs(w[0]-0.75) > 1e-9 {
+		t.Fatalf("expected multi-signal cpp fan-in ids to drive update to 0.75, got=%v", w)
 	}
 }
 
