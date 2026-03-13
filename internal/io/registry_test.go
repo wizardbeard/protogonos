@@ -32,6 +32,22 @@ func TestRegisterAndResolveSensor(t *testing.T) {
 	}
 }
 
+func TestRegisterAndResolveSensorTrimsNames(t *testing.T) {
+	resetRegistriesForTests()
+	t.Cleanup(resetRegistriesForTests)
+
+	if err := RegisterSensor("  s-trim  ", func() Sensor { return testSensor{} }); err != nil {
+		t.Fatalf("register trimmed sensor: %v", err)
+	}
+	s, err := ResolveSensor(" s-trim ", "xor")
+	if err != nil {
+		t.Fatalf("resolve trimmed sensor: %v", err)
+	}
+	if s.Name() != "test-sensor" {
+		t.Fatalf("unexpected trimmed sensor: %s", s.Name())
+	}
+}
+
 func TestRegisterAndResolveActuator(t *testing.T) {
 	resetRegistriesForTests()
 	t.Cleanup(resetRegistriesForTests)
@@ -45,6 +61,22 @@ func TestRegisterAndResolveActuator(t *testing.T) {
 	}
 	if a.Name() != "test-actuator" {
 		t.Fatalf("unexpected actuator: %s", a.Name())
+	}
+}
+
+func TestRegisterAndResolveActuatorTrimsNames(t *testing.T) {
+	resetRegistriesForTests()
+	t.Cleanup(resetRegistriesForTests)
+
+	if err := RegisterActuator("  a-trim  ", func() Actuator { return testActuator{} }); err != nil {
+		t.Fatalf("register trimmed actuator: %v", err)
+	}
+	a, err := ResolveActuator(" a-trim ", "xor")
+	if err != nil {
+		t.Fatalf("resolve trimmed actuator: %v", err)
+	}
+	if a.Name() != "test-actuator" {
+		t.Fatalf("unexpected trimmed actuator: %s", a.Name())
 	}
 }
 
@@ -64,11 +96,17 @@ func TestRegistryValidationAndDuplicates(t *testing.T) {
 	if err := RegisterSensor("dup", func() Sensor { return testSensor{} }); !errors.Is(err, ErrSensorExists) {
 		t.Fatalf("expected ErrSensorExists, got: %v", err)
 	}
+	if err := RegisterSensor(" dup ", func() Sensor { return testSensor{} }); !errors.Is(err, ErrSensorExists) {
+		t.Fatalf("expected ErrSensorExists for spaced sensor duplicate, got: %v", err)
+	}
 	if err := RegisterActuator("dup", func() Actuator { return testActuator{} }); err != nil {
 		t.Fatalf("register actuator: %v", err)
 	}
 	if err := RegisterActuator("dup", func() Actuator { return testActuator{} }); !errors.Is(err, ErrActuatorExists) {
 		t.Fatalf("expected ErrActuatorExists, got: %v", err)
+	}
+	if err := RegisterActuator(" dup ", func() Actuator { return testActuator{} }); !errors.Is(err, ErrActuatorExists) {
+		t.Fatalf("expected ErrActuatorExists for spaced actuator duplicate, got: %v", err)
 	}
 }
 

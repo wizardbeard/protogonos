@@ -84,6 +84,7 @@ func RegisterSensor(name string, factory SensorFactory) error {
 }
 
 func RegisterSensorWithSpec(spec SensorSpec) error {
+	spec.Name = strings.TrimSpace(spec.Name)
 	if spec.Name == "" {
 		return errors.New("sensor name is required")
 	}
@@ -110,6 +111,7 @@ func RegisterSensorWithSpec(spec SensorSpec) error {
 }
 
 func ResolveSensor(name, scape string) (Sensor, error) {
+	name = strings.TrimSpace(name)
 	sensorRegistry.mu.RLock()
 	entry, ok := sensorRegistry.m[name]
 	sensorRegistry.mu.RUnlock()
@@ -183,6 +185,7 @@ func RegisterActuator(name string, factory ActuatorFactory) error {
 }
 
 func RegisterActuatorWithSpec(spec ActuatorSpec) error {
+	spec.Name = strings.TrimSpace(spec.Name)
 	if spec.Name == "" {
 		return errors.New("actuator name is required")
 	}
