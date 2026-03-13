@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"sort"
+	"strings"
 	"sync"
 )
 
@@ -32,6 +33,7 @@ var cepRegistry = struct {
 }
 
 func RegisterCPP(name string, factory CPPFactory) error {
+	name = strings.TrimSpace(name)
 	if name == "" {
 		return errors.New("cpp name is required")
 	}
@@ -49,6 +51,7 @@ func RegisterCPP(name string, factory CPPFactory) error {
 }
 
 func ResolveCPP(name string) (CPP, error) {
+	name = strings.TrimSpace(name)
 	cppRegistry.mu.RLock()
 	factory, ok := cppRegistry.m[name]
 	cppRegistry.mu.RUnlock()
@@ -70,6 +73,7 @@ func ListCPPs() []string {
 }
 
 func RegisterCEP(name string, factory CEPFactory) error {
+	name = strings.TrimSpace(name)
 	if name == "" {
 		return errors.New("cep name is required")
 	}
@@ -87,6 +91,7 @@ func RegisterCEP(name string, factory CEPFactory) error {
 }
 
 func ResolveCEP(name string) (CEP, error) {
+	name = strings.TrimSpace(name)
 	cepRegistry.mu.RLock()
 	factory, ok := cepRegistry.m[name]
 	cepRegistry.mu.RUnlock()

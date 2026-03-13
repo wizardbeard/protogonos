@@ -36,6 +36,22 @@ func TestRegisterAndResolveCPP(t *testing.T) {
 	}
 }
 
+func TestRegisterAndResolveCPPTrimsNames(t *testing.T) {
+	resetRegistriesForTests()
+	t.Cleanup(resetRegistriesForTests)
+
+	if err := RegisterCPP("  trimmed-cpp  ", func() CPP { return testCPP{} }); err != nil {
+		t.Fatalf("register cpp with spaces: %v", err)
+	}
+	cpp, err := ResolveCPP(" trimmed-cpp ")
+	if err != nil {
+		t.Fatalf("resolve trimmed cpp: %v", err)
+	}
+	if cpp.Name() != "test-cpp" {
+		t.Fatalf("unexpected trimmed cpp: %s", cpp.Name())
+	}
+}
+
 func TestRegisterAndResolveCEP(t *testing.T) {
 	resetRegistriesForTests()
 	t.Cleanup(resetRegistriesForTests)
@@ -49,6 +65,22 @@ func TestRegisterAndResolveCEP(t *testing.T) {
 	}
 	if cep.Name() != "test-cep" {
 		t.Fatalf("unexpected cep: %s", cep.Name())
+	}
+}
+
+func TestRegisterAndResolveCEPTrimsNames(t *testing.T) {
+	resetRegistriesForTests()
+	t.Cleanup(resetRegistriesForTests)
+
+	if err := RegisterCEP("  trimmed-cep  ", func() CEP { return testCEP{} }); err != nil {
+		t.Fatalf("register cep with spaces: %v", err)
+	}
+	cep, err := ResolveCEP(" trimmed-cep ")
+	if err != nil {
+		t.Fatalf("resolve trimmed cep: %v", err)
+	}
+	if cep.Name() != "test-cep" {
+		t.Fatalf("unexpected trimmed cep: %s", cep.Name())
 	}
 }
 
@@ -68,11 +100,17 @@ func TestRegistryValidationAndDuplicates(t *testing.T) {
 	if err := RegisterCPP("dup", func() CPP { return testCPP{} }); !errors.Is(err, ErrCPPExists) {
 		t.Fatalf("expected ErrCPPExists, got: %v", err)
 	}
+	if err := RegisterCPP(" dup ", func() CPP { return testCPP{} }); !errors.Is(err, ErrCPPExists) {
+		t.Fatalf("expected ErrCPPExists for spaced cpp duplicate, got: %v", err)
+	}
 	if err := RegisterCEP("dup", func() CEP { return testCEP{} }); err != nil {
 		t.Fatalf("register cep dup: %v", err)
 	}
 	if err := RegisterCEP("dup", func() CEP { return testCEP{} }); !errors.Is(err, ErrCEPExists) {
 		t.Fatalf("expected ErrCEPExists, got: %v", err)
+	}
+	if err := RegisterCEP(" dup ", func() CEP { return testCEP{} }); !errors.Is(err, ErrCEPExists) {
+		t.Fatalf("expected ErrCEPExists for spaced cep duplicate, got: %v", err)
 	}
 }
 
