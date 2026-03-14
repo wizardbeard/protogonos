@@ -28,6 +28,14 @@ type SeedPopulationOptions struct {
 	// resolves to "scanner". Supported values: "balanced5" (default),
 	// "core3", and "forward5".
 	FlatlandScannerProfile string
+
+	// GTSAProfile controls the GTSA seed scaffold.
+	// Supported values: "default" (full) and "core".
+	GTSAProfile string
+
+	// FXProfile controls the FX seed scaffold.
+	// Supported values: "default" (full) and "market".
+	FXProfile string
 }
 
 const (
@@ -36,6 +44,10 @@ const (
 	FlatlandScannerSeedProfileBalanced5 = "balanced5"
 	FlatlandScannerSeedProfileCore3     = "core3"
 	FlatlandScannerSeedProfileForward5  = "forward5"
+	GTSASeedProfileDefault              = "default"
+	GTSASeedProfileCore                 = "core"
+	FXSeedProfileDefault                = "default"
+	FXSeedProfileMarket                 = "market"
 )
 
 func ConstructSeedPopulation(scapeName string, size int, seed int64) (SeedPopulation, error) {
@@ -78,17 +90,9 @@ func ConstructSeedPopulationWithOptions(scapeName string, size int, seed int64, 
 			OutputNeuronIDs: []string{"m"},
 		}, nil
 	case "gtsa":
-		return SeedPopulation{
-			Genomes:         seedGTSAPopulation(size, seed),
-			InputNeuronIDs:  []string{"x", "d", "w", "p"},
-			OutputNeuronIDs: []string{"y"},
-		}, nil
+		return constructGTSASeedPopulation(size, seed, options)
 	case "fx":
-		return SeedPopulation{
-			Genomes:         seedFXPopulation(size, seed),
-			InputNeuronIDs:  []string{"p", "s", "m", "v", "n", "d", "q", "e", "pc", "ppc", "pr"},
-			OutputNeuronIDs: []string{"t"},
-		}, nil
+		return constructFXSeedPopulation(size, seed, options)
 	case "epitopes":
 		return SeedPopulation{
 			Genomes:         seedEpitopesPopulation(size, seed),
@@ -157,6 +161,32 @@ func normalizeFlatlandScannerSeedProfile(raw string) string {
 	}
 }
 
+func normalizeGTSASeedProfile(raw string) string {
+	profile := strings.ToLower(strings.TrimSpace(raw))
+	profile = strings.ReplaceAll(profile, "_", "-")
+	switch profile {
+	case "", "default", "full", "all", "workflow":
+		return GTSASeedProfileDefault
+	case "core", "minimal", "legacy":
+		return GTSASeedProfileCore
+	default:
+		return profile
+	}
+}
+
+func normalizeFXSeedProfile(raw string) string {
+	profile := strings.ToLower(strings.TrimSpace(raw))
+	profile = strings.ReplaceAll(profile, "_", "-")
+	switch profile {
+	case "", "default", "full", "all", "workflow":
+		return FXSeedProfileDefault
+	case "market", "minimal", "legacy":
+		return FXSeedProfileMarket
+	default:
+		return profile
+	}
+}
+
 func resolveFlatlandScannerSeedProfile(raw string) (string, error) {
 	profile := normalizeFlatlandScannerSeedProfile(raw)
 	switch profile {
@@ -164,6 +194,44 @@ func resolveFlatlandScannerSeedProfile(raw string) (string, error) {
 		return profile, nil
 	default:
 		return "", fmt.Errorf("unsupported flatland scanner profile: %s", raw)
+	}
+}
+
+func constructGTSASeedPopulation(size int, seed int64, options SeedPopulationOptions) (SeedPopulation, error) {
+	switch normalizeGTSASeedProfile(options.GTSAProfile) {
+	case GTSASeedProfileDefault:
+		return SeedPopulation{
+			Genomes:         seedGTSAPopulation(size, seed),
+			InputNeuronIDs:  []string{"x", "d", "w", "p"},
+			OutputNeuronIDs: []string{"y"},
+		}, nil
+	case GTSASeedProfileCore:
+		return SeedPopulation{
+			Genomes:         seedGTSAPopulationCore(size, seed),
+			InputNeuronIDs:  []string{"x"},
+			OutputNeuronIDs: []string{"y"},
+		}, nil
+	default:
+		return SeedPopulation{}, fmt.Errorf("unsupported gtsa seed profile: %s", options.GTSAProfile)
+	}
+}
+
+func constructFXSeedPopulation(size int, seed int64, options SeedPopulationOptions) (SeedPopulation, error) {
+	switch normalizeFXSeedProfile(options.FXProfile) {
+	case FXSeedProfileDefault:
+		return SeedPopulation{
+			Genomes:         seedFXPopulation(size, seed),
+			InputNeuronIDs:  []string{"p", "s", "m", "v", "n", "d", "q", "e", "pc", "ppc", "pr"},
+			OutputNeuronIDs: []string{"t"},
+		}, nil
+	case FXSeedProfileMarket:
+		return SeedPopulation{
+			Genomes:         seedFXPopulationMarket(size, seed),
+			InputNeuronIDs:  []string{"p", "s"},
+			OutputNeuronIDs: []string{"t"},
+		}, nil
+	default:
+		return SeedPopulation{}, fmt.Errorf("unsupported fx seed profile: %s", options.FXProfile)
 	}
 }
 
@@ -608,6 +676,29 @@ func seedGTSAPopulation(size int, seed int64) []model.Genome {
 	return population
 }
 
+func seedGTSAPopulationCore(size int, seed int64) []model.Genome {
+	rng := rand.New(rand.NewSource(seed))
+	population := make([]model.Genome, 0, size)
+	for i := 0; i < size; i++ {
+		population = append(population, model.Genome{
+			VersionedRecord: model.VersionedRecord{SchemaVersion: storage.CurrentSchemaVersion, CodecVersion: storage.CurrentCodecVersion},
+			ID:              fmt.Sprintf("gtsa-g0-%d", i),
+			SensorIDs: []string{
+				protoio.GTSAInputSensorName,
+			},
+			ActuatorIDs: []string{protoio.GTSAPredictActuatorName},
+			Neurons: []model.Neuron{
+				{ID: "x", Activation: "identity", Bias: 0},
+				{ID: "y", Activation: "identity", Bias: jitter(rng, 0.3)},
+			},
+			Synapses: []model.Synapse{
+				{ID: "s1", From: "x", To: "y", Weight: jitter(rng, 1.0), Enabled: true},
+			},
+		})
+	}
+	return population
+}
+
 func seedFXPopulation(size int, seed int64) []model.Genome {
 	rng := rand.New(rand.NewSource(seed))
 	population := make([]model.Genome, 0, size)
@@ -655,6 +746,32 @@ func seedFXPopulation(size int, seed int64) []model.Genome {
 				{ID: "s9", From: "pc", To: "t", Weight: 0.45 + jitter(rng, 0.10), Enabled: true},
 				{ID: "s10", From: "ppc", To: "t", Weight: 0.30 + jitter(rng, 0.10), Enabled: true},
 				{ID: "s11", From: "pr", To: "t", Weight: 0.35 + jitter(rng, 0.10), Enabled: true},
+			},
+		})
+	}
+	return population
+}
+
+func seedFXPopulationMarket(size int, seed int64) []model.Genome {
+	rng := rand.New(rand.NewSource(seed))
+	population := make([]model.Genome, 0, size)
+	for i := 0; i < size; i++ {
+		population = append(population, model.Genome{
+			VersionedRecord: model.VersionedRecord{SchemaVersion: storage.CurrentSchemaVersion, CodecVersion: storage.CurrentCodecVersion},
+			ID:              fmt.Sprintf("fx-g0-%d", i),
+			SensorIDs: []string{
+				protoio.FXPriceSensorName,
+				protoio.FXSignalSensorName,
+			},
+			ActuatorIDs: []string{protoio.FXTradeActuatorName},
+			Neurons: []model.Neuron{
+				{ID: "p", Activation: "identity", Bias: 0},
+				{ID: "s", Activation: "identity", Bias: 0},
+				{ID: "t", Activation: "tanh", Bias: jitter(rng, 0.25)},
+			},
+			Synapses: []model.Synapse{
+				{ID: "s1", From: "p", To: "t", Weight: 0.35 + jitter(rng, 0.25), Enabled: true},
+				{ID: "s2", From: "s", To: "t", Weight: 1.10 + jitter(rng, 0.25), Enabled: true},
 			},
 		})
 	}

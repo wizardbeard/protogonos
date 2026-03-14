@@ -342,6 +342,30 @@ func TestConstructSeedPopulationGTSA(t *testing.T) {
 	}
 }
 
+func TestConstructSeedPopulationGTSACoreProfile(t *testing.T) {
+	seed, err := ConstructSeedPopulationWithOptions("gtsa", 2, 23, SeedPopulationOptions{
+		GTSAProfile: GTSASeedProfileCore,
+	})
+	if err != nil {
+		t.Fatalf("construct gtsa core population: %v", err)
+	}
+	if len(seed.InputNeuronIDs) != 1 || seed.InputNeuronIDs[0] != "x" {
+		t.Fatalf("unexpected gtsa core input ids: %#v", seed.InputNeuronIDs)
+	}
+	if len(seed.OutputNeuronIDs) != 1 || seed.OutputNeuronIDs[0] != "y" {
+		t.Fatalf("unexpected gtsa core output ids: %#v", seed.OutputNeuronIDs)
+	}
+	if len(seed.Genomes[0].SensorIDs) != 1 || seed.Genomes[0].SensorIDs[0] != protoio.GTSAInputSensorName {
+		t.Fatalf("unexpected gtsa core sensor ids: %#v", seed.Genomes[0].SensorIDs)
+	}
+	if len(seed.Genomes[0].Neurons) != 2 {
+		t.Fatalf("unexpected gtsa core neuron count: %d", len(seed.Genomes[0].Neurons))
+	}
+	if len(seed.Genomes[0].Synapses) != 1 {
+		t.Fatalf("unexpected gtsa core synapse count: %d", len(seed.Genomes[0].Synapses))
+	}
+}
+
 func TestConstructSeedPopulationFX(t *testing.T) {
 	seed, err := ConstructSeedPopulation("fx", 2, 29)
 	if err != nil {
@@ -383,6 +407,50 @@ func TestConstructSeedPopulationFX(t *testing.T) {
 	}
 	if len(seed.Genomes[0].ActuatorIDs) != 1 || seed.Genomes[0].ActuatorIDs[0] != protoio.FXTradeActuatorName {
 		t.Fatalf("unexpected fx actuator ids: %#v", seed.Genomes[0].ActuatorIDs)
+	}
+}
+
+func TestConstructSeedPopulationFXMarketProfile(t *testing.T) {
+	seed, err := ConstructSeedPopulationWithOptions("fx", 2, 29, SeedPopulationOptions{
+		FXProfile: FXSeedProfileMarket,
+	})
+	if err != nil {
+		t.Fatalf("construct fx market population: %v", err)
+	}
+	if len(seed.InputNeuronIDs) != 2 || seed.InputNeuronIDs[0] != "p" || seed.InputNeuronIDs[1] != "s" {
+		t.Fatalf("unexpected fx market input ids: %#v", seed.InputNeuronIDs)
+	}
+	if len(seed.OutputNeuronIDs) != 1 || seed.OutputNeuronIDs[0] != "t" {
+		t.Fatalf("unexpected fx market output ids: %#v", seed.OutputNeuronIDs)
+	}
+	if len(seed.Genomes[0].SensorIDs) != 2 ||
+		seed.Genomes[0].SensorIDs[0] != protoio.FXPriceSensorName ||
+		seed.Genomes[0].SensorIDs[1] != protoio.FXSignalSensorName {
+		t.Fatalf("unexpected fx market sensor ids: %#v", seed.Genomes[0].SensorIDs)
+	}
+	if len(seed.Genomes[0].Neurons) != 3 {
+		t.Fatalf("unexpected fx market neuron count: %d", len(seed.Genomes[0].Neurons))
+	}
+	if len(seed.Genomes[0].Synapses) != 2 {
+		t.Fatalf("unexpected fx market synapse count: %d", len(seed.Genomes[0].Synapses))
+	}
+}
+
+func TestConstructSeedPopulationRejectsUnsupportedGTSAProfile(t *testing.T) {
+	_, err := ConstructSeedPopulationWithOptions("gtsa", 1, 23, SeedPopulationOptions{
+		GTSAProfile: "unsupported-profile",
+	})
+	if err == nil {
+		t.Fatal("expected unsupported gtsa profile error")
+	}
+}
+
+func TestConstructSeedPopulationRejectsUnsupportedFXProfile(t *testing.T) {
+	_, err := ConstructSeedPopulationWithOptions("fx", 1, 29, SeedPopulationOptions{
+		FXProfile: "unsupported-profile",
+	})
+	if err == nil {
+		t.Fatal("expected unsupported fx profile error")
 	}
 }
 
