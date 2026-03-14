@@ -9,6 +9,7 @@ import (
 	"math"
 	"os"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -228,11 +229,13 @@ func runBenchmarkExperimentEvaluations(args []string) error {
 	}
 	if *jsonOut {
 		payload := struct {
-			ID          string                         `json:"id"`
-			Evaluations stats.BenchmarkEvaluationStats `json:"evaluations"`
+			ID           string                         `json:"id"`
+			Evaluations  stats.BenchmarkEvaluationStats `json:"evaluations"`
+			Morphologies []string                       `json:"morphologies,omitempty"`
 		}{
-			ID:          exp.ID,
-			Evaluations: evalStats,
+			ID:           exp.ID,
+			Evaluations:  evalStats,
+			Morphologies: benchmarkExperimentMorphologies(exp),
 		}
 		enc := json.NewEncoder(os.Stdout)
 		enc.SetIndent("", "  ")
@@ -306,17 +309,19 @@ func runBenchmarkExperimentReport(args []string) error {
 
 	if *jsonOut {
 		payload := struct {
-			ID          string                         `json:"id"`
-			Dir         string                         `json:"dir"`
-			ReportName  string                         `json:"report_name"`
-			Evaluations stats.BenchmarkEvaluationStats `json:"evaluations"`
-			GraphFiles  []string                       `json:"graph_files"`
+			ID           string                         `json:"id"`
+			Dir          string                         `json:"dir"`
+			ReportName   string                         `json:"report_name"`
+			Evaluations  stats.BenchmarkEvaluationStats `json:"evaluations"`
+			Morphologies []string                       `json:"morphologies,omitempty"`
+			GraphFiles   []string                       `json:"graph_files"`
 		}{
-			ID:          exp.ID,
-			Dir:         reportDir,
-			ReportName:  report.ReportName,
-			Evaluations: evalStats,
-			GraphFiles:  append([]string(nil), graphFiles...),
+			ID:           exp.ID,
+			Dir:          reportDir,
+			ReportName:   report.ReportName,
+			Evaluations:  evalStats,
+			Morphologies: benchmarkExperimentMorphologies(exp),
+			GraphFiles:   append([]string(nil), graphFiles...),
 		}
 		enc := json.NewEncoder(os.Stdout)
 		enc.SetIndent("", "  ")
@@ -324,10 +329,11 @@ func runBenchmarkExperimentReport(args []string) error {
 	}
 
 	fmt.Printf(
-		"benchmark_experiment_report id=%s name=%s dir=%s graphs=%d success=%d/%d success_rate=%.6f\n",
+		"benchmark_experiment_report id=%s name=%s dir=%s morphologies=%s graphs=%d success=%d/%d success_rate=%.6f\n",
 		exp.ID,
 		report.ReportName,
 		reportDir,
+		strings.Join(benchmarkExperimentMorphologies(exp), ","),
 		len(graphFiles),
 		evalStats.SuccessRuns,
 		evalStats.TotalRuns,
@@ -783,15 +789,65 @@ func runBenchmarkExperimentUnconsult(args []string) error {
 		enc := json.NewEncoder(os.Stdout)
 		enc.SetIndent("", "  ")
 		return enc.Encode(struct {
-			File  string `json:"file"`
-			Items int    `json:"items"`
+			File         string   `json:"file"`
+			Items        int      `json:"items"`
+			Morphologies []string `json:"morphologies,omitempty"`
 		}{
-			File:  filepath.Clean(*outPath),
-			Items: len(items),
+			File:         filepath.Clean(*outPath),
+			Items:        len(items),
+			Morphologies: benchmarkExperimentMorphologiesFromItems(items),
 		})
 	}
-	fmt.Printf("benchmark_experiment_unconsult file=%s items=%d\n", filepath.Clean(*outPath), len(items))
+	fmt.Printf("benchmark_experiment_unconsult file=%s items=%d morphologies=%s\n", filepath.Clean(*outPath), len(items), strings.Join(benchmarkExperimentMorphologiesFromItems(items), ","))
 	return nil
+}
+
+func benchmarkExperimentMorphologies(exp stats.BenchmarkExperiment) []string {
+	values := make([]string, 0, len(exp.Summaries))
+	seen := make(map[string]struct{}, len(exp.Summaries))
+	for _, summary := range exp.Summaries {
+		morphology := strings.TrimSpace(summary.Morphology)
+		if morphology == "" {
+			morphology = strings.TrimSpace(summary.Scape)
+		}
+		if morphology == "" {
+			continue
+		}
+		if _, ok := seen[morphology]; ok {
+			continue
+		}
+		seen[morphology] = struct{}{}
+		values = append(values, morphology)
+	}
+	sort.Strings(values)
+	return values
+}
+
+func benchmarkExperimentMorphologiesFromItems(items []any) []string {
+	seen := map[string]struct{}{}
+	values := make([]string, 0, len(items))
+	for _, item := range items {
+		record, ok := item.(map[string]any)
+		if !ok {
+			continue
+		}
+		morphology, _ := record["morphology"].(string)
+		if strings.TrimSpace(morphology) == "" {
+			scape, _ := record["scape"].(string)
+			morphology = scape
+		}
+		morphology = strings.TrimSpace(morphology)
+		if morphology == "" {
+			continue
+		}
+		if _, ok := seen[morphology]; ok {
+			continue
+		}
+		seen[morphology] = struct{}{}
+		values = append(values, morphology)
+	}
+	sort.Strings(values)
+	return values
 }
 
 func upsertLongFlagArg(args []string, flagName, value string) []string {

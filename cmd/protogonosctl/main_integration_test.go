@@ -1270,8 +1270,9 @@ func TestBenchmarkExperimentEvaluationsAndReport(t *testing.T) {
 		t.Fatalf("benchmark-experiment evaluations: %v", err)
 	}
 	var evalPayload struct {
-		ID          string                         `json:"id"`
-		Evaluations stats.BenchmarkEvaluationStats `json:"evaluations"`
+		ID           string                         `json:"id"`
+		Evaluations  stats.BenchmarkEvaluationStats `json:"evaluations"`
+		Morphologies []string                       `json:"morphologies"`
 	}
 	if err := json.Unmarshal([]byte(evalOut), &evalPayload); err != nil {
 		t.Fatalf("decode evaluations payload: %v", err)
@@ -1282,6 +1283,9 @@ func TestBenchmarkExperimentEvaluationsAndReport(t *testing.T) {
 	if evalPayload.Evaluations.TotalRuns != 2 || len(evalPayload.Evaluations.Runs) != 2 {
 		t.Fatalf("unexpected evaluations payload: %+v", evalPayload.Evaluations)
 	}
+	if len(evalPayload.Morphologies) != 1 || evalPayload.Morphologies[0] != "xor" {
+		t.Fatalf("unexpected evaluations morphologies: %+v", evalPayload)
+	}
 
 	reportOut, err := captureStdout(func() error {
 		return run(context.Background(), []string{"benchmark-experiment", "report", "--id", "exp-reporting", "--name", "report2", "--json"})
@@ -1290,11 +1294,12 @@ func TestBenchmarkExperimentEvaluationsAndReport(t *testing.T) {
 		t.Fatalf("benchmark-experiment report: %v", err)
 	}
 	var reportPayload struct {
-		ID          string                         `json:"id"`
-		Dir         string                         `json:"dir"`
-		ReportName  string                         `json:"report_name"`
-		Evaluations stats.BenchmarkEvaluationStats `json:"evaluations"`
-		GraphFiles  []string                       `json:"graph_files"`
+		ID           string                         `json:"id"`
+		Dir          string                         `json:"dir"`
+		ReportName   string                         `json:"report_name"`
+		Evaluations  stats.BenchmarkEvaluationStats `json:"evaluations"`
+		Morphologies []string                       `json:"morphologies"`
+		GraphFiles   []string                       `json:"graph_files"`
 	}
 	if err := json.Unmarshal([]byte(reportOut), &reportPayload); err != nil {
 		t.Fatalf("decode report payload: %v", err)
@@ -1307,6 +1312,9 @@ func TestBenchmarkExperimentEvaluationsAndReport(t *testing.T) {
 	}
 	if reportPayload.Evaluations.TotalRuns != 2 {
 		t.Fatalf("unexpected report evaluations payload: %+v", reportPayload.Evaluations)
+	}
+	if len(reportPayload.Morphologies) != 1 || reportPayload.Morphologies[0] != "xor" {
+		t.Fatalf("unexpected report morphologies: %+v", reportPayload)
 	}
 	if len(reportPayload.GraphFiles) == 0 {
 		t.Fatalf("expected at least one graph output file: %+v", reportPayload)
@@ -1452,14 +1460,15 @@ func TestBenchmarkExperimentEvaluationsAndReport(t *testing.T) {
 
 	unconsultPath := filepath.Join(workdir, "benchmarks", "custom_alife_benchmark")
 	unconsultOut, err := captureStdout(func() error {
-		return run(context.Background(), []string{"benchmark-experiment", "unconsult", "--id", "exp-reporting", "--source", "run-ids", "--out", unconsultPath, "--json"})
+		return run(context.Background(), []string{"benchmark-experiment", "unconsult", "--id", "exp-reporting", "--source", "summaries", "--out", unconsultPath, "--json"})
 	})
 	if err != nil {
 		t.Fatalf("benchmark-experiment unconsult: %v", err)
 	}
 	var unconsultPayload struct {
-		File  string `json:"file"`
-		Items int    `json:"items"`
+		File         string   `json:"file"`
+		Items        int      `json:"items"`
+		Morphologies []string `json:"morphologies"`
 	}
 	if err := json.Unmarshal([]byte(unconsultOut), &unconsultPayload); err != nil {
 		t.Fatalf("decode unconsult payload: %v", err)
@@ -1467,12 +1476,15 @@ func TestBenchmarkExperimentEvaluationsAndReport(t *testing.T) {
 	if unconsultPayload.Items != 2 {
 		t.Fatalf("expected 2 unconsult items, got %+v", unconsultPayload)
 	}
+	if len(unconsultPayload.Morphologies) != 1 || unconsultPayload.Morphologies[0] != "fx[market]" {
+		t.Fatalf("expected profiled morphology in unconsult metadata, got %+v", unconsultPayload)
+	}
 	data, err := os.ReadFile(unconsultPath)
 	if err != nil {
 		t.Fatalf("read unconsult output: %v", err)
 	}
 	text := string(data)
-	if !strings.Contains(text, "\"exp-reporting-run-001\"") || !strings.Contains(text, "\"exp-reporting-run-002\"") {
+	if !strings.Contains(text, "\"exp-reporting-run-001\"") || !strings.Contains(text, "\"exp-reporting-run-002\"") || !strings.Contains(text, "\"morphology\":\"fx[market]\"") {
 		t.Fatalf("unexpected unconsult output content:\n%s", text)
 	}
 }
