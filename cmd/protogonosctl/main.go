@@ -173,10 +173,12 @@ func runRun(ctx context.Context, args []string) error {
 	evolutionType := fs.String("evolution-type", "generational", "evolution type: generational|steady_state")
 	scapeName := fs.String("scape", "xor", "scape name")
 	gtsaCSV := fs.String("gtsa-csv", "", "optional GTSA CSV table path")
+	gtsaProfile := fs.String("gtsa-profile", "", "optional GTSA seed profile override: default|core")
 	gtsaTrainEnd := fs.Int("gtsa-train-end", 0, "optional GTSA train_end cutoff for loaded CSV")
 	gtsaValidationEnd := fs.Int("gtsa-validation-end", 0, "optional GTSA validation_end cutoff for loaded CSV")
 	gtsaTestEnd := fs.Int("gtsa-test-end", 0, "optional GTSA test_end cutoff for loaded CSV")
 	fxCSV := fs.String("fx-csv", "", "optional FX CSV price-series path")
+	fxProfile := fs.String("fx-profile", "", "optional FX seed profile override: default|market")
 	epitopesCSV := fs.String("epitopes-csv", "", "optional epitopes CSV table path")
 	epitopesTable := fs.String("epitopes-table", "", "optional built-in epitopes table name (abc_pred10|abc_pred12|abc_pred14|abc_pred16|abc_pred18|abc_pred20)")
 	llvmWorkflowJSON := fs.String("llvm-workflow-json", "", "optional LLVM workflow JSON path")
@@ -258,10 +260,12 @@ func runRun(ctx context.Context, args []string) error {
 		req = protoapi.RunRequest{
 			Scape:                   *scapeName,
 			GTSACSVPath:             *gtsaCSV,
+			GTSAProfile:             *gtsaProfile,
 			GTSATrainEnd:            *gtsaTrainEnd,
 			GTSAValidationEnd:       *gtsaValidationEnd,
 			GTSATestEnd:             *gtsaTestEnd,
 			FXCSVPath:               *fxCSV,
+			FXProfile:               *fxProfile,
 			EpitopesCSVPath:         *epitopesCSV,
 			EpitopesTableName:       *epitopesTable,
 			LLVMWorkflowJSONPath:    *llvmWorkflowJSON,
@@ -325,11 +329,13 @@ func runRun(ctx context.Context, args []string) error {
 	} else {
 		err := overrideFromFlags(&req, setFlags, map[string]any{
 			"scape":                     *scapeName,
+			"gtsa-profile":              *gtsaProfile,
 			"gtsa-csv":                  *gtsaCSV,
 			"gtsa-train-end":            *gtsaTrainEnd,
 			"gtsa-validation-end":       *gtsaValidationEnd,
 			"gtsa-test-end":             *gtsaTestEnd,
 			"fx-csv":                    *fxCSV,
+			"fx-profile":                *fxProfile,
 			"epitopes-csv":              *epitopesCSV,
 			"epitopes-table":            *epitopesTable,
 			"llvm-workflow-json":        *llvmWorkflowJSON,
@@ -1126,10 +1132,12 @@ func runBenchmark(ctx context.Context, args []string) error {
 	evolutionType := fs.String("evolution-type", "generational", "evolution type: generational|steady_state")
 	scapeName := fs.String("scape", "xor", "scape name")
 	gtsaCSV := fs.String("gtsa-csv", "", "optional GTSA CSV table path")
+	gtsaProfile := fs.String("gtsa-profile", "", "optional GTSA seed profile override: default|core")
 	gtsaTrainEnd := fs.Int("gtsa-train-end", 0, "optional GTSA train_end cutoff for loaded CSV")
 	gtsaValidationEnd := fs.Int("gtsa-validation-end", 0, "optional GTSA validation_end cutoff for loaded CSV")
 	gtsaTestEnd := fs.Int("gtsa-test-end", 0, "optional GTSA test_end cutoff for loaded CSV")
 	fxCSV := fs.String("fx-csv", "", "optional FX CSV price-series path")
+	fxProfile := fs.String("fx-profile", "", "optional FX seed profile override: default|market")
 	epitopesCSV := fs.String("epitopes-csv", "", "optional epitopes CSV table path")
 	epitopesTable := fs.String("epitopes-table", "", "optional built-in epitopes table name (abc_pred10|abc_pred12|abc_pred14|abc_pred16|abc_pred18|abc_pred20)")
 	llvmWorkflowJSON := fs.String("llvm-workflow-json", "", "optional LLVM workflow JSON path")
@@ -1211,10 +1219,12 @@ func runBenchmark(ctx context.Context, args []string) error {
 		req = protoapi.RunRequest{
 			Scape:                   *scapeName,
 			GTSACSVPath:             *gtsaCSV,
+			GTSAProfile:             *gtsaProfile,
 			GTSATrainEnd:            *gtsaTrainEnd,
 			GTSAValidationEnd:       *gtsaValidationEnd,
 			GTSATestEnd:             *gtsaTestEnd,
 			FXCSVPath:               *fxCSV,
+			FXProfile:               *fxProfile,
 			EpitopesCSVPath:         *epitopesCSV,
 			EpitopesTableName:       *epitopesTable,
 			LLVMWorkflowJSONPath:    *llvmWorkflowJSON,
@@ -1277,11 +1287,13 @@ func runBenchmark(ctx context.Context, args []string) error {
 	} else {
 		err := overrideFromFlags(&req, setFlags, map[string]any{
 			"scape":                     *scapeName,
+			"gtsa-profile":              *gtsaProfile,
 			"gtsa-csv":                  *gtsaCSV,
 			"gtsa-train-end":            *gtsaTrainEnd,
 			"gtsa-validation-end":       *gtsaValidationEnd,
 			"gtsa-test-end":             *gtsaTestEnd,
 			"fx-csv":                    *fxCSV,
+			"fx-profile":                *fxProfile,
 			"epitopes-csv":              *epitopesCSV,
 			"epitopes-table":            *epitopesTable,
 			"llvm-workflow-json":        *llvmWorkflowJSON,

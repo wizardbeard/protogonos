@@ -911,6 +911,97 @@ func TestApplyScapeDataSourcesAppliesEpitopesTableSelectionToContext(t *testing.
 	}
 }
 
+func TestRunRequestFromArtifactsConfigPreservesSeedProfiles(t *testing.T) {
+	req := runRequestFromArtifactsConfig(stats.RunConfig{
+		Scape:       "fx",
+		GTSAProfile: "core",
+		FXProfile:   "market",
+	})
+	if req.GTSAProfile != "core" {
+		t.Fatalf("expected gtsa profile core, got %q", req.GTSAProfile)
+	}
+	if req.FXProfile != "market" {
+		t.Fatalf("expected fx profile market, got %q", req.FXProfile)
+	}
+}
+
+func TestDefaultSeedIONeuronsForScapeUsesGTSAProfile(t *testing.T) {
+	inputs, outputs, err := defaultSeedIONeuronsForScape(RunRequest{
+		Scape:       "gtsa",
+		Seed:        23,
+		GTSAProfile: "core",
+	})
+	if err != nil {
+		t.Fatalf("default seed io neurons: %v", err)
+	}
+	if len(inputs) != 1 || inputs[0] != "x" {
+		t.Fatalf("unexpected gtsa core input ids: %#v", inputs)
+	}
+	if len(outputs) != 1 || outputs[0] != "y" {
+		t.Fatalf("unexpected gtsa core output ids: %#v", outputs)
+	}
+}
+
+func TestDefaultSeedIONeuronsForScapeUsesFXProfile(t *testing.T) {
+	inputs, outputs, err := defaultSeedIONeuronsForScape(RunRequest{
+		Scape:     "fx",
+		Seed:      29,
+		FXProfile: "market",
+	})
+	if err != nil {
+		t.Fatalf("default seed io neurons: %v", err)
+	}
+	if len(inputs) != 2 || inputs[0] != "p" || inputs[1] != "s" {
+		t.Fatalf("unexpected fx market input ids: %#v", inputs)
+	}
+	if len(outputs) != 1 || outputs[0] != "t" {
+		t.Fatalf("unexpected fx market output ids: %#v", outputs)
+	}
+}
+
+func TestClientRunPersistsSeedProfilesInArtifacts(t *testing.T) {
+	base := t.TempDir()
+	client, err := New(Options{
+		StoreKind:     "memory",
+		BenchmarksDir: filepath.Join(base, "benchmarks"),
+		ExportsDir:    filepath.Join(base, "exports"),
+	})
+	if err != nil {
+		t.Fatalf("new client: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = client.Close()
+	})
+
+	summary, err := client.Run(context.Background(), RunRequest{
+		RunID:       "fx-profile-artifact",
+		Scape:       "xor",
+		Population:  2,
+		Generations: 1,
+		Seed:        31,
+		GTSAProfile: "core",
+		FXProfile:   "market",
+	})
+	if err != nil {
+		t.Fatalf("run: %v", err)
+	}
+
+	configData, err := os.ReadFile(filepath.Join(base, "benchmarks", summary.RunID, "config.json"))
+	if err != nil {
+		t.Fatalf("read config: %v", err)
+	}
+	var cfg stats.RunConfig
+	if err := json.Unmarshal(configData, &cfg); err != nil {
+		t.Fatalf("decode config: %v", err)
+	}
+	if cfg.GTSAProfile != "core" {
+		t.Fatalf("expected artifact gtsa profile core, got %q", cfg.GTSAProfile)
+	}
+	if cfg.FXProfile != "market" {
+		t.Fatalf("expected artifact fx profile market, got %q", cfg.FXProfile)
+	}
+}
+
 func TestClientEpitopesReplayReplaysTraceAccChampionsFromArtifacts(t *testing.T) {
 	base := t.TempDir()
 	client, err := New(Options{

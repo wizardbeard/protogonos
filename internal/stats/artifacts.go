@@ -40,6 +40,8 @@ type RunConfig struct {
 	EpitopesTestEnd         int      `json:"epitopes_test_end,omitempty"`
 	EpitopesBenchmarkStart  int      `json:"epitopes_benchmark_start,omitempty"`
 	EpitopesBenchmarkEnd    int      `json:"epitopes_benchmark_end,omitempty"`
+	GTSAProfile             string   `json:"gtsa_profile,omitempty"`
+	FXProfile               string   `json:"fx_profile,omitempty"`
 	FlatlandScannerProfile  string   `json:"flatland_scanner_profile,omitempty"`
 	FlatlandScannerSpread   *float64 `json:"flatland_scanner_spread,omitempty"`
 	FlatlandScannerOffset   *float64 `json:"flatland_scanner_offset,omitempty"`

@@ -331,6 +331,39 @@ func TestLoadRunRequestFromConfigParsesFlatlandOverrides(t *testing.T) {
 	}
 }
 
+func TestLoadRunRequestFromConfigParsesSeedProfiles(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "run_config_seed_profiles.json")
+	payload := map[string]any{
+		"gtsa_profile": "core",
+		"scape_data": map[string]any{
+			"gtsa": map[string]any{
+				"profile": "default",
+			},
+			"fx": map[string]any{
+				"profile": "market",
+			},
+		},
+	}
+	data, err := json.Marshal(payload)
+	if err != nil {
+		t.Fatalf("marshal payload: %v", err)
+	}
+	if err := os.WriteFile(path, data, 0o644); err != nil {
+		t.Fatalf("write config: %v", err)
+	}
+
+	req, err := loadRunRequestFromConfig(path)
+	if err != nil {
+		t.Fatalf("load run request: %v", err)
+	}
+	if req.GTSAProfile != "core" {
+		t.Fatalf("expected top-level gtsa profile core, got %q", req.GTSAProfile)
+	}
+	if req.FXProfile != "market" {
+		t.Fatalf("expected nested fx profile market, got %q", req.FXProfile)
+	}
+}
+
 func TestLoadRunRequestFromConfigMapsOpModeList(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "run_config_op_mode_list.json")
 	payload := map[string]any{

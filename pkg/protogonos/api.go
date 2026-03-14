@@ -71,6 +71,8 @@ type RunRequest struct {
 	EpitopesTestEnd         int
 	EpitopesBenchmarkStart  int
 	EpitopesBenchmarkEnd    int
+	GTSAProfile             string
+	FXProfile               string
 	FlatlandScannerProfile  string
 	FlatlandScannerSpread   *float64
 	FlatlandScannerOffset   *float64
@@ -378,7 +380,7 @@ func (c *Client) Run(ctx context.Context, req RunRequest) (RunSummary, error) {
 		return RunSummary{}, err
 	}
 
-	seedPopulation, err := genotype.ConstructSeedPopulation(req.Scape, req.Population, req.Seed)
+	seedPopulation, err := genotype.ConstructSeedPopulationWithOptions(req.Scape, req.Population, req.Seed, seedPopulationOptionsFromRequest(req))
 	if err != nil {
 		return RunSummary{}, err
 	}
@@ -590,6 +592,8 @@ func (c *Client) Run(ctx context.Context, req RunRequest) (RunSummary, error) {
 			EpitopesTestEnd:         req.EpitopesTestEnd,
 			EpitopesBenchmarkStart:  req.EpitopesBenchmarkStart,
 			EpitopesBenchmarkEnd:    req.EpitopesBenchmarkEnd,
+			GTSAProfile:             req.GTSAProfile,
+			FXProfile:               req.FXProfile,
 			FlatlandScannerProfile:  req.FlatlandScannerProfile,
 			FlatlandScannerSpread:   cloneFloat64Ptr(req.FlatlandScannerSpread),
 			FlatlandScannerOffset:   cloneFloat64Ptr(req.FlatlandScannerOffset),
@@ -756,6 +760,8 @@ func runRequestFromArtifactsConfig(cfg stats.RunConfig) RunRequest {
 		EpitopesTestEnd:         cfg.EpitopesTestEnd,
 		EpitopesBenchmarkStart:  cfg.EpitopesBenchmarkStart,
 		EpitopesBenchmarkEnd:    cfg.EpitopesBenchmarkEnd,
+		GTSAProfile:             cfg.GTSAProfile,
+		FXProfile:               cfg.FXProfile,
 		FlatlandScannerProfile:  cfg.FlatlandScannerProfile,
 		FlatlandScannerSpread:   cloneFloat64Ptr(cfg.FlatlandScannerSpread),
 		FlatlandScannerOffset:   cloneFloat64Ptr(cfg.FlatlandScannerOffset),
@@ -783,16 +789,16 @@ func normalizeEpitopesReplayMode(raw string) (string, error) {
 	}
 }
 
-func defaultSeedIONeuronsForScape(scapeName string, seed int64) ([]string, []string, error) {
-	seedPopulation, err := genotype.ConstructSeedPopulation(scapeName, 1, seed)
+func defaultSeedIONeuronsForScape(req RunRequest) ([]string, []string, error) {
+	seedPopulation, err := genotype.ConstructSeedPopulationWithOptions(req.Scape, 1, req.Seed, seedPopulationOptionsFromRequest(req))
 	if err != nil {
 		return nil, nil, err
 	}
 	if len(seedPopulation.InputNeuronIDs) == 0 {
-		return nil, nil, fmt.Errorf("seed input neuron ids are empty for scape %s", scapeName)
+		return nil, nil, fmt.Errorf("seed input neuron ids are empty for scape %s", req.Scape)
 	}
 	if len(seedPopulation.OutputNeuronIDs) == 0 {
-		return nil, nil, fmt.Errorf("seed output neuron ids are empty for scape %s", scapeName)
+		return nil, nil, fmt.Errorf("seed output neuron ids are empty for scape %s", req.Scape)
 	}
 	return append([]string(nil), seedPopulation.InputNeuronIDs...),
 		append([]string(nil), seedPopulation.OutputNeuronIDs...),
@@ -817,6 +823,14 @@ func buildReplayCortex(scapeName string, genome model.Genome, inputNeuronIDs, ou
 		outputNeuronIDs,
 		substrateRuntime,
 	)
+}
+
+func seedPopulationOptionsFromRequest(req RunRequest) genotype.SeedPopulationOptions {
+	return genotype.SeedPopulationOptions{
+		GTSAProfile:            req.GTSAProfile,
+		FXProfile:              req.FXProfile,
+		FlatlandScannerProfile: req.FlatlandScannerProfile,
+	}
 }
 
 func buildReplayIO(scapeName string, genome model.Genome) (map[string]protoio.Sensor, map[string]protoio.Actuator, error) {
@@ -1472,7 +1486,7 @@ func (c *Client) EpitopesReplay(ctx context.Context, req EpitopesReplayRequest) 
 		return EpitopesReplaySummary{}, err
 	}
 
-	inputNeuronIDs, outputNeuronIDs, err := defaultSeedIONeuronsForScape("epitopes", runCfg.Seed)
+	inputNeuronIDs, outputNeuronIDs, err := defaultSeedIONeuronsForScape(replayReq)
 	if err != nil {
 		return EpitopesReplaySummary{}, err
 	}

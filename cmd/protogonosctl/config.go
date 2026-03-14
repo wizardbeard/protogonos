@@ -86,6 +86,12 @@ func loadRunRequestFromConfig(path string) (protoapi.RunRequest, error) {
 	if v, ok := asInt(raw["epitopes_benchmark_end"]); ok {
 		req.EpitopesBenchmarkEnd = v
 	}
+	if v, ok := asString(raw["gtsa_profile"]); ok {
+		req.GTSAProfile = v
+	}
+	if v, ok := asString(raw["fx_profile"]); ok {
+		req.FXProfile = v
+	}
 	if v, ok := asString(raw["flatland_scanner_profile"]); ok {
 		req.FlatlandScannerProfile = v
 	}
@@ -411,6 +417,11 @@ func joinStringSlice(values []any) (string, bool) {
 
 func applyScapeDataConfigFallbacks(req *protoapi.RunRequest, scapeData map[string]any) {
 	if gtsaData, ok := scapeData["gtsa"].(map[string]any); ok {
+		if req.GTSAProfile == "" {
+			if v, ok := asString(gtsaData["profile"]); ok {
+				req.GTSAProfile = v
+			}
+		}
 		if req.GTSACSVPath == "" {
 			if v, ok := asString(gtsaData["csv_path"]); ok {
 				req.GTSACSVPath = v
@@ -434,6 +445,11 @@ func applyScapeDataConfigFallbacks(req *protoapi.RunRequest, scapeData map[strin
 	}
 
 	if fxData, ok := scapeData["fx"].(map[string]any); ok {
+		if req.FXProfile == "" {
+			if v, ok := asString(fxData["profile"]); ok {
+				req.FXProfile = v
+			}
+		}
 		if req.FXCSVPath == "" {
 			if v, ok := asString(fxData["csv_path"]); ok {
 				req.FXCSVPath = v
@@ -571,6 +587,8 @@ func overrideFromFlags(req *protoapi.RunRequest, set map[string]bool, flagValue 
 			req.SpecieIdentifier = v.(string)
 		case "scape":
 			req.Scape = v.(string)
+		case "gtsa-profile":
+			req.GTSAProfile = v.(string)
 		case "gtsa-csv":
 			req.GTSACSVPath = v.(string)
 		case "gtsa-train-end":
@@ -581,6 +599,8 @@ func overrideFromFlags(req *protoapi.RunRequest, set map[string]bool, flagValue 
 			req.GTSATestEnd = v.(int)
 		case "fx-csv":
 			req.FXCSVPath = v.(string)
+		case "fx-profile":
+			req.FXProfile = v.(string)
 		case "epitopes-csv":
 			req.EpitopesCSVPath = v.(string)
 		case "epitopes-table":
