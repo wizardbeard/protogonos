@@ -168,6 +168,24 @@ func ConstructMorphology(scapeName, profile string) (Morphology, error) {
 		default:
 			return nil, fmt.Errorf("unsupported pole2 morphology profile: %s", profile)
 		}
+	case "fx":
+		switch profile {
+		case "", "default", "all", "workflow", "full":
+			return FXMorphology{}, nil
+		case "market", "legacy", "minimal":
+			return FXMarketMorphology{}, nil
+		default:
+			return nil, fmt.Errorf("unsupported fx morphology profile: %s", profile)
+		}
+	case "gtsa":
+		switch profile {
+		case "", "default", "all", "workflow", "full":
+			return GTSAMorphology{}, nil
+		case "core", "minimal", "legacy":
+			return GTSACoreMorphology{}, nil
+		default:
+			return nil, fmt.Errorf("unsupported gtsa morphology profile: %s", profile)
+		}
 	default:
 		m, ok := defaultMorphologyForScape(scapeName)
 		if !ok {
@@ -190,6 +208,10 @@ func AvailableMorphologyProfiles(scapeName string) []string {
 		profiles = []string{"default", "range_sense", "reward"}
 	case "pole2-balancing":
 		profiles = []string{"2", "3", "4", "6", "default"}
+	case "fx":
+		profiles = []string{"default", "market"}
+	case "gtsa":
+		profiles = []string{"core", "default"}
 	default:
 		if _, ok := defaultMorphologyForScape(scapeName); ok {
 			profiles = []string{"default"}

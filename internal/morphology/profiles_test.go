@@ -56,6 +56,32 @@ func TestConstructMorphologyDTMProfiles(t *testing.T) {
 	}
 }
 
+func TestConstructMorphologyFXProfiles(t *testing.T) {
+	marketMorph, err := ConstructMorphology("fx", "market")
+	if err != nil {
+		t.Fatalf("construct fx market profile: %v", err)
+	}
+	if marketMorph.Name() != "fx-market-v1" {
+		t.Fatalf("expected fx-market-v1, got=%s", marketMorph.Name())
+	}
+	if got := marketMorph.Sensors(); len(got) != 2 || got[0] != protoio.FXPriceSensorName || got[1] != protoio.FXSignalSensorName {
+		t.Fatalf("expected market-only fx sensors, got=%v", got)
+	}
+}
+
+func TestConstructMorphologyGTSAProfiles(t *testing.T) {
+	coreMorph, err := ConstructMorphology("gtsa", "core")
+	if err != nil {
+		t.Fatalf("construct gtsa core profile: %v", err)
+	}
+	if coreMorph.Name() != "gtsa-core-v1" {
+		t.Fatalf("expected gtsa-core-v1, got=%s", coreMorph.Name())
+	}
+	if got := coreMorph.Sensors(); len(got) != 1 || got[0] != protoio.GTSAInputSensorName {
+		t.Fatalf("expected core-only gtsa sensor profile, got=%v", got)
+	}
+}
+
 func TestConstructMorphologyPole2Profiles(t *testing.T) {
 	m3, err := ConstructMorphology("pole2-balancing", "3")
 	if err != nil {
@@ -90,6 +116,12 @@ func TestEnsureScapeCompatibilityWithProfile(t *testing.T) {
 	if err := EnsureScapeCompatibilityWithProfile("dtm_sim", "range_sense"); err != nil {
 		t.Fatalf("ensure dtm alias profile compatibility: %v", err)
 	}
+	if err := EnsureScapeCompatibilityWithProfile("fx_sim", "market"); err != nil {
+		t.Fatalf("ensure fx alias market profile compatibility: %v", err)
+	}
+	if err := EnsureScapeCompatibilityWithProfile("scape_GTSA", "core"); err != nil {
+		t.Fatalf("ensure gtsa alias core profile compatibility: %v", err)
+	}
 }
 
 func TestAvailableMorphologyProfiles(t *testing.T) {
@@ -99,6 +131,12 @@ func TestAvailableMorphologyProfiles(t *testing.T) {
 	}
 	if p[0] != "classic" || p[len(p)-1] != "scanner" {
 		t.Fatalf("expected sorted profile list, got=%v", p)
+	}
+	if got := AvailableMorphologyProfiles("fx"); len(got) != 2 || got[0] != "default" || got[1] != "market" {
+		t.Fatalf("expected fx market/default profiles, got=%v", got)
+	}
+	if got := AvailableMorphologyProfiles("gtsa"); len(got) != 2 || got[0] != "core" || got[1] != "default" {
+		t.Fatalf("expected gtsa core/default profiles, got=%v", got)
 	}
 	if got := AvailableMorphologyProfiles("xor"); len(got) != 1 || got[0] != "default" {
 		t.Fatalf("expected default-only profile for xor, got=%v", got)
