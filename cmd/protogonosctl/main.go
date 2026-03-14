@@ -415,6 +415,9 @@ func runRun(ctx context.Context, args []string) error {
 		if err != nil {
 			return err
 		}
+		req.GTSAProfile = preset.GTSAProfile
+		req.FXProfile = preset.FXProfile
+		req.FlatlandScannerProfile = preset.FlatlandScannerProfile
 		req.Selection = preset.Selection
 		req.TuneSelection = preset.TuneSelection
 		req.WeightPerturb = preset.WeightPerturb
@@ -1372,6 +1375,9 @@ func runBenchmark(ctx context.Context, args []string) error {
 		if err != nil {
 			return err
 		}
+		req.GTSAProfile = preset.GTSAProfile
+		req.FXProfile = preset.FXProfile
+		req.FlatlandScannerProfile = preset.FlatlandScannerProfile
 		req.Selection = preset.Selection
 		req.TuneSelection = preset.TuneSelection
 		req.WeightPerturb = preset.WeightPerturb
@@ -1506,8 +1512,12 @@ func runProfile(_ context.Context, args []string) error {
 			return nil
 		}
 		for _, profile := range profiles {
-			fmt.Printf("id=%s selection=%s expected_selection=%s tune_selection=%s expected_tune_selection=%s mutation_ops=%d\n",
+			fmt.Printf("id=%s morphology=%s gtsa_profile=%s fx_profile=%s flatland_scanner_profile=%s selection=%s expected_selection=%s tune_selection=%s expected_tune_selection=%s mutation_ops=%d\n",
 				profile.ID,
+				profile.Morphology,
+				profile.GTSAProfile,
+				profile.FXProfile,
+				profile.FlatlandScannerProfile,
 				profile.PopulationSelection,
 				profile.ExpectedSelection,
 				profile.TuningSelection,
@@ -1535,8 +1545,12 @@ func runProfile(_ context.Context, args []string) error {
 			enc.SetIndent("", "  ")
 			return enc.Encode(resolved)
 		}
-		fmt.Printf("id=%s selection=%s expected_selection=%s tune_selection=%s expected_tune_selection=%s mutation_ops=%d w_perturb=%.3f w_bias=%.3f w_remove_bias=%.3f w_activation=%.3f w_aggregator=%.3f w_add_syn=%.3f w_remove_syn=%.3f w_add_neuron=%.3f w_remove_neuron=%.3f w_plasticity_rule=%.3f w_plasticity=%.3f w_substrate=%.3f\n",
+		fmt.Printf("id=%s morphology=%s gtsa_profile=%s fx_profile=%s flatland_scanner_profile=%s selection=%s expected_selection=%s tune_selection=%s expected_tune_selection=%s mutation_ops=%d w_perturb=%.3f w_bias=%.3f w_remove_bias=%.3f w_activation=%.3f w_aggregator=%.3f w_add_syn=%.3f w_remove_syn=%.3f w_add_neuron=%.3f w_remove_neuron=%.3f w_plasticity_rule=%.3f w_plasticity=%.3f w_substrate=%.3f\n",
 			resolved.ID,
+			resolved.Morphology,
+			resolved.GTSAProfile,
+			resolved.FXProfile,
+			resolved.FlatlandScannerProfile,
 			resolved.PopulationSelection,
 			resolved.ExpectedSelection,
 			resolved.TuningSelection,

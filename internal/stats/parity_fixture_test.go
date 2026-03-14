@@ -10,15 +10,18 @@ import (
 type parityProfileFixture struct {
 	Source   string `json:"source"`
 	Profiles []struct {
-		ID                    string `json:"id"`
-		PopulationSelect      string `json:"population_selection"`
-		ExpectedSelection     string `json:"expected_selection"`
-		PopulationEvo         string `json:"population_evolution"`
-		Morphology            string `json:"morphology"`
-		ConnectionArch        string `json:"connection_architecture"`
-		TuningSelection       string `json:"tuning_selection"`
-		ExpectedTuneSelection string `json:"expected_tuning_selection"`
-		MutationOperators     []struct {
+		ID                     string `json:"id"`
+		PopulationSelect       string `json:"population_selection"`
+		ExpectedSelection      string `json:"expected_selection"`
+		PopulationEvo          string `json:"population_evolution"`
+		Morphology             string `json:"morphology"`
+		GTSAProfile            string `json:"gtsa_profile"`
+		FXProfile              string `json:"fx_profile"`
+		FlatlandScannerProfile string `json:"flatland_scanner_profile"`
+		ConnectionArch         string `json:"connection_architecture"`
+		TuningSelection        string `json:"tuning_selection"`
+		ExpectedTuneSelection  string `json:"expected_tuning_selection"`
+		MutationOperators      []struct {
 			Name   string `json:"name"`
 			Weight int    `json:"weight"`
 		} `json:"mutation_operators"`
@@ -38,7 +41,7 @@ func TestReferenceBenchmarkerFixture(t *testing.T) {
 	if fixture.Source == "" {
 		t.Fatal("expected source in parity fixture")
 	}
-	if len(fixture.Profiles) < 3 {
+	if len(fixture.Profiles) < 5 {
 		t.Fatalf("expected expanded benchmark profiles, got %d", len(fixture.Profiles))
 	}
 	for _, p := range fixture.Profiles {

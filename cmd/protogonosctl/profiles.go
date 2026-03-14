@@ -13,20 +13,23 @@ import (
 const parityProfileFixturePath = "testdata/fixtures/parity/ref_benchmarker_profiles.json"
 
 type parityPreset struct {
-	Selection            string
-	TuneSelection        string
-	WeightPerturb        float64
-	WeightBias           float64
-	WeightRemoveBias     float64
-	WeightActivation     float64
-	WeightAggregator     float64
-	WeightAddSyn         float64
-	WeightRemoveSyn      float64
-	WeightAddNeuro       float64
-	WeightRemoveNeuro    float64
-	WeightPlasticityRule float64
-	WeightPlasticity     float64
-	WeightSubstrate      float64
+	GTSAProfile            string
+	FXProfile              string
+	FlatlandScannerProfile string
+	Selection              string
+	TuneSelection          string
+	WeightPerturb          float64
+	WeightBias             float64
+	WeightRemoveBias       float64
+	WeightActivation       float64
+	WeightAggregator       float64
+	WeightAddSyn           float64
+	WeightRemoveSyn        float64
+	WeightAddNeuro         float64
+	WeightRemoveNeuro      float64
+	WeightPlasticityRule   float64
+	WeightPlasticity       float64
+	WeightSubstrate        float64
 }
 
 type parityProfileFixture struct {
@@ -34,12 +37,16 @@ type parityProfileFixture struct {
 }
 
 type parityProfileFixtureProfile struct {
-	ID                  string                   `json:"id"`
-	PopulationSelection string                   `json:"population_selection"`
-	ExpectedSelection   string                   `json:"expected_selection"`
-	TuningSelection     string                   `json:"tuning_selection"`
-	ExpectedTuning      string                   `json:"expected_tuning_selection"`
-	MutationOperators   []parityMutationOperator `json:"mutation_operators"`
+	ID                     string                   `json:"id"`
+	PopulationSelection    string                   `json:"population_selection"`
+	ExpectedSelection      string                   `json:"expected_selection"`
+	Morphology             string                   `json:"morphology,omitempty"`
+	GTSAProfile            string                   `json:"gtsa_profile,omitempty"`
+	FXProfile              string                   `json:"fx_profile,omitempty"`
+	FlatlandScannerProfile string                   `json:"flatland_scanner_profile,omitempty"`
+	TuningSelection        string                   `json:"tuning_selection"`
+	ExpectedTuning         string                   `json:"expected_tuning_selection"`
+	MutationOperators      []parityMutationOperator `json:"mutation_operators"`
 }
 
 type parityMutationOperator struct {
@@ -48,33 +55,41 @@ type parityMutationOperator struct {
 }
 
 type parityProfileInfo struct {
-	ID                  string
-	PopulationSelection string
-	TuningSelection     string
-	ExpectedSelection   string
-	ExpectedTuning      string
-	MutationOperatorLen int
+	ID                     string
+	Morphology             string
+	GTSAProfile            string
+	FXProfile              string
+	FlatlandScannerProfile string
+	PopulationSelection    string
+	TuningSelection        string
+	ExpectedSelection      string
+	ExpectedTuning         string
+	MutationOperatorLen    int
 }
 
 type parityProfileResolved struct {
-	ID                   string
-	PopulationSelection  string
-	TuningSelection      string
-	ExpectedSelection    string
-	ExpectedTuning       string
-	MutationOperatorLen  int
-	WeightPerturb        float64
-	WeightBias           float64
-	WeightRemoveBias     float64
-	WeightActivation     float64
-	WeightAggregator     float64
-	WeightAddSyn         float64
-	WeightRemoveSyn      float64
-	WeightAddNeuro       float64
-	WeightRemoveNeuro    float64
-	WeightPlasticityRule float64
-	WeightPlasticity     float64
-	WeightSubstrate      float64
+	ID                     string
+	Morphology             string
+	GTSAProfile            string
+	FXProfile              string
+	FlatlandScannerProfile string
+	PopulationSelection    string
+	TuningSelection        string
+	ExpectedSelection      string
+	ExpectedTuning         string
+	MutationOperatorLen    int
+	WeightPerturb          float64
+	WeightBias             float64
+	WeightRemoveBias       float64
+	WeightActivation       float64
+	WeightAggregator       float64
+	WeightAddSyn           float64
+	WeightRemoveSyn        float64
+	WeightAddNeuro         float64
+	WeightRemoveNeuro      float64
+	WeightPlasticityRule   float64
+	WeightPlasticity       float64
+	WeightSubstrate        float64
 }
 
 func loadParityFixture() (parityProfileFixture, error) {
@@ -99,20 +114,23 @@ func loadParityPreset(profileID string) (parityPreset, error) {
 		return parityPreset{}, err
 	}
 	return parityPreset{
-		Selection:            resolved.PopulationSelection,
-		TuneSelection:        resolved.TuningSelection,
-		WeightPerturb:        resolved.WeightPerturb,
-		WeightBias:           resolved.WeightBias,
-		WeightRemoveBias:     resolved.WeightRemoveBias,
-		WeightActivation:     resolved.WeightActivation,
-		WeightAggregator:     resolved.WeightAggregator,
-		WeightAddSyn:         resolved.WeightAddSyn,
-		WeightRemoveSyn:      resolved.WeightRemoveSyn,
-		WeightAddNeuro:       resolved.WeightAddNeuro,
-		WeightRemoveNeuro:    resolved.WeightRemoveNeuro,
-		WeightPlasticityRule: resolved.WeightPlasticityRule,
-		WeightPlasticity:     resolved.WeightPlasticity,
-		WeightSubstrate:      resolved.WeightSubstrate,
+		GTSAProfile:            resolved.GTSAProfile,
+		FXProfile:              resolved.FXProfile,
+		FlatlandScannerProfile: resolved.FlatlandScannerProfile,
+		Selection:              resolved.PopulationSelection,
+		TuneSelection:          resolved.TuningSelection,
+		WeightPerturb:          resolved.WeightPerturb,
+		WeightBias:             resolved.WeightBias,
+		WeightRemoveBias:       resolved.WeightRemoveBias,
+		WeightActivation:       resolved.WeightActivation,
+		WeightAggregator:       resolved.WeightAggregator,
+		WeightAddSyn:           resolved.WeightAddSyn,
+		WeightRemoveSyn:        resolved.WeightRemoveSyn,
+		WeightAddNeuro:         resolved.WeightAddNeuro,
+		WeightRemoveNeuro:      resolved.WeightRemoveNeuro,
+		WeightPlasticityRule:   resolved.WeightPlasticityRule,
+		WeightPlasticity:       resolved.WeightPlasticity,
+		WeightSubstrate:        resolved.WeightSubstrate,
 	}, nil
 }
 
@@ -130,12 +148,16 @@ func resolveParityProfile(profileID string) (parityProfileResolved, error) {
 		}
 		constraint := map2rec.ConvertConstraint(profileToConstraintMap(profile))
 		resolved := parityProfileResolved{
-			ID:                  profile.ID,
-			PopulationSelection: mapPopulationSelection(constraint.PopulationSelectionF),
-			TuningSelection:     mapTuningSelection(firstOrEmpty(constraint.TuningSelectionFs)),
-			ExpectedSelection:   profile.ExpectedSelection,
-			ExpectedTuning:      profile.ExpectedTuning,
-			MutationOperatorLen: len(profile.MutationOperators),
+			ID:                     profile.ID,
+			Morphology:             profile.Morphology,
+			GTSAProfile:            profile.GTSAProfile,
+			FXProfile:              profile.FXProfile,
+			FlatlandScannerProfile: profile.FlatlandScannerProfile,
+			PopulationSelection:    mapPopulationSelection(constraint.PopulationSelectionF),
+			TuningSelection:        mapTuningSelection(firstOrEmpty(constraint.TuningSelectionFs)),
+			ExpectedSelection:      profile.ExpectedSelection,
+			ExpectedTuning:         profile.ExpectedTuning,
+			MutationOperatorLen:    len(profile.MutationOperators),
 		}
 		for _, op := range constraint.MutationOperators {
 			switch mutationWeightBucket(op.Name) {
@@ -203,12 +225,16 @@ func listParityProfiles() ([]parityProfileInfo, error) {
 	out := make([]parityProfileInfo, 0, len(fixture.Profiles))
 	for _, profile := range fixture.Profiles {
 		out = append(out, parityProfileInfo{
-			ID:                  profile.ID,
-			PopulationSelection: mapPopulationSelection(profile.PopulationSelection),
-			TuningSelection:     mapTuningSelection(profile.TuningSelection),
-			ExpectedSelection:   profile.ExpectedSelection,
-			ExpectedTuning:      profile.ExpectedTuning,
-			MutationOperatorLen: len(profile.MutationOperators),
+			ID:                     profile.ID,
+			Morphology:             profile.Morphology,
+			GTSAProfile:            profile.GTSAProfile,
+			FXProfile:              profile.FXProfile,
+			FlatlandScannerProfile: profile.FlatlandScannerProfile,
+			PopulationSelection:    mapPopulationSelection(profile.PopulationSelection),
+			TuningSelection:        mapTuningSelection(profile.TuningSelection),
+			ExpectedSelection:      profile.ExpectedSelection,
+			ExpectedTuning:         profile.ExpectedTuning,
+			MutationOperatorLen:    len(profile.MutationOperators),
 		})
 	}
 	return out, nil

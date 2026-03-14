@@ -18,6 +18,24 @@ func TestLoadParityPreset(t *testing.T) {
 	}
 }
 
+func TestLoadParityPresetCarriesSeedProfiles(t *testing.T) {
+	preset, err := loadParityPreset("parity-fx-market")
+	if err != nil {
+		t.Fatalf("load preset: %v", err)
+	}
+	if preset.FXProfile != "market" {
+		t.Fatalf("expected fx market preset profile, got %q", preset.FXProfile)
+	}
+
+	preset, err = loadParityPreset("parity-gtsa-core")
+	if err != nil {
+		t.Fatalf("load preset: %v", err)
+	}
+	if preset.GTSAProfile != "core" {
+		t.Fatalf("expected gtsa core preset profile, got %q", preset.GTSAProfile)
+	}
+}
+
 func TestLoadParityPresetMissing(t *testing.T) {
 	_, err := loadParityPreset("missing-profile")
 	if err == nil {
@@ -38,6 +56,24 @@ func TestResolveParityProfile(t *testing.T) {
 	}
 	if resolved.TuningSelection != resolved.ExpectedTuning {
 		t.Fatalf("tuning mismatch: got=%s expected=%s", resolved.TuningSelection, resolved.ExpectedTuning)
+	}
+}
+
+func TestResolveParityProfileIncludesSeedProfiles(t *testing.T) {
+	resolved, err := resolveParityProfile("parity-fx-market")
+	if err != nil {
+		t.Fatalf("resolve profile: %v", err)
+	}
+	if resolved.FXProfile != "market" {
+		t.Fatalf("expected fx market profile, got %q", resolved.FXProfile)
+	}
+
+	resolved, err = resolveParityProfile("parity-gtsa-core")
+	if err != nil {
+		t.Fatalf("resolve profile: %v", err)
+	}
+	if resolved.GTSAProfile != "core" {
+		t.Fatalf("expected gtsa core profile, got %q", resolved.GTSAProfile)
 	}
 }
 
