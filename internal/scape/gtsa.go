@@ -69,7 +69,7 @@ func evaluateGTSAWithTick(ctx context.Context, ticker TickAgent, cfg gtsaModeCon
 		return 0, nil, err
 	}
 
-	return evaluateGTSA(ctx, cfg, func(ctx context.Context, percept gtsaPercept) (float64, error) {
+	fitness, trace, err := evaluateGTSA(ctx, cfg, func(ctx context.Context, percept gtsaPercept) (float64, error) {
 		io.input.Set(percept.current)
 		if io.delta != nil {
 			io.delta.Set(percept.delta)
@@ -93,6 +93,12 @@ func evaluateGTSAWithTick(ctx context.Context, ticker TickAgent, cfg gtsaModeCon
 		}
 		return 0, nil
 	})
+	if err != nil {
+		return 0, nil, err
+	}
+	trace["sensor_surface"] = io.sensorSurface()
+	trace["sensor_width"] = io.sensorWidth()
+	return fitness, trace, nil
 }
 
 func evaluateGTSA(
@@ -309,6 +315,27 @@ type gtsaIOBindings struct {
 	windowMean    protoio.ScalarSensorSetter
 	progress      protoio.ScalarSensorSetter
 	predictOutput protoio.SnapshotActuator
+}
+
+func (b gtsaIOBindings) sensorSurface() string {
+	if b.delta == nil && b.windowMean == nil && b.progress == nil {
+		return "core"
+	}
+	return "extended"
+}
+
+func (b gtsaIOBindings) sensorWidth() int {
+	width := 1
+	if b.delta != nil {
+		width++
+	}
+	if b.windowMean != nil {
+		width++
+	}
+	if b.progress != nil {
+		width++
+	}
+	return width
 }
 
 type gtsaPercept struct {

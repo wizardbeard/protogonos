@@ -111,6 +111,12 @@ func TestGTSAScapeEvaluateWithIOComponents(t *testing.T) {
 	if _, ok := trace["mse"].(float64); !ok {
 		t.Fatalf("trace missing mse: %+v", trace)
 	}
+	if surface, _ := trace["sensor_surface"].(string); surface != "core" {
+		t.Fatalf("expected core sensor surface, got %+v", trace)
+	}
+	if width, _ := trace["sensor_width"].(int); width != 1 {
+		t.Fatalf("expected core sensor width 1, got %+v", trace)
+	}
 }
 
 func TestGTSAScapeEvaluateWithExtendedIOComponents(t *testing.T) {
@@ -173,6 +179,12 @@ func TestGTSAScapeEvaluateWithExtendedIOComponents(t *testing.T) {
 	}
 	if _, ok := trace["last_progress"].(float64); !ok {
 		t.Fatalf("trace missing last_progress: %+v", trace)
+	}
+	if surface, _ := trace["sensor_surface"].(string); surface != "extended" {
+		t.Fatalf("expected extended sensor surface, got %+v", trace)
+	}
+	if width, _ := trace["sensor_width"].(int); width != 4 {
+		t.Fatalf("expected extended sensor width 4, got %+v", trace)
 	}
 }
 

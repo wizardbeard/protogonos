@@ -74,7 +74,7 @@ func evaluateFXWithTick(ctx context.Context, ticker TickAgent, cfg fxModeConfig)
 		return 0, nil, err
 	}
 
-	return evaluateFX(ctx, cfg, func(ctx context.Context, percept []float64) (float64, error) {
+	fitness, trace, err := evaluateFX(ctx, cfg, func(ctx context.Context, percept []float64) (float64, error) {
 		if len(percept) < 2 {
 			return 0, fmt.Errorf("fx percept width <2 for tick agent: %d", len(percept))
 		}
@@ -120,6 +120,12 @@ func evaluateFXWithTick(ctx context.Context, ticker TickAgent, cfg fxModeConfig)
 		}
 		return 0, nil
 	})
+	if err != nil {
+		return 0, nil, err
+	}
+	trace["sensor_surface"] = io.sensorSurface()
+	trace["sensor_width"] = io.sensorWidth()
+	return fitness, trace, nil
 }
 
 func evaluateFX(
@@ -421,6 +427,41 @@ type fxIOBindings struct {
 	prevPercentChange protoio.ScalarSensorSetter
 	profit            protoio.ScalarSensorSetter
 	tradeOutput       protoio.SnapshotActuator
+}
+
+func (b fxIOBindings) sensorSurface() string {
+	if b.momentum == nil &&
+		b.volatility == nil &&
+		b.nav == nil &&
+		b.drawdown == nil &&
+		b.position == nil &&
+		b.entry == nil &&
+		b.percentChange == nil &&
+		b.prevPercentChange == nil &&
+		b.profit == nil {
+		return "market"
+	}
+	return "extended"
+}
+
+func (b fxIOBindings) sensorWidth() int {
+	width := 2
+	for _, setter := range []protoio.ScalarSensorSetter{
+		b.momentum,
+		b.volatility,
+		b.nav,
+		b.drawdown,
+		b.position,
+		b.entry,
+		b.percentChange,
+		b.prevPercentChange,
+		b.profit,
+	} {
+		if setter != nil {
+			width++
+		}
+	}
+	return width
 }
 
 func fxIO(agent TickAgent) (fxIOBindings, error) {
