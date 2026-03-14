@@ -1386,12 +1386,12 @@ func TestBenchmarkExperimentEvaluationsAndReport(t *testing.T) {
 	}
 
 	chgOut, err := captureStdout(func() error {
-		return run(context.Background(), []string{"benchmark-experiment", "chg-mrph", "--id", "exp-reporting", "--run-id", "exp-reporting-run-001", "--scape", "regression-mimic"})
+		return run(context.Background(), []string{"benchmark-experiment", "chg-mrph", "--id", "exp-reporting", "--run-id", "exp-reporting-run-001", "--scape", "fx[market]"})
 	})
 	if err != nil {
 		t.Fatalf("benchmark-experiment chg-mrph: %v", err)
 	}
-	if !strings.Contains(chgOut, "benchmark_experiment_chg_mrph id=exp-reporting scape=regression-mimic") {
+	if !strings.Contains(chgOut, "benchmark_experiment_chg_mrph id=exp-reporting scape=fx morphology=fx[market]") {
 		t.Fatalf("unexpected chg-mrph output: %s", chgOut)
 	}
 	expAfter, ok, err := stats.ReadBenchmarkExperiment("benchmarks", "exp-reporting")
@@ -1402,8 +1402,14 @@ func TestBenchmarkExperimentEvaluationsAndReport(t *testing.T) {
 		t.Fatal("expected experiment to exist after chg-mrph")
 	}
 	joinedArgs := strings.Join(expAfter.BenchmarkArgs, " ")
-	if !strings.Contains(joinedArgs, "--scape regression-mimic") && !strings.Contains(joinedArgs, "--scape=regression-mimic") {
+	if !strings.Contains(joinedArgs, "--scape fx") && !strings.Contains(joinedArgs, "--scape=fx") {
 		t.Fatalf("expected updated scape arg in benchmark args: %v", expAfter.BenchmarkArgs)
+	}
+	if !strings.Contains(joinedArgs, "--fx-profile market") && !strings.Contains(joinedArgs, "--fx-profile=market") {
+		t.Fatalf("expected updated fx-profile arg in benchmark args: %v", expAfter.BenchmarkArgs)
+	}
+	if len(expAfter.Summaries) == 0 || expAfter.Summaries[0].Morphology != "fx[market]" {
+		t.Fatalf("expected experiment summaries to carry profiled morphology, got %+v", expAfter.Summaries)
 	}
 	cfgAfter, ok, err := stats.ReadRunConfig("benchmarks", "exp-reporting-run-001")
 	if err != nil {
@@ -1412,8 +1418,18 @@ func TestBenchmarkExperimentEvaluationsAndReport(t *testing.T) {
 	if !ok {
 		t.Fatal("expected run config to exist after chg-mrph")
 	}
-	if cfgAfter.Scape != "regression-mimic" {
+	if cfgAfter.Scape != "fx" || cfgAfter.FXProfile != "market" {
 		t.Fatalf("expected run config scape update, got %+v", cfgAfter)
+	}
+	summaryAfter, ok, err := stats.ReadBenchmarkSummary("benchmarks", "exp-reporting-run-001")
+	if err != nil {
+		t.Fatalf("read benchmark summary after chg-mrph: %v", err)
+	}
+	if !ok {
+		t.Fatal("expected benchmark summary to exist after chg-mrph")
+	}
+	if summaryAfter.Morphology != "fx[market]" || summaryAfter.FXProfile != "market" {
+		t.Fatalf("expected benchmark summary profile update, got %+v", summaryAfter)
 	}
 
 	vectorOut, err := captureStdout(func() error {

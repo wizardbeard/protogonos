@@ -518,12 +518,16 @@ func runBenchmarkExperimentChangeMorphology(args []string) error {
 	}
 	experimentID := strings.TrimSpace(*id)
 	targetRunID := strings.TrimSpace(*runID)
-	newScape := strings.TrimSpace(*scapeName)
-	if newScape == "" {
+	newMorphology := strings.TrimSpace(*scapeName)
+	if newMorphology == "" {
 		return errors.New("benchmark-experiment chg-mrph requires --scape")
 	}
 	if experimentID == "" && targetRunID == "" {
 		return errors.New("benchmark-experiment chg-mrph requires --id or --run-id")
+	}
+	newScape, gtsaProfile, fxProfile, flatlandScannerProfile, err := parseBenchmarkMorphologyTag(newMorphology)
+	if err != nil {
+		return err
 	}
 
 	if experimentID != "" {
@@ -535,10 +539,11 @@ func runBenchmarkExperimentChangeMorphology(args []string) error {
 			return fmt.Errorf("benchmark experiment not found: %s", experimentID)
 		}
 		exp.BenchmarkArgs = upsertLongFlagArg(exp.BenchmarkArgs, "scape", newScape)
+		exp.BenchmarkArgs = rewriteBenchmarkMorphologyArgs(exp.BenchmarkArgs, gtsaProfile, fxProfile, flatlandScannerProfile)
 		if err := stats.WriteBenchmarkExperiment(benchmarksDir, exp); err != nil {
 			return err
 		}
-		fmt.Printf("benchmark_experiment_chg_mrph id=%s scape=%s\n", exp.ID, newScape)
+		fmt.Printf("benchmark_experiment_chg_mrph id=%s scape=%s morphology=%s\n", exp.ID, newScape, stats.BenchmarkMorphologyLabel(newScape, gtsaProfile, fxProfile, flatlandScannerProfile))
 	}
 
 	if targetRunID != "" {
@@ -551,6 +556,9 @@ func runBenchmarkExperimentChangeMorphology(args []string) error {
 		}
 		oldScape := cfg.Scape
 		cfg.Scape = newScape
+		cfg.GTSAProfile = gtsaProfile
+		cfg.FXProfile = fxProfile
+		cfg.FlatlandScannerProfile = flatlandScannerProfile
 		if err := stats.WriteRunConfig(benchmarksDir, targetRunID, cfg); err != nil {
 			return err
 		}
@@ -563,12 +571,122 @@ func runBenchmarkExperimentChangeMorphology(args []string) error {
 				continue
 			}
 			entry.Scape = newScape
+			entry.GTSAProfile = gtsaProfile
+			entry.FXProfile = fxProfile
+			entry.FlatlandScannerProfile = flatlandScannerProfile
+			entry.Morphology = stats.BenchmarkMorphologyLabel(newScape, gtsaProfile, fxProfile, flatlandScannerProfile)
 			if err := stats.AppendRunIndex(benchmarksDir, entry); err != nil {
 				return err
 			}
 			break
 		}
-		fmt.Printf("benchmark_run_chg_mrph run_id=%s old_scape=%s new_scape=%s\n", targetRunID, oldScape, newScape)
+		if summary, ok, err := stats.ReadBenchmarkSummary(benchmarksDir, targetRunID); err != nil {
+			return err
+		} else if ok {
+			summary.Scape = newScape
+			summary.GTSAProfile = gtsaProfile
+			summary.FXProfile = fxProfile
+			summary.FlatlandScannerProfile = flatlandScannerProfile
+			summary.Morphology = stats.BenchmarkMorphologyLabel(newScape, gtsaProfile, fxProfile, flatlandScannerProfile)
+			if err := stats.WriteBenchmarkSummary(filepath.Join(benchmarksDir, targetRunID), summary); err != nil {
+				return err
+			}
+		}
+		if err := rewriteExperimentSummaryMorphology(targetRunID, newScape, gtsaProfile, fxProfile, flatlandScannerProfile); err != nil {
+			return err
+		}
+		fmt.Printf("benchmark_run_chg_mrph run_id=%s old_scape=%s new_scape=%s morphology=%s\n", targetRunID, oldScape, newScape, stats.BenchmarkMorphologyLabel(newScape, gtsaProfile, fxProfile, flatlandScannerProfile))
+	}
+	return nil
+}
+
+func parseBenchmarkMorphologyTag(raw string) (string, string, string, string, error) {
+	tag := strings.TrimSpace(raw)
+	if tag == "" {
+		return "", "", "", "", errors.New("benchmark morphology tag is required")
+	}
+	base := tag
+	profile := ""
+	if open := strings.Index(tag, "["); open >= 0 {
+		if !strings.HasSuffix(tag, "]") || open == 0 {
+			return "", "", "", "", fmt.Errorf("invalid morphology tag: %s", raw)
+		}
+		base = strings.TrimSpace(tag[:open])
+		profile = strings.TrimSpace(tag[open+1 : len(tag)-1])
+	}
+	switch base {
+	case "gtsa":
+		return base, profile, "", "", nil
+	case "fx":
+		return base, "", profile, "", nil
+	case "flatland":
+		return base, "", "", profile, nil
+	default:
+		if profile != "" {
+			return "", "", "", "", fmt.Errorf("profiled morphology tag is unsupported for scape: %s", raw)
+		}
+		return base, "", "", "", nil
+	}
+}
+
+func rewriteBenchmarkMorphologyArgs(args []string, gtsaProfile, fxProfile, flatlandScannerProfile string) []string {
+	args = removeLongFlagArg(args, "gtsa-profile")
+	args = removeLongFlagArg(args, "fx-profile")
+	args = removeLongFlagArg(args, "flatland-scanner-profile")
+	if gtsaProfile != "" {
+		args = upsertLongFlagArg(args, "gtsa-profile", gtsaProfile)
+	}
+	if fxProfile != "" {
+		args = upsertLongFlagArg(args, "fx-profile", fxProfile)
+	}
+	if flatlandScannerProfile != "" {
+		args = upsertLongFlagArg(args, "flatland-scanner-profile", flatlandScannerProfile)
+	}
+	return args
+}
+
+func removeLongFlagArg(args []string, flagName string) []string {
+	normalized := make([]string, 0, len(args))
+	for i := 0; i < len(args); i++ {
+		arg := args[i]
+		switch {
+		case arg == "--"+flagName:
+			if i+1 < len(args) {
+				i++
+			}
+		case strings.HasPrefix(arg, "--"+flagName+"="):
+			continue
+		default:
+			normalized = append(normalized, arg)
+		}
+	}
+	return normalized
+}
+
+func rewriteExperimentSummaryMorphology(runID, scapeName, gtsaProfile, fxProfile, flatlandScannerProfile string) error {
+	exps, err := stats.ListBenchmarkExperiments(benchmarksDir)
+	if err != nil {
+		return err
+	}
+	morphology := stats.BenchmarkMorphologyLabel(scapeName, gtsaProfile, fxProfile, flatlandScannerProfile)
+	for _, exp := range exps {
+		changed := false
+		for i := range exp.Summaries {
+			if exp.Summaries[i].RunID != runID {
+				continue
+			}
+			exp.Summaries[i].Scape = scapeName
+			exp.Summaries[i].GTSAProfile = gtsaProfile
+			exp.Summaries[i].FXProfile = fxProfile
+			exp.Summaries[i].FlatlandScannerProfile = flatlandScannerProfile
+			exp.Summaries[i].Morphology = morphology
+			changed = true
+		}
+		if changed {
+			if err := stats.WriteBenchmarkExperiment(benchmarksDir, exp); err != nil {
+				return err
+			}
+		}
 	}
 	return nil
 }

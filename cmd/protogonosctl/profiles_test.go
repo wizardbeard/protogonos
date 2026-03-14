@@ -1,6 +1,9 @@
 package main
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 func TestLoadParityPreset(t *testing.T) {
 	preset, err := loadParityPreset("ref-default-xorandxor")
@@ -117,5 +120,34 @@ func TestMapPopulationSelectionAliases(t *testing.T) {
 		if got := mapPopulationSelection(in); got != want {
 			t.Fatalf("mapPopulationSelection(%q)=%q want=%q", in, got, want)
 		}
+	}
+}
+
+func TestParseBenchmarkMorphologyTag(t *testing.T) {
+	scape, gtsa, fx, flatland, err := parseBenchmarkMorphologyTag("fx[market]")
+	if err != nil {
+		t.Fatalf("parse fx morphology tag: %v", err)
+	}
+	if scape != "fx" || fx != "market" || gtsa != "" || flatland != "" {
+		t.Fatalf("unexpected fx morphology parse: scape=%q gtsa=%q fx=%q flatland=%q", scape, gtsa, fx, flatland)
+	}
+
+	scape, gtsa, fx, flatland, err = parseBenchmarkMorphologyTag("gtsa[core]")
+	if err != nil {
+		t.Fatalf("parse gtsa morphology tag: %v", err)
+	}
+	if scape != "gtsa" || gtsa != "core" || fx != "" || flatland != "" {
+		t.Fatalf("unexpected gtsa morphology parse: scape=%q gtsa=%q fx=%q flatland=%q", scape, gtsa, fx, flatland)
+	}
+}
+
+func TestRewriteBenchmarkMorphologyArgs(t *testing.T) {
+	args := rewriteBenchmarkMorphologyArgs([]string{"--scape", "gtsa", "--gtsa-profile", "core", "--fx-profile", "market"}, "", "market", "")
+	joined := strings.Join(args, " ")
+	if strings.Contains(joined, "gtsa-profile") {
+		t.Fatalf("expected gtsa-profile to be removed, args=%v", args)
+	}
+	if !strings.Contains(joined, "--fx-profile market") {
+		t.Fatalf("expected fx-profile to be added, args=%v", args)
 	}
 }
