@@ -507,6 +507,7 @@ func runRuns(_ context.Context, args []string) error {
 			RunID              string   `json:"run_id"`
 			CreatedAtUTC       string   `json:"created_at_utc"`
 			Scape              string   `json:"scape"`
+			Morphology         string   `json:"morphology"`
 			Seed               int64    `json:"seed"`
 			PopulationSize     int      `json:"population_size"`
 			Generations        int      `json:"generations"`
@@ -531,6 +532,7 @@ func runRuns(_ context.Context, args []string) error {
 				RunID:              e.RunID,
 				CreatedAtUTC:       e.CreatedAtUTC,
 				Scape:              e.Scape,
+				Morphology:         e.Morphology,
 				Seed:               e.Seed,
 				PopulationSize:     e.PopulationSize,
 				Generations:        e.Generations,
@@ -556,10 +558,11 @@ func runRuns(_ context.Context, args []string) error {
 			}
 		}
 
-		fmt.Printf("run_id=%s created_at=%s scape=%s seed=%d pop=%d gens=%d tuning=%t final_best_fitness=%.6f compare_improvement=%s\n",
+		fmt.Printf("run_id=%s created_at=%s scape=%s morphology=%s seed=%d pop=%d gens=%d tuning=%t final_best_fitness=%.6f compare_improvement=%s\n",
 			e.RunID,
 			e.CreatedAtUTC,
 			e.Scape,
+			e.Morphology,
 			e.Seed,
 			e.PopulationSize,
 			e.Generations,
@@ -1610,7 +1613,13 @@ func runExport(_ context.Context, args []string) error {
 		return err
 	}
 
-	fmt.Printf("exported run_id=%s to=%s\n", *runID, filepath.Clean(exportedDir))
+	morphology := ""
+	if cfg, ok, err := stats.ReadRunConfig(benchmarksDir, *runID); err != nil {
+		return err
+	} else if ok {
+		morphology = stats.BenchmarkMorphologyLabelFromConfig(cfg)
+	}
+	fmt.Printf("exported run_id=%s morphology=%s to=%s\n", *runID, morphology, filepath.Clean(exportedDir))
 	return nil
 }
 

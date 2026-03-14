@@ -356,6 +356,9 @@ func TestRunsCommandSQLiteListsPersistedRun(t *testing.T) {
 	if !strings.Contains(output, "run_id="+expectedRunID) {
 		t.Fatalf("runs output missing expected run id %s: %s", expectedRunID, output)
 	}
+	if !strings.Contains(output, "morphology=xor") {
+		t.Fatalf("runs output missing morphology label: %s", output)
+	}
 
 	jsonOutput, err := captureStdout(func() error {
 		return run(context.Background(), []string{
@@ -376,6 +379,9 @@ func TestRunsCommandSQLiteListsPersistedRun(t *testing.T) {
 	}
 	if _, ok := parsed[0]["run_id"]; !ok {
 		t.Fatalf("expected run_id field in runs json output: %v", parsed[0])
+	}
+	if _, ok := parsed[0]["morphology"]; !ok {
+		t.Fatalf("expected morphology field in runs json output: %v", parsed[0])
 	}
 }
 

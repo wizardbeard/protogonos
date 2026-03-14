@@ -81,6 +81,9 @@ func TestClientRunRunsAndExport(t *testing.T) {
 	if len(runs) == 0 || runs[0].RunID != summary.RunID {
 		t.Fatalf("expected latest run %s in runs list: %+v", summary.RunID, runs)
 	}
+	if runs[0].Morphology != "xor" {
+		t.Fatalf("expected xor morphology in runs list, got %+v", runs[0])
+	}
 
 	lineage, err := client.Lineage(context.Background(), LineageRequest{RunID: summary.RunID, Limit: 10})
 	if err != nil {
@@ -154,6 +157,9 @@ func TestClientRunRunsAndExport(t *testing.T) {
 	}
 	if exported.RunID != summary.RunID {
 		t.Fatalf("exported run mismatch: got=%s want=%s", exported.RunID, summary.RunID)
+	}
+	if exported.Morphology != "xor" {
+		t.Fatalf("expected xor morphology in export summary, got %+v", exported)
 	}
 
 	for _, file := range []string{"config.json", "fitness_history.json", "top_genomes.json", "lineage.json", "generation_diagnostics.json", "species_history.json"} {
@@ -1401,6 +1407,49 @@ func TestClientRunValidationOpModeForcesTuningFlagsOffInArtifacts(t *testing.T) 
 	}
 	if runs[0].TuningEnabled {
 		t.Fatal("expected tuning_enabled=false in run index for validation mode")
+	}
+}
+
+func TestClientRunsAndExportExposeProfiledMorphology(t *testing.T) {
+	base := t.TempDir()
+	client, err := New(Options{
+		StoreKind:     "memory",
+		BenchmarksDir: filepath.Join(base, "benchmarks"),
+		ExportsDir:    filepath.Join(base, "exports"),
+	})
+	if err != nil {
+		t.Fatalf("new client: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = client.Close()
+	})
+
+	summary, err := client.Run(context.Background(), RunRequest{
+		RunID:       "fx-market-run",
+		Scape:       "fx",
+		FXProfile:   "market",
+		Population:  2,
+		Generations: 1,
+		Seed:        41,
+	})
+	if err != nil {
+		t.Fatalf("run: %v", err)
+	}
+
+	runs, err := client.Runs(context.Background(), RunsRequest{Limit: 1})
+	if err != nil {
+		t.Fatalf("runs: %v", err)
+	}
+	if len(runs) != 1 || runs[0].Morphology != "fx[market]" {
+		t.Fatalf("expected profiled morphology in runs list, got %+v", runs)
+	}
+
+	exported, err := client.Export(context.Background(), ExportRequest{RunID: summary.RunID})
+	if err != nil {
+		t.Fatalf("export: %v", err)
+	}
+	if exported.Morphology != "fx[market]" {
+		t.Fatalf("expected profiled morphology in export summary, got %+v", exported)
 	}
 }
 

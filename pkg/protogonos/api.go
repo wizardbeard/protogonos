@@ -158,6 +158,7 @@ type RunItem struct {
 	RunID              string
 	CreatedAtUTC       string
 	Scape              string
+	Morphology         string
 	Seed               int64
 	Population         int
 	Generations        int
@@ -173,8 +174,9 @@ type ExportRequest struct {
 }
 
 type ExportSummary struct {
-	RunID     string
-	Directory string
+	RunID      string
+	Morphology string
+	Directory  string
 }
 
 type LineageRequest struct {
@@ -983,6 +985,7 @@ func (c *Client) Runs(_ context.Context, req RunsRequest) ([]RunItem, error) {
 			RunID:            e.RunID,
 			CreatedAtUTC:     e.CreatedAtUTC,
 			Scape:            e.Scape,
+			Morphology:       e.Morphology,
 			Seed:             e.Seed,
 			Population:       e.PopulationSize,
 			Generations:      e.Generations,
@@ -1025,13 +1028,25 @@ func (c *Client) Export(_ context.Context, req ExportRequest) (ExportSummary, er
 			return ExportSummary{}, errors.New("no runs available to export")
 		}
 		runID = entries[0].RunID
+		return c.exportRunByID(runID, entries[0].Morphology, req.OutDir)
 	}
-
-	exportedDir, err := stats.ExportRunArtifacts(c.benchmarksDir, runID, req.OutDir)
+	cfg, ok, err := stats.ReadRunConfig(c.benchmarksDir, runID)
 	if err != nil {
 		return ExportSummary{}, err
 	}
-	return ExportSummary{RunID: runID, Directory: filepath.Clean(exportedDir)}, nil
+	morphology := ""
+	if ok {
+		morphology = stats.BenchmarkMorphologyLabelFromConfig(cfg)
+	}
+	return c.exportRunByID(runID, morphology, req.OutDir)
+}
+
+func (c *Client) exportRunByID(runID, morphology, outDir string) (ExportSummary, error) {
+	exportedDir, err := stats.ExportRunArtifacts(c.benchmarksDir, runID, outDir)
+	if err != nil {
+		return ExportSummary{}, err
+	}
+	return ExportSummary{RunID: runID, Morphology: morphology, Directory: filepath.Clean(exportedDir)}, nil
 }
 
 func (c *Client) Lineage(ctx context.Context, req LineageRequest) ([]LineageItem, error) {
