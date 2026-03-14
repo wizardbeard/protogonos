@@ -64,6 +64,9 @@ func TestBuildBenchmarkEvaluationStats(t *testing.T) {
 	if !stats.Runs[0].Success || stats.Runs[0].Evaluations != 20 {
 		t.Fatalf("unexpected first run evaluation detail: %+v", stats.Runs[0])
 	}
+	if stats.Runs[0].Morphology != "xor" {
+		t.Fatalf("expected evaluation run morphology label, got %+v", stats.Runs[0])
+	}
 	if stats.Runs[1].Success {
 		t.Fatalf("expected second run to fail goal: %+v", stats.Runs[1])
 	}

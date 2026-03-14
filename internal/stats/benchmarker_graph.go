@@ -66,10 +66,7 @@ func BuildBenchmarkerGraphs(baseDir string, exp BenchmarkExperiment) ([]Benchmar
 		if !ok {
 			traceAcc = nil
 		}
-		morphology := strings.TrimSpace(cfg.Scape)
-		if morphology == "" {
-			morphology = "unknown"
-		}
+		morphology := BenchmarkMorphologyLabelFromConfig(cfg)
 		runsByMorphology[morphology] = append(runsByMorphology[morphology], benchmarkRunGraphData{
 			populationSize: cfg.PopulationSize,
 			series:         series,

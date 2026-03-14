@@ -1431,20 +1431,24 @@ func runBenchmark(ctx context.Context, args []string) error {
 	improvement := runSummary.FinalBestFitness - initialBest
 	passed := improvement >= *minImprovement
 	report := stats.BenchmarkSummary{
-		RunID:          runSummary.RunID,
-		Scape:          req.Scape,
-		PopulationSize: req.Population,
-		Generations:    req.Generations,
-		Seed:           req.Seed,
-		InitialBest:    initialBest,
-		FinalBest:      runSummary.FinalBestFitness,
-		BestMean:       bestMean,
-		BestStd:        bestStd,
-		BestMax:        bestMax,
-		BestMin:        bestMin,
-		Improvement:    improvement,
-		MinImprovement: *minImprovement,
-		Passed:         passed,
+		RunID:                  runSummary.RunID,
+		Scape:                  req.Scape,
+		Morphology:             stats.BenchmarkMorphologyLabel(req.Scape, req.GTSAProfile, req.FXProfile, req.FlatlandScannerProfile),
+		GTSAProfile:            req.GTSAProfile,
+		FXProfile:              req.FXProfile,
+		FlatlandScannerProfile: req.FlatlandScannerProfile,
+		PopulationSize:         req.Population,
+		Generations:            req.Generations,
+		Seed:                   req.Seed,
+		InitialBest:            initialBest,
+		FinalBest:              runSummary.FinalBestFitness,
+		BestMean:               bestMean,
+		BestStd:                bestStd,
+		BestMax:                bestMax,
+		BestMin:                bestMin,
+		Improvement:            improvement,
+		MinImprovement:         *minImprovement,
+		Passed:                 passed,
 	}
 	if err := stats.WriteBenchmarkSummary(runSummary.ArtifactsDir, report); err != nil {
 		return err
@@ -1453,9 +1457,10 @@ func runBenchmark(ctx context.Context, args []string) error {
 		return err
 	}
 
-	fmt.Printf("benchmark run_id=%s scape=%s initial_best=%.6f final_best=%.6f mean_best=%.6f std_best=%.6f best_min=%.6f best_max=%.6f improvement=%.6f threshold=%.6f passed=%t\n",
+	fmt.Printf("benchmark run_id=%s scape=%s morphology=%s initial_best=%.6f final_best=%.6f mean_best=%.6f std_best=%.6f best_min=%.6f best_max=%.6f improvement=%.6f threshold=%.6f passed=%t\n",
 		runSummary.RunID,
 		req.Scape,
+		report.Morphology,
 		initialBest,
 		runSummary.FinalBestFitness,
 		bestMean,

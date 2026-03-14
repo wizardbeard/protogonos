@@ -109,6 +109,7 @@ func TestWriteAndExportRunArtifacts(t *testing.T) {
 	if err := WriteBenchmarkSummary(runDir, BenchmarkSummary{
 		RunID:          runID,
 		Scape:          "xor",
+		Morphology:     "xor",
 		PopulationSize: 4,
 		Generations:    3,
 		Seed:           1,
@@ -175,6 +176,7 @@ func TestRunIndexAppendListAndUpsert(t *testing.T) {
 	err := AppendRunIndex(baseDir, RunIndexEntry{
 		RunID:            "run-1",
 		Scape:            "xor",
+		Morphology:       "xor",
 		PopulationSize:   8,
 		Generations:      3,
 		Seed:             1,
@@ -190,6 +192,7 @@ func TestRunIndexAppendListAndUpsert(t *testing.T) {
 	err = AppendRunIndex(baseDir, RunIndexEntry{
 		RunID:            "run-2",
 		Scape:            "xor",
+		Morphology:       "xor",
 		PopulationSize:   8,
 		Generations:      3,
 		Seed:             2,
@@ -216,6 +219,7 @@ func TestRunIndexAppendListAndUpsert(t *testing.T) {
 	err = AppendRunIndex(baseDir, RunIndexEntry{
 		RunID:            "run-1",
 		Scape:            "xor",
+		Morphology:       "xor",
 		PopulationSize:   8,
 		Generations:      3,
 		Seed:             1,
@@ -237,6 +241,9 @@ func TestRunIndexAppendListAndUpsert(t *testing.T) {
 	}
 	if entries[0].RunID != "run-1" || entries[0].FinalBestFitness != 0.90 {
 		t.Fatalf("unexpected upsert result: %+v", entries[0])
+	}
+	if entries[0].Morphology != "xor" {
+		t.Fatalf("expected morphology to survive run index persistence, got %+v", entries[0])
 	}
 }
 
@@ -399,6 +406,7 @@ func TestReadBenchmarkSummary(t *testing.T) {
 	want := BenchmarkSummary{
 		RunID:          runID,
 		Scape:          "xor",
+		Morphology:     "xor",
 		PopulationSize: 8,
 		Generations:    3,
 		Seed:           9,
@@ -422,7 +430,29 @@ func TestReadBenchmarkSummary(t *testing.T) {
 	if !ok {
 		t.Fatalf("expected benchmark summary to exist")
 	}
-	if got.RunID != want.RunID || got.Scape != want.Scape || got.BestMean != want.BestMean {
+	if got.RunID != want.RunID || got.Scape != want.Scape || got.Morphology != want.Morphology || got.BestMean != want.BestMean {
 		t.Fatalf("unexpected benchmark summary: %+v", got)
+	}
+}
+
+func TestBenchmarkMorphologyLabel(t *testing.T) {
+	cases := []struct {
+		scape    string
+		gtsa     string
+		fx       string
+		flatland string
+		want     string
+	}{
+		{scape: "gtsa", gtsa: "core", want: "gtsa[core]"},
+		{scape: "fx", fx: "market", want: "fx[market]"},
+		{scape: "flatland", flatland: "core3", want: "flatland[core3]"},
+		{scape: "fx", fx: "default", want: "fx"},
+		{scape: "xor", want: "xor"},
+		{scape: "", want: "unknown"},
+	}
+	for _, tc := range cases {
+		if got := BenchmarkMorphologyLabel(tc.scape, tc.gtsa, tc.fx, tc.flatland); got != tc.want {
+			t.Fatalf("BenchmarkMorphologyLabel(%q,%q,%q,%q)=%q want=%q", tc.scape, tc.gtsa, tc.fx, tc.flatland, got, tc.want)
+		}
 	}
 }

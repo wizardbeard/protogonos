@@ -165,7 +165,11 @@ func runBenchmarkExperimentShow(args []string) error {
 			finalBest = exp.Summaries[i].FinalBest
 			passed = exp.Summaries[i].Passed
 		}
-		fmt.Printf("run=%d run_id=%s final_best=%.6f passed=%t\n", i+1, runID, finalBest, passed)
+		morphology := ""
+		if i < len(exp.Summaries) {
+			morphology = exp.Summaries[i].Morphology
+		}
+		fmt.Printf("run=%d run_id=%s morphology=%s final_best=%.6f passed=%t\n", i+1, runID, morphology, finalBest, passed)
 	}
 	return nil
 }
@@ -248,9 +252,10 @@ func runBenchmarkExperimentEvaluations(args []string) error {
 	)
 	for i, run := range evalStats.Runs {
 		fmt.Printf(
-			"run=%d run_id=%s success=%t evaluations=%d generation=%d final_best=%.6f\n",
+			"run=%d run_id=%s morphology=%s success=%t evaluations=%d generation=%d final_best=%.6f\n",
 			i+1,
 			run.RunID,
+			run.Morphology,
 			run.Success,
 			run.Evaluations,
 			run.ReachedGeneration,

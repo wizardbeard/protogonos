@@ -662,16 +662,20 @@ func (c *Client) Run(ctx context.Context, req RunRequest) (RunSummary, error) {
 	}
 
 	if err := stats.AppendRunIndex(c.benchmarksDir, stats.RunIndexEntry{
-		RunID:            runID,
-		Scape:            req.Scape,
-		PopulationSize:   req.Population,
-		Generations:      req.Generations,
-		Seed:             req.Seed,
-		Workers:          req.Workers,
-		EliteCount:       eliteCount,
-		TuningEnabled:    req.EnableTuning,
-		FinalBestFitness: result.BestFinalFitness,
-		CreatedAtUTC:     now.Format(time.RFC3339Nano),
+		RunID:                  runID,
+		Scape:                  req.Scape,
+		Morphology:             stats.BenchmarkMorphologyLabel(req.Scape, req.GTSAProfile, req.FXProfile, req.FlatlandScannerProfile),
+		GTSAProfile:            req.GTSAProfile,
+		FXProfile:              req.FXProfile,
+		FlatlandScannerProfile: req.FlatlandScannerProfile,
+		PopulationSize:         req.Population,
+		Generations:            req.Generations,
+		Seed:                   req.Seed,
+		Workers:                req.Workers,
+		EliteCount:             eliteCount,
+		TuningEnabled:          req.EnableTuning,
+		FinalBestFitness:       result.BestFinalFitness,
+		CreatedAtUTC:           now.Format(time.RFC3339Nano),
 	}); err != nil {
 		return RunSummary{}, err
 	}

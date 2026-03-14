@@ -91,6 +91,47 @@ func TestBuildBenchmarkerGraphs(t *testing.T) {
 	}
 }
 
+func TestBuildBenchmarkerGraphsSeparatesProfiledMorphologies(t *testing.T) {
+	base := t.TempDir()
+	exp := BenchmarkExperiment{
+		ID:     "exp-profile-graphs",
+		RunIDs: []string{"exp-profile-graphs-fx-default", "exp-profile-graphs-fx-market"},
+	}
+
+	writeRun := func(runID, fxProfile string) {
+		runDir := filepath.Join(base, runID)
+		if _, err := WriteRunArtifacts(base, RunArtifacts{
+			Config: RunConfig{
+				RunID:          runID,
+				Scape:          "fx",
+				FXProfile:      fxProfile,
+				PopulationSize: 6,
+				Generations:    2,
+				Seed:           1,
+			},
+			BestByGeneration: []float64{0.2, 0.45},
+		}); err != nil {
+			t.Fatalf("write run artifacts for %s: %v", runID, err)
+		}
+		if err := WriteBenchmarkSeries(runDir, []float64{0.2, 0.45}); err != nil {
+			t.Fatalf("write benchmark series for %s: %v", runID, err)
+		}
+	}
+	writeRun(exp.RunIDs[0], "")
+	writeRun(exp.RunIDs[1], "market")
+
+	graphs, err := BuildBenchmarkerGraphs(base, exp)
+	if err != nil {
+		t.Fatalf("build benchmarker graphs: %v", err)
+	}
+	if len(graphs) != 2 {
+		t.Fatalf("expected separate graphs per profile, got %d (%+v)", len(graphs), graphs)
+	}
+	if graphs[0].Morphology != "fx" || graphs[1].Morphology != "fx[market]" {
+		t.Fatalf("unexpected morphology grouping: %+v", graphs)
+	}
+}
+
 func TestWriteBenchmarkerGraphs(t *testing.T) {
 	base := t.TempDir()
 	graphs := []BenchmarkerGraph{

@@ -12,6 +12,7 @@ import (
 
 type BenchmarkEvaluationRun struct {
 	RunID             string  `json:"run_id"`
+	Morphology        string  `json:"morphology,omitempty"`
 	Evaluations       int     `json:"evaluations"`
 	Success           bool    `json:"success"`
 	ReachedGeneration int     `json:"reached_generation,omitempty"`
@@ -67,6 +68,7 @@ func BuildBenchmarkEvaluationStats(baseDir string, exp BenchmarkExperiment, fitn
 		}
 
 		run := evaluateBenchmarkSeries(runID, series, cfg.PopulationSize, fitnessGoal, evalLimit)
+		run.Morphology = BenchmarkMorphologyLabelFromConfig(cfg)
 		if i < len(exp.Summaries) {
 			run.FinalBest = exp.Summaries[i].FinalBest
 		}

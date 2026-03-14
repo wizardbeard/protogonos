@@ -149,33 +149,67 @@ type TuningComparison struct {
 }
 
 type BenchmarkSummary struct {
-	RunID          string  `json:"run_id"`
-	Scape          string  `json:"scape"`
-	PopulationSize int     `json:"population_size"`
-	Generations    int     `json:"generations"`
-	Seed           int64   `json:"seed"`
-	InitialBest    float64 `json:"initial_best"`
-	FinalBest      float64 `json:"final_best"`
-	BestMean       float64 `json:"best_mean"`
-	BestStd        float64 `json:"best_std"`
-	BestMax        float64 `json:"best_max"`
-	BestMin        float64 `json:"best_min"`
-	Improvement    float64 `json:"improvement"`
-	MinImprovement float64 `json:"min_improvement"`
-	Passed         bool    `json:"passed"`
+	RunID                  string  `json:"run_id"`
+	Scape                  string  `json:"scape"`
+	Morphology             string  `json:"morphology,omitempty"`
+	GTSAProfile            string  `json:"gtsa_profile,omitempty"`
+	FXProfile              string  `json:"fx_profile,omitempty"`
+	FlatlandScannerProfile string  `json:"flatland_scanner_profile,omitempty"`
+	PopulationSize         int     `json:"population_size"`
+	Generations            int     `json:"generations"`
+	Seed                   int64   `json:"seed"`
+	InitialBest            float64 `json:"initial_best"`
+	FinalBest              float64 `json:"final_best"`
+	BestMean               float64 `json:"best_mean"`
+	BestStd                float64 `json:"best_std"`
+	BestMax                float64 `json:"best_max"`
+	BestMin                float64 `json:"best_min"`
+	Improvement            float64 `json:"improvement"`
+	MinImprovement         float64 `json:"min_improvement"`
+	Passed                 bool    `json:"passed"`
 }
 
 type RunIndexEntry struct {
-	RunID            string  `json:"run_id"`
-	Scape            string  `json:"scape"`
-	PopulationSize   int     `json:"population_size"`
-	Generations      int     `json:"generations"`
-	Seed             int64   `json:"seed"`
-	Workers          int     `json:"workers"`
-	EliteCount       int     `json:"elite_count"`
-	TuningEnabled    bool    `json:"tuning_enabled"`
-	FinalBestFitness float64 `json:"final_best_fitness"`
-	CreatedAtUTC     string  `json:"created_at_utc"`
+	RunID                  string  `json:"run_id"`
+	Scape                  string  `json:"scape"`
+	Morphology             string  `json:"morphology,omitempty"`
+	GTSAProfile            string  `json:"gtsa_profile,omitempty"`
+	FXProfile              string  `json:"fx_profile,omitempty"`
+	FlatlandScannerProfile string  `json:"flatland_scanner_profile,omitempty"`
+	PopulationSize         int     `json:"population_size"`
+	Generations            int     `json:"generations"`
+	Seed                   int64   `json:"seed"`
+	Workers                int     `json:"workers"`
+	EliteCount             int     `json:"elite_count"`
+	TuningEnabled          bool    `json:"tuning_enabled"`
+	FinalBestFitness       float64 `json:"final_best_fitness"`
+	CreatedAtUTC           string  `json:"created_at_utc"`
+}
+
+func BenchmarkMorphologyLabel(scapeName, gtsaProfile, fxProfile, flatlandScannerProfile string) string {
+	scapeName = strings.TrimSpace(scapeName)
+	switch strings.ToLower(scapeName) {
+	case "gtsa":
+		if profile := strings.TrimSpace(gtsaProfile); profile != "" && profile != "default" {
+			return scapeName + "[" + profile + "]"
+		}
+	case "fx":
+		if profile := strings.TrimSpace(fxProfile); profile != "" && profile != "default" {
+			return scapeName + "[" + profile + "]"
+		}
+	case "flatland":
+		if profile := strings.TrimSpace(flatlandScannerProfile); profile != "" && profile != "balanced5" {
+			return scapeName + "[" + profile + "]"
+		}
+	}
+	if scapeName == "" {
+		return "unknown"
+	}
+	return scapeName
+}
+
+func BenchmarkMorphologyLabelFromConfig(cfg RunConfig) string {
+	return BenchmarkMorphologyLabel(cfg.Scape, cfg.GTSAProfile, cfg.FXProfile, cfg.FlatlandScannerProfile)
 }
 
 func WriteRunArtifacts(baseDir string, artifacts RunArtifacts) (string, error) {
