@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"math"
+	"reflect"
 	"testing"
 	"time"
 
@@ -305,6 +306,15 @@ func TestFlatlandScapeStepInputSurfaceIncludesScannerAndExtendedChannels(t *test
 	}
 	if width, ok := trace["step_input_width"].(int); !ok || width != flatlandBaseFeatureWidth+flatlandScannerWidth {
 		t.Fatalf("expected trace step_input_width=%d, trace=%+v", flatlandBaseFeatureWidth+flatlandScannerWidth, trace)
+	}
+	if bins, ok := trace["scanner_runtime_active_bins"].([]int); !ok || !reflect.DeepEqual(bins, []int{0, 1, 2, 3, 4}) {
+		t.Fatalf("expected full runtime scanner bins, trace=%+v", trace)
+	}
+	if density, ok := trace["scanner_density_runtime"].(int); !ok || density != 5 {
+		t.Fatalf("expected runtime scanner density=5, trace=%+v", trace)
+	}
+	if width, ok := trace["scanner_feature_width_runtime"].(int); !ok || width != 15 {
+		t.Fatalf("expected runtime scanner feature width=15, trace=%+v", trace)
 	}
 
 	expectEqual := func(name string, got, want float64) {
@@ -648,6 +658,15 @@ func TestFlatlandScapeEvaluateWithAlignedPartialScannerIOComponents(t *testing.T
 	if width, ok := trace["sensor_width"].(int); !ok || width != 9 {
 		t.Fatalf("expected scanner sensor width=9, trace=%+v", trace)
 	}
+	if bins, ok := trace["scanner_runtime_active_bins"].([]int); !ok || !reflect.DeepEqual(bins, []int{1, 2, 3}) {
+		t.Fatalf("expected runtime scanner bins [1 2 3], trace=%+v", trace)
+	}
+	if density, ok := trace["scanner_density_runtime"].(int); !ok || density != 3 {
+		t.Fatalf("expected runtime scanner density=3, trace=%+v", trace)
+	}
+	if width, ok := trace["scanner_feature_width_runtime"].(int); !ok || width != 9 {
+		t.Fatalf("expected runtime scanner feature width=9, trace=%+v", trace)
+	}
 	if active, ok := trace["scanner_density_active"].(int); !ok || active != 3 {
 		t.Fatalf("expected active scanner density=3, trace=%+v", trace)
 	}
@@ -840,6 +859,15 @@ func TestFlatlandScapeTraceCapturesMetabolicsAndCollisions(t *testing.T) {
 	if width, ok := trace["scanner_feature_width_effective"].(int); !ok || width != effective*3 {
 		t.Fatalf("trace missing scanner_feature_width_effective aligned to effective density: %+v", trace)
 	}
+	if bins, ok := trace["scanner_profile_active_bins"].([]int); !ok || len(bins) != effective {
+		t.Fatalf("trace missing scanner_profile_active_bins aligned to effective density: %+v", trace)
+	}
+	if runtimeDensity, ok := trace["scanner_density_runtime"].(int); !ok || runtimeDensity <= 0 || runtimeDensity > effective {
+		t.Fatalf("trace missing scanner_density_runtime bounded by effective density: %+v", trace)
+	}
+	if runtimeWidth, ok := trace["scanner_feature_width_runtime"].(int); !ok || runtimeWidth != mustTraceFlatlandInt(t, trace, "scanner_density_runtime")*3 {
+		t.Fatalf("trace missing scanner_feature_width_runtime aligned to runtime density: %+v", trace)
+	}
 	if _, ok := trace["layout_variant"].(int); !ok {
 		t.Fatalf("trace missing layout_variant: %+v", trace)
 	}
@@ -880,6 +908,9 @@ func TestFlatlandScapeEvaluateModeAnnotatesMode(t *testing.T) {
 	if effective, _ := validationTrace["scanner_density_effective"].(int); effective != 5 {
 		t.Fatalf("expected validation effective scanner density=5, trace=%+v", validationTrace)
 	}
+	if runtime, _ := validationTrace["scanner_density_runtime"].(int); runtime != 5 {
+		t.Fatalf("expected validation runtime scanner density=5, trace=%+v", validationTrace)
+	}
 
 	_, testTrace, err := scape.EvaluateMode(context.Background(), forager, "test")
 	if err != nil {
@@ -893,6 +924,9 @@ func TestFlatlandScapeEvaluateModeAnnotatesMode(t *testing.T) {
 	}
 	if effective, _ := testTrace["scanner_density_effective"].(int); effective != 5 {
 		t.Fatalf("expected test effective scanner density=5, trace=%+v", testTrace)
+	}
+	if runtime, _ := testTrace["scanner_density_runtime"].(int); runtime != 5 {
+		t.Fatalf("expected test runtime scanner density=5, trace=%+v", testTrace)
 	}
 
 	_, benchmarkTrace, err := scape.EvaluateMode(context.Background(), forager, "benchmark")
@@ -910,6 +944,12 @@ func TestFlatlandScapeEvaluateModeAnnotatesMode(t *testing.T) {
 	}
 	if width, _ := benchmarkTrace["scanner_feature_width_effective"].(int); width != 9 {
 		t.Fatalf("expected benchmark effective scanner feature width=9, trace=%+v", benchmarkTrace)
+	}
+	if bins, ok := benchmarkTrace["scanner_runtime_active_bins"].([]int); !ok || !reflect.DeepEqual(bins, []int{1, 2, 3}) {
+		t.Fatalf("expected benchmark runtime scanner bins [1 2 3], trace=%+v", benchmarkTrace)
+	}
+	if runtime, _ := benchmarkTrace["scanner_density_runtime"].(int); runtime != 3 {
+		t.Fatalf("expected benchmark runtime scanner density=3, trace=%+v", benchmarkTrace)
 	}
 	if _, ok := benchmarkTrace["layout_variant"].(int); !ok {
 		t.Fatalf("expected benchmark layout_variant trace marker, got %+v", benchmarkTrace)
@@ -1441,6 +1481,15 @@ func mustTraceFloat64Slice(t *testing.T, trace Trace, key string) []float64 {
 	value, ok := trace[key].([]float64)
 	if !ok {
 		t.Fatalf("expected trace[%q] []float64, got trace=%+v", key, trace)
+	}
+	return value
+}
+
+func mustTraceFlatlandInt(t *testing.T, trace Trace, key string) int {
+	t.Helper()
+	value, ok := trace[key].(int)
+	if !ok {
+		t.Fatalf("expected trace[%q] int, got trace=%+v", key, trace)
 	}
 	return value
 }

@@ -510,6 +510,9 @@ func evaluateFlatlandWithStep(ctx context.Context, runner StepAgent, cfg flatlan
 	trace["sensor_width"] = flatlandBaseFeatureWidth + flatlandScannerWidth
 	trace["step_input_width"] = flatlandBaseFeatureWidth + flatlandScannerWidth
 	trace["scanner_density_active"] = flatlandScannerDensity
+	trace["scanner_runtime_active_bins"] = trace["scanner_profile_active_bins"]
+	trace["scanner_density_runtime"] = trace["scanner_density_effective"]
+	trace["scanner_feature_width_runtime"] = trace["scanner_feature_width_effective"]
 	return fitness, trace, nil
 }
 
@@ -588,6 +591,9 @@ func evaluateFlatlandWithTick(ctx context.Context, ticker TickAgent, cfg flatlan
 	trace["sensor_surface"] = ioBindings.sensorSurface()
 	trace["sensor_width"] = ioBindings.sensorWidth()
 	trace["scanner_density_active"] = ioBindings.scannerDensityActive
+	trace["scanner_runtime_active_bins"] = ioBindings.runtimeActiveScannerBins(trace)
+	trace["scanner_density_runtime"] = len(ioBindings.runtimeActiveScannerBins(trace))
+	trace["scanner_feature_width_runtime"] = len(ioBindings.runtimeActiveScannerBins(trace)) * 3
 	return fitness, trace, nil
 }
 
@@ -808,6 +814,7 @@ func evaluateFlatland(
 		"scanner_density":                 flatlandScannerDensity,
 		"scanner_density_active":          flatlandScannerDensity,
 		"scanner_density_effective":       countActiveFlatlandScannerWeights(episode.scannerWeights),
+		"scanner_profile_active_bins":     flatlandActiveScannerBins(episode.scannerWeights),
 		"scanner_feature_width":           flatlandScannerWidth,
 		"scanner_feature_width_effective": countActiveFlatlandScannerWeights(episode.scannerWeights) * 3,
 		"scanner_spread":                  episode.scannerSpread,
@@ -2015,6 +2022,7 @@ type flatlandIOBindings struct {
 	distanceScanSetters     [flatlandScannerDensity]protoio.ScalarSensorSetter
 	colorScanSetters        [flatlandScannerDensity]protoio.ScalarSensorSetter
 	energyScanSetters       [flatlandScannerDensity]protoio.ScalarSensorSetter
+	scannerMask             [flatlandScannerDensity]bool
 	scannerDensityActive    int
 	moveOutput              protoio.SnapshotActuator
 	controlSurface          string
@@ -2111,6 +2119,20 @@ func (b flatlandIOBindings) sensorWidth() int {
 	}
 	width += b.scannerDensityActive * 3
 	return width
+}
+
+func (b flatlandIOBindings) runtimeActiveScannerBins(trace Trace) []int {
+	profileBins := flatlandScannerActiveBinsFromTrace(trace)
+	if len(profileBins) == 0 {
+		return nil
+	}
+	active := make([]int, 0, len(profileBins))
+	for _, idx := range profileBins {
+		if idx >= 0 && idx < flatlandScannerDensity && b.scannerMask[idx] {
+			active = append(active, idx)
+		}
+	}
+	return active
 }
 
 func flatlandIO(agent TickAgent) (flatlandIOBindings, error) {
@@ -2252,6 +2274,7 @@ func flatlandIO(agent TickAgent) (flatlandIOBindings, error) {
 		distanceScanSetters:     distanceScanSetters,
 		colorScanSetters:        colorScanSetters,
 		energyScanSetters:       energyScanSetters,
+		scannerMask:             flatlandScannerBaselineMask(distanceMask, colorMask, energyMask),
 		scannerDensityActive:    scannerDensityActive,
 		moveOutput:              moveOutput,
 		controlSurface:          actuatorName,
@@ -2343,6 +2366,19 @@ func flatlandAlignedScannerDensity(
 	return countFlatlandScannerMask(baseline), true
 }
 
+func flatlandScannerBaselineMask(
+	distanceMask [flatlandScannerDensity]bool,
+	colorMask [flatlandScannerDensity]bool,
+	energyMask [flatlandScannerDensity]bool,
+) [flatlandScannerDensity]bool {
+	for _, mask := range [][flatlandScannerDensity]bool{distanceMask, colorMask, energyMask} {
+		if countFlatlandScannerMask(mask) > 0 {
+			return mask
+		}
+	}
+	return [flatlandScannerDensity]bool{}
+}
+
 func countFlatlandScannerMask(mask [flatlandScannerDensity]bool) int {
 	count := 0
 	for _, enabled := range mask {
@@ -2361,6 +2397,37 @@ func countActiveFlatlandScannerWeights(weights [flatlandScannerDensity]float64) 
 		}
 	}
 	return active
+}
+
+func flatlandActiveScannerBins(weights [flatlandScannerDensity]float64) []int {
+	active := make([]int, 0, flatlandScannerDensity)
+	for i, weight := range weights {
+		if weight > 0 {
+			active = append(active, i)
+		}
+	}
+	return active
+}
+
+func flatlandScannerActiveBinsFromTrace(trace Trace) []int {
+	raw, ok := trace["scanner_profile_active_bins"]
+	if !ok {
+		return nil
+	}
+	switch typed := raw.(type) {
+	case []int:
+		return append([]int(nil), typed...)
+	case []any:
+		out := make([]int, 0, len(typed))
+		for _, item := range typed {
+			if value, ok := item.(int); ok {
+				out = append(out, value)
+			}
+		}
+		return out
+	default:
+		return nil
+	}
 }
 
 func flatlandControlFromOutput(values []float64) (flatlandControl, error) {
