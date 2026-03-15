@@ -380,6 +380,12 @@ func TestFlatlandScapeEvaluateWithIOComponents(t *testing.T) {
 	if _, ok := trace["energy"].(float64); !ok {
 		t.Fatalf("trace missing energy: %+v", trace)
 	}
+	if surface, _ := trace["sensor_surface"].(string); surface != "classic" {
+		t.Fatalf("expected classic sensor surface, trace=%+v", trace)
+	}
+	if width, ok := trace["sensor_width"].(int); !ok || width != 2 {
+		t.Fatalf("expected classic sensor width=2, trace=%+v", trace)
+	}
 	if surface, _ := trace["control_surface"].(string); surface != protoio.FlatlandMoveActuatorName {
 		t.Fatalf("expected flatland_move control surface, trace=%+v", trace)
 	}
@@ -467,6 +473,12 @@ func TestFlatlandScapeEvaluateWithExtendedIOComponents(t *testing.T) {
 	if fitness <= 0 {
 		t.Fatalf("expected positive fitness, got %f", fitness)
 	}
+	if surface, _ := trace["sensor_surface"].(string); surface != "extended" {
+		t.Fatalf("expected extended sensor surface, trace=%+v", trace)
+	}
+	if width, ok := trace["sensor_width"].(int); !ok || width != 10 {
+		t.Fatalf("expected extended sensor width=10, trace=%+v", trace)
+	}
 	if width, ok := trace["feature_width"].(int); !ok || width != flatlandBaseFeatureWidth {
 		t.Fatalf("expected extended feature width marker, trace=%+v", trace)
 	}
@@ -533,6 +545,12 @@ func TestFlatlandScapeEvaluateWithScannerIOComponents(t *testing.T) {
 	}
 	if fitness <= 0 {
 		t.Fatalf("expected positive fitness, got %f", fitness)
+	}
+	if surface, _ := trace["sensor_surface"].(string); surface != "scanner" {
+		t.Fatalf("expected scanner sensor surface, trace=%+v", trace)
+	}
+	if width, ok := trace["sensor_width"].(int); !ok || width != 15 {
+		t.Fatalf("expected scanner sensor width=15, trace=%+v", trace)
 	}
 	if density, ok := trace["scanner_density"].(int); !ok || density != 5 {
 		t.Fatalf("expected scanner density marker, trace=%+v", trace)
@@ -617,6 +635,12 @@ func TestFlatlandScapeEvaluateWithAlignedPartialScannerIOComponents(t *testing.T
 	}
 	if surface, _ := trace["control_surface"].(string); surface != protoio.FlatlandMoveActuatorName {
 		t.Fatalf("expected tick-agent control surface via flatland_move, trace=%+v", trace)
+	}
+	if surface, _ := trace["sensor_surface"].(string); surface != "scanner" {
+		t.Fatalf("expected scanner sensor surface, trace=%+v", trace)
+	}
+	if width, ok := trace["sensor_width"].(int); !ok || width != 9 {
+		t.Fatalf("expected scanner sensor width=9, trace=%+v", trace)
 	}
 	if active, ok := trace["scanner_density_active"].(int); !ok || active != 3 {
 		t.Fatalf("expected active scanner density=3, trace=%+v", trace)

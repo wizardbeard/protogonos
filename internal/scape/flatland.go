@@ -583,6 +583,8 @@ func evaluateFlatlandWithTick(ctx context.Context, ticker TickAgent, cfg flatlan
 		return 0, nil, err
 	}
 	trace["control_surface"] = ioBindings.controlSurface
+	trace["sensor_surface"] = ioBindings.sensorSurface()
+	trace["sensor_width"] = ioBindings.sensorWidth()
 	trace["scanner_density_active"] = ioBindings.scannerDensityActive
 	return fitness, trace, nil
 }
@@ -2012,6 +2014,99 @@ type flatlandIOBindings struct {
 	scannerDensityActive    int
 	moveOutput              protoio.SnapshotActuator
 	controlSurface          string
+}
+
+func (b flatlandIOBindings) sensorSurface() string {
+	baseCount := 0
+	if b.distanceSetter != nil {
+		baseCount++
+	}
+	if b.energySetter != nil {
+		baseCount++
+	}
+
+	extendedCount := 0
+	if b.preySetter != nil {
+		extendedCount++
+	}
+	if b.predatorSetter != nil {
+		extendedCount++
+	}
+	if b.poisonSetter != nil {
+		extendedCount++
+	}
+	if b.wallSetter != nil {
+		extendedCount++
+	}
+	if b.foodProximitySetter != nil {
+		extendedCount++
+	}
+	if b.preyProximitySetter != nil {
+		extendedCount++
+	}
+	if b.predatorProximitySetter != nil {
+		extendedCount++
+	}
+	if b.poisonProximitySetter != nil {
+		extendedCount++
+	}
+	if b.wallProximitySetter != nil {
+		extendedCount++
+	}
+	if b.resourceBalanceSetter != nil {
+		extendedCount++
+	}
+
+	scannerCount := b.scannerDensityActive * 3
+	if scannerCount > 0 && baseCount == 0 && extendedCount == 0 {
+		return "scanner"
+	}
+	if extendedCount > 0 || scannerCount > 0 {
+		return "extended"
+	}
+	return "classic"
+}
+
+func (b flatlandIOBindings) sensorWidth() int {
+	width := 0
+	if b.distanceSetter != nil {
+		width++
+	}
+	if b.energySetter != nil {
+		width++
+	}
+	if b.preySetter != nil {
+		width++
+	}
+	if b.predatorSetter != nil {
+		width++
+	}
+	if b.poisonSetter != nil {
+		width++
+	}
+	if b.wallSetter != nil {
+		width++
+	}
+	if b.foodProximitySetter != nil {
+		width++
+	}
+	if b.preyProximitySetter != nil {
+		width++
+	}
+	if b.predatorProximitySetter != nil {
+		width++
+	}
+	if b.poisonProximitySetter != nil {
+		width++
+	}
+	if b.wallProximitySetter != nil {
+		width++
+	}
+	if b.resourceBalanceSetter != nil {
+		width++
+	}
+	width += b.scannerDensityActive * 3
+	return width
 }
 
 func flatlandIO(agent TickAgent) (flatlandIOBindings, error) {
