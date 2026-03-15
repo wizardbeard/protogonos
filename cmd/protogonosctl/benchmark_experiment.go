@@ -546,10 +546,18 @@ func runBenchmarkExperimentChangeMorphology(args []string) error {
 		}
 		exp.BenchmarkArgs = upsertLongFlagArg(exp.BenchmarkArgs, "scape", newScape)
 		exp.BenchmarkArgs = rewriteBenchmarkMorphologyArgs(exp.BenchmarkArgs, gtsaProfile, fxProfile, flatlandScannerProfile)
+		morphology := stats.BenchmarkMorphologyLabel(newScape, gtsaProfile, fxProfile, flatlandScannerProfile)
+		for i := range exp.Summaries {
+			exp.Summaries[i].Scape = newScape
+			exp.Summaries[i].GTSAProfile = gtsaProfile
+			exp.Summaries[i].FXProfile = fxProfile
+			exp.Summaries[i].FlatlandScannerProfile = flatlandScannerProfile
+			exp.Summaries[i].Morphology = morphology
+		}
 		if err := stats.WriteBenchmarkExperiment(benchmarksDir, exp); err != nil {
 			return err
 		}
-		fmt.Printf("benchmark_experiment_chg_mrph id=%s scape=%s morphology=%s\n", exp.ID, newScape, stats.BenchmarkMorphologyLabel(newScape, gtsaProfile, fxProfile, flatlandScannerProfile))
+		fmt.Printf("benchmark_experiment_chg_mrph id=%s scape=%s morphology=%s\n", exp.ID, newScape, morphology)
 	}
 
 	if targetRunID != "" {
@@ -827,15 +835,7 @@ func benchmarkExperimentMorphologiesFromItems(items []any) []string {
 	seen := map[string]struct{}{}
 	values := make([]string, 0, len(items))
 	for _, item := range items {
-		record, ok := item.(map[string]any)
-		if !ok {
-			continue
-		}
-		morphology, _ := record["morphology"].(string)
-		if strings.TrimSpace(morphology) == "" {
-			scape, _ := record["scape"].(string)
-			morphology = scape
-		}
+		morphology := benchmarkExperimentMorphologyFromItem(item)
 		morphology = strings.TrimSpace(morphology)
 		if morphology == "" {
 			continue
@@ -848,6 +848,46 @@ func benchmarkExperimentMorphologiesFromItems(items []any) []string {
 	}
 	sort.Strings(values)
 	return values
+}
+
+func benchmarkExperimentMorphologyFromItem(item any) string {
+	switch typed := item.(type) {
+	case stats.BenchmarkSummary:
+		if morphology := strings.TrimSpace(typed.Morphology); morphology != "" {
+			return morphology
+		}
+		return strings.TrimSpace(typed.Scape)
+	case *stats.BenchmarkSummary:
+		if typed == nil {
+			return ""
+		}
+		if morphology := strings.TrimSpace(typed.Morphology); morphology != "" {
+			return morphology
+		}
+		return strings.TrimSpace(typed.Scape)
+	case stats.RunIndexEntry:
+		if morphology := strings.TrimSpace(typed.Morphology); morphology != "" {
+			return morphology
+		}
+		return strings.TrimSpace(typed.Scape)
+	case *stats.RunIndexEntry:
+		if typed == nil {
+			return ""
+		}
+		if morphology := strings.TrimSpace(typed.Morphology); morphology != "" {
+			return morphology
+		}
+		return strings.TrimSpace(typed.Scape)
+	case map[string]any:
+		morphology, _ := typed["morphology"].(string)
+		if strings.TrimSpace(morphology) == "" {
+			scape, _ := typed["scape"].(string)
+			morphology = scape
+		}
+		return morphology
+	default:
+		return ""
+	}
 }
 
 func upsertLongFlagArg(args []string, flagName, value string) []string {
