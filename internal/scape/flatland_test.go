@@ -297,6 +297,12 @@ func TestFlatlandScapeStepInputSurfaceIncludesScannerAndExtendedChannels(t *test
 	if len(lastInput) != flatlandBaseFeatureWidth+flatlandScannerWidth {
 		t.Fatalf("expected step input width=%d, got=%d input=%v", flatlandBaseFeatureWidth+flatlandScannerWidth, len(lastInput), lastInput)
 	}
+	if surface, _ := trace["sensor_surface"].(string); surface != "step_input" {
+		t.Fatalf("expected step_input sensor surface, trace=%+v", trace)
+	}
+	if width, ok := trace["sensor_width"].(int); !ok || width != flatlandBaseFeatureWidth+flatlandScannerWidth {
+		t.Fatalf("expected trace sensor_width=%d, trace=%+v", flatlandBaseFeatureWidth+flatlandScannerWidth, trace)
+	}
 	if width, ok := trace["step_input_width"].(int); !ok || width != flatlandBaseFeatureWidth+flatlandScannerWidth {
 		t.Fatalf("expected trace step_input_width=%d, trace=%+v", flatlandBaseFeatureWidth+flatlandScannerWidth, trace)
 	}
@@ -835,6 +841,12 @@ func TestFlatlandScapeTraceCapturesMetabolicsAndCollisions(t *testing.T) {
 	}
 	if surface, ok := trace["control_surface"].(string); !ok || surface == "" {
 		t.Fatalf("trace missing control_surface: %+v", trace)
+	}
+	if surface, ok := trace["sensor_surface"].(string); !ok || surface == "" {
+		t.Fatalf("trace missing sensor_surface: %+v", trace)
+	}
+	if _, ok := trace["sensor_width"].(int); !ok {
+		t.Fatalf("trace missing sensor_width: %+v", trace)
 	}
 }
 

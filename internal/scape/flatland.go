@@ -506,6 +506,8 @@ func evaluateFlatlandWithStep(ctx context.Context, runner StepAgent, cfg flatlan
 		return 0, nil, err
 	}
 	trace["control_surface"] = "step_output"
+	trace["sensor_surface"] = "step_input"
+	trace["sensor_width"] = flatlandBaseFeatureWidth + flatlandScannerWidth
 	trace["step_input_width"] = flatlandBaseFeatureWidth + flatlandScannerWidth
 	trace["scanner_density_active"] = flatlandScannerDensity
 	return fitness, trace, nil
