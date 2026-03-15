@@ -56,7 +56,7 @@ func (FXScape) EvaluateMode(ctx context.Context, agent Agent, mode string) (Fitn
 }
 
 func evaluateFXWithStep(ctx context.Context, runner StepAgent, cfg fxModeConfig) (Fitness, Trace, error) {
-	return evaluateFX(ctx, cfg, func(ctx context.Context, percept []float64) (float64, error) {
+	fitness, trace, err := evaluateFX(ctx, cfg, func(ctx context.Context, percept []float64) (float64, error) {
 		out, err := runner.RunStep(ctx, percept)
 		if err != nil {
 			return 0, err
@@ -66,6 +66,14 @@ func evaluateFXWithStep(ctx context.Context, runner StepAgent, cfg fxModeConfig)
 		}
 		return out[0], nil
 	})
+	if err != nil {
+		return 0, nil, err
+	}
+	if width, ok := trace["feature_width"].(int); ok {
+		trace["sensor_width"] = width
+	}
+	trace["sensor_surface"] = "step_input"
+	return fitness, trace, nil
 }
 
 func evaluateFXWithTick(ctx context.Context, ticker TickAgent, cfg fxModeConfig) (Fitness, Trace, error) {

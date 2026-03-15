@@ -52,6 +52,12 @@ func TestFXScapeEvaluateModeAnnotatesMode(t *testing.T) {
 	if mode, _ := validationTrace["mode"].(string); mode != "validation" {
 		t.Fatalf("expected validation mode trace marker, got %+v", validationTrace)
 	}
+	if surface, _ := validationTrace["sensor_surface"].(string); surface != "step_input" {
+		t.Fatalf("expected validation step_input sensor surface, got %+v", validationTrace)
+	}
+	if width, _ := validationTrace["sensor_width"].(int); width <= 2 {
+		t.Fatalf("expected validation step sensor width > 2, got %+v", validationTrace)
+	}
 
 	_, testTrace, err := scape.EvaluateMode(context.Background(), follow, "test")
 	if err != nil {
@@ -59,6 +65,12 @@ func TestFXScapeEvaluateModeAnnotatesMode(t *testing.T) {
 	}
 	if mode, _ := testTrace["mode"].(string); mode != "test" {
 		t.Fatalf("expected test mode trace marker, got %+v", testTrace)
+	}
+	if surface, _ := testTrace["sensor_surface"].(string); surface != "step_input" {
+		t.Fatalf("expected test step_input sensor surface, got %+v", testTrace)
+	}
+	if width, _ := testTrace["sensor_width"].(int); width <= 2 {
+		t.Fatalf("expected test step sensor width > 2, got %+v", testTrace)
 	}
 }
 
@@ -276,6 +288,12 @@ func TestFXScapeStepPerceptIncludesMarketInternals(t *testing.T) {
 	}
 	if width, ok := trace["feature_width"].(int); !ok || width < 14 {
 		t.Fatalf("expected feature_width >= 14 with prev percentage channel, got %+v", trace)
+	}
+	if surface, _ := trace["sensor_surface"].(string); surface != "step_input" {
+		t.Fatalf("expected step_input sensor surface, got %+v", trace)
+	}
+	if width, ok := trace["sensor_width"].(int); !ok || width < 14 {
+		t.Fatalf("expected sensor_width >= 14 with prev percentage channel, got %+v", trace)
 	}
 	if _, ok := trace["prev_percentage_change"].(float64); !ok {
 		t.Fatalf("expected prev_percentage_change in trace, got %+v", trace)

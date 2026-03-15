@@ -51,7 +51,7 @@ func (GTSAScape) EvaluateMode(ctx context.Context, agent Agent, mode string) (Fi
 }
 
 func evaluateGTSAWithStep(ctx context.Context, runner StepAgent, cfg gtsaModeConfig) (Fitness, Trace, error) {
-	return evaluateGTSA(ctx, cfg, func(ctx context.Context, percept gtsaPercept) (float64, error) {
+	fitness, trace, err := evaluateGTSA(ctx, cfg, func(ctx context.Context, percept gtsaPercept) (float64, error) {
 		out, err := runner.RunStep(ctx, percept.vector)
 		if err != nil {
 			return 0, err
@@ -61,6 +61,14 @@ func evaluateGTSAWithStep(ctx context.Context, runner StepAgent, cfg gtsaModeCon
 		}
 		return out[0], nil
 	})
+	if err != nil {
+		return 0, nil, err
+	}
+	if width, ok := trace["feature_width"].(int); ok {
+		trace["sensor_width"] = width
+	}
+	trace["sensor_surface"] = "step_input"
+	return fitness, trace, nil
 }
 
 func evaluateGTSAWithTick(ctx context.Context, ticker TickAgent, cfg gtsaModeConfig) (Fitness, Trace, error) {
