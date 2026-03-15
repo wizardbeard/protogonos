@@ -830,6 +830,16 @@ func TestFlatlandScapeTraceCapturesMetabolicsAndCollisions(t *testing.T) {
 	if weights, ok := trace["scanner_profile_weights"].([]float64); !ok || len(weights) != flatlandScannerDensity {
 		t.Fatalf("trace missing scanner_profile_weights len=%d: %+v", flatlandScannerDensity, trace)
 	}
+	if effective, ok := trace["scanner_density_effective"].(int); !ok || effective <= 0 || effective > flatlandScannerDensity {
+		t.Fatalf("trace missing scanner_density_effective in range 1..%d: %+v", flatlandScannerDensity, trace)
+	}
+	effective, ok := trace["scanner_density_effective"].(int)
+	if !ok || effective <= 0 || effective > flatlandScannerDensity {
+		t.Fatalf("trace missing scanner_density_effective in range 1..%d: %+v", flatlandScannerDensity, trace)
+	}
+	if width, ok := trace["scanner_feature_width_effective"].(int); !ok || width != effective*3 {
+		t.Fatalf("trace missing scanner_feature_width_effective aligned to effective density: %+v", trace)
+	}
 	if _, ok := trace["layout_variant"].(int); !ok {
 		t.Fatalf("trace missing layout_variant: %+v", trace)
 	}
@@ -867,6 +877,9 @@ func TestFlatlandScapeEvaluateModeAnnotatesMode(t *testing.T) {
 	if profile, _ := validationTrace["scanner_profile"].(string); profile != flatlandScannerProfileForward {
 		t.Fatalf("expected validation scanner profile %q, trace=%+v", flatlandScannerProfileForward, validationTrace)
 	}
+	if effective, _ := validationTrace["scanner_density_effective"].(int); effective != 5 {
+		t.Fatalf("expected validation effective scanner density=5, trace=%+v", validationTrace)
+	}
 
 	_, testTrace, err := scape.EvaluateMode(context.Background(), forager, "test")
 	if err != nil {
@@ -878,6 +891,9 @@ func TestFlatlandScapeEvaluateModeAnnotatesMode(t *testing.T) {
 	if profile, _ := testTrace["scanner_profile"].(string); profile != flatlandScannerProfileBalanced {
 		t.Fatalf("expected test scanner profile %q, trace=%+v", flatlandScannerProfileBalanced, testTrace)
 	}
+	if effective, _ := testTrace["scanner_density_effective"].(int); effective != 5 {
+		t.Fatalf("expected test effective scanner density=5, trace=%+v", testTrace)
+	}
 
 	_, benchmarkTrace, err := scape.EvaluateMode(context.Background(), forager, "benchmark")
 	if err != nil {
@@ -888,6 +904,12 @@ func TestFlatlandScapeEvaluateModeAnnotatesMode(t *testing.T) {
 	}
 	if profile, _ := benchmarkTrace["scanner_profile"].(string); profile != flatlandScannerProfileCore {
 		t.Fatalf("expected benchmark scanner profile %q, trace=%+v", flatlandScannerProfileCore, benchmarkTrace)
+	}
+	if effective, _ := benchmarkTrace["scanner_density_effective"].(int); effective != 3 {
+		t.Fatalf("expected benchmark effective scanner density=3, trace=%+v", benchmarkTrace)
+	}
+	if width, _ := benchmarkTrace["scanner_feature_width_effective"].(int); width != 9 {
+		t.Fatalf("expected benchmark effective scanner feature width=9, trace=%+v", benchmarkTrace)
 	}
 	if _, ok := benchmarkTrace["layout_variant"].(int); !ok {
 		t.Fatalf("expected benchmark layout_variant trace marker, got %+v", benchmarkTrace)
