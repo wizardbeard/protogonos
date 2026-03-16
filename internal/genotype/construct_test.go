@@ -37,6 +37,34 @@ func TestGenerateNeuronAggrFDefaultsToNone(t *testing.T) {
 	}
 }
 
+func TestCircuitActivationTagParsesBareAndExplicitValues(t *testing.T) {
+	if ok, activation := circuitActivationTag([]string{"sigmoid", "circuit"}); !ok || activation != "tanh" {
+		t.Fatalf("expected bare circuit tag to default to tanh, got ok=%v activation=%q", ok, activation)
+	}
+	if ok, activation := circuitActivationTag([]string{"circuit: signed_sine"}); !ok || activation != "signed_sine" {
+		t.Fatalf("expected explicit circuit activation, got ok=%v activation=%q", ok, activation)
+	}
+	if ok, activation := circuitActivationTag([]string{"circuit:   "}); !ok || activation != "tanh" {
+		t.Fatalf("expected empty explicit circuit activation to fall back to tanh, got ok=%v activation=%q", ok, activation)
+	}
+	if ok, activation := circuitActivationTag([]string{"sigmoid", "relu"}); ok || activation != "" {
+		t.Fatalf("expected no circuit activation tag, got ok=%v activation=%q", ok, activation)
+	}
+}
+
+func TestStripCircuitActivationsPreservesNonCircuitPool(t *testing.T) {
+	got := stripCircuitActivations([]string{" sigmoid ", "circuit:tanh", "relu", "circuit", " "})
+	want := []string{"sigmoid", "relu"}
+	if len(got) != len(want) {
+		t.Fatalf("unexpected stripped activation count: got=%v want=%v", got, want)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Fatalf("unexpected stripped activation pool: got=%v want=%v", got, want)
+		}
+	}
+}
+
 func TestCalculateROIDsLayerAware(t *testing.T) {
 	selfID := "L1.5:n1"
 	outputIDs := []string{"L2:n2", "L1:n3", "L0.9:n4", "actuator:a"}
@@ -179,6 +207,36 @@ func TestConstructSeedNNValidatesRequiredSensorsAndActuators(t *testing.T) {
 	}
 	if _, err := ConstructSeedNN(0, []string{"s1"}, nil, nil, nil, nil, rand.New(rand.NewSource(1))); err == nil {
 		t.Fatal("expected validation error for missing actuators")
+	}
+}
+
+func TestConstructSeedNNDeduplicatesBlankSensorsAndActuators(t *testing.T) {
+	seed, err := ConstructSeedNN(
+		0,
+		[]string{"s1", " ", "s1", "s2"},
+		[]string{"a1", "a1", "", "a2"},
+		[]string{"sigmoid"},
+		[]string{"none"},
+		[]string{"dot_product"},
+		rand.New(rand.NewSource(13)),
+	)
+	if err != nil {
+		t.Fatalf("construct deduplicated seed nn: %v", err)
+	}
+	if len(seed.InputNeuronIDs) != 2 {
+		t.Fatalf("expected 2 unique input neurons, got=%v", seed.InputNeuronIDs)
+	}
+	if len(seed.OutputNeuronIDs) != 2 {
+		t.Fatalf("expected 2 unique output neurons, got=%v", seed.OutputNeuronIDs)
+	}
+	if len(seed.SensorNeuronLinks) != 2 {
+		t.Fatalf("expected 2 sensor links, got=%d", len(seed.SensorNeuronLinks))
+	}
+	if len(seed.NeuronActuatorLinks) != 2 {
+		t.Fatalf("expected 2 actuator links, got=%d", len(seed.NeuronActuatorLinks))
+	}
+	if len(seed.Synapses) != 4 {
+		t.Fatalf("expected full 2x2 input/output synapse scaffold, got=%d", len(seed.Synapses))
 	}
 }
 
