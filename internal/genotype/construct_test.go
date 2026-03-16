@@ -294,6 +294,78 @@ func TestConstructSeedNNWithActuatorVLBuildsMultipleOutputsPerActuator(t *testin
 	}
 }
 
+func TestConstructSeedNNWithActuatorVLIgnoresVectorLengthsInCircuitMode(t *testing.T) {
+	seed, err := ConstructSeedNNWithActuatorVL(
+		0,
+		[]string{"s1"},
+		[]string{"a1", "a2"},
+		map[string]int{
+			"a1": 3,
+			"a2": 2,
+		},
+		[]string{"circuit:tanh", "sigmoid"},
+		[]string{"none"},
+		[]string{"dot_product"},
+		rand.New(rand.NewSource(29)),
+	)
+	if err != nil {
+		t.Fatalf("construct circuit seed nn with vl: %v", err)
+	}
+	if len(seed.OutputNeuronIDs) != 2 {
+		t.Fatalf("expected one circuit output per actuator, got=%v", seed.OutputNeuronIDs)
+	}
+	if len(seed.NeuronActuatorLinks) != 2 {
+		t.Fatalf("expected one actuator link per circuit output, got=%d", len(seed.NeuronActuatorLinks))
+	}
+	if len(seed.Neurons) != 5 {
+		t.Fatalf("expected 1 input + 2 relay + 2 circuit neurons, got=%d", len(seed.Neurons))
+	}
+	if len(seed.Synapses) != 4 {
+		t.Fatalf("expected one input->relay and one relay->circuit synapse per actuator, got=%d", len(seed.Synapses))
+	}
+	countByActuator := map[string]int{}
+	for _, link := range seed.NeuronActuatorLinks {
+		countByActuator[link.ActuatorID]++
+	}
+	if countByActuator["a1"] != 1 || countByActuator["a2"] != 1 {
+		t.Fatalf("unexpected circuit link distribution by actuator: %v", countByActuator)
+	}
+	byID := map[string]string{}
+	for _, neuron := range seed.Neurons {
+		byID[neuron.ID] = neuron.Activation
+	}
+	if byID["L0.99:circuit:0"] != "tanh" || byID["L0.99:circuit:1"] != "tanh" {
+		t.Fatalf("expected explicit circuit activations for outputs, got=%v", byID)
+	}
+}
+
+func TestConstructSeedNNWithActuatorVLDefaultsNonPositiveLengthsToSingleOutput(t *testing.T) {
+	seed, err := ConstructSeedNNWithActuatorVL(
+		0,
+		[]string{"s1"},
+		[]string{"a1", "a2", "a3"},
+		map[string]int{
+			"a1": 0,
+			"a2": -2,
+			"a3": 4,
+		},
+		[]string{"sigmoid"},
+		[]string{"none"},
+		[]string{"dot_product"},
+		rand.New(rand.NewSource(31)),
+	)
+	if err != nil {
+		t.Fatalf("construct seed nn with mixed vl values: %v", err)
+	}
+	countByActuator := map[string]int{}
+	for _, link := range seed.NeuronActuatorLinks {
+		countByActuator[link.ActuatorID]++
+	}
+	if countByActuator["a1"] != 1 || countByActuator["a2"] != 1 || countByActuator["a3"] != 4 {
+		t.Fatalf("unexpected fallback link distribution by actuator: %v", countByActuator)
+	}
+}
+
 func TestGenerateIDsReturnsCountAndUniqueValues(t *testing.T) {
 	ids := GenerateIDs(4, rand.New(rand.NewSource(1)))
 	if len(ids) != 4 {
