@@ -111,27 +111,22 @@ func RegisterSensorWithSpec(spec SensorSpec) error {
 }
 
 func ResolveSensor(name, scape string) (Sensor, error) {
-	name = strings.TrimSpace(name)
-	sensorRegistry.mu.RLock()
-	entry, ok := sensorRegistry.m[name]
-	sensorRegistry.mu.RUnlock()
+	entry, resolvedName, ok := findRegisteredSensor(name)
 	if !ok {
-		return nil, fmt.Errorf("%w: %s", ErrSensorNotFound, name)
+		return nil, fmt.Errorf("%w: %s", ErrSensorNotFound, strings.TrimSpace(name))
 	}
-	if err := sensorCompatibilityError(name, entry, scapeid.Normalize(scape)); err != nil {
+	if err := sensorCompatibilityError(resolvedName, entry, scapeid.Normalize(scape)); err != nil {
 		return nil, err
 	}
 	return entry.factory(), nil
 }
 
 func SensorCompatibleWithScape(name, scape string) bool {
-	sensorRegistry.mu.RLock()
-	entry, ok := sensorRegistry.m[name]
-	sensorRegistry.mu.RUnlock()
+	entry, resolvedName, ok := findRegisteredSensor(name)
 	if !ok {
 		return false
 	}
-	return sensorCompatibilityError(name, entry, scapeid.Normalize(scape)) == nil
+	return sensorCompatibilityError(resolvedName, entry, scapeid.Normalize(scape)) == nil
 }
 
 func ListSensorsForScape(scape string) []string {
@@ -173,6 +168,22 @@ func sensorCompatibilityError(name string, entry registeredSensor, scape string)
 		}
 	}
 	return nil
+}
+
+func findRegisteredSensor(name string) (registeredSensor, string, bool) {
+	lookupName := strings.TrimSpace(name)
+	if lookupName == "" {
+		return registeredSensor{}, "", false
+	}
+
+	sensorRegistry.mu.RLock()
+	defer sensorRegistry.mu.RUnlock()
+
+	entry, ok := sensorRegistry.m[lookupName]
+	if !ok {
+		return registeredSensor{}, "", false
+	}
+	return entry, lookupName, true
 }
 
 func RegisterActuator(name string, factory ActuatorFactory) error {

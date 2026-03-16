@@ -108,6 +108,14 @@ func (c *Cortex) RegisteredSensor(id string) (protoio.Sensor, bool) {
 		return nil, false
 	}
 	s, ok := c.sensors[id]
+	if ok {
+		return s, true
+	}
+	trimmedID := strings.TrimSpace(id)
+	if trimmedID == "" || trimmedID == id {
+		return nil, false
+	}
+	s, ok = c.sensors[trimmedID]
 	return s, ok
 }
 

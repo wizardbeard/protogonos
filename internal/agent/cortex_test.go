@@ -5,6 +5,7 @@ import (
 	"errors"
 	"math"
 	"math/rand"
+	"reflect"
 	"testing"
 
 	protoio "protogonos/internal/io"
@@ -124,6 +125,32 @@ func TestCortexRegisteredActuatorResolvesCanonicalAlias(t *testing.T) {
 	gotCanonical, ok := c.RegisteredActuator(protoio.XOROutputActuatorName)
 	if !ok || gotCanonical != aliasActuator {
 		t.Fatalf("expected canonical actuator lookup to resolve alias registration: ok=%t actuator=%v", ok, gotCanonical)
+	}
+}
+
+func TestCortexRegisteredSensorTrimsLookupID(t *testing.T) {
+	genome := model.Genome{
+		SensorIDs: []string{"sensor-id"},
+	}
+	trimmedSensor := testSensor{values: []float64{1}}
+	c, err := NewCortex(
+		"agent-sensor-trim",
+		genome,
+		map[string]protoio.Sensor{
+			"sensor-id": trimmedSensor,
+		},
+		nil,
+		[]string{"i"},
+		[]string{"o"},
+		nil,
+	)
+	if err != nil {
+		t.Fatalf("new cortex: %v", err)
+	}
+
+	got, ok := c.RegisteredSensor(" sensor-id ")
+	if !ok || !reflect.DeepEqual(got, trimmedSensor) {
+		t.Fatalf("expected trimmed sensor lookup to succeed: ok=%t sensor=%v", ok, got)
 	}
 }
 

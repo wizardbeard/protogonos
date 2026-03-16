@@ -48,6 +48,29 @@ func TestRegisterAndResolveSensorTrimsNames(t *testing.T) {
 	}
 }
 
+func TestSensorCompatibleWithScapeTrimsNames(t *testing.T) {
+	resetRegistriesForTests()
+	t.Cleanup(resetRegistriesForTests)
+
+	if err := RegisterSensorWithSpec(SensorSpec{
+		Name:          "  s-trim-compatible  ",
+		Factory:       func() Sensor { return testSensor{} },
+		SchemaVersion: SupportedSchemaVersion,
+		CodecVersion:  SupportedCodecVersion,
+		Compatible: func(scape string) error {
+			if scape != "xor" {
+				return errors.New("unsupported scape")
+			}
+			return nil
+		},
+	}); err != nil {
+		t.Fatalf("register trimmed compatible sensor: %v", err)
+	}
+	if !SensorCompatibleWithScape(" s-trim-compatible ", "xor") {
+		t.Fatal("expected trimmed sensor compatibility lookup to succeed")
+	}
+}
+
 func TestRegisterAndResolveActuator(t *testing.T) {
 	resetRegistriesForTests()
 	t.Cleanup(resetRegistriesForTests)
