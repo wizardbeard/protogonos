@@ -78,6 +78,33 @@ func TestCalculateROIDsLayerAware(t *testing.T) {
 	}
 }
 
+func TestCalculateROIDsHandlesMixedLayerTokenFormats(t *testing.T) {
+	selfID := "layer=2|hidden"
+	outputIDs := []string{
+		"L3:out",
+		"li2/loop",
+		"layer1:feedback",
+		"input",
+		" 1.5 ",
+	}
+	got := CalculateROIDs(selfID, outputIDs)
+	want := []string{"li2/loop", "layer1:feedback", " 1.5 "}
+	if len(got) != len(want) {
+		t.Fatalf("unexpected recurrent ids count: got=%v want=%v", got, want)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Fatalf("unexpected recurrent ids ordering/content: got=%v want=%v", got, want)
+		}
+	}
+}
+
+func TestSanitizeIDReplacesReferenceSeparators(t *testing.T) {
+	if got := sanitizeID(" L1:n0 | branch / child "); got != "L1_n0___branch___child" {
+		t.Fatalf("unexpected sanitized id: %q", got)
+	}
+}
+
 func TestConstructNeuronBuildsSynapsesAndPlasticity(t *testing.T) {
 	neuron, synapses, roIDs, err := ConstructNeuron(
 		3,
@@ -352,6 +379,25 @@ func TestCreateInitPatternGroupsAndSortsLayers(t *testing.T) {
 	}
 	if len(pattern[1].NeuronIDs) != 2 {
 		t.Fatalf("expected two neurons in layer 1 bucket, got=%v", pattern[1].NeuronIDs)
+	}
+}
+
+func TestCreateInitPatternAcceptsMixedLayerFormats(t *testing.T) {
+	pattern := CreateInitPattern([]string{
+		"layer2:deep",
+		"li1/hidden",
+		"0.5",
+		"L1:mid",
+		"junk",
+	})
+	if len(pattern) != 3 {
+		t.Fatalf("expected 3 layer groups, got=%v", pattern)
+	}
+	if pattern[0].Layer != 0.5 || pattern[1].Layer != 1 || pattern[2].Layer != 2 {
+		t.Fatalf("unexpected mixed-format layer ordering: %v", pattern)
+	}
+	if len(pattern[1].NeuronIDs) != 2 {
+		t.Fatalf("expected two layer-1 neurons from mixed formats, got=%v", pattern[1].NeuronIDs)
 	}
 }
 
