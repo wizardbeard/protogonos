@@ -4,6 +4,7 @@ import (
 	"math/rand"
 	"testing"
 
+	"protogonos/internal/model"
 	"protogonos/internal/nn"
 )
 
@@ -150,6 +151,68 @@ func TestConstructNeuronSelfModulationV6WeightWidth(t *testing.T) {
 	}
 	if len(synapses[0].PlasticityParams) != 5 {
 		t.Fatalf("expected self_modulationV6 synapse parameter width 5, got=%v", synapses[0].PlasticityParams)
+	}
+}
+
+func TestConstructNeuronAppliesDefaultPlasticityScaffolding(t *testing.T) {
+	tests := []struct {
+		name            string
+		pfName          string
+		seed            int64
+		wantWeightWidth int
+	}{
+		{name: "self_modulation_v4", pfName: "self_modulationV4", seed: 41, wantWeightWidth: 2},
+		{name: "neuromodulation", pfName: "neuromodulation", seed: 43, wantWeightWidth: 0},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			expectedRule, expectedParams := GenerateNeuronPF(rand.New(rand.NewSource(tc.seed)), []string{tc.pfName})
+			var expected model.Neuron
+			applyPFNeuralParams(&expected, expectedRule, expectedParams)
+
+			neuron, synapses, _, err := ConstructNeuron(
+				0,
+				"L1:n1",
+				[]InputSpec{{FromID: "n0", Width: 1}},
+				nil,
+				nil,
+				[]string{tc.pfName},
+				nil,
+				rand.New(rand.NewSource(tc.seed)),
+			)
+			if err != nil {
+				t.Fatalf("construct neuron: %v", err)
+			}
+			if neuron.PlasticityRule != expected.PlasticityRule {
+				t.Fatalf("unexpected plasticity rule: got=%q want=%q", neuron.PlasticityRule, expected.PlasticityRule)
+			}
+			if neuron.PlasticityRate != expected.PlasticityRate ||
+				neuron.PlasticityA != expected.PlasticityA ||
+				neuron.PlasticityB != expected.PlasticityB ||
+				neuron.PlasticityC != expected.PlasticityC ||
+				neuron.PlasticityD != expected.PlasticityD {
+				t.Fatalf(
+					"unexpected plasticity defaults: got rate=%f A=%f B=%f C=%f D=%f want rate=%f A=%f B=%f C=%f D=%f",
+					neuron.PlasticityRate,
+					neuron.PlasticityA,
+					neuron.PlasticityB,
+					neuron.PlasticityC,
+					neuron.PlasticityD,
+					expected.PlasticityRate,
+					expected.PlasticityA,
+					expected.PlasticityB,
+					expected.PlasticityC,
+					expected.PlasticityD,
+				)
+			}
+			if len(synapses) != 1 {
+				t.Fatalf("expected one generated synapse, got=%d", len(synapses))
+			}
+			if len(synapses[0].PlasticityParams) != tc.wantWeightWidth {
+				t.Fatalf("unexpected weight-parameter width: got=%d want=%d", len(synapses[0].PlasticityParams), tc.wantWeightWidth)
+			}
+		})
 	}
 }
 
