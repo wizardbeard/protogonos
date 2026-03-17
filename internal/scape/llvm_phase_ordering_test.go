@@ -84,6 +84,15 @@ func TestLLVMPhaseOrderingScapeEvaluateWithIOComponents(t *testing.T) {
 	if _, ok := trace["phases"].(int); !ok {
 		t.Fatalf("trace missing phases: %+v", trace)
 	}
+	if surface, ok := trace["sensor_surface"].(string); !ok || surface != "core" {
+		t.Fatalf("expected sensor_surface=core, got %+v", trace)
+	}
+	if width, ok := trace["sensor_width"].(int); !ok || width != 2 {
+		t.Fatalf("expected sensor_width=2, got %+v", trace)
+	}
+	if surface, ok := trace["control_surface"].(string); !ok || surface != protoio.LLVMPhaseActuatorName {
+		t.Fatalf("expected control_surface=%s, got %+v", protoio.LLVMPhaseActuatorName, trace)
+	}
 }
 
 func TestLLVMPhaseOrderingScapeEvaluateWithExtendedIOComponents(t *testing.T) {
@@ -151,6 +160,12 @@ func TestLLVMPhaseOrderingScapeEvaluateWithExtendedIOComponents(t *testing.T) {
 	if _, ok := trace["mean_runtime_gain"].(float64); !ok {
 		t.Fatalf("trace missing mean_runtime_gain: %+v", trace)
 	}
+	if surface, ok := trace["sensor_surface"].(string); !ok || surface != "extended" {
+		t.Fatalf("expected sensor_surface=extended, got %+v", trace)
+	}
+	if width, ok := trace["sensor_width"].(int); !ok || width != 5 {
+		t.Fatalf("expected sensor_width=5, got %+v", trace)
+	}
 }
 
 func TestLLVMPhaseOrderingScapeEvaluateModeAnnotatesMode(t *testing.T) {
@@ -172,6 +187,15 @@ func TestLLVMPhaseOrderingScapeEvaluateModeAnnotatesMode(t *testing.T) {
 	if mode, _ := validationTrace["mode"].(string); mode != "validation" {
 		t.Fatalf("expected validation mode trace marker, got %+v", validationTrace)
 	}
+	if surface, _ := validationTrace["sensor_surface"].(string); surface != "step_input" {
+		t.Fatalf("expected validation sensor_surface=step_input, got %+v", validationTrace)
+	}
+	if width, _ := validationTrace["sensor_width"].(int); width != 31 {
+		t.Fatalf("expected validation sensor_width=31, got %+v", validationTrace)
+	}
+	if surface, _ := validationTrace["control_surface"].(string); surface != "step_output" {
+		t.Fatalf("expected validation control_surface=step_output, got %+v", validationTrace)
+	}
 
 	_, testTrace, err := scape.EvaluateMode(context.Background(), phaseAware, "test")
 	if err != nil {
@@ -179,6 +203,12 @@ func TestLLVMPhaseOrderingScapeEvaluateModeAnnotatesMode(t *testing.T) {
 	}
 	if mode, _ := testTrace["mode"].(string); mode != "test" {
 		t.Fatalf("expected test mode trace marker, got %+v", testTrace)
+	}
+	if surface, _ := testTrace["sensor_surface"].(string); surface != "step_input" {
+		t.Fatalf("expected test sensor_surface=step_input, got %+v", testTrace)
+	}
+	if width, _ := testTrace["sensor_width"].(int); width != 31 {
+		t.Fatalf("expected test sensor_width=31, got %+v", testTrace)
 	}
 }
 

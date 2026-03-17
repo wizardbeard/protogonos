@@ -96,6 +96,9 @@ func evaluateLLVMPhaseOrderingWithStep(ctx context.Context, runner StepAgent, cf
 	return evaluateLLVMPhaseOrdering(
 		ctx,
 		cfg,
+		"step_input",
+		llvmPerceptWidth,
+		"step_output",
 		func(ctx context.Context, in llvmSenseInput) ([]float64, error) {
 			out, err := runner.RunStep(ctx, in.vector)
 			if err != nil {
@@ -118,6 +121,9 @@ func evaluateLLVMPhaseOrderingWithTick(ctx context.Context, ticker TickAgent, cf
 	return evaluateLLVMPhaseOrdering(
 		ctx,
 		cfg,
+		io.sensorSurface(),
+		io.sensorWidth(),
+		protoio.LLVMPhaseActuatorName,
 		func(ctx context.Context, in llvmSenseInput) ([]float64, error) {
 			io.complexity.Set(in.complexity)
 			io.pass.Set(in.passNorm)
@@ -151,6 +157,9 @@ func evaluateLLVMPhaseOrderingWithTick(ctx context.Context, ticker TickAgent, cf
 func evaluateLLVMPhaseOrdering(
 	ctx context.Context,
 	cfg llvmPhaseOrderingConfig,
+	sensorSurface string,
+	sensorWidth int,
+	controlSurface string,
 	choosePhase func(context.Context, llvmSenseInput) ([]float64, error),
 ) (Fitness, Trace, error) {
 	complexity := cfg.initialComplexity
@@ -278,6 +287,9 @@ func evaluateLLVMPhaseOrdering(
 		"program":                cfg.program,
 		"termination_reason":     terminationReason,
 		"workflow_name":          cfg.workflowName,
+		"sensor_surface":         sensorSurface,
+		"sensor_width":           sensorWidth,
+		"control_surface":        controlSurface,
 		"optimization_surface":   len(cfg.optimizations),
 		"percept_width":          llvmPerceptWidth,
 		"percept_layout":         "legacy2+extended29",
@@ -751,6 +763,27 @@ func llvmPhaseOrderingIO(agent TickAgent) (llvmIOBindings, error) {
 		runtimeGain: runtimeGainSetter,
 		phaseOutput: output,
 	}, nil
+}
+
+func (b llvmIOBindings) sensorSurface() string {
+	if b.alignment == nil && b.diversity == nil && b.runtimeGain == nil {
+		return "core"
+	}
+	return "extended"
+}
+
+func (b llvmIOBindings) sensorWidth() int {
+	width := 2
+	if b.alignment != nil {
+		width++
+	}
+	if b.diversity != nil {
+		width++
+	}
+	if b.runtimeGain != nil {
+		width++
+	}
+	return width
 }
 
 func optionalLLVMSensorSetter(
