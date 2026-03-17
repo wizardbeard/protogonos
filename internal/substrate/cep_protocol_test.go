@@ -271,6 +271,54 @@ func TestCEPProcessForwardOrderedFanIn(t *testing.T) {
 	}
 }
 
+func TestCEPProcessTrimsConfiguredFanInPIDs(t *testing.T) {
+	p, err := NewCEPProcessWithID("cep_trim_config", WeightExpressionCEPName, nil, []string{" n1 ", " n2 "})
+	if err != nil {
+		t.Fatalf("new cep process: %v", err)
+	}
+
+	if _, ready, err := p.Forward("n1", []float64{0.2}); err != nil {
+		t.Fatalf("forward n1: %v", err)
+	} else if ready {
+		t.Fatal("unexpected ready after first trimmed fan-in message")
+	}
+
+	command, ready, err := p.Forward("n2", []float64{0.8})
+	if err != nil {
+		t.Fatalf("forward n2: %v", err)
+	}
+	if !ready {
+		t.Fatal("expected ready command after trimmed fan-in cycle")
+	}
+	if len(command.Signal) != 2 || command.Signal[0] != 0.2 || command.Signal[1] != 0.8 {
+		t.Fatalf("unexpected command signal from trimmed fan-in config: %+v", command.Signal)
+	}
+}
+
+func TestCEPProcessTrimsForwardSenderPID(t *testing.T) {
+	p, err := NewCEPProcessWithID("cep_trim_sender", WeightExpressionCEPName, nil, []string{"n1", "n2"})
+	if err != nil {
+		t.Fatalf("new cep process: %v", err)
+	}
+
+	if _, ready, err := p.Forward(" n1 ", []float64{0.2}); err != nil {
+		t.Fatalf("forward trimmed n1: %v", err)
+	} else if ready {
+		t.Fatal("unexpected ready after first trimmed-sender fan-in message")
+	}
+
+	command, ready, err := p.Forward(" n2 ", []float64{0.8})
+	if err != nil {
+		t.Fatalf("forward trimmed n2: %v", err)
+	}
+	if !ready {
+		t.Fatal("expected ready command after trimmed-sender fan-in cycle")
+	}
+	if len(command.Signal) != 2 || command.Signal[0] != 0.2 || command.Signal[1] != 0.8 {
+		t.Fatalf("unexpected command signal from trimmed sender ids: %+v", command.Signal)
+	}
+}
+
 func TestCEPProcessAssignsDefaultID(t *testing.T) {
 	p, err := NewCEPProcess(DefaultCEPName, nil, []string{"n1"})
 	if err != nil {

@@ -120,7 +120,8 @@ func NewCEPProcessWithID(id string, cepName string, parameters map[string]float6
 }
 
 func NewCEPProcessWithOwner(id string, terminatePID string, cepName string, parameters map[string]float64, faninPIDs []string) (*CEPProcess, error) {
-	if len(faninPIDs) == 0 {
+	trimmedFaninPIDs := trimCEPFaninPIDs(faninPIDs)
+	if len(trimmedFaninPIDs) == 0 {
 		return nil, fmt.Errorf("fanin pids are required")
 	}
 	processID := strings.TrimSpace(id)
@@ -130,9 +131,9 @@ func NewCEPProcessWithOwner(id string, terminatePID string, cepName string, para
 	out := &CEPProcess{
 		id:           processID,
 		terminatePID: strings.TrimSpace(terminatePID),
-		cepName:      cepName,
+		cepName:      strings.TrimSpace(cepName),
 		parameters:   cloneFloatMap(parameters),
-		faninPIDs:    append([]string(nil), faninPIDs...),
+		faninPIDs:    append([]string(nil), trimmedFaninPIDs...),
 	}
 	return out, nil
 }
@@ -177,7 +178,7 @@ func (p *CEPProcess) handleForward(fromPID string, input []float64) (CEPCommand,
 		return CEPCommand{}, false, fmt.Errorf("fanin pids are required")
 	}
 	p.pending = append(p.pending, pendingForward{
-		fromPID: fromPID,
+		fromPID: strings.TrimSpace(fromPID),
 		input:   append([]float64(nil), input...),
 	})
 
