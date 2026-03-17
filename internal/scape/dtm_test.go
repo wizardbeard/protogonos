@@ -94,6 +94,15 @@ func TestDTMScapeEvaluateWithIOComponents(t *testing.T) {
 	if _, ok := trace["terminal_runs"].(int); !ok {
 		t.Fatalf("trace missing terminal_runs: %+v", trace)
 	}
+	if surface, ok := trace["sensor_surface"].(string); !ok || surface != "all" {
+		t.Fatalf("expected sensor_surface=all, got %+v", trace)
+	}
+	if width, ok := trace["sensor_width"].(int); !ok || width != 4 {
+		t.Fatalf("expected sensor_width=4, got %+v", trace)
+	}
+	if surface, ok := trace["control_surface"].(string); !ok || surface != protoio.DTMMoveActuatorName {
+		t.Fatalf("expected control_surface=%s, got %+v", protoio.DTMMoveActuatorName, trace)
+	}
 }
 
 func TestDTMScapeEvaluateWithExtendedIOComponents(t *testing.T) {
@@ -167,6 +176,12 @@ func TestDTMScapeEvaluateWithExtendedIOComponents(t *testing.T) {
 	if _, ok := trace["mean_step_progress"].(float64); !ok {
 		t.Fatalf("trace missing mean_step_progress: %+v", trace)
 	}
+	if surface, ok := trace["sensor_surface"].(string); !ok || surface != "all" {
+		t.Fatalf("expected sensor_surface=all for extended dtm IO, got %+v", trace)
+	}
+	if width, ok := trace["sensor_width"].(int); !ok || width != 7 {
+		t.Fatalf("expected sensor_width=7 for extended dtm IO, got %+v", trace)
+	}
 }
 
 func TestDTMScapeEvaluateWithRangeOnlyIOComponents(t *testing.T) {
@@ -212,12 +227,18 @@ func TestDTMScapeEvaluateWithRangeOnlyIOComponents(t *testing.T) {
 	}
 
 	scape := DTMScape{}
-	fitness, _, err := scape.Evaluate(context.Background(), cortex)
+	fitness, trace, err := scape.Evaluate(context.Background(), cortex)
 	if err != nil {
 		t.Fatalf("evaluate: %v", err)
 	}
 	if fitness <= 0 {
 		t.Fatalf("expected positive fitness, got %f", fitness)
+	}
+	if surface, ok := trace["sensor_surface"].(string); !ok || surface != "range_sense" {
+		t.Fatalf("expected sensor_surface=range_sense, got %+v", trace)
+	}
+	if width, ok := trace["sensor_width"].(int); !ok || width != 3 {
+		t.Fatalf("expected sensor_width=3, got %+v", trace)
 	}
 }
 
@@ -255,12 +276,18 @@ func TestDTMScapeEvaluateWithRewardOnlyIOComponents(t *testing.T) {
 	}
 
 	scape := DTMScape{}
-	fitness, _, err := scape.Evaluate(context.Background(), cortex)
+	fitness, trace, err := scape.Evaluate(context.Background(), cortex)
 	if err != nil {
 		t.Fatalf("evaluate: %v", err)
 	}
 	if fitness <= 0 {
 		t.Fatalf("expected positive fitness, got %f", fitness)
+	}
+	if surface, ok := trace["sensor_surface"].(string); !ok || surface != "reward" {
+		t.Fatalf("expected sensor_surface=reward, got %+v", trace)
+	}
+	if width, ok := trace["sensor_width"].(int); !ok || width != 1 {
+		t.Fatalf("expected sensor_width=1, got %+v", trace)
 	}
 }
 
@@ -328,6 +355,15 @@ func TestDTMScapeTraceIncludesRunDiagnostics(t *testing.T) {
 	}
 	if _, ok := trace["mean_switched_signal"].(float64); !ok {
 		t.Fatalf("trace missing mean_switched_signal: %+v", trace)
+	}
+	if surface, ok := trace["sensor_surface"].(string); !ok || surface != "step_input" {
+		t.Fatalf("expected sensor_surface=step_input, got %+v", trace)
+	}
+	if width, ok := trace["sensor_width"].(int); !ok || width != 7 {
+		t.Fatalf("expected sensor_width=7, got %+v", trace)
+	}
+	if surface, ok := trace["control_surface"].(string); !ok || surface != "step_output" {
+		t.Fatalf("expected control_surface=step_output, got %+v", trace)
 	}
 	if width, ok := trace["feature_width"].(int); !ok || width != 7 {
 		t.Fatalf("expected feature_width=7, got %+v", trace)

@@ -122,6 +122,9 @@ func evaluateDTMWithStep(ctx context.Context, runner StepAgent, cfg dtmModeConfi
 		ctx,
 		runner.ID(),
 		cfg,
+		"step_input",
+		7,
+		"step_output",
 		func(ctx context.Context, sense dtmSenseInput) (float64, error) {
 			out, err := runner.RunStep(ctx, sense.vector)
 			if err != nil {
@@ -145,6 +148,9 @@ func evaluateDTMWithTick(ctx context.Context, ticker TickAgent, cfg dtmModeConfi
 		ctx,
 		ticker.ID(),
 		cfg,
+		ioBindings.sensorSurface(),
+		ioBindings.sensorWidth(),
+		protoio.DTMMoveActuatorName,
 		func(ctx context.Context, sense dtmSenseInput) (float64, error) {
 			if ioBindings.leftSetter != nil {
 				ioBindings.leftSetter.Set(sense.left)
@@ -189,6 +195,9 @@ func evaluateDTM(
 	ctx context.Context,
 	agentID string,
 	cfg dtmModeConfig,
+	sensorSurface string,
+	sensorWidth int,
+	controlSurface string,
 	chooseMove func(context.Context, dtmSenseInput) (float64, error),
 ) (Fitness, Trace, error) {
 	episode := newDTMEpisode(agentID, cfg)
@@ -330,6 +339,9 @@ func evaluateDTM(
 		"last_step_index":        episode.stepIndex,
 		"switch_spread_floor":    cfg.switchFloor,
 		"switch_spread_interval": cfg.switchSpread,
+		"sensor_surface":         sensorSurface,
+		"sensor_width":           sensorWidth,
+		"control_surface":        controlSurface,
 		"feature_width":          7,
 		"mean_run_progress":      meanRunProgress,
 		"mean_step_progress":     meanStepProgress,
@@ -513,10 +525,15 @@ type dtmIOBindings struct {
 	leftSetter         protoio.ScalarSensorSetter
 	frontSetter        protoio.ScalarSensorSetter
 	rightSetter        protoio.ScalarSensorSetter
+	hasRange           bool
 	rewardSetter       protoio.ScalarSensorSetter
+	hasReward          bool
 	runProgressSetter  protoio.ScalarSensorSetter
+	hasRunProgress     bool
 	stepProgressSetter protoio.ScalarSensorSetter
+	hasStepProgress    bool
 	switchedSetter     protoio.ScalarSensorSetter
+	hasSwitched        bool
 	moveOutput         protoio.SnapshotActuator
 }
 
@@ -592,12 +609,50 @@ func dtmIO(agent TickAgent) (dtmIOBindings, error) {
 		leftSetter:         leftSetter,
 		frontSetter:        frontSetter,
 		rightSetter:        rightSetter,
+		hasRange:           rangeCount == 3,
 		rewardSetter:       rewardSetter,
+		hasReward:          hasReward,
 		runProgressSetter:  runProgressSetter,
+		hasRunProgress:     runProgressSetter != nil,
 		stepProgressSetter: stepProgressSetter,
+		hasStepProgress:    stepProgressSetter != nil,
 		switchedSetter:     switchedSetter,
+		hasSwitched:        switchedSetter != nil,
 		moveOutput:         output,
 	}, nil
+}
+
+func (b dtmIOBindings) sensorSurface() string {
+	switch {
+	case b.hasRange && b.hasReward:
+		return "all"
+	case b.hasRange:
+		return "range_sense"
+	case b.hasReward:
+		return "reward"
+	default:
+		return ""
+	}
+}
+
+func (b dtmIOBindings) sensorWidth() int {
+	width := 0
+	if b.hasRange {
+		width += 3
+	}
+	if b.hasReward {
+		width++
+	}
+	if b.hasRunProgress {
+		width++
+	}
+	if b.hasStepProgress {
+		width++
+	}
+	if b.hasSwitched {
+		width++
+	}
+	return width
 }
 
 func resolveOptionalDTMSetter(
