@@ -106,7 +106,7 @@ func (r *SimpleRuntime) Step(ctx context.Context, inputs []float64) ([]float64, 
 }
 
 func (r *SimpleRuntime) StepWithFanin(ctx context.Context, inputs []float64, faninSignals map[string]float64) ([]float64, error) {
-	return r.step(ctx, inputs, faninSignals)
+	return r.step(ctx, inputs, normalizeFaninSignals(faninSignals))
 }
 
 func (r *SimpleRuntime) step(ctx context.Context, inputs []float64, faninSignals map[string]float64) ([]float64, error) {
@@ -340,6 +340,24 @@ func (r *SimpleRuntime) controlSignalsFromFaninMap(faninSignals map[string]float
 		signals = append(signals, value)
 	}
 	return signals, true
+}
+
+func normalizeFaninSignals(raw map[string]float64) map[string]float64 {
+	if len(raw) == 0 {
+		return nil
+	}
+	out := make(map[string]float64, len(raw))
+	for pid, value := range raw {
+		trimmed := strings.TrimSpace(pid)
+		if trimmed == "" {
+			continue
+		}
+		out[trimmed] = value
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
 }
 
 func (r *SimpleRuntime) resolveProcessSignals(faninPIDs []string, controlSignals []float64) ([]float64, error) {
