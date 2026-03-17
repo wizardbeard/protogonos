@@ -128,6 +128,58 @@ func TestCortexRegisteredActuatorResolvesCanonicalAlias(t *testing.T) {
 	}
 }
 
+func TestCortexRegisteredActuatorTrimsLookupID(t *testing.T) {
+	genome := model.Genome{
+		ActuatorIDs: []string{protoio.XOROutputActuatorName},
+	}
+	trimmedActuator := &testActuator{}
+	c, err := NewCortex(
+		"agent-actuator-trim",
+		genome,
+		nil,
+		map[string]protoio.Actuator{
+			protoio.XOROutputActuatorName: trimmedActuator,
+		},
+		[]string{"i"},
+		[]string{"o"},
+		nil,
+	)
+	if err != nil {
+		t.Fatalf("new cortex: %v", err)
+	}
+
+	got, ok := c.RegisteredActuator(" " + protoio.XOROutputActuatorName + " ")
+	if !ok || got != trimmedActuator {
+		t.Fatalf("expected trimmed actuator lookup to succeed: ok=%t actuator=%v", ok, got)
+	}
+}
+
+func TestCortexRegisteredActuatorTrimsAliasLookupID(t *testing.T) {
+	genome := model.Genome{
+		ActuatorIDs: []string{protoio.XORSendOutputActuatorAliasName},
+	}
+	aliasActuator := &testActuator{}
+	c, err := NewCortex(
+		"agent-actuator-alias-trim",
+		genome,
+		nil,
+		map[string]protoio.Actuator{
+			protoio.XORSendOutputActuatorAliasName: aliasActuator,
+		},
+		[]string{"i"},
+		[]string{"o"},
+		nil,
+	)
+	if err != nil {
+		t.Fatalf("new cortex: %v", err)
+	}
+
+	got, ok := c.RegisteredActuator(" " + protoio.XOROutputActuatorName + " ")
+	if !ok || got != aliasActuator {
+		t.Fatalf("expected trimmed canonical actuator lookup to resolve alias registration: ok=%t actuator=%v", ok, got)
+	}
+}
+
 func TestCortexRegisteredSensorTrimsLookupID(t *testing.T) {
 	genome := model.Genome{
 		SensorIDs: []string{"sensor-id"},

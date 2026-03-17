@@ -128,7 +128,15 @@ func (c *Cortex) RegisteredActuator(id string) (protoio.Actuator, bool) {
 		return a, true
 	}
 
-	canonicalID := protoio.CanonicalActuatorName(id)
+	trimmedID := strings.TrimSpace(id)
+	if trimmedID != "" && trimmedID != id {
+		a, ok = c.actuators[trimmedID]
+		if ok {
+			return a, true
+		}
+	}
+
+	canonicalID := protoio.CanonicalActuatorName(trimmedID)
 	if canonicalID == "" {
 		return nil, false
 	}
