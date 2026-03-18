@@ -82,6 +82,32 @@ func TestConstructMorphologyGTSAProfiles(t *testing.T) {
 	}
 }
 
+func TestConstructMorphologyEpitopesProfiles(t *testing.T) {
+	coreMorph, err := ConstructMorphology("epitopes", "core")
+	if err != nil {
+		t.Fatalf("construct epitopes core profile: %v", err)
+	}
+	if coreMorph.Name() != "epitopes-core-v1" {
+		t.Fatalf("expected epitopes-core-v1, got=%s", coreMorph.Name())
+	}
+	if got := coreMorph.Sensors(); len(got) != 2 || got[0] != protoio.EpitopesSignalSensorName || got[1] != protoio.EpitopesMemorySensorName {
+		t.Fatalf("expected core-only epitopes sensors, got=%v", got)
+	}
+}
+
+func TestConstructMorphologyLLVMProfiles(t *testing.T) {
+	coreMorph, err := ConstructMorphology("llvm-phase-ordering", "core")
+	if err != nil {
+		t.Fatalf("construct llvm core profile: %v", err)
+	}
+	if coreMorph.Name() != "llvm-phase-ordering-core-v1" {
+		t.Fatalf("expected llvm-phase-ordering-core-v1, got=%s", coreMorph.Name())
+	}
+	if got := coreMorph.Sensors(); len(got) != 2 || got[0] != protoio.LLVMComplexitySensorName || got[1] != protoio.LLVMPassIndexSensorName {
+		t.Fatalf("expected core-only llvm sensors, got=%v", got)
+	}
+}
+
 func TestConstructMorphologyPole2Profiles(t *testing.T) {
 	m3, err := ConstructMorphology("pole2-balancing", "3")
 	if err != nil {
@@ -122,6 +148,12 @@ func TestEnsureScapeCompatibilityWithProfile(t *testing.T) {
 	if err := EnsureScapeCompatibilityWithProfile("scape_GTSA", "core"); err != nil {
 		t.Fatalf("ensure gtsa alias core profile compatibility: %v", err)
 	}
+	if err := EnsureScapeCompatibilityWithProfile("epitopes_sim", "core"); err != nil {
+		t.Fatalf("ensure epitopes alias core profile compatibility: %v", err)
+	}
+	if err := EnsureScapeCompatibilityWithProfile("scape_LLVMPhaseOrdering", "core"); err != nil {
+		t.Fatalf("ensure llvm alias core profile compatibility: %v", err)
+	}
 }
 
 func TestAvailableMorphologyProfiles(t *testing.T) {
@@ -137,6 +169,12 @@ func TestAvailableMorphologyProfiles(t *testing.T) {
 	}
 	if got := AvailableMorphologyProfiles("gtsa"); len(got) != 2 || got[0] != "core" || got[1] != "default" {
 		t.Fatalf("expected gtsa core/default profiles, got=%v", got)
+	}
+	if got := AvailableMorphologyProfiles("epitopes"); len(got) != 2 || got[0] != "core" || got[1] != "default" {
+		t.Fatalf("expected epitopes core/default profiles, got=%v", got)
+	}
+	if got := AvailableMorphologyProfiles("llvm-phase-ordering"); len(got) != 2 || got[0] != "core" || got[1] != "default" {
+		t.Fatalf("expected llvm core/default profiles, got=%v", got)
 	}
 	if got := AvailableMorphologyProfiles("xor"); len(got) != 1 || got[0] != "default" {
 		t.Fatalf("expected default-only profile for xor, got=%v", got)

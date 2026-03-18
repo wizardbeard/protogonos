@@ -25,3 +25,24 @@ func (EpitopesMorphology) Actuators() []string {
 func (EpitopesMorphology) Compatible(scape string) bool {
 	return scape == "epitopes"
 }
+
+type EpitopesCoreMorphology struct{}
+
+func (EpitopesCoreMorphology) Name() string {
+	return "epitopes-core-v1"
+}
+
+func (EpitopesCoreMorphology) Sensors() []string {
+	return []string{
+		protoio.EpitopesSignalSensorName,
+		protoio.EpitopesMemorySensorName,
+	}
+}
+
+func (EpitopesCoreMorphology) Actuators() []string {
+	return []string{protoio.EpitopesResponseActuatorName}
+}
+
+func (EpitopesCoreMorphology) Compatible(scape string) bool {
+	return scape == "epitopes"
+}

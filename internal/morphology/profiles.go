@@ -186,6 +186,24 @@ func ConstructMorphology(scapeName, profile string) (Morphology, error) {
 		default:
 			return nil, fmt.Errorf("unsupported gtsa morphology profile: %s", profile)
 		}
+	case "epitopes":
+		switch profile {
+		case "", "default", "all", "workflow", "full":
+			return EpitopesMorphology{}, nil
+		case "core", "minimal", "legacy":
+			return EpitopesCoreMorphology{}, nil
+		default:
+			return nil, fmt.Errorf("unsupported epitopes morphology profile: %s", profile)
+		}
+	case "llvm-phase-ordering":
+		switch profile {
+		case "", "default", "all", "workflow", "full":
+			return LLVMPhaseOrderingMorphology{}, nil
+		case "core", "minimal", "legacy":
+			return LLVMPhaseOrderingCoreMorphology{}, nil
+		default:
+			return nil, fmt.Errorf("unsupported llvm-phase-ordering morphology profile: %s", profile)
+		}
 	default:
 		m, ok := defaultMorphologyForScape(scapeName)
 		if !ok {
@@ -211,6 +229,10 @@ func AvailableMorphologyProfiles(scapeName string) []string {
 	case "fx":
 		profiles = []string{"default", "market"}
 	case "gtsa":
+		profiles = []string{"core", "default"}
+	case "epitopes":
+		profiles = []string{"core", "default"}
+	case "llvm-phase-ordering":
 		profiles = []string{"core", "default"}
 	default:
 		if _, ok := defaultMorphologyForScape(scapeName); ok {

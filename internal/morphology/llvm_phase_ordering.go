@@ -25,3 +25,24 @@ func (LLVMPhaseOrderingMorphology) Actuators() []string {
 func (LLVMPhaseOrderingMorphology) Compatible(scape string) bool {
 	return scape == "llvm-phase-ordering"
 }
+
+type LLVMPhaseOrderingCoreMorphology struct{}
+
+func (LLVMPhaseOrderingCoreMorphology) Name() string {
+	return "llvm-phase-ordering-core-v1"
+}
+
+func (LLVMPhaseOrderingCoreMorphology) Sensors() []string {
+	return []string{
+		protoio.LLVMComplexitySensorName,
+		protoio.LLVMPassIndexSensorName,
+	}
+}
+
+func (LLVMPhaseOrderingCoreMorphology) Actuators() []string {
+	return []string{protoio.LLVMPhaseActuatorName}
+}
+
+func (LLVMPhaseOrderingCoreMorphology) Compatible(scape string) bool {
+	return scape == "llvm-phase-ordering"
+}
