@@ -73,6 +73,8 @@ type RunRequest struct {
 	EpitopesBenchmarkEnd    int
 	GTSAProfile             string
 	FXProfile               string
+	EpitopesProfile         string
+	LLVMProfile             string
 	FlatlandScannerProfile  string
 	FlatlandScannerSpread   *float64
 	FlatlandScannerOffset   *float64
@@ -596,6 +598,8 @@ func (c *Client) Run(ctx context.Context, req RunRequest) (RunSummary, error) {
 			EpitopesBenchmarkEnd:    req.EpitopesBenchmarkEnd,
 			GTSAProfile:             req.GTSAProfile,
 			FXProfile:               req.FXProfile,
+			EpitopesProfile:         req.EpitopesProfile,
+			LLVMProfile:             req.LLVMProfile,
 			FlatlandScannerProfile:  req.FlatlandScannerProfile,
 			FlatlandScannerSpread:   cloneFloat64Ptr(req.FlatlandScannerSpread),
 			FlatlandScannerOffset:   cloneFloat64Ptr(req.FlatlandScannerOffset),
@@ -666,9 +670,11 @@ func (c *Client) Run(ctx context.Context, req RunRequest) (RunSummary, error) {
 	if err := stats.AppendRunIndex(c.benchmarksDir, stats.RunIndexEntry{
 		RunID:                  runID,
 		Scape:                  req.Scape,
-		Morphology:             stats.BenchmarkMorphologyLabel(req.Scape, req.GTSAProfile, req.FXProfile, req.FlatlandScannerProfile),
+		Morphology:             stats.BenchmarkMorphologyLabel(req.Scape, req.GTSAProfile, req.FXProfile, req.EpitopesProfile, req.LLVMProfile, req.FlatlandScannerProfile),
 		GTSAProfile:            req.GTSAProfile,
 		FXProfile:              req.FXProfile,
+		EpitopesProfile:        req.EpitopesProfile,
+		LLVMProfile:            req.LLVMProfile,
 		FlatlandScannerProfile: req.FlatlandScannerProfile,
 		PopulationSize:         req.Population,
 		Generations:            req.Generations,
@@ -768,6 +774,8 @@ func runRequestFromArtifactsConfig(cfg stats.RunConfig) RunRequest {
 		EpitopesBenchmarkEnd:    cfg.EpitopesBenchmarkEnd,
 		GTSAProfile:             cfg.GTSAProfile,
 		FXProfile:               cfg.FXProfile,
+		EpitopesProfile:         cfg.EpitopesProfile,
+		LLVMProfile:             cfg.LLVMProfile,
 		FlatlandScannerProfile:  cfg.FlatlandScannerProfile,
 		FlatlandScannerSpread:   cloneFloat64Ptr(cfg.FlatlandScannerSpread),
 		FlatlandScannerOffset:   cloneFloat64Ptr(cfg.FlatlandScannerOffset),
@@ -835,6 +843,8 @@ func seedPopulationOptionsFromRequest(req RunRequest) genotype.SeedPopulationOpt
 	return genotype.SeedPopulationOptions{
 		GTSAProfile:            req.GTSAProfile,
 		FXProfile:              req.FXProfile,
+		EpitopesProfile:        req.EpitopesProfile,
+		LLVMProfile:            req.LLVMProfile,
 		FlatlandScannerProfile: req.FlatlandScannerProfile,
 	}
 }

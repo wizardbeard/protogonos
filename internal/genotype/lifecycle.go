@@ -36,6 +36,14 @@ type SeedPopulationOptions struct {
 	// FXProfile controls the FX seed scaffold.
 	// Supported values: "default" (full) and "market".
 	FXProfile string
+
+	// EpitopesProfile controls the epitopes seed scaffold.
+	// Supported values: "default" (full) and "core".
+	EpitopesProfile string
+
+	// LLVMProfile controls the llvm-phase-ordering seed scaffold.
+	// Supported values: "default" (full) and "core".
+	LLVMProfile string
 }
 
 const (
@@ -48,6 +56,10 @@ const (
 	GTSASeedProfileCore                 = "core"
 	FXSeedProfileDefault                = "default"
 	FXSeedProfileMarket                 = "market"
+	EpitopesSeedProfileDefault          = "default"
+	EpitopesSeedProfileCore             = "core"
+	LLVMSeedProfileDefault              = "default"
+	LLVMSeedProfileCore                 = "core"
 )
 
 func ConstructSeedPopulation(scapeName string, size int, seed int64) (SeedPopulation, error) {
@@ -94,17 +106,9 @@ func ConstructSeedPopulationWithOptions(scapeName string, size int, seed int64, 
 	case "fx":
 		return constructFXSeedPopulation(size, seed, options)
 	case "epitopes":
-		return SeedPopulation{
-			Genomes:         seedEpitopesPopulation(size, seed),
-			InputNeuronIDs:  []string{"s", "m", "t", "p", "g"},
-			OutputNeuronIDs: []string{"r"},
-		}, nil
+		return constructEpitopesSeedPopulation(size, seed, options)
 	case "llvm-phase-ordering":
-		return SeedPopulation{
-			Genomes:         seedLLVMPhaseOrderingPopulation(size, seed),
-			InputNeuronIDs:  []string{"c", "p", "a", "d", "r"},
-			OutputNeuronIDs: llvmSeedOutputNeuronIDs(),
-		}, nil
+		return constructLLVMSeedPopulation(size, seed, options)
 	default:
 		return SeedPopulation{}, fmt.Errorf("unsupported scape: %s", scapeName)
 	}
@@ -187,6 +191,32 @@ func normalizeFXSeedProfile(raw string) string {
 	}
 }
 
+func normalizeEpitopesSeedProfile(raw string) string {
+	profile := strings.ToLower(strings.TrimSpace(raw))
+	profile = strings.ReplaceAll(profile, "_", "-")
+	switch profile {
+	case "", "default", "full", "all", "workflow":
+		return EpitopesSeedProfileDefault
+	case "core", "minimal", "legacy":
+		return EpitopesSeedProfileCore
+	default:
+		return profile
+	}
+}
+
+func normalizeLLVMSeedProfile(raw string) string {
+	profile := strings.ToLower(strings.TrimSpace(raw))
+	profile = strings.ReplaceAll(profile, "_", "-")
+	switch profile {
+	case "", "default", "full", "all", "workflow":
+		return LLVMSeedProfileDefault
+	case "core", "minimal", "legacy":
+		return LLVMSeedProfileCore
+	default:
+		return profile
+	}
+}
+
 func resolveFlatlandScannerSeedProfile(raw string) (string, error) {
 	profile := normalizeFlatlandScannerSeedProfile(raw)
 	switch profile {
@@ -232,6 +262,44 @@ func constructFXSeedPopulation(size int, seed int64, options SeedPopulationOptio
 		}, nil
 	default:
 		return SeedPopulation{}, fmt.Errorf("unsupported fx seed profile: %s", options.FXProfile)
+	}
+}
+
+func constructEpitopesSeedPopulation(size int, seed int64, options SeedPopulationOptions) (SeedPopulation, error) {
+	switch normalizeEpitopesSeedProfile(options.EpitopesProfile) {
+	case EpitopesSeedProfileDefault:
+		return SeedPopulation{
+			Genomes:         seedEpitopesPopulation(size, seed),
+			InputNeuronIDs:  []string{"s", "m", "t", "p", "g"},
+			OutputNeuronIDs: []string{"r"},
+		}, nil
+	case EpitopesSeedProfileCore:
+		return SeedPopulation{
+			Genomes:         seedEpitopesPopulationCore(size, seed),
+			InputNeuronIDs:  []string{"s", "m"},
+			OutputNeuronIDs: []string{"r"},
+		}, nil
+	default:
+		return SeedPopulation{}, fmt.Errorf("unsupported epitopes seed profile: %s", options.EpitopesProfile)
+	}
+}
+
+func constructLLVMSeedPopulation(size int, seed int64, options SeedPopulationOptions) (SeedPopulation, error) {
+	switch normalizeLLVMSeedProfile(options.LLVMProfile) {
+	case LLVMSeedProfileDefault:
+		return SeedPopulation{
+			Genomes:         seedLLVMPhaseOrderingPopulation(size, seed),
+			InputNeuronIDs:  []string{"c", "p", "a", "d", "r"},
+			OutputNeuronIDs: llvmSeedOutputNeuronIDs(),
+		}, nil
+	case LLVMSeedProfileCore:
+		return SeedPopulation{
+			Genomes:         seedLLVMPhaseOrderingPopulationCore(size, seed),
+			InputNeuronIDs:  []string{"c", "p"},
+			OutputNeuronIDs: llvmSeedOutputNeuronIDs(),
+		}, nil
+	default:
+		return SeedPopulation{}, fmt.Errorf("unsupported llvm seed profile: %s", options.LLVMProfile)
 	}
 }
 
@@ -813,6 +881,32 @@ func seedEpitopesPopulation(size int, seed int64) []model.Genome {
 	return population
 }
 
+func seedEpitopesPopulationCore(size int, seed int64) []model.Genome {
+	rng := rand.New(rand.NewSource(seed))
+	population := make([]model.Genome, 0, size)
+	for i := 0; i < size; i++ {
+		population = append(population, model.Genome{
+			VersionedRecord: model.VersionedRecord{SchemaVersion: storage.CurrentSchemaVersion, CodecVersion: storage.CurrentCodecVersion},
+			ID:              fmt.Sprintf("epitopes-g0-%d", i),
+			SensorIDs: []string{
+				protoio.EpitopesSignalSensorName,
+				protoio.EpitopesMemorySensorName,
+			},
+			ActuatorIDs: []string{protoio.EpitopesResponseActuatorName},
+			Neurons: []model.Neuron{
+				{ID: "s", Activation: "identity", Bias: 0},
+				{ID: "m", Activation: "identity", Bias: 0},
+				{ID: "r", Activation: "tanh", Bias: jitter(rng, 0.25)},
+			},
+			Synapses: []model.Synapse{
+				{ID: "s1", From: "s", To: "r", Weight: 0.9 + jitter(rng, 0.2), Enabled: true},
+				{ID: "s2", From: "m", To: "r", Weight: 0.7 + jitter(rng, 0.2), Enabled: true},
+			},
+		})
+	}
+	return population
+}
+
 func seedLLVMPhaseOrderingPopulation(size int, seed int64) []model.Genome {
 	rng := rand.New(rand.NewSource(seed))
 	population := make([]model.Genome, 0, size)
@@ -887,6 +981,62 @@ func seedLLVMPhaseOrderingPopulation(size int, seed int64) []model.Genome {
 				protoio.LLVMAlignmentSensorName,
 				protoio.LLVMDiversitySensorName,
 				protoio.LLVMRuntimeGainSensorName,
+			},
+			ActuatorIDs: []string{protoio.LLVMPhaseActuatorName},
+			Neurons:     neurons,
+			Synapses:    synapses,
+		})
+	}
+	return population
+}
+
+func seedLLVMPhaseOrderingPopulationCore(size int, seed int64) []model.Genome {
+	rng := rand.New(rand.NewSource(seed))
+	population := make([]model.Genome, 0, size)
+	outputIDs := llvmSeedOutputNeuronIDs()
+	surfaceSize := len(outputIDs)
+	if surfaceSize <= 0 {
+		surfaceSize = 1
+	}
+
+	for i := 0; i < size; i++ {
+		neurons := make([]model.Neuron, 0, 2+surfaceSize)
+		neurons = append(neurons,
+			model.Neuron{ID: "c", Activation: "identity", Bias: 0},
+			model.Neuron{ID: "p", Activation: "identity", Bias: 0},
+		)
+		synapses := make([]model.Synapse, 0, surfaceSize*2)
+		for idx, outputID := range outputIDs {
+			progress := float64(idx) / float64(maxIntLifecycle(1, surfaceSize-1))
+			neurons = append(neurons, model.Neuron{
+				ID:         outputID,
+				Activation: "identity",
+				Bias:       (1.0 - 2.0*progress) + jitter(rng, 0.05),
+			})
+			synapses = append(synapses,
+				model.Synapse{
+					ID:      fmt.Sprintf("s%d:p", idx),
+					From:    "p",
+					To:      outputID,
+					Weight:  -2.2 + 4.4*progress + jitter(rng, 0.05),
+					Enabled: true,
+				},
+				model.Synapse{
+					ID:      fmt.Sprintf("s%d:c", idx),
+					From:    "c",
+					To:      outputID,
+					Weight:  -0.35 + jitter(rng, 0.1),
+					Enabled: true,
+				},
+			)
+		}
+
+		population = append(population, model.Genome{
+			VersionedRecord: model.VersionedRecord{SchemaVersion: storage.CurrentSchemaVersion, CodecVersion: storage.CurrentCodecVersion},
+			ID:              fmt.Sprintf("llvm-g0-%d", i),
+			SensorIDs: []string{
+				protoio.LLVMComplexitySensorName,
+				protoio.LLVMPassIndexSensorName,
 			},
 			ActuatorIDs: []string{protoio.LLVMPhaseActuatorName},
 			Neurons:     neurons,

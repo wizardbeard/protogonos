@@ -1436,9 +1436,11 @@ func runBenchmark(ctx context.Context, args []string) error {
 	report := stats.BenchmarkSummary{
 		RunID:                  runSummary.RunID,
 		Scape:                  req.Scape,
-		Morphology:             stats.BenchmarkMorphologyLabel(req.Scape, req.GTSAProfile, req.FXProfile, req.FlatlandScannerProfile),
+		Morphology:             stats.BenchmarkMorphologyLabel(req.Scape, req.GTSAProfile, req.FXProfile, req.EpitopesProfile, req.LLVMProfile, req.FlatlandScannerProfile),
 		GTSAProfile:            req.GTSAProfile,
 		FXProfile:              req.FXProfile,
+		EpitopesProfile:        req.EpitopesProfile,
+		LLVMProfile:            req.LLVMProfile,
 		FlatlandScannerProfile: req.FlatlandScannerProfile,
 		PopulationSize:         req.Population,
 		Generations:            req.Generations,

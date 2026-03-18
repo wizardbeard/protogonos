@@ -440,19 +440,23 @@ func TestBenchmarkMorphologyLabel(t *testing.T) {
 		scape    string
 		gtsa     string
 		fx       string
+		epitopes string
+		llvm     string
 		flatland string
 		want     string
 	}{
 		{scape: "gtsa", gtsa: "core", want: "gtsa[core]"},
 		{scape: "fx", fx: "market", want: "fx[market]"},
+		{scape: "epitopes", epitopes: "core", want: "epitopes[core]"},
+		{scape: "llvm-phase-ordering", llvm: "core", want: "llvm-phase-ordering[core]"},
 		{scape: "flatland", flatland: "core3", want: "flatland[core3]"},
 		{scape: "fx", fx: "default", want: "fx"},
 		{scape: "xor", want: "xor"},
 		{scape: "", want: "unknown"},
 	}
 	for _, tc := range cases {
-		if got := BenchmarkMorphologyLabel(tc.scape, tc.gtsa, tc.fx, tc.flatland); got != tc.want {
-			t.Fatalf("BenchmarkMorphologyLabel(%q,%q,%q,%q)=%q want=%q", tc.scape, tc.gtsa, tc.fx, tc.flatland, got, tc.want)
+		if got := BenchmarkMorphologyLabel(tc.scape, tc.gtsa, tc.fx, tc.epitopes, tc.llvm, tc.flatland); got != tc.want {
+			t.Fatalf("BenchmarkMorphologyLabel(%q,%q,%q,%q,%q,%q)=%q want=%q", tc.scape, tc.gtsa, tc.fx, tc.epitopes, tc.llvm, tc.flatland, got, tc.want)
 		}
 	}
 }

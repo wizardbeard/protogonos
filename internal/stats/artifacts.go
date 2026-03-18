@@ -42,6 +42,8 @@ type RunConfig struct {
 	EpitopesBenchmarkEnd    int      `json:"epitopes_benchmark_end,omitempty"`
 	GTSAProfile             string   `json:"gtsa_profile,omitempty"`
 	FXProfile               string   `json:"fx_profile,omitempty"`
+	EpitopesProfile         string   `json:"epitopes_profile,omitempty"`
+	LLVMProfile             string   `json:"llvm_profile,omitempty"`
 	FlatlandScannerProfile  string   `json:"flatland_scanner_profile,omitempty"`
 	FlatlandScannerSpread   *float64 `json:"flatland_scanner_spread,omitempty"`
 	FlatlandScannerOffset   *float64 `json:"flatland_scanner_offset,omitempty"`
@@ -154,6 +156,8 @@ type BenchmarkSummary struct {
 	Morphology             string  `json:"morphology,omitempty"`
 	GTSAProfile            string  `json:"gtsa_profile,omitempty"`
 	FXProfile              string  `json:"fx_profile,omitempty"`
+	EpitopesProfile        string  `json:"epitopes_profile,omitempty"`
+	LLVMProfile            string  `json:"llvm_profile,omitempty"`
 	FlatlandScannerProfile string  `json:"flatland_scanner_profile,omitempty"`
 	PopulationSize         int     `json:"population_size"`
 	Generations            int     `json:"generations"`
@@ -175,6 +179,8 @@ type RunIndexEntry struct {
 	Morphology             string  `json:"morphology,omitempty"`
 	GTSAProfile            string  `json:"gtsa_profile,omitempty"`
 	FXProfile              string  `json:"fx_profile,omitempty"`
+	EpitopesProfile        string  `json:"epitopes_profile,omitempty"`
+	LLVMProfile            string  `json:"llvm_profile,omitempty"`
 	FlatlandScannerProfile string  `json:"flatland_scanner_profile,omitempty"`
 	PopulationSize         int     `json:"population_size"`
 	Generations            int     `json:"generations"`
@@ -186,7 +192,7 @@ type RunIndexEntry struct {
 	CreatedAtUTC           string  `json:"created_at_utc"`
 }
 
-func BenchmarkMorphologyLabel(scapeName, gtsaProfile, fxProfile, flatlandScannerProfile string) string {
+func BenchmarkMorphologyLabel(scapeName, gtsaProfile, fxProfile, epitopesProfile, llvmProfile, flatlandScannerProfile string) string {
 	scapeName = strings.TrimSpace(scapeName)
 	switch strings.ToLower(scapeName) {
 	case "gtsa":
@@ -195,6 +201,14 @@ func BenchmarkMorphologyLabel(scapeName, gtsaProfile, fxProfile, flatlandScanner
 		}
 	case "fx":
 		if profile := strings.TrimSpace(fxProfile); profile != "" && profile != "default" {
+			return scapeName + "[" + profile + "]"
+		}
+	case "epitopes":
+		if profile := strings.TrimSpace(epitopesProfile); profile != "" && profile != "default" {
+			return scapeName + "[" + profile + "]"
+		}
+	case "llvm-phase-ordering":
+		if profile := strings.TrimSpace(llvmProfile); profile != "" && profile != "default" {
 			return scapeName + "[" + profile + "]"
 		}
 	case "flatland":
@@ -209,7 +223,7 @@ func BenchmarkMorphologyLabel(scapeName, gtsaProfile, fxProfile, flatlandScanner
 }
 
 func BenchmarkMorphologyLabelFromConfig(cfg RunConfig) string {
-	return BenchmarkMorphologyLabel(cfg.Scape, cfg.GTSAProfile, cfg.FXProfile, cfg.FlatlandScannerProfile)
+	return BenchmarkMorphologyLabel(cfg.Scape, cfg.GTSAProfile, cfg.FXProfile, cfg.EpitopesProfile, cfg.LLVMProfile, cfg.FlatlandScannerProfile)
 }
 
 func WriteRunArtifacts(baseDir string, artifacts RunArtifacts) (string, error) {

@@ -454,6 +454,41 @@ func TestConstructSeedPopulationRejectsUnsupportedFXProfile(t *testing.T) {
 	}
 }
 
+func TestConstructSeedPopulationEpitopesCoreProfile(t *testing.T) {
+	seed, err := ConstructSeedPopulationWithOptions("epitopes", 2, 31, SeedPopulationOptions{
+		EpitopesProfile: EpitopesSeedProfileCore,
+	})
+	if err != nil {
+		t.Fatalf("construct epitopes core population: %v", err)
+	}
+	if len(seed.InputNeuronIDs) != 2 || seed.InputNeuronIDs[0] != "s" || seed.InputNeuronIDs[1] != "m" {
+		t.Fatalf("unexpected epitopes core input ids: %#v", seed.InputNeuronIDs)
+	}
+	if len(seed.OutputNeuronIDs) != 1 || seed.OutputNeuronIDs[0] != "r" {
+		t.Fatalf("unexpected epitopes core output ids: %#v", seed.OutputNeuronIDs)
+	}
+	if len(seed.Genomes[0].SensorIDs) != 2 ||
+		seed.Genomes[0].SensorIDs[0] != protoio.EpitopesSignalSensorName ||
+		seed.Genomes[0].SensorIDs[1] != protoio.EpitopesMemorySensorName {
+		t.Fatalf("unexpected epitopes core sensor ids: %#v", seed.Genomes[0].SensorIDs)
+	}
+	if len(seed.Genomes[0].Neurons) != 3 {
+		t.Fatalf("unexpected epitopes core neuron count: %d", len(seed.Genomes[0].Neurons))
+	}
+	if len(seed.Genomes[0].Synapses) != 2 {
+		t.Fatalf("unexpected epitopes core synapse count: %d", len(seed.Genomes[0].Synapses))
+	}
+}
+
+func TestConstructSeedPopulationRejectsUnsupportedEpitopesProfile(t *testing.T) {
+	_, err := ConstructSeedPopulationWithOptions("epitopes", 1, 31, SeedPopulationOptions{
+		EpitopesProfile: "unsupported-profile",
+	})
+	if err == nil {
+		t.Fatal("expected unsupported epitopes profile error")
+	}
+}
+
 func TestConstructSeedPopulationEpitopes(t *testing.T) {
 	seed, err := ConstructSeedPopulation("epitopes", 2, 31)
 	if err != nil {
@@ -478,6 +513,41 @@ func TestConstructSeedPopulationEpitopes(t *testing.T) {
 	}
 	if len(seed.Genomes[0].ActuatorIDs) != 1 || seed.Genomes[0].ActuatorIDs[0] != protoio.EpitopesResponseActuatorName {
 		t.Fatalf("unexpected epitopes actuator ids: %#v", seed.Genomes[0].ActuatorIDs)
+	}
+}
+
+func TestConstructSeedPopulationLLVMCoreProfile(t *testing.T) {
+	seed, err := ConstructSeedPopulationWithOptions("llvm-phase-ordering", 2, 71, SeedPopulationOptions{
+		LLVMProfile: LLVMSeedProfileCore,
+	})
+	if err != nil {
+		t.Fatalf("construct llvm core population: %v", err)
+	}
+	if len(seed.InputNeuronIDs) != 2 || seed.InputNeuronIDs[0] != "c" || seed.InputNeuronIDs[1] != "p" {
+		t.Fatalf("unexpected llvm core input ids: %#v", seed.InputNeuronIDs)
+	}
+	if len(seed.OutputNeuronIDs) != len(llvmSeedOutputNeuronIDs()) {
+		t.Fatalf("unexpected llvm core output surface: %d", len(seed.OutputNeuronIDs))
+	}
+	if len(seed.Genomes[0].SensorIDs) != 2 ||
+		seed.Genomes[0].SensorIDs[0] != protoio.LLVMComplexitySensorName ||
+		seed.Genomes[0].SensorIDs[1] != protoio.LLVMPassIndexSensorName {
+		t.Fatalf("unexpected llvm core sensor ids: %#v", seed.Genomes[0].SensorIDs)
+	}
+	if len(seed.Genomes[0].Neurons) != 2+len(llvmSeedOutputNeuronIDs()) {
+		t.Fatalf("unexpected llvm core neuron count: %d", len(seed.Genomes[0].Neurons))
+	}
+	if len(seed.Genomes[0].Synapses) != 2*len(llvmSeedOutputNeuronIDs()) {
+		t.Fatalf("unexpected llvm core synapse count: %d", len(seed.Genomes[0].Synapses))
+	}
+}
+
+func TestConstructSeedPopulationRejectsUnsupportedLLVMProfile(t *testing.T) {
+	_, err := ConstructSeedPopulationWithOptions("llvm-phase-ordering", 1, 71, SeedPopulationOptions{
+		LLVMProfile: "unsupported-profile",
+	})
+	if err == nil {
+		t.Fatal("expected unsupported llvm profile error")
 	}
 }
 

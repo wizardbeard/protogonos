@@ -919,15 +919,23 @@ func TestApplyScapeDataSourcesAppliesEpitopesTableSelectionToContext(t *testing.
 
 func TestRunRequestFromArtifactsConfigPreservesSeedProfiles(t *testing.T) {
 	req := runRequestFromArtifactsConfig(stats.RunConfig{
-		Scape:       "fx",
-		GTSAProfile: "core",
-		FXProfile:   "market",
+		Scape:           "fx",
+		GTSAProfile:     "core",
+		FXProfile:       "market",
+		EpitopesProfile: "core",
+		LLVMProfile:     "core",
 	})
 	if req.GTSAProfile != "core" {
 		t.Fatalf("expected gtsa profile core, got %q", req.GTSAProfile)
 	}
 	if req.FXProfile != "market" {
 		t.Fatalf("expected fx profile market, got %q", req.FXProfile)
+	}
+	if req.EpitopesProfile != "core" {
+		t.Fatalf("expected epitopes profile core, got %q", req.EpitopesProfile)
+	}
+	if req.LLVMProfile != "core" {
+		t.Fatalf("expected llvm profile core, got %q", req.LLVMProfile)
 	}
 }
 
@@ -965,6 +973,40 @@ func TestDefaultSeedIONeuronsForScapeUsesFXProfile(t *testing.T) {
 	}
 }
 
+func TestDefaultSeedIONeuronsForScapeUsesEpitopesProfile(t *testing.T) {
+	inputs, outputs, err := defaultSeedIONeuronsForScape(RunRequest{
+		Scape:           "epitopes",
+		Seed:            31,
+		EpitopesProfile: "core",
+	})
+	if err != nil {
+		t.Fatalf("default seed io neurons: %v", err)
+	}
+	if len(inputs) != 2 || inputs[0] != "s" || inputs[1] != "m" {
+		t.Fatalf("unexpected epitopes core input ids: %#v", inputs)
+	}
+	if len(outputs) != 1 || outputs[0] != "r" {
+		t.Fatalf("unexpected epitopes core output ids: %#v", outputs)
+	}
+}
+
+func TestDefaultSeedIONeuronsForScapeUsesLLVMProfile(t *testing.T) {
+	inputs, outputs, err := defaultSeedIONeuronsForScape(RunRequest{
+		Scape:       "llvm-phase-ordering",
+		Seed:        71,
+		LLVMProfile: "core",
+	})
+	if err != nil {
+		t.Fatalf("default seed io neurons: %v", err)
+	}
+	if len(inputs) != 2 || inputs[0] != "c" || inputs[1] != "p" {
+		t.Fatalf("unexpected llvm core input ids: %#v", inputs)
+	}
+	if len(outputs) != 55 || outputs[0] != "o00" {
+		t.Fatalf("unexpected llvm core output ids: %#v", outputs)
+	}
+}
+
 func TestClientRunPersistsSeedProfilesInArtifacts(t *testing.T) {
 	base := t.TempDir()
 	client, err := New(Options{
@@ -980,13 +1022,15 @@ func TestClientRunPersistsSeedProfilesInArtifacts(t *testing.T) {
 	})
 
 	summary, err := client.Run(context.Background(), RunRequest{
-		RunID:       "fx-profile-artifact",
-		Scape:       "xor",
-		Population:  2,
-		Generations: 1,
-		Seed:        31,
-		GTSAProfile: "core",
-		FXProfile:   "market",
+		RunID:           "fx-profile-artifact",
+		Scape:           "xor",
+		Population:      2,
+		Generations:     1,
+		Seed:            31,
+		GTSAProfile:     "core",
+		FXProfile:       "market",
+		EpitopesProfile: "core",
+		LLVMProfile:     "core",
 	})
 	if err != nil {
 		t.Fatalf("run: %v", err)
@@ -1005,6 +1049,12 @@ func TestClientRunPersistsSeedProfilesInArtifacts(t *testing.T) {
 	}
 	if cfg.FXProfile != "market" {
 		t.Fatalf("expected artifact fx profile market, got %q", cfg.FXProfile)
+	}
+	if cfg.EpitopesProfile != "core" {
+		t.Fatalf("expected artifact epitopes profile core, got %q", cfg.EpitopesProfile)
+	}
+	if cfg.LLVMProfile != "core" {
+		t.Fatalf("expected artifact llvm profile core, got %q", cfg.LLVMProfile)
 	}
 }
 
