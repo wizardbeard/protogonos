@@ -356,6 +356,9 @@ func evaluateEpitopesWithStep(ctx context.Context, runner StepAgent, cfg epitope
 	return evaluateEpitopes(
 		ctx,
 		cfg,
+		"step_input",
+		epitopesPerceptWidth(cfg.sequenceLength),
+		"step_output",
 		func(ctx context.Context, percept epitopesSenseInput) ([]float64, error) {
 			out, err := runner.RunStep(ctx, percept.vector)
 			if err != nil {
@@ -378,6 +381,9 @@ func evaluateEpitopesWithTick(ctx context.Context, ticker TickAgent, cfg epitope
 	return evaluateEpitopes(
 		ctx,
 		cfg,
+		io.sensorSurface(),
+		io.sensorWidth(),
+		protoio.EpitopesResponseActuatorName,
 		func(ctx context.Context, percept epitopesSenseInput) ([]float64, error) {
 			io.signal.Set(percept.signal)
 			io.memory.Set(percept.memory)
@@ -409,6 +415,9 @@ func evaluateEpitopesWithTick(ctx context.Context, ticker TickAgent, cfg epitope
 func evaluateEpitopes(
 	ctx context.Context,
 	cfg epitopesModeConfig,
+	sensorSurface string,
+	sensorWidth int,
+	controlSurface string,
 	chooseClassification func(context.Context, epitopesSenseInput) ([]float64, error),
 ) (Fitness, Trace, error) {
 	table := cfg.table
@@ -428,7 +437,7 @@ func evaluateEpitopes(
 	progressAcc := 0.0
 	decisionMarginAcc := 0.0
 	evaluated := 0
-	perceptWidth := 2 + cfg.sequenceLength*epitopesAlphabetSize
+	perceptWidth := epitopesPerceptWidth(cfg.sequenceLength)
 
 	for i := 0; i < cfg.maxSamples; i++ {
 		if err := ctx.Err(); err != nil {
@@ -504,6 +513,9 @@ func evaluateEpitopes(
 		"index_current":        session.indexCurrent,
 		"configured_max":       cfg.maxSamples,
 		"sequence_length":      cfg.sequenceLength,
+		"sensor_surface":       sensorSurface,
+		"sensor_width":         sensorWidth,
+		"control_surface":      controlSurface,
 		"feature_width":        perceptWidth,
 		"positive_targets":     positiveTargets,
 		"negative_targets":     negativeTargets,
@@ -1257,6 +1269,10 @@ func epitopesHasMotif(sequence, motif []int) bool {
 	return false
 }
 
+func epitopesPerceptWidth(sequenceLength int) int {
+	return 2 + sequenceLength*epitopesAlphabetSize
+}
+
 func epitopesOutputToBinary(output []float64) int {
 	if len(output) == 1 {
 		if output[0] >= 0 {
@@ -1342,6 +1358,27 @@ func epitopesIO(agent TickAgent) (epitopesIOBindings, error) {
 		margin:         marginSetter,
 		responseOutput: output,
 	}, nil
+}
+
+func (b epitopesIOBindings) sensorSurface() string {
+	if b.target == nil && b.progress == nil && b.margin == nil {
+		return "core"
+	}
+	return "extended"
+}
+
+func (b epitopesIOBindings) sensorWidth() int {
+	width := 2
+	if b.target != nil {
+		width++
+	}
+	if b.progress != nil {
+		width++
+	}
+	if b.margin != nil {
+		width++
+	}
+	return width
 }
 
 func optionalEpitopesSensorSetter(

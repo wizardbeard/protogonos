@@ -91,6 +91,15 @@ func TestEpitopesScapeEvaluateWithIOComponents(t *testing.T) {
 	if _, ok := trace["accuracy"].(float64); !ok {
 		t.Fatalf("trace missing accuracy: %+v", trace)
 	}
+	if surface, ok := trace["sensor_surface"].(string); !ok || surface != "core" {
+		t.Fatalf("expected sensor_surface=core, got %+v", trace)
+	}
+	if width, ok := trace["sensor_width"].(int); !ok || width != 2 {
+		t.Fatalf("expected sensor_width=2, got %+v", trace)
+	}
+	if surface, ok := trace["control_surface"].(string); !ok || surface != protoio.EpitopesResponseActuatorName {
+		t.Fatalf("expected control_surface=%s, got %+v", protoio.EpitopesResponseActuatorName, trace)
+	}
 }
 
 func TestEpitopesScapeEvaluateWithExtendedIOComponents(t *testing.T) {
@@ -161,6 +170,12 @@ func TestEpitopesScapeEvaluateWithExtendedIOComponents(t *testing.T) {
 	if _, ok := trace["mean_decision_margin"].(float64); !ok {
 		t.Fatalf("trace missing mean_decision_margin: %+v", trace)
 	}
+	if surface, ok := trace["sensor_surface"].(string); !ok || surface != "extended" {
+		t.Fatalf("expected sensor_surface=extended, got %+v", trace)
+	}
+	if width, ok := trace["sensor_width"].(int); !ok || width != 5 {
+		t.Fatalf("expected sensor_width=5, got %+v", trace)
+	}
 }
 
 func TestEpitopesScapeEvaluateModeAnnotatesMode(t *testing.T) {
@@ -181,6 +196,16 @@ func TestEpitopesScapeEvaluateModeAnnotatesMode(t *testing.T) {
 	}
 	if mode, _ := trace["mode"].(string); mode != "validation" {
 		t.Fatalf("expected validation mode trace marker, got %+v", trace)
+	}
+	if surface, _ := trace["sensor_surface"].(string); surface != "step_input" {
+		t.Fatalf("expected validation sensor_surface=step_input, got %+v", trace)
+	}
+	featureWidth, fok := trace["feature_width"].(int)
+	if width, _ := trace["sensor_width"].(int); !fok || width != featureWidth {
+		t.Fatalf("expected validation sensor_width to match feature_width, got %+v", trace)
+	}
+	if surface, _ := trace["control_surface"].(string); surface != "step_output" {
+		t.Fatalf("expected validation control_surface=step_output, got %+v", trace)
 	}
 	if startIndex, ok := trace["start_index"].(int); !ok || startIndex <= 0 {
 		t.Fatalf("expected positive start_index in validation mode, got %+v", trace)
@@ -212,6 +237,13 @@ func TestEpitopesScapeStepPerceptIncludesSequenceFeatures(t *testing.T) {
 	}
 	if width, ok := trace["feature_width"].(int); !ok || width <= 2 {
 		t.Fatalf("expected feature_width > 2 in trace, got %+v", trace)
+	}
+	if surface, ok := trace["sensor_surface"].(string); !ok || surface != "step_input" {
+		t.Fatalf("expected sensor_surface=step_input, got %+v", trace)
+	}
+	featureWidth, fok := trace["feature_width"].(int)
+	if width, ok := trace["sensor_width"].(int); !ok || !fok || width != featureWidth {
+		t.Fatalf("expected sensor_width to match feature_width, got %+v", trace)
 	}
 	if seqLen, ok := trace["sequence_length"].(int); !ok || seqLen <= 0 {
 		t.Fatalf("expected positive sequence_length in trace, got %+v", trace)
