@@ -302,8 +302,12 @@ func resolveConstructMorphology(raw string) (morphology.Morphology, error) {
 		return morphology.GTSAMorphology{}, nil
 	case "fx", "fx-v1":
 		return morphology.FXMorphology{}, nil
+	case "epitopes-core", "epitopes-core-v1", "epitopes_core", "epitopes_core_v1":
+		return morphology.EpitopesCoreMorphology{}, nil
 	case "epitopes", "epitopes-v1":
 		return morphology.EpitopesMorphology{}, nil
+	case "llvm-phase-ordering-core", "llvm-phase-ordering-core-v1", "llvm_phase_ordering_core", "llvm_phase_ordering_core_v1", "llvmphaseorderingcore", "scape-llvmphaseordering-core":
+		return morphology.LLVMPhaseOrderingCoreMorphology{}, nil
 	case "llvm-phase-ordering", "llvm-phase-ordering-v1", "llvmphaseordering", "scape-llvmphaseordering":
 		return morphology.LLVMPhaseOrderingMorphology{}, nil
 	default:

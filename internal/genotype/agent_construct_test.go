@@ -96,6 +96,64 @@ func TestConstructCortexSupportsFlatlandScannerMorphologyAlias(t *testing.T) {
 	}
 }
 
+func TestConstructCortexSupportsEpitopesCoreMorphologyAlias(t *testing.T) {
+	constraint := DefaultConstructConstraint()
+	constraint.Morphology = "epitopes_core_v1"
+
+	out, err := ConstructCortex(
+		"agent-epitopes-core",
+		0,
+		constraint,
+		"neural",
+		"none",
+		"l2l_feedforward",
+		rand.New(rand.NewSource(29)),
+	)
+	if err != nil {
+		t.Fatalf("construct cortex: %v", err)
+	}
+	if len(out.Genome.SensorIDs) != 2 ||
+		out.Genome.SensorIDs[0] != protoio.EpitopesSignalSensorName ||
+		out.Genome.SensorIDs[1] != protoio.EpitopesMemorySensorName {
+		t.Fatalf("unexpected epitopes core sensor surface: %v", out.Genome.SensorIDs)
+	}
+	if len(out.Genome.ActuatorIDs) != 1 || out.Genome.ActuatorIDs[0] != protoio.EpitopesResponseActuatorName {
+		t.Fatalf("unexpected epitopes core actuator ids: %v", out.Genome.ActuatorIDs)
+	}
+	if len(out.InputNeuronIDs) != 2 || len(out.OutputNeuronIDs) != 1 {
+		t.Fatalf("unexpected epitopes core input/output ids: in=%v out=%v", out.InputNeuronIDs, out.OutputNeuronIDs)
+	}
+}
+
+func TestConstructCortexSupportsLLVMCoreMorphologyAlias(t *testing.T) {
+	constraint := DefaultConstructConstraint()
+	constraint.Morphology = "llvm_phase_ordering_core_v1"
+
+	out, err := ConstructCortex(
+		"agent-llvm-core",
+		0,
+		constraint,
+		"neural",
+		"none",
+		"l2l_feedforward",
+		rand.New(rand.NewSource(31)),
+	)
+	if err != nil {
+		t.Fatalf("construct cortex: %v", err)
+	}
+	if len(out.Genome.SensorIDs) != 2 ||
+		out.Genome.SensorIDs[0] != protoio.LLVMComplexitySensorName ||
+		out.Genome.SensorIDs[1] != protoio.LLVMPassIndexSensorName {
+		t.Fatalf("unexpected llvm core sensor surface: %v", out.Genome.SensorIDs)
+	}
+	if len(out.Genome.ActuatorIDs) != 1 || out.Genome.ActuatorIDs[0] != protoio.LLVMPhaseActuatorName {
+		t.Fatalf("unexpected llvm core actuator ids: %v", out.Genome.ActuatorIDs)
+	}
+	if len(out.InputNeuronIDs) != 2 || len(out.OutputNeuronIDs) != 1 {
+		t.Fatalf("unexpected llvm core input/output ids: in=%v out=%v", out.InputNeuronIDs, out.OutputNeuronIDs)
+	}
+}
+
 func TestConstructAgentMaterializesStrategyAndSubstrate(t *testing.T) {
 	constraint := DefaultConstructConstraint()
 	constraint.Morphology = "xor"
