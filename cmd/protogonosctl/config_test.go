@@ -334,13 +334,21 @@ func TestLoadRunRequestFromConfigParsesFlatlandOverrides(t *testing.T) {
 func TestLoadRunRequestFromConfigParsesSeedProfiles(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "run_config_seed_profiles.json")
 	payload := map[string]any{
-		"gtsa_profile": "core",
+		"gtsa_profile":     "core",
+		"epitopes_profile": "core",
+		"llvm_profile":     "core",
 		"scape_data": map[string]any{
 			"gtsa": map[string]any{
 				"profile": "default",
 			},
 			"fx": map[string]any{
 				"profile": "market",
+			},
+			"epitopes": map[string]any{
+				"profile": "default",
+			},
+			"llvm": map[string]any{
+				"profile": "default",
 			},
 		},
 	}
@@ -361,6 +369,12 @@ func TestLoadRunRequestFromConfigParsesSeedProfiles(t *testing.T) {
 	}
 	if req.FXProfile != "market" {
 		t.Fatalf("expected nested fx profile market, got %q", req.FXProfile)
+	}
+	if req.EpitopesProfile != "core" {
+		t.Fatalf("expected top-level epitopes profile core, got %q", req.EpitopesProfile)
+	}
+	if req.LLVMProfile != "core" {
+		t.Fatalf("expected top-level llvm profile core, got %q", req.LLVMProfile)
 	}
 }
 

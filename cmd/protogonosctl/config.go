@@ -92,6 +92,12 @@ func loadRunRequestFromConfig(path string) (protoapi.RunRequest, error) {
 	if v, ok := asString(raw["fx_profile"]); ok {
 		req.FXProfile = v
 	}
+	if v, ok := asString(raw["epitopes_profile"]); ok {
+		req.EpitopesProfile = v
+	}
+	if v, ok := asString(raw["llvm_profile"]); ok {
+		req.LLVMProfile = v
+	}
 	if v, ok := asString(raw["flatland_scanner_profile"]); ok {
 		req.FlatlandScannerProfile = v
 	}
@@ -458,6 +464,11 @@ func applyScapeDataConfigFallbacks(req *protoapi.RunRequest, scapeData map[strin
 	}
 
 	if epitopesData, ok := scapeData["epitopes"].(map[string]any); ok {
+		if req.EpitopesProfile == "" {
+			if v, ok := asString(epitopesData["profile"]); ok {
+				req.EpitopesProfile = v
+			}
+		}
 		if req.EpitopesCSVPath == "" {
 			if v, ok := asString(epitopesData["csv_path"]); ok {
 				req.EpitopesCSVPath = v
@@ -511,6 +522,11 @@ func applyScapeDataConfigFallbacks(req *protoapi.RunRequest, scapeData map[strin
 	}
 
 	if llvmData, ok := scapeData["llvm"].(map[string]any); ok {
+		if req.LLVMProfile == "" {
+			if v, ok := asString(llvmData["profile"]); ok {
+				req.LLVMProfile = v
+			}
+		}
 		if req.LLVMWorkflowJSONPath == "" {
 			if v, ok := asString(llvmData["workflow_json_path"]); ok {
 				req.LLVMWorkflowJSONPath = v
@@ -601,10 +617,14 @@ func overrideFromFlags(req *protoapi.RunRequest, set map[string]bool, flagValue 
 			req.FXCSVPath = v.(string)
 		case "fx-profile":
 			req.FXProfile = v.(string)
+		case "epitopes-profile":
+			req.EpitopesProfile = v.(string)
 		case "epitopes-csv":
 			req.EpitopesCSVPath = v.(string)
 		case "epitopes-table":
 			req.EpitopesTableName = v.(string)
+		case "llvm-profile":
+			req.LLVMProfile = v.(string)
 		case "llvm-workflow-json":
 			req.LLVMWorkflowJSONPath = v.(string)
 		case "epitopes-gt-start":

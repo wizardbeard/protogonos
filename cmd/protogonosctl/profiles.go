@@ -15,6 +15,8 @@ const parityProfileFixturePath = "testdata/fixtures/parity/ref_benchmarker_profi
 type parityPreset struct {
 	GTSAProfile            string
 	FXProfile              string
+	EpitopesProfile        string
+	LLVMProfile            string
 	FlatlandScannerProfile string
 	Selection              string
 	TuneSelection          string
@@ -43,6 +45,8 @@ type parityProfileFixtureProfile struct {
 	Morphology             string                   `json:"morphology,omitempty"`
 	GTSAProfile            string                   `json:"gtsa_profile,omitempty"`
 	FXProfile              string                   `json:"fx_profile,omitempty"`
+	EpitopesProfile        string                   `json:"epitopes_profile,omitempty"`
+	LLVMProfile            string                   `json:"llvm_profile,omitempty"`
 	FlatlandScannerProfile string                   `json:"flatland_scanner_profile,omitempty"`
 	TuningSelection        string                   `json:"tuning_selection"`
 	ExpectedTuning         string                   `json:"expected_tuning_selection"`
@@ -59,6 +63,8 @@ type parityProfileInfo struct {
 	Morphology             string
 	GTSAProfile            string
 	FXProfile              string
+	EpitopesProfile        string
+	LLVMProfile            string
 	FlatlandScannerProfile string
 	PopulationSelection    string
 	TuningSelection        string
@@ -72,6 +78,8 @@ type parityProfileResolved struct {
 	Morphology             string
 	GTSAProfile            string
 	FXProfile              string
+	EpitopesProfile        string
+	LLVMProfile            string
 	FlatlandScannerProfile string
 	PopulationSelection    string
 	TuningSelection        string
@@ -116,6 +124,8 @@ func loadParityPreset(profileID string) (parityPreset, error) {
 	return parityPreset{
 		GTSAProfile:            resolved.GTSAProfile,
 		FXProfile:              resolved.FXProfile,
+		EpitopesProfile:        resolved.EpitopesProfile,
+		LLVMProfile:            resolved.LLVMProfile,
 		FlatlandScannerProfile: resolved.FlatlandScannerProfile,
 		Selection:              resolved.PopulationSelection,
 		TuneSelection:          resolved.TuningSelection,
@@ -152,6 +162,8 @@ func resolveParityProfile(profileID string) (parityProfileResolved, error) {
 			Morphology:             profile.Morphology,
 			GTSAProfile:            profile.GTSAProfile,
 			FXProfile:              profile.FXProfile,
+			EpitopesProfile:        profile.EpitopesProfile,
+			LLVMProfile:            profile.LLVMProfile,
 			FlatlandScannerProfile: profile.FlatlandScannerProfile,
 			PopulationSelection:    mapPopulationSelection(constraint.PopulationSelectionF),
 			TuningSelection:        mapTuningSelection(firstOrEmpty(constraint.TuningSelectionFs)),
@@ -229,6 +241,8 @@ func listParityProfiles() ([]parityProfileInfo, error) {
 			Morphology:             profile.Morphology,
 			GTSAProfile:            profile.GTSAProfile,
 			FXProfile:              profile.FXProfile,
+			EpitopesProfile:        profile.EpitopesProfile,
+			LLVMProfile:            profile.LLVMProfile,
 			FlatlandScannerProfile: profile.FlatlandScannerProfile,
 			PopulationSelection:    mapPopulationSelection(profile.PopulationSelection),
 			TuningSelection:        mapTuningSelection(profile.TuningSelection),

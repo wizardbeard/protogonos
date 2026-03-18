@@ -531,7 +531,7 @@ func runBenchmarkExperimentChangeMorphology(args []string) error {
 	if experimentID == "" && targetRunID == "" {
 		return errors.New("benchmark-experiment chg-mrph requires --id or --run-id")
 	}
-	newScape, gtsaProfile, fxProfile, flatlandScannerProfile, err := parseBenchmarkMorphologyTag(newMorphology)
+	newScape, gtsaProfile, fxProfile, epitopesProfile, llvmProfile, flatlandScannerProfile, err := parseBenchmarkMorphologyTag(newMorphology)
 	if err != nil {
 		return err
 	}
@@ -545,12 +545,14 @@ func runBenchmarkExperimentChangeMorphology(args []string) error {
 			return fmt.Errorf("benchmark experiment not found: %s", experimentID)
 		}
 		exp.BenchmarkArgs = upsertLongFlagArg(exp.BenchmarkArgs, "scape", newScape)
-		exp.BenchmarkArgs = rewriteBenchmarkMorphologyArgs(exp.BenchmarkArgs, gtsaProfile, fxProfile, flatlandScannerProfile)
-		morphology := stats.BenchmarkMorphologyLabel(newScape, gtsaProfile, fxProfile, "", "", flatlandScannerProfile)
+		exp.BenchmarkArgs = rewriteBenchmarkMorphologyArgs(exp.BenchmarkArgs, gtsaProfile, fxProfile, epitopesProfile, llvmProfile, flatlandScannerProfile)
+		morphology := stats.BenchmarkMorphologyLabel(newScape, gtsaProfile, fxProfile, epitopesProfile, llvmProfile, flatlandScannerProfile)
 		for i := range exp.Summaries {
 			exp.Summaries[i].Scape = newScape
 			exp.Summaries[i].GTSAProfile = gtsaProfile
 			exp.Summaries[i].FXProfile = fxProfile
+			exp.Summaries[i].EpitopesProfile = epitopesProfile
+			exp.Summaries[i].LLVMProfile = llvmProfile
 			exp.Summaries[i].FlatlandScannerProfile = flatlandScannerProfile
 			exp.Summaries[i].Morphology = morphology
 		}
@@ -572,6 +574,8 @@ func runBenchmarkExperimentChangeMorphology(args []string) error {
 		cfg.Scape = newScape
 		cfg.GTSAProfile = gtsaProfile
 		cfg.FXProfile = fxProfile
+		cfg.EpitopesProfile = epitopesProfile
+		cfg.LLVMProfile = llvmProfile
 		cfg.FlatlandScannerProfile = flatlandScannerProfile
 		if err := stats.WriteRunConfig(benchmarksDir, targetRunID, cfg); err != nil {
 			return err
@@ -587,8 +591,10 @@ func runBenchmarkExperimentChangeMorphology(args []string) error {
 			entry.Scape = newScape
 			entry.GTSAProfile = gtsaProfile
 			entry.FXProfile = fxProfile
+			entry.EpitopesProfile = epitopesProfile
+			entry.LLVMProfile = llvmProfile
 			entry.FlatlandScannerProfile = flatlandScannerProfile
-			entry.Morphology = stats.BenchmarkMorphologyLabel(newScape, gtsaProfile, fxProfile, "", "", flatlandScannerProfile)
+			entry.Morphology = stats.BenchmarkMorphologyLabel(newScape, gtsaProfile, fxProfile, epitopesProfile, llvmProfile, flatlandScannerProfile)
 			if err := stats.AppendRunIndex(benchmarksDir, entry); err != nil {
 				return err
 			}
@@ -600,58 +606,72 @@ func runBenchmarkExperimentChangeMorphology(args []string) error {
 			summary.Scape = newScape
 			summary.GTSAProfile = gtsaProfile
 			summary.FXProfile = fxProfile
+			summary.EpitopesProfile = epitopesProfile
+			summary.LLVMProfile = llvmProfile
 			summary.FlatlandScannerProfile = flatlandScannerProfile
-			summary.Morphology = stats.BenchmarkMorphologyLabel(newScape, gtsaProfile, fxProfile, "", "", flatlandScannerProfile)
+			summary.Morphology = stats.BenchmarkMorphologyLabel(newScape, gtsaProfile, fxProfile, epitopesProfile, llvmProfile, flatlandScannerProfile)
 			if err := stats.WriteBenchmarkSummary(filepath.Join(benchmarksDir, targetRunID), summary); err != nil {
 				return err
 			}
 		}
-		if err := rewriteExperimentSummaryMorphology(targetRunID, newScape, gtsaProfile, fxProfile, flatlandScannerProfile); err != nil {
+		if err := rewriteExperimentSummaryMorphology(targetRunID, newScape, gtsaProfile, fxProfile, epitopesProfile, llvmProfile, flatlandScannerProfile); err != nil {
 			return err
 		}
-		fmt.Printf("benchmark_run_chg_mrph run_id=%s old_scape=%s new_scape=%s morphology=%s\n", targetRunID, oldScape, newScape, stats.BenchmarkMorphologyLabel(newScape, gtsaProfile, fxProfile, "", "", flatlandScannerProfile))
+		fmt.Printf("benchmark_run_chg_mrph run_id=%s old_scape=%s new_scape=%s morphology=%s\n", targetRunID, oldScape, newScape, stats.BenchmarkMorphologyLabel(newScape, gtsaProfile, fxProfile, epitopesProfile, llvmProfile, flatlandScannerProfile))
 	}
 	return nil
 }
 
-func parseBenchmarkMorphologyTag(raw string) (string, string, string, string, error) {
+func parseBenchmarkMorphologyTag(raw string) (string, string, string, string, string, string, error) {
 	tag := strings.TrimSpace(raw)
 	if tag == "" {
-		return "", "", "", "", errors.New("benchmark morphology tag is required")
+		return "", "", "", "", "", "", errors.New("benchmark morphology tag is required")
 	}
 	base := tag
 	profile := ""
 	if open := strings.Index(tag, "["); open >= 0 {
 		if !strings.HasSuffix(tag, "]") || open == 0 {
-			return "", "", "", "", fmt.Errorf("invalid morphology tag: %s", raw)
+			return "", "", "", "", "", "", fmt.Errorf("invalid morphology tag: %s", raw)
 		}
 		base = strings.TrimSpace(tag[:open])
 		profile = strings.TrimSpace(tag[open+1 : len(tag)-1])
 	}
 	switch base {
 	case "gtsa":
-		return base, profile, "", "", nil
+		return base, profile, "", "", "", "", nil
 	case "fx":
-		return base, "", profile, "", nil
+		return base, "", profile, "", "", "", nil
+	case "epitopes":
+		return base, "", "", profile, "", "", nil
+	case "llvm-phase-ordering":
+		return base, "", "", "", profile, "", nil
 	case "flatland":
-		return base, "", "", profile, nil
+		return base, "", "", "", "", profile, nil
 	default:
 		if profile != "" {
-			return "", "", "", "", fmt.Errorf("profiled morphology tag is unsupported for scape: %s", raw)
+			return "", "", "", "", "", "", fmt.Errorf("profiled morphology tag is unsupported for scape: %s", raw)
 		}
-		return base, "", "", "", nil
+		return base, "", "", "", "", "", nil
 	}
 }
 
-func rewriteBenchmarkMorphologyArgs(args []string, gtsaProfile, fxProfile, flatlandScannerProfile string) []string {
+func rewriteBenchmarkMorphologyArgs(args []string, gtsaProfile, fxProfile, epitopesProfile, llvmProfile, flatlandScannerProfile string) []string {
 	args = removeLongFlagArg(args, "gtsa-profile")
 	args = removeLongFlagArg(args, "fx-profile")
+	args = removeLongFlagArg(args, "epitopes-profile")
+	args = removeLongFlagArg(args, "llvm-profile")
 	args = removeLongFlagArg(args, "flatland-scanner-profile")
 	if gtsaProfile != "" {
 		args = upsertLongFlagArg(args, "gtsa-profile", gtsaProfile)
 	}
 	if fxProfile != "" {
 		args = upsertLongFlagArg(args, "fx-profile", fxProfile)
+	}
+	if epitopesProfile != "" {
+		args = upsertLongFlagArg(args, "epitopes-profile", epitopesProfile)
+	}
+	if llvmProfile != "" {
+		args = upsertLongFlagArg(args, "llvm-profile", llvmProfile)
 	}
 	if flatlandScannerProfile != "" {
 		args = upsertLongFlagArg(args, "flatland-scanner-profile", flatlandScannerProfile)
@@ -677,12 +697,12 @@ func removeLongFlagArg(args []string, flagName string) []string {
 	return normalized
 }
 
-func rewriteExperimentSummaryMorphology(runID, scapeName, gtsaProfile, fxProfile, flatlandScannerProfile string) error {
+func rewriteExperimentSummaryMorphology(runID, scapeName, gtsaProfile, fxProfile, epitopesProfile, llvmProfile, flatlandScannerProfile string) error {
 	exps, err := stats.ListBenchmarkExperiments(benchmarksDir)
 	if err != nil {
 		return err
 	}
-	morphology := stats.BenchmarkMorphologyLabel(scapeName, gtsaProfile, fxProfile, "", "", flatlandScannerProfile)
+	morphology := stats.BenchmarkMorphologyLabel(scapeName, gtsaProfile, fxProfile, epitopesProfile, llvmProfile, flatlandScannerProfile)
 	for _, exp := range exps {
 		changed := false
 		for i := range exp.Summaries {
@@ -692,6 +712,8 @@ func rewriteExperimentSummaryMorphology(runID, scapeName, gtsaProfile, fxProfile
 			exp.Summaries[i].Scape = scapeName
 			exp.Summaries[i].GTSAProfile = gtsaProfile
 			exp.Summaries[i].FXProfile = fxProfile
+			exp.Summaries[i].EpitopesProfile = epitopesProfile
+			exp.Summaries[i].LLVMProfile = llvmProfile
 			exp.Summaries[i].FlatlandScannerProfile = flatlandScannerProfile
 			exp.Summaries[i].Morphology = morphology
 			changed = true

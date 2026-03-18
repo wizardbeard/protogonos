@@ -179,8 +179,10 @@ func runRun(ctx context.Context, args []string) error {
 	gtsaTestEnd := fs.Int("gtsa-test-end", 0, "optional GTSA test_end cutoff for loaded CSV")
 	fxCSV := fs.String("fx-csv", "", "optional FX CSV price-series path")
 	fxProfile := fs.String("fx-profile", "", "optional FX seed profile override: default|market")
+	epitopesProfile := fs.String("epitopes-profile", "", "optional epitopes seed profile override: default|core")
 	epitopesCSV := fs.String("epitopes-csv", "", "optional epitopes CSV table path")
 	epitopesTable := fs.String("epitopes-table", "", "optional built-in epitopes table name (abc_pred10|abc_pred12|abc_pred14|abc_pred16|abc_pred18|abc_pred20)")
+	llvmProfile := fs.String("llvm-profile", "", "optional llvm-phase-ordering seed profile override: default|core")
 	llvmWorkflowJSON := fs.String("llvm-workflow-json", "", "optional LLVM workflow JSON path")
 	flatlandScannerProfile := fs.String("flatland-scanner-profile", "", "optional flatland scanner profile override: balanced5|core3|forward5")
 	flatlandScannerSpread := fs.Float64("flatland-scanner-spread", 0, "optional flatland scanner spread override in [0.05,1]")
@@ -266,8 +268,10 @@ func runRun(ctx context.Context, args []string) error {
 			GTSATestEnd:             *gtsaTestEnd,
 			FXCSVPath:               *fxCSV,
 			FXProfile:               *fxProfile,
+			EpitopesProfile:         *epitopesProfile,
 			EpitopesCSVPath:         *epitopesCSV,
 			EpitopesTableName:       *epitopesTable,
+			LLVMProfile:             *llvmProfile,
 			LLVMWorkflowJSONPath:    *llvmWorkflowJSON,
 			FlatlandScannerProfile:  *flatlandScannerProfile,
 			EpitopesGTStart:         *epitopesGTStart,
@@ -336,8 +340,10 @@ func runRun(ctx context.Context, args []string) error {
 			"gtsa-test-end":             *gtsaTestEnd,
 			"fx-csv":                    *fxCSV,
 			"fx-profile":                *fxProfile,
+			"epitopes-profile":          *epitopesProfile,
 			"epitopes-csv":              *epitopesCSV,
 			"epitopes-table":            *epitopesTable,
+			"llvm-profile":              *llvmProfile,
 			"llvm-workflow-json":        *llvmWorkflowJSON,
 			"epitopes-gt-start":         *epitopesGTStart,
 			"epitopes-gt-end":           *epitopesGTEnd,
@@ -417,6 +423,8 @@ func runRun(ctx context.Context, args []string) error {
 		}
 		req.GTSAProfile = preset.GTSAProfile
 		req.FXProfile = preset.FXProfile
+		req.EpitopesProfile = preset.EpitopesProfile
+		req.LLVMProfile = preset.LLVMProfile
 		req.FlatlandScannerProfile = preset.FlatlandScannerProfile
 		req.Selection = preset.Selection
 		req.TuneSelection = preset.TuneSelection
@@ -1144,8 +1152,10 @@ func runBenchmark(ctx context.Context, args []string) error {
 	gtsaTestEnd := fs.Int("gtsa-test-end", 0, "optional GTSA test_end cutoff for loaded CSV")
 	fxCSV := fs.String("fx-csv", "", "optional FX CSV price-series path")
 	fxProfile := fs.String("fx-profile", "", "optional FX seed profile override: default|market")
+	epitopesProfile := fs.String("epitopes-profile", "", "optional epitopes seed profile override: default|core")
 	epitopesCSV := fs.String("epitopes-csv", "", "optional epitopes CSV table path")
 	epitopesTable := fs.String("epitopes-table", "", "optional built-in epitopes table name (abc_pred10|abc_pred12|abc_pred14|abc_pred16|abc_pred18|abc_pred20)")
+	llvmProfile := fs.String("llvm-profile", "", "optional llvm-phase-ordering seed profile override: default|core")
 	llvmWorkflowJSON := fs.String("llvm-workflow-json", "", "optional LLVM workflow JSON path")
 	flatlandScannerProfile := fs.String("flatland-scanner-profile", "", "optional flatland scanner profile override: balanced5|core3|forward5")
 	flatlandScannerSpread := fs.Float64("flatland-scanner-spread", 0, "optional flatland scanner spread override in [0.05,1]")
@@ -1231,8 +1241,10 @@ func runBenchmark(ctx context.Context, args []string) error {
 			GTSATestEnd:             *gtsaTestEnd,
 			FXCSVPath:               *fxCSV,
 			FXProfile:               *fxProfile,
+			EpitopesProfile:         *epitopesProfile,
 			EpitopesCSVPath:         *epitopesCSV,
 			EpitopesTableName:       *epitopesTable,
+			LLVMProfile:             *llvmProfile,
 			LLVMWorkflowJSONPath:    *llvmWorkflowJSON,
 			FlatlandScannerProfile:  *flatlandScannerProfile,
 			EpitopesGTStart:         *epitopesGTStart,
@@ -1300,8 +1312,10 @@ func runBenchmark(ctx context.Context, args []string) error {
 			"gtsa-test-end":             *gtsaTestEnd,
 			"fx-csv":                    *fxCSV,
 			"fx-profile":                *fxProfile,
+			"epitopes-profile":          *epitopesProfile,
 			"epitopes-csv":              *epitopesCSV,
 			"epitopes-table":            *epitopesTable,
+			"llvm-profile":              *llvmProfile,
 			"llvm-workflow-json":        *llvmWorkflowJSON,
 			"epitopes-gt-start":         *epitopesGTStart,
 			"epitopes-gt-end":           *epitopesGTEnd,
@@ -1380,6 +1394,8 @@ func runBenchmark(ctx context.Context, args []string) error {
 		}
 		req.GTSAProfile = preset.GTSAProfile
 		req.FXProfile = preset.FXProfile
+		req.EpitopesProfile = preset.EpitopesProfile
+		req.LLVMProfile = preset.LLVMProfile
 		req.FlatlandScannerProfile = preset.FlatlandScannerProfile
 		req.Selection = preset.Selection
 		req.TuneSelection = preset.TuneSelection
@@ -1522,11 +1538,13 @@ func runProfile(_ context.Context, args []string) error {
 			return nil
 		}
 		for _, profile := range profiles {
-			fmt.Printf("id=%s morphology=%s gtsa_profile=%s fx_profile=%s flatland_scanner_profile=%s selection=%s expected_selection=%s tune_selection=%s expected_tune_selection=%s mutation_ops=%d\n",
+			fmt.Printf("id=%s morphology=%s gtsa_profile=%s fx_profile=%s epitopes_profile=%s llvm_profile=%s flatland_scanner_profile=%s selection=%s expected_selection=%s tune_selection=%s expected_tune_selection=%s mutation_ops=%d\n",
 				profile.ID,
 				profile.Morphology,
 				profile.GTSAProfile,
 				profile.FXProfile,
+				profile.EpitopesProfile,
+				profile.LLVMProfile,
 				profile.FlatlandScannerProfile,
 				profile.PopulationSelection,
 				profile.ExpectedSelection,
@@ -1555,11 +1573,13 @@ func runProfile(_ context.Context, args []string) error {
 			enc.SetIndent("", "  ")
 			return enc.Encode(resolved)
 		}
-		fmt.Printf("id=%s morphology=%s gtsa_profile=%s fx_profile=%s flatland_scanner_profile=%s selection=%s expected_selection=%s tune_selection=%s expected_tune_selection=%s mutation_ops=%d w_perturb=%.3f w_bias=%.3f w_remove_bias=%.3f w_activation=%.3f w_aggregator=%.3f w_add_syn=%.3f w_remove_syn=%.3f w_add_neuron=%.3f w_remove_neuron=%.3f w_plasticity_rule=%.3f w_plasticity=%.3f w_substrate=%.3f\n",
+		fmt.Printf("id=%s morphology=%s gtsa_profile=%s fx_profile=%s epitopes_profile=%s llvm_profile=%s flatland_scanner_profile=%s selection=%s expected_selection=%s tune_selection=%s expected_tune_selection=%s mutation_ops=%d w_perturb=%.3f w_bias=%.3f w_remove_bias=%.3f w_activation=%.3f w_aggregator=%.3f w_add_syn=%.3f w_remove_syn=%.3f w_add_neuron=%.3f w_remove_neuron=%.3f w_plasticity_rule=%.3f w_plasticity=%.3f w_substrate=%.3f\n",
 			resolved.ID,
 			resolved.Morphology,
 			resolved.GTSAProfile,
 			resolved.FXProfile,
+			resolved.EpitopesProfile,
+			resolved.LLVMProfile,
 			resolved.FlatlandScannerProfile,
 			resolved.PopulationSelection,
 			resolved.ExpectedSelection,
