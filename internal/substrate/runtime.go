@@ -25,22 +25,22 @@ var (
 )
 
 type SimpleRuntime struct {
-	cpp                 CPP
-	ceps                []CEP
-	cepActors           []*CEPActor
-	cepActorsByWeight   [][]*CEPActor
-	cepActorInits       []cepActorInit
-	cepFaninRelays      [][][]*CEPFaninRelay
-	cepCommandRelays    [][]*CEPCommandRelay
-	substrateMailboxes  []*substrateCommandMailbox
-	cepProcessFaninPIDs [][]string
-	cepFaninPIDs        []string
-	params              map[string]float64
-	weightParams        []map[string]float64
-	weights             []float64
-	backup              []float64
-	backupWeightParams  []map[string]float64
-	terminated          bool
+	cpp                   CPP
+	ceps                  []CEP
+	cepActors             []*CEPActor
+	cepActorsByWeight     [][]*CEPActor
+	cepActorInits         []cepActorInit
+	cepFaninRelays        [][][]*CEPFaninRelay
+	cepCommandRelays      [][]*CEPCommandRelay
+	substrateMailboxes    []*substrateCommandMailbox
+	cepProcessFaninPIDs   [][]string
+	cepFaninPIDs          []string
+	params                map[string]float64
+	weightCEPParams       [][]map[string]float64
+	weights               []float64
+	backup                []float64
+	backupWeightCEPParams [][]map[string]float64
+	terminated            bool
 }
 
 func NewSimpleRuntime(spec Spec, weightCount int) (*SimpleRuntime, error) {
@@ -80,9 +80,9 @@ func NewSimpleRuntime(spec Spec, weightCount int) (*SimpleRuntime, error) {
 	if len(cepActorPool) > 0 {
 		cepActors = cepActorPool[0]
 	}
-	weightParams := make([]map[string]float64, weightCount)
-	for i := range weightParams {
-		weightParams[i] = cloneFloatMap(params)
+	weightCEPParams := make([][]map[string]float64, weightCount)
+	for i := range weightCEPParams {
+		weightCEPParams[i] = cloneCEPWeightParamRow(cepActorInits)
 	}
 	return &SimpleRuntime{
 		cpp:                 cpp,
@@ -96,7 +96,7 @@ func NewSimpleRuntime(spec Spec, weightCount int) (*SimpleRuntime, error) {
 		cepProcessFaninPIDs: cepProcessFaninPIDs,
 		cepFaninPIDs:        append([]string(nil), cepFaninPIDs...),
 		params:              params,
-		weightParams:        weightParams,
+		weightCEPParams:     weightCEPParams,
 		weights:             make([]float64, weightCount),
 	}, nil
 }
@@ -163,7 +163,7 @@ func (r *SimpleRuntime) step(ctx context.Context, inputs []float64, faninSignals
 					if routeErr := r.routeCEPCommand(i, cepIdx, command); routeErr != nil {
 						return nil, fmt.Errorf("cep %s command relay: %w", cep.Name(), routeErr)
 					}
-					w, applyErr := r.applySubstrateMailbox(i, next)
+					w, applyErr := r.applySubstrateMailbox(i, cepIdx, next)
 					if applyErr != nil {
 						return nil, fmt.Errorf("cep %s apply mailbox commands: %w", cep.Name(), applyErr)
 					}
@@ -273,7 +273,7 @@ func (r *SimpleRuntime) Weights() []float64 {
 
 func (r *SimpleRuntime) Backup() {
 	r.backup = r.Weights()
-	r.backupWeightParams = cloneWeightParamSet(r.weightParams)
+	r.backupWeightCEPParams = cloneCEPWeightParamSet(r.weightCEPParams)
 }
 
 func (r *SimpleRuntime) Restore() error {
@@ -284,7 +284,7 @@ func (r *SimpleRuntime) Restore() error {
 		r.weights = make([]float64, len(r.backup))
 	}
 	copy(r.weights, r.backup)
-	r.weightParams = cloneWeightParamSet(r.backupWeightParams)
+	r.weightCEPParams = cloneCEPWeightParamSet(r.backupWeightCEPParams)
 	return nil
 }
 
@@ -292,8 +292,8 @@ func (r *SimpleRuntime) Reset() {
 	for i := range r.weights {
 		r.weights[i] = 0
 	}
-	for i := range r.weightParams {
-		r.weightParams[i] = cloneFloatMap(r.params)
+	for i := range r.weightCEPParams {
+		r.weightCEPParams[i] = cloneCEPWeightParamRow(r.cepActorInits)
 	}
 }
 
@@ -1086,6 +1086,34 @@ func cloneCEPActorInits(inits []cepActorInit) []cepActorInit {
 	return out
 }
 
+func cloneCEPWeightParamRow(inits []cepActorInit) []map[string]float64 {
+	if len(inits) == 0 {
+		return nil
+	}
+	out := make([]map[string]float64, len(inits))
+	for i, init := range inits {
+		out[i] = cloneFloatMap(init.parameters)
+	}
+	return out
+}
+
+func cloneCEPWeightParamSet(in [][]map[string]float64) [][]map[string]float64 {
+	if len(in) == 0 {
+		return nil
+	}
+	out := make([][]map[string]float64, len(in))
+	for i := range in {
+		if len(in[i]) == 0 {
+			continue
+		}
+		out[i] = make([]map[string]float64, len(in[i]))
+		for j := range in[i] {
+			out[i][j] = cloneFloatMap(in[i][j])
+		}
+	}
+	return out
+}
+
 type substrateCommandMailbox struct {
 	id          string
 	inbox       chan substrateMailboxMessage
@@ -1371,7 +1399,7 @@ func (r *SimpleRuntime) postSubstrateCommand(weightIdx int, command CEPCommand) 
 	return mailbox.Post(command)
 }
 
-func (r *SimpleRuntime) applySubstrateMailbox(weightIdx int, current float64) (float64, error) {
+func (r *SimpleRuntime) applySubstrateMailbox(weightIdx int, cepIdx int, current float64) (float64, error) {
 	if weightIdx < 0 || weightIdx >= len(r.substrateMailboxes) {
 		return 0, ErrMissingSubstrateMailbox
 	}
@@ -1388,8 +1416,10 @@ func (r *SimpleRuntime) applySubstrateMailbox(weightIdx int, current float64) (f
 	}
 	next := current
 	parameters := cloneFloatMap(r.params)
-	if weightIdx >= 0 && weightIdx < len(r.weightParams) && len(r.weightParams[weightIdx]) > 0 {
-		parameters = cloneFloatMap(r.weightParams[weightIdx])
+	if weightIdx >= 0 && weightIdx < len(r.weightCEPParams) &&
+		cepIdx >= 0 && cepIdx < len(r.weightCEPParams[weightIdx]) &&
+		len(r.weightCEPParams[weightIdx][cepIdx]) > 0 {
+		parameters = cloneFloatMap(r.weightCEPParams[weightIdx][cepIdx])
 	}
 	for _, command := range mailbox.Drain() {
 		updated, nextParams, applyErr := ApplyCEPCommandWithParameters(next, command, parameters)
@@ -1399,8 +1429,9 @@ func (r *SimpleRuntime) applySubstrateMailbox(weightIdx int, current float64) (f
 		next = updated
 		parameters = nextParams
 	}
-	if weightIdx >= 0 && weightIdx < len(r.weightParams) {
-		r.weightParams[weightIdx] = cloneFloatMap(parameters)
+	if weightIdx >= 0 && weightIdx < len(r.weightCEPParams) &&
+		cepIdx >= 0 && cepIdx < len(r.weightCEPParams[weightIdx]) {
+		r.weightCEPParams[weightIdx][cepIdx] = cloneFloatMap(parameters)
 	}
 	return next, nil
 }

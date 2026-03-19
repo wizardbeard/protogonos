@@ -331,7 +331,7 @@ func TestSimpleRuntimeSetABCNCEPTrimsNamedFanInSignalKeys(t *testing.T) {
 	}
 }
 
-func TestSimpleRuntimeSetABCNCEPPersistsSignalCoefficientsAcrossCEPStages(t *testing.T) {
+func TestSimpleRuntimeSetABCNCEPDoesNotShareSignalCoefficientsAcrossCEPStages(t *testing.T) {
 	resetRegistriesForTests()
 	t.Cleanup(resetRegistriesForTests)
 
@@ -360,8 +360,8 @@ func TestSimpleRuntimeSetABCNCEPPersistsSignalCoefficientsAcrossCEPStages(t *tes
 	if err != nil {
 		t.Fatalf("step 1: %v", err)
 	}
-	if len(w) != 1 || math.Abs(w[0]-0.832) > 1e-9 {
-		t.Fatalf("unexpected persisted-coefficient set_abcn stage update, got=%v want=0.832", w)
+	if len(w) != 1 || math.Abs(w[0]-1.4) > 1e-9 {
+		t.Fatalf("unexpected stage-local set_abcn update, got=%v want=1.4", w)
 	}
 }
 
@@ -803,8 +803,8 @@ func TestSimpleRuntimeCEPChainUsesPerCEPFanInConfig(t *testing.T) {
 	if err != nil {
 		t.Fatalf("step: %v", err)
 	}
-	if len(w) != 1 || math.Abs(w[0]-0.832) > 1e-9 {
-		t.Fatalf("unexpected per-cep fan-in chain update, got=%v want=0.832", w)
+	if len(w) != 1 || math.Abs(w[0]-1.4) > 1e-9 {
+		t.Fatalf("unexpected per-cep fan-in chain update, got=%v want=1.4", w)
 	}
 }
 
@@ -1510,10 +1510,10 @@ func TestSimpleRuntimeBackupRestoreIncludesPersistentWeightParameters(t *testing
 	if err := rt.Restore(); err != nil {
 		t.Fatalf("restore: %v", err)
 	}
-	if len(rt.weightParams) != 1 {
-		t.Fatalf("expected one restored weight-parameter set, got=%d", len(rt.weightParams))
+	if len(rt.weightCEPParams) != 1 || len(rt.weightCEPParams[0]) != 1 {
+		t.Fatalf("expected one restored per-cep weight-parameter set, got=%v", rt.weightCEPParams)
 	}
-	restored := rt.weightParams[0]
+	restored := rt.weightCEPParams[0][0]
 	if restored["A"] != 0.2 || restored["B"] != 0.5 || restored["C"] != -0.1 || restored["N"] != 0.8 {
 		t.Fatalf("expected restore to recover persisted coefficients, got=%v", restored)
 	}
@@ -1552,11 +1552,61 @@ func TestSimpleRuntimeResetClearsPersistentWeightParametersToBaseConfig(t *testi
 	if len(resetWeights) != 1 || resetWeights[0] != 0 {
 		t.Fatalf("expected reset weights to be zeroed, got=%v", resetWeights)
 	}
-	if len(rt.weightParams) != 1 {
-		t.Fatalf("expected one reset weight-parameter set, got=%d", len(rt.weightParams))
+	if len(rt.weightCEPParams) != 1 || len(rt.weightCEPParams[0]) != 1 {
+		t.Fatalf("expected one reset per-cep weight-parameter set, got=%v", rt.weightCEPParams)
 	}
-	if rt.weightParams[0] != nil {
-		t.Fatalf("expected reset to clear persisted coefficients back to base config, got=%v", rt.weightParams[0])
+	if rt.weightCEPParams[0][0] != nil {
+		t.Fatalf("expected reset to clear persisted coefficients back to base config, got=%v", rt.weightCEPParams[0][0])
+	}
+}
+
+func TestSimpleRuntimeTracksPersistentParametersPerCEPStage(t *testing.T) {
+	resetRegistriesForTests()
+	t.Cleanup(resetRegistriesForTests)
+
+	rt, err := NewSimpleRuntime(Spec{
+		CPPName:  DefaultCPPName,
+		CEPNames: []string{SetABCNCEPName, SetABCNCEPName},
+		Parameters: map[string]float64{
+			"A": 0,
+			"B": 1,
+			"C": 0,
+			"N": 1,
+		},
+		CEPFaninPIDsByCEP: [][]string{
+			{"n1", "n2", "n3", "n4", "n5"},
+			{"n6"},
+		},
+	}, 1)
+	if err != nil {
+		t.Fatalf("new runtime: %v", err)
+	}
+
+	updated, err := rt.StepWithFanin(context.Background(), []float64{0, 0, 0, 0, 0, 0}, map[string]float64{
+		"n1": 1,
+		"n2": 0,
+		"n3": 0,
+		"n4": 0,
+		"n5": 0,
+		"n6": 1,
+	})
+	if err != nil {
+		t.Fatalf("step with staged coefficients: %v", err)
+	}
+	if len(updated) != 1 || math.Abs(updated[0]-1.0) > 1e-9 {
+		t.Fatalf("expected second cep stage to keep its own base coefficients, got=%v", updated)
+	}
+
+	if len(rt.weightCEPParams) != 1 || len(rt.weightCEPParams[0]) != 2 {
+		t.Fatalf("unexpected per-stage parameter storage shape: %v", rt.weightCEPParams)
+	}
+	stageOne := rt.weightCEPParams[0][0]
+	stageTwo := rt.weightCEPParams[0][1]
+	if stageOne["A"] != 0 || stageOne["B"] != 0 || stageOne["C"] != 0 || stageOne["N"] != 0 {
+		t.Fatalf("expected first cep stage coefficients to persist independently, got=%v", stageOne)
+	}
+	if stageTwo["A"] != 0 || stageTwo["B"] != 1 || stageTwo["C"] != 0 || stageTwo["N"] != 1 {
+		t.Fatalf("expected second cep stage coefficients to retain base values, got=%v", stageTwo)
 	}
 }
 
