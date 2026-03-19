@@ -134,6 +134,7 @@ func evaluateFXWithTick(ctx context.Context, ticker TickAgent, cfg fxModeConfig)
 	}
 	trace["sensor_surface"] = io.sensorSurface()
 	trace["sensor_width"] = io.sensorWidth()
+	trace["control_surface"] = protoio.FXTradeActuatorName
 	return fitness, trace, nil
 }
 

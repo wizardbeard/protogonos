@@ -107,6 +107,7 @@ func evaluateGTSAWithTick(ctx context.Context, ticker TickAgent, cfg gtsaModeCon
 	}
 	trace["sensor_surface"] = io.sensorSurface()
 	trace["sensor_width"] = io.sensorWidth()
+	trace["control_surface"] = protoio.GTSAPredictActuatorName
 	return fitness, trace, nil
 }
 

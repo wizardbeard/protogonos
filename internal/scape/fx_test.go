@@ -132,6 +132,9 @@ func TestFXScapeEvaluateWithIOComponents(t *testing.T) {
 	if surface, _ := trace["sensor_surface"].(string); surface != "market" {
 		t.Fatalf("expected market sensor surface, got %+v", trace)
 	}
+	if surface, _ := trace["control_surface"].(string); surface != protoio.FXTradeActuatorName {
+		t.Fatalf("expected control surface %s, got %+v", protoio.FXTradeActuatorName, trace)
+	}
 	if width, _ := trace["sensor_width"].(int); width != 2 {
 		t.Fatalf("expected market sensor width 2, got %+v", trace)
 	}
@@ -225,6 +228,9 @@ func TestFXScapeEvaluateWithExtendedIOComponents(t *testing.T) {
 	}
 	if surface, _ := trace["sensor_surface"].(string); surface != "extended" {
 		t.Fatalf("expected extended sensor surface, got %+v", trace)
+	}
+	if surface, _ := trace["control_surface"].(string); surface != protoio.FXTradeActuatorName {
+		t.Fatalf("expected control surface %s, got %+v", protoio.FXTradeActuatorName, trace)
 	}
 	if width, _ := trace["sensor_width"].(int); width != 11 {
 		t.Fatalf("expected extended sensor width 11, got %+v", trace)

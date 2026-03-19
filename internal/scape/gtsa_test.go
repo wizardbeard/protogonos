@@ -132,6 +132,9 @@ func TestGTSAScapeEvaluateWithIOComponents(t *testing.T) {
 	if surface, _ := trace["sensor_surface"].(string); surface != "core" {
 		t.Fatalf("expected core sensor surface, got %+v", trace)
 	}
+	if surface, _ := trace["control_surface"].(string); surface != protoio.GTSAPredictActuatorName {
+		t.Fatalf("expected control surface %s, got %+v", protoio.GTSAPredictActuatorName, trace)
+	}
 	if width, _ := trace["sensor_width"].(int); width != 1 {
 		t.Fatalf("expected core sensor width 1, got %+v", trace)
 	}
@@ -200,6 +203,9 @@ func TestGTSAScapeEvaluateWithExtendedIOComponents(t *testing.T) {
 	}
 	if surface, _ := trace["sensor_surface"].(string); surface != "extended" {
 		t.Fatalf("expected extended sensor surface, got %+v", trace)
+	}
+	if surface, _ := trace["control_surface"].(string); surface != protoio.GTSAPredictActuatorName {
+		t.Fatalf("expected control surface %s, got %+v", protoio.GTSAPredictActuatorName, trace)
 	}
 	if width, _ := trace["sensor_width"].(int); width != 4 {
 		t.Fatalf("expected extended sensor width 4, got %+v", trace)
