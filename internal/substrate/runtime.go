@@ -285,6 +285,9 @@ func (r *SimpleRuntime) Restore() error {
 	}
 	copy(r.weights, r.backup)
 	r.weightCEPParams = cloneCEPWeightParamSet(r.backupWeightCEPParams)
+	if err := r.rebuildProcessState(); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -295,6 +298,7 @@ func (r *SimpleRuntime) Reset() {
 	for i := range r.weightCEPParams {
 		r.weightCEPParams[i] = cloneCEPWeightParamRow(r.cepActorInits)
 	}
+	_ = r.rebuildProcessState()
 }
 
 const runtimeCPPProcessID = "cpp"
@@ -1112,6 +1116,65 @@ func cloneCEPWeightParamSet(in [][]map[string]float64) [][]map[string]float64 {
 		}
 	}
 	return out
+}
+
+func (r *SimpleRuntime) rebuildProcessState() error {
+	weightCount := len(r.weights)
+	r.terminateProcessState()
+
+	cepActorPool, err := buildCEPActorPool(r.cepActorInits, weightCount)
+	if err != nil {
+		return err
+	}
+	r.cepActorsByWeight = cepActorPool
+	r.cepActors = nil
+	if len(cepActorPool) > 0 {
+		r.cepActors = cepActorPool[0]
+	}
+	r.cepFaninRelays = buildCEPFaninRelayPool(cepActorPool, r.cepProcessFaninPIDs)
+	r.substrateMailboxes = buildSubstrateCommandMailboxPool(r.cepActorInits, weightCount)
+	r.cepCommandRelays = buildCEPCommandRelayPool(r.cepActorInits, r.substrateMailboxes)
+	return nil
+}
+
+func (r *SimpleRuntime) terminateProcessState() {
+	terminated := map[*CEPActor]struct{}{}
+	for _, actors := range r.cepActorsByWeight {
+		for _, actor := range actors {
+			if actor == nil {
+				continue
+			}
+			if _, exists := terminated[actor]; exists {
+				continue
+			}
+			terminated[actor] = struct{}{}
+			_ = actor.TerminateFrom(runtimeExoSelfProcessID)
+		}
+	}
+	for _, weightRelays := range r.cepFaninRelays {
+		for _, cepRelays := range weightRelays {
+			for _, relay := range cepRelays {
+				if relay == nil {
+					continue
+				}
+				relay.Terminate()
+			}
+		}
+	}
+	for _, weightRelays := range r.cepCommandRelays {
+		for _, relay := range weightRelays {
+			if relay == nil {
+				continue
+			}
+			relay.Terminate()
+		}
+	}
+	for _, mailbox := range r.substrateMailboxes {
+		if mailbox == nil {
+			continue
+		}
+		mailbox.Terminate()
+	}
 }
 
 type substrateCommandMailbox struct {

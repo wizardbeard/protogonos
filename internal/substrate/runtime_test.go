@@ -1610,6 +1610,88 @@ func TestSimpleRuntimeTracksPersistentParametersPerCEPStage(t *testing.T) {
 	}
 }
 
+func TestSimpleRuntimeRestoreClearsPendingCEPFaninState(t *testing.T) {
+	resetRegistriesForTests()
+	t.Cleanup(resetRegistriesForTests)
+
+	rt, err := NewSimpleRuntime(Spec{
+		CPPName:      DefaultCPPName,
+		CEPName:      WeightExpressionCEPName,
+		CEPFaninPIDs: []string{"n1", "n2"},
+	}, 1)
+	if err != nil {
+		t.Fatalf("new runtime: %v", err)
+	}
+
+	rt.Backup()
+
+	actor := rt.cepActorsByWeight[0][0]
+	if err := actor.Post(CEPForwardMessage{FromPID: "n1", Input: []float64{0.75}}); err != nil {
+		t.Fatalf("post pending fan-in: %v", err)
+	}
+	syncID, err := actor.PostSync()
+	if err != nil {
+		t.Fatalf("post sync pending fan-in: %v", err)
+	}
+	if err := actor.AwaitSync(syncID); err != nil {
+		t.Fatalf("await sync pending fan-in: %v", err)
+	}
+
+	if err := rt.Restore(); err != nil {
+		t.Fatalf("restore: %v", err)
+	}
+
+	updated, err := rt.StepWithFanin(context.Background(), []float64{0, 0}, map[string]float64{
+		"n1": 0.2,
+		"n2": 1.0,
+	})
+	if err != nil {
+		t.Fatalf("step after restore: %v", err)
+	}
+	if len(updated) != 1 || math.Abs(updated[0]-0.2) > 1e-9 {
+		t.Fatalf("expected restore to clear pending fan-in state, got=%v want=0.2", updated)
+	}
+}
+
+func TestSimpleRuntimeResetClearsPendingCEPFaninState(t *testing.T) {
+	resetRegistriesForTests()
+	t.Cleanup(resetRegistriesForTests)
+
+	rt, err := NewSimpleRuntime(Spec{
+		CPPName:      DefaultCPPName,
+		CEPName:      WeightExpressionCEPName,
+		CEPFaninPIDs: []string{"n1", "n2"},
+	}, 1)
+	if err != nil {
+		t.Fatalf("new runtime: %v", err)
+	}
+
+	actor := rt.cepActorsByWeight[0][0]
+	if err := actor.Post(CEPForwardMessage{FromPID: "n1", Input: []float64{0.75}}); err != nil {
+		t.Fatalf("post pending fan-in: %v", err)
+	}
+	syncID, err := actor.PostSync()
+	if err != nil {
+		t.Fatalf("post sync pending fan-in: %v", err)
+	}
+	if err := actor.AwaitSync(syncID); err != nil {
+		t.Fatalf("await sync pending fan-in: %v", err)
+	}
+
+	rt.Reset()
+
+	updated, err := rt.StepWithFanin(context.Background(), []float64{0, 0}, map[string]float64{
+		"n1": 0.2,
+		"n2": 1.0,
+	})
+	if err != nil {
+		t.Fatalf("step after reset: %v", err)
+	}
+	if len(updated) != 1 || math.Abs(updated[0]-0.2) > 1e-9 {
+		t.Fatalf("expected reset to clear pending fan-in state, got=%v want=0.2", updated)
+	}
+}
+
 func TestSimpleRuntimeTerminateBlocksStep(t *testing.T) {
 	resetRegistriesForTests()
 	t.Cleanup(resetRegistriesForTests)
