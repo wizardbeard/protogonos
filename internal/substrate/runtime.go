@@ -163,7 +163,7 @@ func (r *SimpleRuntime) step(ctx context.Context, inputs []float64, faninSignals
 					if routeErr := r.routeCEPCommand(i, cepIdx, command); routeErr != nil {
 						return nil, fmt.Errorf("cep %s command relay: %w", cep.Name(), routeErr)
 					}
-					w, applyErr := r.applySubstrateMailbox(i, cepIdx, next)
+					w, applyErr := r.applySubstrateMailbox(i, cepIdx, expectedInits, next)
 					if applyErr != nil {
 						return nil, fmt.Errorf("cep %s apply mailbox commands: %w", cep.Name(), applyErr)
 					}
@@ -1462,7 +1462,7 @@ func (r *SimpleRuntime) postSubstrateCommand(weightIdx int, command CEPCommand) 
 	return mailbox.Post(command)
 }
 
-func (r *SimpleRuntime) applySubstrateMailbox(weightIdx int, cepIdx int, current float64) (float64, error) {
+func (r *SimpleRuntime) applySubstrateMailbox(weightIdx int, cepIdx int, expectedInits []cepActorInit, current float64) (float64, error) {
 	if weightIdx < 0 || weightIdx >= len(r.substrateMailboxes) {
 		return 0, ErrMissingSubstrateMailbox
 	}
@@ -1485,6 +1485,11 @@ func (r *SimpleRuntime) applySubstrateMailbox(weightIdx int, cepIdx int, current
 		parameters = cloneFloatMap(r.weightCEPParams[weightIdx][cepIdx])
 	}
 	for _, command := range mailbox.Drain() {
+		if cepIdx >= 0 && cepIdx < len(expectedInits) {
+			if envelopeErr := validateCEPCommandEnvelope(command, expectedInits[cepIdx]); envelopeErr != nil {
+				return 0, envelopeErr
+			}
+		}
 		updated, nextParams, applyErr := ApplyCEPCommandWithParameters(next, command, parameters)
 		if applyErr != nil {
 			return 0, applyErr

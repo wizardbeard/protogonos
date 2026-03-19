@@ -1203,6 +1203,39 @@ func TestSimpleRuntimeStepRequiresSubstrateMailbox(t *testing.T) {
 	}
 }
 
+func TestSimpleRuntimeStepRejectsUnexpectedMailboxCommandSender(t *testing.T) {
+	resetRegistriesForTests()
+	t.Cleanup(resetRegistriesForTests)
+
+	rt, err := NewSimpleRuntime(Spec{
+		CPPName:  DefaultCPPName,
+		CEPNames: []string{DefaultCEPName, DefaultCEPName},
+	}, 1)
+	if err != nil {
+		t.Fatalf("new runtime: %v", err)
+	}
+	if len(rt.substrateMailboxes) == 0 || rt.substrateMailboxes[0] == nil {
+		t.Fatal("expected substrate mailbox to be initialized")
+	}
+
+	expectedInits := scopeCEPActorInitsForWeight(rt.cepActorInits, 0)
+	if len(expectedInits) < 2 {
+		t.Fatalf("expected two scoped cep inits, got=%v", expectedInits)
+	}
+	if err := rt.substrateMailboxes[0].Post(CEPCommand{
+		FromPID: expectedInits[1].id,
+		ToPID:   expectedInits[1].substratePID,
+		Command: SetIterativeCEPName,
+		Signal:  []float64{0.25},
+	}); err != nil {
+		t.Fatalf("post unexpected mailbox command: %v", err)
+	}
+
+	if _, err := rt.Step(context.Background(), []float64{1}); !errors.Is(err, ErrUnexpectedCEPCommandSender) {
+		t.Fatalf("expected ErrUnexpectedCEPCommandSender, got %v", err)
+	}
+}
+
 func TestSubstrateCommandMailboxActorSyncAndTerminate(t *testing.T) {
 	mailbox := newSubstrateCommandMailbox("substrate_w1")
 	commandA := CEPCommand{
