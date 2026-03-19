@@ -205,6 +205,9 @@ func (c *Cortex) ApplyGenome(genome model.Genome) error {
 	}
 	c.genome = genotype.CloneGenome(genome)
 	c.nnState = nn.NewForwardState()
+	if managed, ok := c.substrate.(substrate.StatefulRuntime); ok {
+		managed.Reset()
+	}
 	return nil
 }
 

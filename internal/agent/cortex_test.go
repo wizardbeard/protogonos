@@ -1018,6 +1018,79 @@ func TestCortexApplyGenomeReplacesRuntimeWeights(t *testing.T) {
 	}
 }
 
+func TestCortexApplyGenomeResetsSubstrateState(t *testing.T) {
+	genome := model.Genome{
+		Neurons: []model.Neuron{
+			{ID: "i", Activation: "identity"},
+			{ID: "o", Activation: "identity"},
+		},
+		Synapses: []model.Synapse{
+			{ID: "s", From: "i", To: "o", Weight: 1.0, Enabled: true},
+		},
+	}
+
+	rt, err := substrate.NewSimpleRuntime(substrate.Spec{
+		CPPName: substrate.DefaultCPPName,
+		CEPName: substrate.DefaultCEPName,
+		Parameters: map[string]float64{
+			"scale": 1.0,
+		},
+	}, 1)
+	if err != nil {
+		t.Fatalf("new substrate runtime: %v", err)
+	}
+
+	c, err := NewCortex("agent-apply-substrate", genome, nil, nil, []string{"i"}, []string{"o"}, rt)
+	if err != nil {
+		t.Fatalf("new cortex: %v", err)
+	}
+
+	out1, err := c.RunStep(context.Background(), []float64{1.5})
+	if err != nil {
+		t.Fatalf("run step 1: %v", err)
+	}
+	out2, err := c.RunStep(context.Background(), []float64{1.5})
+	if err != nil {
+		t.Fatalf("run step 2: %v", err)
+	}
+	if out2[0] <= out1[0] {
+		t.Fatalf("expected substrate accumulation before apply genome, out1=%v out2=%v", out1, out2)
+	}
+
+	applied := genome
+	applied.Synapses = append([]model.Synapse(nil), genome.Synapses...)
+	applied.Synapses[0].Weight = 0.5
+	if err := c.ApplyGenome(applied); err != nil {
+		t.Fatalf("apply genome: %v", err)
+	}
+
+	out3, err := c.RunStep(context.Background(), []float64{1.5})
+	if err != nil {
+		t.Fatalf("run step 3: %v", err)
+	}
+	freshRT, err := substrate.NewSimpleRuntime(substrate.Spec{
+		CPPName: substrate.DefaultCPPName,
+		CEPName: substrate.DefaultCEPName,
+		Parameters: map[string]float64{
+			"scale": 1.0,
+		},
+	}, 1)
+	if err != nil {
+		t.Fatalf("new fresh substrate runtime: %v", err)
+	}
+	fresh, err := NewCortex("agent-apply-substrate-fresh", applied, nil, nil, []string{"i"}, []string{"o"}, freshRT)
+	if err != nil {
+		t.Fatalf("new fresh cortex: %v", err)
+	}
+	want, err := fresh.RunStep(context.Background(), []float64{1.5})
+	if err != nil {
+		t.Fatalf("fresh run step: %v", err)
+	}
+	if len(out3) != 1 || len(want) != 1 || out3[0] != want[0] {
+		t.Fatalf("expected apply genome to reset substrate accumulation to fresh-runtime behavior, got=%v want=%v", out3, want)
+	}
+}
+
 func TestCortexApplyGenomeTerminatedError(t *testing.T) {
 	genome := model.Genome{
 		Neurons: []model.Neuron{
