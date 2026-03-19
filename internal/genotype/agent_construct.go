@@ -294,14 +294,32 @@ func resolveConstructMorphology(raw string) (morphology.Morphology, error) {
 		return morphology.Pole2BalancingMorphology{}, nil
 	case "flatland", "flatland-v1":
 		return morphology.FlatlandMorphology{}, nil
+	case "flatland-classic", "flatland-classic-v1", "flatland_classic", "flatland_classic_v1":
+		return morphology.FlatlandClassicMorphology{}, nil
 	case "flatland-scanner", "flatland-scanner-v1", "flatland_scanner", "flatland_scanner_v1", "flatland-prey", "flatland-prey-v1", "flatland_prey", "flatland_prey_v1":
 		return morphology.FlatlandScannerMorphology{}, nil
 	case "dtm", "dtm-v1":
 		return morphology.DTMMorphology{}, nil
+	case "dtm-range-sense", "dtm-range-sense-v1", "dtm_range_sense", "dtm_range_sense_v1":
+		return morphology.DTMRangeSenseMorphology{}, nil
+	case "dtm-reward", "dtm-reward-v1", "dtm_reward", "dtm_reward_v1":
+		return morphology.DTMRewardMorphology{}, nil
+	case "pole2-balancing-2", "pole2-balancing-2-v1", "pole2_balancing_2", "pole2_balancing_2_v1":
+		return morphology.ConstructMorphology("pole2-balancing", "2")
+	case "pole2-balancing-3", "pole2-balancing-3-v1", "pole2_balancing_3", "pole2_balancing_3_v1":
+		return morphology.ConstructMorphology("pole2-balancing", "3")
+	case "pole2-balancing-4", "pole2-balancing-4-v1", "pole2_balancing_4", "pole2_balancing_4_v1":
+		return morphology.ConstructMorphology("pole2-balancing", "4")
+	case "pole2-balancing-6", "pole2-balancing-6-v1", "pole2_balancing_6", "pole2_balancing_6_v1":
+		return morphology.ConstructMorphology("pole2-balancing", "6")
 	case "gtsa", "gtsa-v1":
 		return morphology.GTSAMorphology{}, nil
+	case "gtsa-core", "gtsa-core-v1", "gtsa_core", "gtsa_core_v1":
+		return morphology.GTSACoreMorphology{}, nil
 	case "fx", "fx-v1":
 		return morphology.FXMorphology{}, nil
+	case "fx-market", "fx-market-v1", "fx_market", "fx_market_v1":
+		return morphology.FXMarketMorphology{}, nil
 	case "epitopes-core", "epitopes-core-v1", "epitopes_core", "epitopes_core_v1":
 		return morphology.EpitopesCoreMorphology{}, nil
 	case "epitopes", "epitopes-v1":
