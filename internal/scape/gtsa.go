@@ -68,6 +68,7 @@ func evaluateGTSAWithStep(ctx context.Context, runner StepAgent, cfg gtsaModeCon
 		trace["sensor_width"] = width
 	}
 	trace["sensor_surface"] = "step_input"
+	trace["control_surface"] = "step_output"
 	return fitness, trace, nil
 }
 

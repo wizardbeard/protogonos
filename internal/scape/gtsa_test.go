@@ -62,6 +62,9 @@ func TestGTSAScapeEvaluateModeUsesConfiguredWindow(t *testing.T) {
 	if surface, _ := gtTrace["sensor_surface"].(string); surface != "step_input" {
 		t.Fatalf("expected gt step_input sensor surface, got %+v", gtTrace)
 	}
+	if surface, _ := gtTrace["control_surface"].(string); surface != "step_output" {
+		t.Fatalf("expected gt step_output control surface, got %+v", gtTrace)
+	}
 	if width, _ := gtTrace["sensor_width"].(int); width <= 0 {
 		t.Fatalf("expected gt step sensor width > 0, got %+v", gtTrace)
 	}
@@ -70,6 +73,9 @@ func TestGTSAScapeEvaluateModeUsesConfiguredWindow(t *testing.T) {
 	}
 	if surface, _ := validationTrace["sensor_surface"].(string); surface != "step_input" {
 		t.Fatalf("expected validation step_input sensor surface, got %+v", validationTrace)
+	}
+	if surface, _ := validationTrace["control_surface"].(string); surface != "step_output" {
+		t.Fatalf("expected validation step_output control surface, got %+v", validationTrace)
 	}
 	if width, _ := validationTrace["sensor_width"].(int); width <= 0 {
 		t.Fatalf("expected validation step sensor width > 0, got %+v", validationTrace)
@@ -252,6 +258,9 @@ func TestGTSAScapeTraceIncludesTableWindowState(t *testing.T) {
 	}
 	if surface, _ := trace["sensor_surface"].(string); surface != "step_input" {
 		t.Fatalf("expected step_input sensor surface, got %+v", trace)
+	}
+	if surface, _ := trace["control_surface"].(string); surface != "step_output" {
+		t.Fatalf("expected step_output control surface, got %+v", trace)
 	}
 	if width, ok := trace["sensor_width"].(int); !ok || width <= 0 {
 		t.Fatalf("trace missing step sensor_width: %+v", trace)
