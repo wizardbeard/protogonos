@@ -301,6 +301,14 @@ func findRegisteredActuator(name string) (registeredActuator, string, bool) {
 			return entry, canonicalName, true
 		}
 	}
+	if canonicalName == "" {
+		canonicalName = lookupName
+	}
+	for registeredName, entry := range actuatorRegistry.m {
+		if CanonicalActuatorName(registeredName) == canonicalName {
+			return entry, registeredName, true
+		}
+	}
 	return registeredActuator{}, "", false
 }
 

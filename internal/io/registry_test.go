@@ -103,6 +103,32 @@ func TestRegisterAndResolveActuatorTrimsNames(t *testing.T) {
 	}
 }
 
+func TestResolveActuatorCanonicalLookupMatchesAliasRegistration(t *testing.T) {
+	actuatorRegistry.mu.Lock()
+	originalActuators := actuatorRegistry.m
+	actuatorRegistry.m = make(map[string]registeredActuator)
+	actuatorRegistry.mu.Unlock()
+	t.Cleanup(func() {
+		actuatorRegistry.mu.Lock()
+		actuatorRegistry.m = originalActuators
+		actuatorRegistry.mu.Unlock()
+	})
+
+	if err := RegisterActuator(XORSendOutputActuatorAliasName, func() Actuator { return testActuator{} }); err != nil {
+		t.Fatalf("register alias actuator: %v", err)
+	}
+	a, err := ResolveActuator(XOROutputActuatorName, "xor")
+	if err != nil {
+		t.Fatalf("resolve canonical actuator through alias registration: %v", err)
+	}
+	if a.Name() != "test-actuator" {
+		t.Fatalf("unexpected canonical actuator from alias registration: %s", a.Name())
+	}
+	if !ActuatorCompatibleWithScape(XOROutputActuatorName, "xor") {
+		t.Fatal("expected canonical actuator compatibility lookup to resolve alias registration")
+	}
+}
+
 func TestRegistryValidationAndDuplicates(t *testing.T) {
 	resetRegistriesForTests()
 	t.Cleanup(resetRegistriesForTests)
