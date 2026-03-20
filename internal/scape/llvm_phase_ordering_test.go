@@ -168,6 +168,48 @@ func TestLLVMPhaseOrderingScapeEvaluateWithExtendedIOComponents(t *testing.T) {
 	}
 }
 
+func TestLLVMPhaseOrderingScapeEvaluateWithTickSensorsAndWriteOnlyActuator(t *testing.T) {
+	agent := scriptedTickAgent{
+		id: "llvm-tick-write-only",
+		sensors: map[string]protoio.Sensor{
+			protoio.LLVMComplexitySensorName: protoio.NewScalarInputSensor(0),
+			protoio.LLVMPassIndexSensorName:  protoio.NewScalarInputSensor(0),
+		},
+		actuators: map[string]protoio.Actuator{
+			protoio.LLVMPhaseActuatorName: &writeOnlyActuator{name: protoio.LLVMPhaseActuatorName},
+		},
+		fn: func(ctx context.Context, sensors map[string]protoio.Sensor) ([]float64, error) {
+			passIndex, err := sensors[protoio.LLVMPassIndexSensorName].Read(ctx)
+			if err != nil {
+				return nil, err
+			}
+			passNorm := 0.0
+			if len(passIndex) > 0 {
+				passNorm = passIndex[0]
+			}
+			return []float64{1 - 2*passNorm}, nil
+		},
+	}
+
+	scape := LLVMPhaseOrderingScape{}
+	fitness, trace, err := scape.Evaluate(context.Background(), agent)
+	if err != nil {
+		t.Fatalf("evaluate tick agent with write-only actuator: %v", err)
+	}
+	if fitness <= 0 {
+		t.Fatalf("expected positive fitness, got %f", fitness)
+	}
+	if surface, ok := trace["sensor_surface"].(string); !ok || surface != "core" {
+		t.Fatalf("expected sensor_surface=core, got %+v", trace)
+	}
+	if width, ok := trace["sensor_width"].(int); !ok || width != 2 {
+		t.Fatalf("expected sensor_width=2, got %+v", trace)
+	}
+	if surface, ok := trace["control_surface"].(string); !ok || surface != protoio.LLVMPhaseActuatorName {
+		t.Fatalf("expected control_surface=%s, got %+v", protoio.LLVMPhaseActuatorName, trace)
+	}
+}
+
 func TestLLVMPhaseOrderingScapeEvaluateModeAnnotatesMode(t *testing.T) {
 	scape := LLVMPhaseOrderingScape{}
 	phaseAware := scriptedStepAgent{

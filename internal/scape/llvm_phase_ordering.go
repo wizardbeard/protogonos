@@ -142,9 +142,11 @@ func evaluateLLVMPhaseOrderingWithTick(ctx context.Context, ticker TickAgent, cf
 				return nil, err
 			}
 
-			last := io.phaseOutput.Last()
-			if len(last) > 0 {
-				return append([]float64(nil), last...), nil
+			if io.phaseOutput != nil {
+				last := io.phaseOutput.Last()
+				if len(last) > 0 {
+					return append([]float64(nil), last...), nil
+				}
 			}
 			if len(out) > 0 {
 				return append([]float64(nil), out...), nil
@@ -746,13 +748,11 @@ func llvmPhaseOrderingIO(agent TickAgent) (llvmIOBindings, error) {
 		return llvmIOBindings{}, err
 	}
 
-	actuator, ok := typed.RegisteredActuator(protoio.LLVMPhaseActuatorName)
-	if !ok {
-		return llvmIOBindings{}, fmt.Errorf("agent %s missing actuator %s", agent.ID(), protoio.LLVMPhaseActuatorName)
-	}
-	output, ok := actuator.(protoio.SnapshotActuator)
-	if !ok {
-		return llvmIOBindings{}, fmt.Errorf("actuator %s does not support output snapshot", protoio.LLVMPhaseActuatorName)
+	var output protoio.SnapshotActuator
+	if actuator, ok := typed.RegisteredActuator(protoio.LLVMPhaseActuatorName); ok {
+		if snapshot, ok := actuator.(protoio.SnapshotActuator); ok {
+			output = snapshot
+		}
 	}
 
 	return llvmIOBindings{

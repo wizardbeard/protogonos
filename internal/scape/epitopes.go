@@ -400,9 +400,11 @@ func evaluateEpitopesWithTick(ctx context.Context, ticker TickAgent, cfg epitope
 			if err != nil {
 				return nil, err
 			}
-			last := io.responseOutput.Last()
-			if len(last) > 0 {
-				return append([]float64(nil), last...), nil
+			if io.responseOutput != nil {
+				last := io.responseOutput.Last()
+				if len(last) > 0 {
+					return append([]float64(nil), last...), nil
+				}
 			}
 			if len(out) > 0 {
 				return append([]float64(nil), out...), nil
@@ -1341,13 +1343,11 @@ func epitopesIO(agent TickAgent) (epitopesIOBindings, error) {
 		return epitopesIOBindings{}, err
 	}
 
-	actuator, ok := typed.RegisteredActuator(protoio.EpitopesResponseActuatorName)
-	if !ok {
-		return epitopesIOBindings{}, fmt.Errorf("agent %s missing actuator %s", agent.ID(), protoio.EpitopesResponseActuatorName)
-	}
-	output, ok := actuator.(protoio.SnapshotActuator)
-	if !ok {
-		return epitopesIOBindings{}, fmt.Errorf("actuator %s does not support output snapshot", protoio.EpitopesResponseActuatorName)
+	var output protoio.SnapshotActuator
+	if actuator, ok := typed.RegisteredActuator(protoio.EpitopesResponseActuatorName); ok {
+		if snapshot, ok := actuator.(protoio.SnapshotActuator); ok {
+			output = snapshot
+		}
 	}
 
 	return epitopesIOBindings{

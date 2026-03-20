@@ -178,6 +178,53 @@ func TestEpitopesScapeEvaluateWithExtendedIOComponents(t *testing.T) {
 	}
 }
 
+func TestEpitopesScapeEvaluateWithTickSensorsAndNoActuatorSnapshot(t *testing.T) {
+	agent := scriptedTickAgent{
+		id: "epitopes-tick-no-snapshot",
+		sensors: map[string]protoio.Sensor{
+			protoio.EpitopesSignalSensorName: protoio.NewScalarInputSensor(0),
+			protoio.EpitopesMemorySensorName: protoio.NewScalarInputSensor(0),
+		},
+		fn: func(ctx context.Context, sensors map[string]protoio.Sensor) ([]float64, error) {
+			signal, err := sensors[protoio.EpitopesSignalSensorName].Read(ctx)
+			if err != nil {
+				return nil, err
+			}
+			memory, err := sensors[protoio.EpitopesMemorySensorName].Read(ctx)
+			if err != nil {
+				return nil, err
+			}
+			signalValue := 0.0
+			if len(signal) > 0 {
+				signalValue = signal[0]
+			}
+			memoryValue := 0.0
+			if len(memory) > 0 {
+				memoryValue = memory[0]
+			}
+			return []float64{signalValue + 0.7*memoryValue}, nil
+		},
+	}
+
+	scape := EpitopesScape{}
+	fitness, trace, err := scape.Evaluate(context.Background(), agent)
+	if err != nil {
+		t.Fatalf("evaluate tick agent without snapshot actuator: %v", err)
+	}
+	if fitness < 0.75 {
+		t.Fatalf("expected fitness >= 0.75, got %f", fitness)
+	}
+	if surface, ok := trace["sensor_surface"].(string); !ok || surface != "core" {
+		t.Fatalf("expected sensor_surface=core, got %+v", trace)
+	}
+	if width, ok := trace["sensor_width"].(int); !ok || width != 2 {
+		t.Fatalf("expected sensor_width=2, got %+v", trace)
+	}
+	if surface, ok := trace["control_surface"].(string); !ok || surface != protoio.EpitopesResponseActuatorName {
+		t.Fatalf("expected control_surface=%s, got %+v", protoio.EpitopesResponseActuatorName, trace)
+	}
+}
+
 func TestEpitopesScapeEvaluateModeAnnotatesMode(t *testing.T) {
 	scape := EpitopesScape{}
 	memoryAware := scriptedStepAgent{
