@@ -237,6 +237,44 @@ func TestFXScapeEvaluateWithExtendedIOComponents(t *testing.T) {
 	}
 }
 
+func TestFXScapeEvaluateWithTickSensorsAndNoActuatorSnapshot(t *testing.T) {
+	agent := scriptedTickAgent{
+		id: "fx-tick-no-snapshot",
+		sensors: map[string]protoio.Sensor{
+			protoio.FXPriceSensorName:  protoio.NewScalarInputSensor(0),
+			protoio.FXSignalSensorName: protoio.NewScalarInputSensor(0),
+		},
+		fn: func(ctx context.Context, sensors map[string]protoio.Sensor) ([]float64, error) {
+			signal, err := sensors[protoio.FXSignalSensorName].Read(ctx)
+			if err != nil {
+				return nil, err
+			}
+			if len(signal) == 0 {
+				return []float64{0}, nil
+			}
+			return []float64{signal[0]}, nil
+		},
+	}
+
+	scape := FXScape{}
+	fitness, trace, err := scape.Evaluate(context.Background(), agent)
+	if err != nil {
+		t.Fatalf("evaluate tick agent without snapshot actuator: %v", err)
+	}
+	if fitness <= 0 {
+		t.Fatalf("expected positive fitness, got %f", fitness)
+	}
+	if surface, _ := trace["sensor_surface"].(string); surface != "market" {
+		t.Fatalf("expected market sensor surface, got %+v", trace)
+	}
+	if surface, _ := trace["control_surface"].(string); surface != protoio.FXTradeActuatorName {
+		t.Fatalf("expected control surface %s, got %+v", protoio.FXTradeActuatorName, trace)
+	}
+	if width, _ := trace["sensor_width"].(int); width != 2 {
+		t.Fatalf("expected market sensor width 2, got %+v", trace)
+	}
+}
+
 func TestFXScapeTraceIncludesAccountLifecycle(t *testing.T) {
 	scape := FXScape{}
 	follow := scriptedStepAgent{

@@ -93,9 +93,11 @@ func evaluateGTSAWithTick(ctx context.Context, ticker TickAgent, cfg gtsaModeCon
 		if err != nil {
 			return 0, err
 		}
-		lastOutput := io.predictOutput.Last()
-		if len(lastOutput) > 0 {
-			return lastOutput[0], nil
+		if io.predictOutput != nil {
+			lastOutput := io.predictOutput.Last()
+			if len(lastOutput) > 0 {
+				return lastOutput[0], nil
+			}
 		}
 		if len(out) > 0 {
 			return out[0], nil
@@ -386,13 +388,11 @@ func gtsaIO(agent TickAgent) (gtsaIOBindings, error) {
 		return gtsaIOBindings{}, err
 	}
 
-	actuator, ok := typed.RegisteredActuator(protoio.GTSAPredictActuatorName)
-	if !ok {
-		return gtsaIOBindings{}, fmt.Errorf("agent %s missing actuator %s", agent.ID(), protoio.GTSAPredictActuatorName)
-	}
-	predictOutput, ok := actuator.(protoio.SnapshotActuator)
-	if !ok {
-		return gtsaIOBindings{}, fmt.Errorf("actuator %s does not support output snapshot", protoio.GTSAPredictActuatorName)
+	var predictOutput protoio.SnapshotActuator
+	if actuator, ok := typed.RegisteredActuator(protoio.GTSAPredictActuatorName); ok {
+		if snapshot, ok := actuator.(protoio.SnapshotActuator); ok {
+			predictOutput = snapshot
+		}
 	}
 	return gtsaIOBindings{
 		input:         inputSetter,

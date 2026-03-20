@@ -120,9 +120,11 @@ func evaluateFXWithTick(ctx context.Context, ticker TickAgent, cfg fxModeConfig)
 		if err != nil {
 			return 0, err
 		}
-		lastOutput := io.tradeOutput.Last()
-		if len(lastOutput) > 0 {
-			return lastOutput[0], nil
+		if io.tradeOutput != nil {
+			lastOutput := io.tradeOutput.Last()
+			if len(lastOutput) > 0 {
+				return lastOutput[0], nil
+			}
 		}
 		if len(out) > 0 {
 			return out[0], nil
@@ -538,13 +540,11 @@ func fxIO(agent TickAgent) (fxIOBindings, error) {
 		return fxIOBindings{}, err
 	}
 
-	actuator, ok := typed.RegisteredActuator(protoio.FXTradeActuatorName)
-	if !ok {
-		return fxIOBindings{}, fmt.Errorf("agent %s missing actuator %s", agent.ID(), protoio.FXTradeActuatorName)
-	}
-	tradeOutput, ok := actuator.(protoio.SnapshotActuator)
-	if !ok {
-		return fxIOBindings{}, fmt.Errorf("actuator %s does not support output snapshot", protoio.FXTradeActuatorName)
+	var tradeOutput protoio.SnapshotActuator
+	if actuator, ok := typed.RegisteredActuator(protoio.FXTradeActuatorName); ok {
+		if snapshot, ok := actuator.(protoio.SnapshotActuator); ok {
+			tradeOutput = snapshot
+		}
 	}
 	return fxIOBindings{
 		price:             priceSetter,

@@ -212,6 +212,46 @@ func TestGTSAScapeEvaluateWithExtendedIOComponents(t *testing.T) {
 	}
 }
 
+func TestGTSAScapeEvaluateWithTickSensorsAndWriteOnlyActuator(t *testing.T) {
+	agent := scriptedTickAgent{
+		id: "gtsa-tick-write-only",
+		sensors: map[string]protoio.Sensor{
+			protoio.GTSAInputSensorName: protoio.NewScalarInputSensor(0),
+		},
+		actuators: map[string]protoio.Actuator{
+			protoio.GTSAPredictActuatorName: &writeOnlyActuator{name: protoio.GTSAPredictActuatorName},
+		},
+		fn: func(ctx context.Context, sensors map[string]protoio.Sensor) ([]float64, error) {
+			input, err := sensors[protoio.GTSAInputSensorName].Read(ctx)
+			if err != nil {
+				return nil, err
+			}
+			if len(input) == 0 {
+				return []float64{0}, nil
+			}
+			return []float64{input[0]}, nil
+		},
+	}
+
+	scape := GTSAScape{}
+	fitness, trace, err := scape.Evaluate(context.Background(), agent)
+	if err != nil {
+		t.Fatalf("evaluate tick agent with write-only actuator: %v", err)
+	}
+	if fitness <= 0 {
+		t.Fatalf("expected positive fitness, got %f", fitness)
+	}
+	if surface, _ := trace["sensor_surface"].(string); surface != "core" {
+		t.Fatalf("expected core sensor surface, got %+v", trace)
+	}
+	if surface, _ := trace["control_surface"].(string); surface != protoio.GTSAPredictActuatorName {
+		t.Fatalf("expected control surface %s, got %+v", protoio.GTSAPredictActuatorName, trace)
+	}
+	if width, _ := trace["sensor_width"].(int); width != 1 {
+		t.Fatalf("expected core sensor width 1, got %+v", trace)
+	}
+}
+
 func TestGTSAScapeTraceIncludesPredictionDiagnostics(t *testing.T) {
 	scape := GTSAScape{}
 	copyInput := scriptedStepAgent{
