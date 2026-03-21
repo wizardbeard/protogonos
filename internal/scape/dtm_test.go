@@ -242,6 +242,57 @@ func TestDTMScapeEvaluateWithRangeOnlyIOComponents(t *testing.T) {
 	}
 }
 
+func TestDTMScapeEvaluateWithTickSensorsAndNoActuatorSnapshot(t *testing.T) {
+	agent := scriptedTickAgent{
+		id: "dtm-tick-no-snapshot",
+		sensors: map[string]protoio.Sensor{
+			protoio.DTMRangeLeftSensorName:  protoio.NewScalarInputSensor(0),
+			protoio.DTMRangeFrontSensorName: protoio.NewScalarInputSensor(0),
+			protoio.DTMRangeRightSensorName: protoio.NewScalarInputSensor(0),
+		},
+		fn: func(ctx context.Context, sensors map[string]protoio.Sensor) ([]float64, error) {
+			left, err := sensors[protoio.DTMRangeLeftSensorName].Read(ctx)
+			if err != nil {
+				return nil, err
+			}
+			right, err := sensors[protoio.DTMRangeRightSensorName].Read(ctx)
+			if err != nil {
+				return nil, err
+			}
+			leftValue := 0.0
+			if len(left) > 0 {
+				leftValue = left[0]
+			}
+			rightValue := 0.0
+			if len(right) > 0 {
+				rightValue = right[0]
+			}
+			if leftValue > 0.5 && rightValue > 0.5 {
+				return []float64{1}, nil
+			}
+			return []float64{0}, nil
+		},
+	}
+
+	scape := DTMScape{}
+	fitness, trace, err := scape.Evaluate(context.Background(), agent)
+	if err != nil {
+		t.Fatalf("evaluate tick agent without snapshot actuator: %v", err)
+	}
+	if fitness <= 0 {
+		t.Fatalf("expected positive fitness, got %f", fitness)
+	}
+	if surface, ok := trace["sensor_surface"].(string); !ok || surface != "range_sense" {
+		t.Fatalf("expected sensor_surface=range_sense, got %+v", trace)
+	}
+	if width, ok := trace["sensor_width"].(int); !ok || width != 3 {
+		t.Fatalf("expected sensor_width=3, got %+v", trace)
+	}
+	if surface, ok := trace["control_surface"].(string); !ok || surface != protoio.DTMMoveActuatorName {
+		t.Fatalf("expected control_surface=%s, got %+v", protoio.DTMMoveActuatorName, trace)
+	}
+}
+
 func TestDTMScapeEvaluateWithRewardOnlyIOComponents(t *testing.T) {
 	genome := model.Genome{
 		SensorIDs:   []string{protoio.DTMRewardSensorName},

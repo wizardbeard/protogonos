@@ -180,10 +180,15 @@ func evaluateDTMWithTick(ctx context.Context, ticker TickAgent, cfg dtmModeConfi
 			}
 
 			move := 0.0
-			last := ioBindings.moveOutput.Last()
-			if len(last) > 0 {
-				move = last[0]
-			} else if len(out) > 0 {
+			haveMove := false
+			if ioBindings.moveOutput != nil {
+				last := ioBindings.moveOutput.Last()
+				if len(last) > 0 {
+					move = last[0]
+					haveMove = true
+				}
+			}
+			if !haveMove && len(out) > 0 {
 				move = out[0]
 			}
 			return move, nil
@@ -596,13 +601,11 @@ func dtmIO(agent TickAgent) (dtmIOBindings, error) {
 		return dtmIOBindings{}, fmt.Errorf("agent %s missing dtm sensing surface: expected range_sense and/or reward sensor", agent.ID())
 	}
 
-	actuator, ok := typed.RegisteredActuator(protoio.DTMMoveActuatorName)
-	if !ok {
-		return dtmIOBindings{}, fmt.Errorf("agent %s missing actuator %s", agent.ID(), protoio.DTMMoveActuatorName)
-	}
-	output, ok := actuator.(protoio.SnapshotActuator)
-	if !ok {
-		return dtmIOBindings{}, fmt.Errorf("actuator %s does not support output snapshot", protoio.DTMMoveActuatorName)
+	var output protoio.SnapshotActuator
+	if actuator, ok := typed.RegisteredActuator(protoio.DTMMoveActuatorName); ok {
+		if snapshot, ok := actuator.(protoio.SnapshotActuator); ok {
+			output = snapshot
+		}
 	}
 
 	return dtmIOBindings{
