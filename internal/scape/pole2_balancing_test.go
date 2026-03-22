@@ -199,6 +199,62 @@ func TestPole2BalancingScapeEvaluateWithReducedIOComponents(t *testing.T) {
 	}
 }
 
+func TestPole2BalancingScapeEvaluateWithTickSensorsAndWriteOnlyActuator(t *testing.T) {
+	agent := scriptedTickAgent{
+		id: "pole2-tick-write-only",
+		sensors: map[string]protoio.Sensor{
+			protoio.Pole2CartPositionSensorName: protoio.NewScalarInputSensor(0),
+			protoio.Pole2Angle1SensorName:       protoio.NewScalarInputSensor(0),
+			protoio.Pole2Angle2SensorName:       protoio.NewScalarInputSensor(0),
+		},
+		actuators: map[string]protoio.Actuator{
+			protoio.Pole2PushActuatorName: &writeOnlyActuator{name: protoio.Pole2PushActuatorName},
+		},
+		fn: func(ctx context.Context, sensors map[string]protoio.Sensor) ([]float64, error) {
+			position, err := sensors[protoio.Pole2CartPositionSensorName].Read(ctx)
+			if err != nil {
+				return nil, err
+			}
+			angle1, err := sensors[protoio.Pole2Angle1SensorName].Read(ctx)
+			if err != nil {
+				return nil, err
+			}
+			angle2, err := sensors[protoio.Pole2Angle2SensorName].Read(ctx)
+			if err != nil {
+				return nil, err
+			}
+			x := 0.0
+			if len(position) > 0 {
+				x = position[0]
+			}
+			a1 := 0.0
+			if len(angle1) > 0 {
+				a1 = angle1[0]
+			}
+			a2 := 0.0
+			if len(angle2) > 0 {
+				a2 = angle2[0]
+			}
+			return []float64{-(0.7*x + 3.8*a1 + 5.4*a2)}, nil
+		},
+	}
+
+	scape := Pole2BalancingScape{}
+	fitness, trace, err := scape.Evaluate(context.Background(), agent)
+	if err != nil {
+		t.Fatalf("evaluate tick agent with write-only actuator: %v", err)
+	}
+	if fitness <= 0 {
+		t.Fatalf("expected positive fitness, got %f", fitness)
+	}
+	if surface, ok := trace["sensor_surface"].(string); !ok || surface != "3" {
+		t.Fatalf("expected reduced pole2 sensor_surface=3, got %+v", trace)
+	}
+	if surface, ok := trace["workflow_surface"].(string); !ok || surface != "none" {
+		t.Fatalf("expected reduced pole2 workflow_surface=none, got %+v", trace)
+	}
+}
+
 func TestPole2BalancingScapeEvaluateModeAnnotatesMode(t *testing.T) {
 	scape := Pole2BalancingScape{}
 	stabilize := scriptedStepAgent{

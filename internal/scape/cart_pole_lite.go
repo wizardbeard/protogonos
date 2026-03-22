@@ -110,9 +110,11 @@ func evaluateCartPoleLiteWithTick(ctx context.Context, ticker TickAgent, cfg car
 			if err != nil {
 				return 0, err
 			}
-			last := forceOutput.Last()
-			if len(last) > 0 {
-				return last[0], nil
+			if forceOutput != nil {
+				last := forceOutput.Last()
+				if len(last) > 0 {
+					return last[0], nil
+				}
 			}
 			if len(out) > 0 {
 				return out[0], nil
@@ -221,13 +223,11 @@ func cartPoleLiteIO(agent TickAgent) (protoio.ScalarSensorSetter, protoio.Scalar
 		return nil, nil, nil, fmt.Errorf("sensor %s does not support scalar set", protoio.CartPoleVelocitySensorName)
 	}
 
-	actuator, ok := typed.RegisteredActuator(protoio.CartPoleForceActuatorName)
-	if !ok {
-		return nil, nil, nil, fmt.Errorf("agent %s missing actuator %s", agent.ID(), protoio.CartPoleForceActuatorName)
-	}
-	output, ok := actuator.(protoio.SnapshotActuator)
-	if !ok {
-		return nil, nil, nil, fmt.Errorf("actuator %s does not support output snapshot", protoio.CartPoleForceActuatorName)
+	var output protoio.SnapshotActuator
+	if actuator, ok := typed.RegisteredActuator(protoio.CartPoleForceActuatorName); ok {
+		if snapshot, ok := actuator.(protoio.SnapshotActuator); ok {
+			output = snapshot
+		}
 	}
 	return positionSetter, velocitySetter, output, nil
 }

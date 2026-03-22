@@ -124,9 +124,11 @@ func evaluateXORWithTick(ctx context.Context, ticker TickAgent, cfg xorModeConfi
 			if err != nil {
 				return 0, err
 			}
-			last := output.Last()
-			if len(last) > 0 {
-				return last[0], nil
+			if output != nil {
+				last := output.Last()
+				if len(last) > 0 {
+					return last[0], nil
+				}
 			}
 			if len(out) > 0 {
 				return out[0], nil
@@ -200,13 +202,11 @@ func xorIO(agent TickAgent) (protoio.ScalarSensorSetter, protoio.ScalarSensorSet
 		return nil, nil, nil, fmt.Errorf("sensor %s does not support scalar set", protoio.XORInputRightSensorName)
 	}
 
-	actuator, ok := typed.RegisteredActuator(protoio.XOROutputActuatorName)
-	if !ok {
-		return nil, nil, nil, fmt.Errorf("agent %s missing actuator %s", agent.ID(), protoio.XOROutputActuatorName)
-	}
-	output, ok := actuator.(protoio.SnapshotActuator)
-	if !ok {
-		return nil, nil, nil, fmt.Errorf("actuator %s does not support output snapshot", protoio.XOROutputActuatorName)
+	var output protoio.SnapshotActuator
+	if actuator, ok := typed.RegisteredActuator(protoio.XOROutputActuatorName); ok {
+		if snapshot, ok := actuator.(protoio.SnapshotActuator); ok {
+			output = snapshot
+		}
 	}
 	return leftSetter, rightSetter, output, nil
 }

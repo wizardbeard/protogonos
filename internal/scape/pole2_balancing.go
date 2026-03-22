@@ -216,10 +216,13 @@ func evaluatePole2BalancingWithTick(ctx context.Context, ticker TickAgent, cfg p
 				doublePole: cfg.doublePole,
 			}
 
-			last := ioBindings.forceOutput.Last()
-			if len(last) > 0 {
-				return decodePole2Control(last, cfg), nil
-			} else if len(out) > 0 {
+			if ioBindings.forceOutput != nil {
+				last := ioBindings.forceOutput.Last()
+				if len(last) > 0 {
+					return decodePole2Control(last, cfg), nil
+				}
+			}
+			if len(out) > 0 {
 				return decodePole2Control(out, cfg), nil
 			}
 			return control, nil
@@ -607,13 +610,11 @@ func pole2BalancingIO(agent TickAgent) (pole2IOBindings, error) {
 	}
 	workflowSurface := classifyPole2WorkflowSurface(hasRunProgress, hasStepProgress, hasFitnessSignal)
 
-	actuator, ok := typed.RegisteredActuator(protoio.Pole2PushActuatorName)
-	if !ok {
-		return pole2IOBindings{}, fmt.Errorf("agent %s missing actuator %s", agent.ID(), protoio.Pole2PushActuatorName)
-	}
-	output, ok := actuator.(protoio.SnapshotActuator)
-	if !ok {
-		return pole2IOBindings{}, fmt.Errorf("actuator %s does not support output snapshot", protoio.Pole2PushActuatorName)
+	var output protoio.SnapshotActuator
+	if actuator, ok := typed.RegisteredActuator(protoio.Pole2PushActuatorName); ok {
+		if snapshot, ok := actuator.(protoio.SnapshotActuator); ok {
+			output = snapshot
+		}
 	}
 
 	return pole2IOBindings{

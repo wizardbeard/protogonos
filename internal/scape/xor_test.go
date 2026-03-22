@@ -114,6 +114,54 @@ func TestXORScapeEvaluateWithIOComponents(t *testing.T) {
 	}
 }
 
+func TestXORScapeEvaluateWithTickSensorsAndNoActuatorSnapshot(t *testing.T) {
+	agent := scriptedTickAgent{
+		id: "xor-tick-no-snapshot",
+		sensors: map[string]protoio.Sensor{
+			protoio.XORInputLeftSensorName:  protoio.NewScalarInputSensor(0),
+			protoio.XORInputRightSensorName: protoio.NewScalarInputSensor(0),
+		},
+		fn: func(ctx context.Context, sensors map[string]protoio.Sensor) ([]float64, error) {
+			left, err := sensors[protoio.XORInputLeftSensorName].Read(ctx)
+			if err != nil {
+				return nil, err
+			}
+			right, err := sensors[protoio.XORInputRightSensorName].Read(ctx)
+			if err != nil {
+				return nil, err
+			}
+			leftValue := 0
+			if len(left) > 0 {
+				leftValue = int(left[0])
+			}
+			rightValue := 0
+			if len(right) > 0 {
+				rightValue = int(right[0])
+			}
+			if leftValue^rightValue == 1 {
+				return []float64{1}, nil
+			}
+			return []float64{0}, nil
+		},
+	}
+
+	xor := XORScape{}
+	fitness, trace, err := xor.Evaluate(context.Background(), agent)
+	if err != nil {
+		t.Fatalf("evaluate tick agent without snapshot actuator: %v", err)
+	}
+	mse, ok := trace["mse"].(float64)
+	if !ok {
+		t.Fatalf("trace missing mse: %+v", trace)
+	}
+	if mse > 1e-9 {
+		t.Fatalf("expected mse ~0, got %f", mse)
+	}
+	if fitness < 1000 {
+		t.Fatalf("expected strong xor fitness, got %f", fitness)
+	}
+}
+
 func TestXORScapeEvaluateModeAnnotatesMode(t *testing.T) {
 	xor := XORScape{}
 	parity := scriptedStepAgent{

@@ -89,6 +89,51 @@ func TestCartPoleLiteScapeEvaluateWithIOComponents(t *testing.T) {
 	}
 }
 
+func TestCartPoleLiteScapeEvaluateWithTickSensorsAndNoActuatorSnapshot(t *testing.T) {
+	agent := scriptedTickAgent{
+		id: "cp-tick-no-snapshot",
+		sensors: map[string]protoio.Sensor{
+			protoio.CartPolePositionSensorName: protoio.NewScalarInputSensor(0),
+			protoio.CartPoleVelocitySensorName: protoio.NewScalarInputSensor(0),
+		},
+		fn: func(ctx context.Context, sensors map[string]protoio.Sensor) ([]float64, error) {
+			position, err := sensors[protoio.CartPolePositionSensorName].Read(ctx)
+			if err != nil {
+				return nil, err
+			}
+			velocity, err := sensors[protoio.CartPoleVelocitySensorName].Read(ctx)
+			if err != nil {
+				return nil, err
+			}
+			x := 0.0
+			if len(position) > 0 {
+				x = position[0]
+			}
+			v := 0.0
+			if len(velocity) > 0 {
+				v = velocity[0]
+			}
+			return []float64{-1.2*x - 0.6*v}, nil
+		},
+	}
+
+	scape := CartPoleLiteScape{}
+	fitness, trace, err := scape.Evaluate(context.Background(), agent)
+	if err != nil {
+		t.Fatalf("evaluate tick agent without snapshot actuator: %v", err)
+	}
+	avgReward, ok := trace["avg_reward"].(float64)
+	if !ok {
+		t.Fatalf("trace missing avg_reward: %+v", trace)
+	}
+	if avgReward <= 0.5 {
+		t.Fatalf("expected avg_reward > 0.5, got %f", avgReward)
+	}
+	if fitness <= 0.5 {
+		t.Fatalf("expected fitness > 0.5, got %f", fitness)
+	}
+}
+
 func TestCartPoleLiteScapeEvaluateModeAnnotatesMode(t *testing.T) {
 	scape := CartPoleLiteScape{}
 	stabilizer := scriptedStepAgent{

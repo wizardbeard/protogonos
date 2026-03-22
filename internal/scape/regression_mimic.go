@@ -103,9 +103,11 @@ func evaluateRegressionMimicWithTick(ctx context.Context, ticker TickAgent, cfg 
 			if err != nil {
 				return 0, err
 			}
-			last := output.Last()
-			if len(last) > 0 {
-				return last[0], nil
+			if output != nil {
+				last := output.Last()
+				if len(last) > 0 {
+					return last[0], nil
+				}
 			}
 			if len(out) > 0 {
 				return out[0], nil
@@ -166,13 +168,11 @@ func regressionMimicIO(agent TickAgent) (protoio.ScalarSensorSetter, protoio.Sna
 		return nil, nil, fmt.Errorf("sensor %s does not support scalar set", protoio.ScalarInputSensorName)
 	}
 
-	actuator, ok := typed.RegisteredActuator(protoio.ScalarOutputActuatorName)
-	if !ok {
-		return nil, nil, fmt.Errorf("agent %s missing actuator %s", agent.ID(), protoio.ScalarOutputActuatorName)
-	}
-	output, ok := actuator.(protoio.SnapshotActuator)
-	if !ok {
-		return nil, nil, fmt.Errorf("actuator %s does not support output snapshot", protoio.ScalarOutputActuatorName)
+	var output protoio.SnapshotActuator
+	if actuator, ok := typed.RegisteredActuator(protoio.ScalarOutputActuatorName); ok {
+		if snapshot, ok := actuator.(protoio.SnapshotActuator); ok {
+			output = snapshot
+		}
 	}
 	return setter, output, nil
 }

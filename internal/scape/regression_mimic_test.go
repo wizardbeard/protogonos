@@ -86,6 +86,44 @@ func TestRegressionMimicScapeEvaluateWithScalarIOComponents(t *testing.T) {
 	}
 }
 
+func TestRegressionMimicScapeEvaluateWithTickSensorsAndWriteOnlyActuator(t *testing.T) {
+	agent := scriptedTickAgent{
+		id: "reg-tick-write-only",
+		sensors: map[string]protoio.Sensor{
+			protoio.ScalarInputSensorName: protoio.NewScalarInputSensor(0),
+		},
+		actuators: map[string]protoio.Actuator{
+			protoio.ScalarOutputActuatorName: &writeOnlyActuator{name: protoio.ScalarOutputActuatorName},
+		},
+		fn: func(ctx context.Context, sensors map[string]protoio.Sensor) ([]float64, error) {
+			input, err := sensors[protoio.ScalarInputSensorName].Read(ctx)
+			if err != nil {
+				return nil, err
+			}
+			if len(input) == 0 {
+				return []float64{0}, nil
+			}
+			return []float64{input[0]}, nil
+		},
+	}
+
+	scape := RegressionMimicScape{}
+	fitness, trace, err := scape.Evaluate(context.Background(), agent)
+	if err != nil {
+		t.Fatalf("evaluate tick agent with write-only actuator: %v", err)
+	}
+	mse, ok := trace["mse"].(float64)
+	if !ok {
+		t.Fatalf("trace missing mse: %+v", trace)
+	}
+	if mse > 1e-9 {
+		t.Fatalf("expected mse ~0, got %f", mse)
+	}
+	if fitness < 0.999999 {
+		t.Fatalf("expected near-perfect fitness, got %f", fitness)
+	}
+}
+
 func TestRegressionMimicScapeEvaluateModeAnnotatesMode(t *testing.T) {
 	scape := RegressionMimicScape{}
 	identity := scriptedStepAgent{
