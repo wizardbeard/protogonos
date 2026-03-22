@@ -578,7 +578,10 @@ func evaluateFlatlandWithTick(ctx context.Context, ticker TickAgent, cfg flatlan
 		if err != nil {
 			return flatlandControl{}, err
 		}
-		values := ioBindings.moveOutput.Last()
+		values := out
+		if ioBindings.moveOutput != nil {
+			values = ioBindings.moveOutput.Last()
+		}
 		if len(values) == 0 {
 			values = out
 		}
@@ -2253,9 +2256,9 @@ func flatlandIO(agent TickAgent) (flatlandIOBindings, error) {
 			)
 		}
 	}
-	moveOutput, ok := actuator.(protoio.SnapshotActuator)
-	if !ok {
-		return flatlandIOBindings{}, fmt.Errorf("actuator %s does not support output snapshot", actuatorName)
+	var moveOutput protoio.SnapshotActuator
+	if snapshot, ok := actuator.(protoio.SnapshotActuator); ok {
+		moveOutput = snapshot
 	}
 
 	return flatlandIOBindings{

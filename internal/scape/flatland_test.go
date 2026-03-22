@@ -733,6 +733,56 @@ func TestFlatlandScapeEvaluateWithTwoWheelsActuator(t *testing.T) {
 	}
 }
 
+func TestFlatlandScapeEvaluateWithWriteOnlyMoveActuator(t *testing.T) {
+	agent := scriptedTickAgent{
+		id: "flatland-tick-write-only",
+		sensors: map[string]protoio.Sensor{
+			protoio.FlatlandDistanceSensorName: protoio.NewScalarInputSensor(0),
+			protoio.FlatlandEnergySensorName:   protoio.NewScalarInputSensor(0),
+		},
+		actuators: map[string]protoio.Actuator{
+			protoio.FlatlandMoveActuatorName: &writeOnlyActuator{name: protoio.FlatlandMoveActuatorName},
+		},
+		fn: func(ctx context.Context, sensors map[string]protoio.Sensor) ([]float64, error) {
+			distance, err := sensors[protoio.FlatlandDistanceSensorName].Read(ctx)
+			if err != nil {
+				return nil, err
+			}
+			energy, err := sensors[protoio.FlatlandEnergySensorName].Read(ctx)
+			if err != nil {
+				return nil, err
+			}
+			dist := 0.0
+			if len(distance) > 0 {
+				dist = distance[0]
+			}
+			en := 0.0
+			if len(energy) > 0 {
+				en = energy[0]
+			}
+			return []float64{dist - 0.2*en}, nil
+		},
+	}
+
+	scape := FlatlandScape{}
+	fitness, trace, err := scape.Evaluate(context.Background(), agent)
+	if err != nil {
+		t.Fatalf("evaluate tick agent with write-only actuator: %v", err)
+	}
+	if fitness <= 0 {
+		t.Fatalf("expected positive fitness, got %f", fitness)
+	}
+	if surface, _ := trace["control_surface"].(string); surface != protoio.FlatlandMoveActuatorName {
+		t.Fatalf("expected flatland_move control surface, trace=%+v", trace)
+	}
+	if surface, _ := trace["sensor_surface"].(string); surface != "classic" {
+		t.Fatalf("expected classic sensor surface, trace=%+v", trace)
+	}
+	if width, ok := trace["sensor_width"].(int); !ok || width != 2 {
+		t.Fatalf("expected sensor_width=2, trace=%+v", trace)
+	}
+}
+
 func TestFlatlandScapeStepAgentSupportsWideControlVector(t *testing.T) {
 	scape := FlatlandScape{}
 	agent := scriptedStepAgent{
