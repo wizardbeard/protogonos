@@ -908,6 +908,9 @@ func TestFlatlandScapeEvaluateModeAnnotatesMode(t *testing.T) {
 	if effective, _ := validationTrace["scanner_density_effective"].(int); effective != 5 {
 		t.Fatalf("expected validation effective scanner density=5, trace=%+v", validationTrace)
 	}
+	if active, _ := validationTrace["scanner_density_active"].(int); active != 5 {
+		t.Fatalf("expected validation active scanner density=5, trace=%+v", validationTrace)
+	}
 	if runtime, _ := validationTrace["scanner_density_runtime"].(int); runtime != 5 {
 		t.Fatalf("expected validation runtime scanner density=5, trace=%+v", validationTrace)
 	}
@@ -925,6 +928,9 @@ func TestFlatlandScapeEvaluateModeAnnotatesMode(t *testing.T) {
 	if effective, _ := testTrace["scanner_density_effective"].(int); effective != 5 {
 		t.Fatalf("expected test effective scanner density=5, trace=%+v", testTrace)
 	}
+	if active, _ := testTrace["scanner_density_active"].(int); active != 5 {
+		t.Fatalf("expected test active scanner density=5, trace=%+v", testTrace)
+	}
 	if runtime, _ := testTrace["scanner_density_runtime"].(int); runtime != 5 {
 		t.Fatalf("expected test runtime scanner density=5, trace=%+v", testTrace)
 	}
@@ -941,6 +947,9 @@ func TestFlatlandScapeEvaluateModeAnnotatesMode(t *testing.T) {
 	}
 	if effective, _ := benchmarkTrace["scanner_density_effective"].(int); effective != 3 {
 		t.Fatalf("expected benchmark effective scanner density=3, trace=%+v", benchmarkTrace)
+	}
+	if active, _ := benchmarkTrace["scanner_density_active"].(int); active != 3 {
+		t.Fatalf("expected benchmark active scanner density=3, trace=%+v", benchmarkTrace)
 	}
 	if width, _ := benchmarkTrace["scanner_feature_width_effective"].(int); width != 9 {
 		t.Fatalf("expected benchmark effective scanner feature width=9, trace=%+v", benchmarkTrace)
