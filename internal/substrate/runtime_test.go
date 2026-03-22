@@ -1745,3 +1745,62 @@ func TestSimpleRuntimeTerminateBlocksStep(t *testing.T) {
 	// Terminate should be idempotent.
 	rt.Terminate()
 }
+
+func TestSimpleRuntimeRestoreRevivesTerminatedRuntime(t *testing.T) {
+	resetRegistriesForTests()
+	t.Cleanup(resetRegistriesForTests)
+
+	rt, err := NewSimpleRuntime(Spec{
+		CPPName: DefaultCPPName,
+		CEPName: DefaultCEPName,
+	}, 1)
+	if err != nil {
+		t.Fatalf("new runtime: %v", err)
+	}
+
+	rt.Backup()
+	rt.Terminate()
+	if _, err := rt.Step(context.Background(), []float64{1}); !errors.Is(err, ErrSubstrateRuntimeTerminated) {
+		t.Fatalf("expected ErrSubstrateRuntimeTerminated before restore, got %v", err)
+	}
+
+	if err := rt.Restore(); err != nil {
+		t.Fatalf("restore: %v", err)
+	}
+
+	updated, err := rt.Step(context.Background(), []float64{1})
+	if err != nil {
+		t.Fatalf("step after restore: %v", err)
+	}
+	if len(updated) != 1 || math.Abs(updated[0]-1) > 1e-9 {
+		t.Fatalf("expected restore to revive terminated runtime, got=%v want=1", updated)
+	}
+}
+
+func TestSimpleRuntimeResetRevivesTerminatedRuntime(t *testing.T) {
+	resetRegistriesForTests()
+	t.Cleanup(resetRegistriesForTests)
+
+	rt, err := NewSimpleRuntime(Spec{
+		CPPName: DefaultCPPName,
+		CEPName: DefaultCEPName,
+	}, 1)
+	if err != nil {
+		t.Fatalf("new runtime: %v", err)
+	}
+
+	rt.Terminate()
+	if _, err := rt.Step(context.Background(), []float64{1}); !errors.Is(err, ErrSubstrateRuntimeTerminated) {
+		t.Fatalf("expected ErrSubstrateRuntimeTerminated before reset, got %v", err)
+	}
+
+	rt.Reset()
+
+	updated, err := rt.Step(context.Background(), []float64{1})
+	if err != nil {
+		t.Fatalf("step after reset: %v", err)
+	}
+	if len(updated) != 1 || math.Abs(updated[0]-1) > 1e-9 {
+		t.Fatalf("expected reset to revive terminated runtime, got=%v want=1", updated)
+	}
+}

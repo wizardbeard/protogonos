@@ -288,6 +288,7 @@ func (r *SimpleRuntime) Restore() error {
 	if err := r.rebuildProcessState(); err != nil {
 		return err
 	}
+	r.terminated = false
 	return nil
 }
 
@@ -298,7 +299,9 @@ func (r *SimpleRuntime) Reset() {
 	for i := range r.weightCEPParams {
 		r.weightCEPParams[i] = cloneCEPWeightParamRow(r.cepActorInits)
 	}
-	_ = r.rebuildProcessState()
+	if err := r.rebuildProcessState(); err == nil {
+		r.terminated = false
+	}
 }
 
 const runtimeCPPProcessID = "cpp"
