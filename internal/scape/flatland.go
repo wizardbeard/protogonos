@@ -590,7 +590,15 @@ func evaluateFlatlandWithTick(ctx context.Context, ticker TickAgent, cfg flatlan
 	if err != nil {
 		return 0, nil, err
 	}
-	trace["control_surface"] = ioBindings.controlSurface
+	controlSurface := ioBindings.controlSurface
+	if controlSurface == "" {
+		if width, ok := trace["last_control_width"].(int); ok && width >= 2 {
+			controlSurface = protoio.FlatlandTwoWheelsActuatorName
+		} else {
+			controlSurface = protoio.FlatlandMoveActuatorName
+		}
+	}
+	trace["control_surface"] = controlSurface
 	trace["sensor_surface"] = ioBindings.sensorSurface()
 	trace["sensor_width"] = ioBindings.sensorWidth()
 	trace["scanner_density_active"] = ioBindings.scannerDensityActive
@@ -2247,14 +2255,10 @@ func flatlandIO(agent TickAgent) (flatlandIOBindings, error) {
 	if !ok {
 		actuatorName = protoio.FlatlandMoveActuatorName
 		actuator, ok = typed.RegisteredActuator(actuatorName)
-		if !ok {
-			return flatlandIOBindings{}, fmt.Errorf(
-				"agent %s missing flatland actuator surface; expected %s or %s",
-				agent.ID(),
-				protoio.FlatlandTwoWheelsActuatorName,
-				protoio.FlatlandMoveActuatorName,
-			)
-		}
+	}
+	if !ok {
+		actuatorName = ""
+		actuator = nil
 	}
 	var moveOutput protoio.SnapshotActuator
 	if snapshot, ok := actuator.(protoio.SnapshotActuator); ok {
