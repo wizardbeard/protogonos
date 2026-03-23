@@ -153,7 +153,7 @@ func (r *SimpleRuntime) step(ctx context.Context, inputs []float64, faninSignals
 				command, ready, err := r.forwardCEPProcess(actor, relays, faninPIDs, processSignals)
 				if err == nil {
 					if !ready {
-						continue
+						break
 					}
 					if cepIdx < len(expectedInits) {
 						if envelopeErr := validateCEPCommandEnvelope(command, expectedInits[cepIdx]); envelopeErr != nil {

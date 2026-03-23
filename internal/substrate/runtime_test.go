@@ -945,6 +945,49 @@ func TestSimpleRuntimeStepValidatesCEPCommandTargetEnvelope(t *testing.T) {
 	}
 }
 
+func TestSimpleRuntimeStepStopsCEPChainWhenEarlierStageIsNotReady(t *testing.T) {
+	resetRegistriesForTests()
+	t.Cleanup(resetRegistriesForTests)
+
+	rt, err := NewSimpleRuntime(Spec{
+		CPPName:  DefaultCPPName,
+		CEPNames: []string{DefaultCEPName, SetWeightCEPName},
+	}, 1)
+	if err != nil {
+		t.Fatalf("new runtime: %v", err)
+	}
+	if len(rt.cepActorsByWeight) == 0 || len(rt.cepActorsByWeight[0]) < 2 {
+		t.Fatal("expected two-stage cep actor pool to be initialized")
+	}
+
+	_ = rt.cepActorsByWeight[0][0].TerminateFrom(runtimeExoSelfProcessID)
+	process, err := NewCEPProcessWithOwner("cep_pending_stage", runtimeExoSelfProcessID, DefaultCEPName, nil, []string{runtimeCPPProcessID, "n2"})
+	if err != nil {
+		t.Fatalf("new pending cep process: %v", err)
+	}
+	process.substratePID = "substrate_w1"
+	actor := NewCEPActor(process)
+	t.Cleanup(func() {
+		_ = actor.TerminateFrom(runtimeExoSelfProcessID)
+	})
+	rt.cepActorsByWeight[0][0] = actor
+	rt.cepActors[0] = actor
+	if len(rt.cepFaninRelays) == 0 || len(rt.cepFaninRelays[0]) == 0 || len(rt.cepFaninRelays[0][0]) == 0 {
+		t.Fatal("expected cep fan-in relay topology to be initialized")
+	}
+	relayID := rt.cepFaninRelays[0][0][0].ID()
+	relayFrom := rt.cepFaninRelays[0][0][0].FromPID()
+	rt.cepFaninRelays[0][0][0] = NewCEPFaninRelay(relayID, relayFrom, actor)
+
+	updated, err := rt.Step(context.Background(), []float64{1})
+	if err != nil {
+		t.Fatalf("step with pending first cep stage: %v", err)
+	}
+	if len(updated) != 1 || updated[0] != 0 {
+		t.Fatalf("expected stalled first cep stage to block later cep stages, got=%v", updated)
+	}
+}
+
 func TestSimpleRuntimeBuildsPerWeightCEPActorPool(t *testing.T) {
 	resetRegistriesForTests()
 	t.Cleanup(resetRegistriesForTests)
