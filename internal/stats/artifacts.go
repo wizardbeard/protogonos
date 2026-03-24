@@ -520,6 +520,18 @@ func ReadRunConfig(baseDir, runID string) (RunConfig, bool, error) {
 	return cfg, true, nil
 }
 
+func ReadRunConfigWithProfileHints(baseDir, runID string) (RunConfig, bool, error) {
+	cfg, ok, err := ReadRunConfig(baseDir, runID)
+	if err != nil || !ok {
+		return cfg, ok, err
+	}
+	cfg, err = FillRunConfigProfileHints(baseDir, runID, cfg)
+	if err != nil {
+		return RunConfig{}, false, err
+	}
+	return cfg, true, nil
+}
+
 func WriteRunConfig(baseDir, runID string, cfg RunConfig) error {
 	if strings.TrimSpace(runID) == "" {
 		return fmt.Errorf("run id is required")

@@ -108,6 +108,47 @@ func TestBuildBenchmarkEvaluationStatsNoGoalUsesFullSeries(t *testing.T) {
 	}
 }
 
+func TestBuildBenchmarkEvaluationStatsRecoversLegacyMorphologyHints(t *testing.T) {
+	base := t.TempDir()
+	runID := "exp-legacy-eval-run"
+	runDir := filepath.Join(base, runID)
+	if _, err := WriteRunArtifacts(base, RunArtifacts{
+		Config: RunConfig{
+			RunID:          runID,
+			Scape:          "fx",
+			PopulationSize: 7,
+			Generations:    3,
+			Seed:           1,
+		},
+		BestByGeneration: []float64{0.1, 0.2, 0.3},
+	}); err != nil {
+		t.Fatalf("write run artifacts: %v", err)
+	}
+	if err := WriteBenchmarkSeries(runDir, []float64{0.1, 0.2, 0.3}); err != nil {
+		t.Fatalf("write benchmark series: %v", err)
+	}
+	if err := WriteBenchmarkSummary(runDir, BenchmarkSummary{
+		RunID:      runID,
+		Scape:      "fx",
+		Morphology: "fx[market]",
+	}); err != nil {
+		t.Fatalf("write benchmark summary: %v", err)
+	}
+
+	exp := BenchmarkExperiment{
+		ID:        "exp-legacy-eval",
+		RunIDs:    []string{runID},
+		Summaries: []BenchmarkSummary{{RunID: runID, FinalBest: 0.3}},
+	}
+	stats, err := BuildBenchmarkEvaluationStats(base, exp, nil, nil)
+	if err != nil {
+		t.Fatalf("build evaluation stats: %v", err)
+	}
+	if len(stats.Runs) != 1 || stats.Runs[0].Morphology != "fx[market]" {
+		t.Fatalf("expected recovered legacy morphology label, got %+v", stats.Runs)
+	}
+}
+
 func TestWriteBenchmarkerReport(t *testing.T) {
 	base := t.TempDir()
 	report := BenchmarkerReport{

@@ -132,6 +132,47 @@ func TestBuildBenchmarkerGraphsSeparatesProfiledMorphologies(t *testing.T) {
 	}
 }
 
+func TestBuildBenchmarkerGraphsRecoversLegacyMorphologyHints(t *testing.T) {
+	base := t.TempDir()
+	exp := BenchmarkExperiment{
+		ID:     "exp-legacy-graphs",
+		RunIDs: []string{"exp-legacy-graphs-fx-market"},
+	}
+
+	runID := exp.RunIDs[0]
+	runDir := filepath.Join(base, runID)
+	if _, err := WriteRunArtifacts(base, RunArtifacts{
+		Config: RunConfig{
+			RunID:          runID,
+			Scape:          "fx",
+			PopulationSize: 6,
+			Generations:    2,
+			Seed:           1,
+		},
+		BestByGeneration: []float64{0.2, 0.45},
+	}); err != nil {
+		t.Fatalf("write run artifacts for %s: %v", runID, err)
+	}
+	if err := WriteBenchmarkSeries(runDir, []float64{0.2, 0.45}); err != nil {
+		t.Fatalf("write benchmark series for %s: %v", runID, err)
+	}
+	if err := WriteBenchmarkSummary(runDir, BenchmarkSummary{
+		RunID:      runID,
+		Scape:      "fx",
+		Morphology: "fx[market]",
+	}); err != nil {
+		t.Fatalf("write benchmark summary for %s: %v", runID, err)
+	}
+
+	graphs, err := BuildBenchmarkerGraphs(base, exp)
+	if err != nil {
+		t.Fatalf("build benchmarker graphs: %v", err)
+	}
+	if len(graphs) != 1 || graphs[0].Morphology != "fx[market]" {
+		t.Fatalf("expected recovered legacy morphology graph, got %+v", graphs)
+	}
+}
+
 func TestWriteBenchmarkerGraphs(t *testing.T) {
 	base := t.TempDir()
 	graphs := []BenchmarkerGraph{

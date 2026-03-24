@@ -45,7 +45,7 @@ func BuildBenchmarkerGraphs(baseDir string, exp BenchmarkExperiment) ([]Benchmar
 	}
 	runsByMorphology := make(map[string][]benchmarkRunGraphData)
 	for _, runID := range exp.RunIDs {
-		cfg, ok, err := ReadRunConfig(baseDir, runID)
+		cfg, ok, err := ReadRunConfigWithProfileHints(baseDir, runID)
 		if err != nil {
 			return nil, err
 		}
@@ -66,7 +66,10 @@ func BuildBenchmarkerGraphs(baseDir string, exp BenchmarkExperiment) ([]Benchmar
 		if !ok {
 			traceAcc = nil
 		}
-		morphology := BenchmarkMorphologyLabelFromConfig(cfg)
+		morphology, err := ResolveRunMorphologyLabel(baseDir, runID, cfg)
+		if err != nil {
+			return nil, err
+		}
 		runsByMorphology[morphology] = append(runsByMorphology[morphology], benchmarkRunGraphData{
 			populationSize: cfg.PopulationSize,
 			series:         series,

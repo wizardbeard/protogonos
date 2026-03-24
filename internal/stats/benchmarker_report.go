@@ -52,7 +52,7 @@ func BuildBenchmarkEvaluationStats(baseDir string, exp BenchmarkExperiment, fitn
 	}
 	successValues := make([]float64, 0, len(exp.RunIDs))
 	for i, runID := range exp.RunIDs {
-		cfg, ok, err := ReadRunConfig(baseDir, runID)
+		cfg, ok, err := ReadRunConfigWithProfileHints(baseDir, runID)
 		if err != nil {
 			return BenchmarkEvaluationStats{}, err
 		}
@@ -68,7 +68,10 @@ func BuildBenchmarkEvaluationStats(baseDir string, exp BenchmarkExperiment, fitn
 		}
 
 		run := evaluateBenchmarkSeries(runID, series, cfg.PopulationSize, fitnessGoal, evalLimit)
-		run.Morphology = BenchmarkMorphologyLabelFromConfig(cfg)
+		run.Morphology, err = ResolveRunMorphologyLabel(baseDir, runID, cfg)
+		if err != nil {
+			return BenchmarkEvaluationStats{}, err
+		}
 		if i < len(exp.Summaries) {
 			run.FinalBest = exp.Summaries[i].FinalBest
 		}
