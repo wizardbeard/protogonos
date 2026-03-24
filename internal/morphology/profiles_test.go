@@ -33,6 +33,22 @@ func TestConstructMorphologyFlatlandProfiles(t *testing.T) {
 	if got := classicMorph.Sensors(); len(got) != 2 || got[0] != protoio.FlatlandDistanceSensorName || got[1] != protoio.FlatlandEnergySensorName {
 		t.Fatalf("unexpected classic flatland sensors: %v", got)
 	}
+
+	defaultAliasMorph, err := ConstructMorphology("flatland", "flatland_v1")
+	if err != nil {
+		t.Fatalf("construct flatland_v1 alias morphology: %v", err)
+	}
+	if defaultAliasMorph.Name() != "flatland-v1" {
+		t.Fatalf("expected flatland_v1 alias to resolve to flatland-v1, got=%s", defaultAliasMorph.Name())
+	}
+
+	classicAliasMorph, err := ConstructMorphology("flatland", "flatland_classic_v1")
+	if err != nil {
+		t.Fatalf("construct flatland_classic_v1 alias morphology: %v", err)
+	}
+	if classicAliasMorph.Name() != "flatland-classic-v1" {
+		t.Fatalf("expected flatland_classic_v1 alias to resolve to flatland-classic-v1, got=%s", classicAliasMorph.Name())
+	}
 }
 
 func TestConstructMorphologyDTMProfiles(t *testing.T) {

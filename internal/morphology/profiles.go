@@ -133,11 +133,11 @@ func ConstructMorphology(scapeName, profile string) (Morphology, error) {
 	switch scapeName {
 	case "flatland":
 		switch profile {
-		case "", "default", "extended", "full":
+		case "", "default", "extended", "full", "flatland_v1":
 			return FlatlandMorphology{}, nil
 		case "scanner", "scan", "flatland_scanner", "prey":
 			return FlatlandScannerMorphology{}, nil
-		case "classic", "legacy", "flatland_v1":
+		case "classic", "legacy", "flatland_classic_v1":
 			return FlatlandClassicMorphology{}, nil
 		default:
 			return nil, fmt.Errorf("unsupported flatland morphology profile: %s", profile)
