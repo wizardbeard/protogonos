@@ -135,7 +135,7 @@ func ConstructMorphology(scapeName, profile string) (Morphology, error) {
 		switch profile {
 		case "", "default", "extended", "full", "flatland_v1":
 			return FlatlandMorphology{}, nil
-		case "scanner", "scan", "flatland_scanner", "prey":
+		case "scanner", "scan", "flatland_scanner", "flatland_scanner_v1", "prey":
 			return FlatlandScannerMorphology{}, nil
 		case "classic", "legacy", "flatland_classic_v1":
 			return FlatlandClassicMorphology{}, nil
@@ -146,9 +146,9 @@ func ConstructMorphology(scapeName, profile string) (Morphology, error) {
 		switch profile {
 		case "", "default", "all", "workflow":
 			return DTMMorphology{}, nil
-		case "range", "range_sense":
+		case "range", "range_sense", "dtm_range_sense_v1":
 			return DTMRangeSenseMorphology{}, nil
-		case "reward":
+		case "reward", "dtm_reward_v1":
 			return DTMRewardMorphology{}, nil
 		default:
 			return nil, fmt.Errorf("unsupported dtm morphology profile: %s", profile)
@@ -172,7 +172,7 @@ func ConstructMorphology(scapeName, profile string) (Morphology, error) {
 		switch profile {
 		case "", "default", "all", "workflow", "full":
 			return FXMorphology{}, nil
-		case "market", "legacy", "minimal":
+		case "market", "legacy", "minimal", "fx_market_v1":
 			return FXMarketMorphology{}, nil
 		default:
 			return nil, fmt.Errorf("unsupported fx morphology profile: %s", profile)
@@ -181,7 +181,7 @@ func ConstructMorphology(scapeName, profile string) (Morphology, error) {
 		switch profile {
 		case "", "default", "all", "workflow", "full":
 			return GTSAMorphology{}, nil
-		case "core", "minimal", "legacy":
+		case "core", "minimal", "legacy", "gtsa_core_v1":
 			return GTSACoreMorphology{}, nil
 		default:
 			return nil, fmt.Errorf("unsupported gtsa morphology profile: %s", profile)
@@ -190,7 +190,7 @@ func ConstructMorphology(scapeName, profile string) (Morphology, error) {
 		switch profile {
 		case "", "default", "all", "workflow", "full":
 			return EpitopesMorphology{}, nil
-		case "core", "minimal", "legacy":
+		case "core", "minimal", "legacy", "epitopes_core_v1":
 			return EpitopesCoreMorphology{}, nil
 		default:
 			return nil, fmt.Errorf("unsupported epitopes morphology profile: %s", profile)
@@ -199,7 +199,7 @@ func ConstructMorphology(scapeName, profile string) (Morphology, error) {
 		switch profile {
 		case "", "default", "all", "workflow", "full":
 			return LLVMPhaseOrderingMorphology{}, nil
-		case "core", "minimal", "legacy":
+		case "core", "minimal", "legacy", "llvm_phase_ordering_core_v1":
 			return LLVMPhaseOrderingCoreMorphology{}, nil
 		default:
 			return nil, fmt.Errorf("unsupported llvm-phase-ordering morphology profile: %s", profile)

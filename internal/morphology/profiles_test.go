@@ -124,6 +124,33 @@ func TestConstructMorphologyLLVMProfiles(t *testing.T) {
 	}
 }
 
+func TestConstructMorphologyAcceptsFullProfileAliases(t *testing.T) {
+	tests := []struct {
+		scape   string
+		profile string
+		want    string
+	}{
+		{scape: "flatland", profile: "flatland-scanner-v1", want: "flatland-scanner-v1"},
+		{scape: "flatland", profile: "flatland-classic-v1", want: "flatland-classic-v1"},
+		{scape: "dtm", profile: "dtm-range-sense-v1", want: "dtm-range-sense-v1"},
+		{scape: "dtm", profile: "dtm-reward-v1", want: "dtm-reward-v1"},
+		{scape: "fx", profile: "fx-market-v1", want: "fx-market-v1"},
+		{scape: "gtsa", profile: "gtsa-core-v1", want: "gtsa-core-v1"},
+		{scape: "epitopes", profile: "epitopes-core-v1", want: "epitopes-core-v1"},
+		{scape: "llvm-phase-ordering", profile: "llvm-phase-ordering-core-v1", want: "llvm-phase-ordering-core-v1"},
+	}
+
+	for _, tt := range tests {
+		m, err := ConstructMorphology(tt.scape, tt.profile)
+		if err != nil {
+			t.Fatalf("construct %s profile %s: %v", tt.scape, tt.profile, err)
+		}
+		if m.Name() != tt.want {
+			t.Fatalf("construct %s profile %s: want=%s got=%s", tt.scape, tt.profile, tt.want, m.Name())
+		}
+	}
+}
+
 func TestConstructMorphologyPole2Profiles(t *testing.T) {
 	m3, err := ConstructMorphology("pole2-balancing", "3")
 	if err != nil {
