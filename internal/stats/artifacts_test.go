@@ -294,6 +294,55 @@ func TestWriteRunConfig(t *testing.T) {
 	}
 }
 
+func TestFillRunConfigProfileHintsFromStoredMorphology(t *testing.T) {
+	baseDir := t.TempDir()
+	runID := "legacy-profiled-run"
+	cfg := RunConfig{RunID: runID, Scape: "epitopes"}
+	if err := WriteRunConfig(baseDir, runID, cfg); err != nil {
+		t.Fatalf("write config: %v", err)
+	}
+	runDir := filepath.Join(baseDir, runID)
+	if err := WriteBenchmarkSummary(runDir, BenchmarkSummary{
+		RunID:      runID,
+		Scape:      "epitopes",
+		Morphology: "epitopes[core]",
+	}); err != nil {
+		t.Fatalf("write benchmark summary: %v", err)
+	}
+
+	filled, err := FillRunConfigProfileHints(baseDir, runID, cfg)
+	if err != nil {
+		t.Fatalf("fill profile hints: %v", err)
+	}
+	if filled.EpitopesProfile != "core" {
+		t.Fatalf("expected epitopes core profile from morphology label, got %+v", filled)
+	}
+}
+
+func TestResolveRunMorphologyLabelFallsBackToRunIndexForLegacyConfig(t *testing.T) {
+	baseDir := t.TempDir()
+	runID := "legacy-fx-run"
+	cfg := RunConfig{RunID: runID, Scape: "fx"}
+	if err := WriteRunConfig(baseDir, runID, cfg); err != nil {
+		t.Fatalf("write config: %v", err)
+	}
+	if err := AppendRunIndex(baseDir, RunIndexEntry{
+		RunID:      runID,
+		Scape:      "fx",
+		Morphology: "fx[market]",
+	}); err != nil {
+		t.Fatalf("append run index: %v", err)
+	}
+
+	label, err := ResolveRunMorphologyLabel(baseDir, runID, cfg)
+	if err != nil {
+		t.Fatalf("resolve run morphology: %v", err)
+	}
+	if label != "fx[market]" {
+		t.Fatalf("expected fx[market] label, got %q", label)
+	}
+}
+
 func TestRunIndexEqualTimestampPrefersLaterAppend(t *testing.T) {
 	baseDir := t.TempDir()
 	ts := "2026-02-10T12:00:00Z"

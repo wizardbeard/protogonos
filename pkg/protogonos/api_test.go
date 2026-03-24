@@ -1503,6 +1503,50 @@ func TestClientRunsAndExportExposeProfiledMorphology(t *testing.T) {
 	}
 }
 
+func TestClientExportFallsBackToStoredMorphologyForLegacyConfig(t *testing.T) {
+	base := t.TempDir()
+	client, err := New(Options{
+		StoreKind:     "memory",
+		BenchmarksDir: filepath.Join(base, "benchmarks"),
+		ExportsDir:    filepath.Join(base, "exports"),
+	})
+	if err != nil {
+		t.Fatalf("new client: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = client.Close()
+	})
+
+	summary, err := client.Run(context.Background(), RunRequest{
+		RunID:       "fx-market-legacy-export",
+		Scape:       "fx",
+		FXProfile:   "market",
+		Population:  2,
+		Generations: 1,
+		Seed:        42,
+	})
+	if err != nil {
+		t.Fatalf("run: %v", err)
+	}
+
+	cfg, ok, err := stats.ReadRunConfig(filepath.Join(base, "benchmarks"), summary.RunID)
+	if err != nil || !ok {
+		t.Fatalf("read config: ok=%t err=%v", ok, err)
+	}
+	cfg.FXProfile = ""
+	if err := stats.WriteRunConfig(filepath.Join(base, "benchmarks"), summary.RunID, cfg); err != nil {
+		t.Fatalf("rewrite legacy config: %v", err)
+	}
+
+	exported, err := client.Export(context.Background(), ExportRequest{RunID: summary.RunID})
+	if err != nil {
+		t.Fatalf("export: %v", err)
+	}
+	if exported.Morphology != "fx[market]" {
+		t.Fatalf("expected fallback profiled morphology in export summary, got %+v", exported)
+	}
+}
+
 func TestClientRunStartPausedControls(t *testing.T) {
 	base := t.TempDir()
 	client, err := New(Options{

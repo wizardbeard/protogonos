@@ -788,6 +788,18 @@ func runRequestFromArtifactsConfig(cfg stats.RunConfig) RunRequest {
 	}
 }
 
+func readRunConfigWithProfileHints(baseDir, runID string) (stats.RunConfig, bool, error) {
+	cfg, ok, err := stats.ReadRunConfig(baseDir, runID)
+	if err != nil || !ok {
+		return cfg, ok, err
+	}
+	cfg, err = stats.FillRunConfigProfileHints(baseDir, runID, cfg)
+	if err != nil {
+		return stats.RunConfig{}, false, err
+	}
+	return cfg, true, nil
+}
+
 func normalizeEpitopesReplayMode(raw string) (string, error) {
 	switch strings.ToLower(strings.TrimSpace(raw)) {
 	case "", "benchmark":
@@ -1040,13 +1052,16 @@ func (c *Client) Export(_ context.Context, req ExportRequest) (ExportSummary, er
 		runID = entries[0].RunID
 		return c.exportRunByID(runID, entries[0].Morphology, req.OutDir)
 	}
-	cfg, ok, err := stats.ReadRunConfig(c.benchmarksDir, runID)
+	cfg, ok, err := readRunConfigWithProfileHints(c.benchmarksDir, runID)
 	if err != nil {
 		return ExportSummary{}, err
 	}
 	morphology := ""
 	if ok {
-		morphology = stats.BenchmarkMorphologyLabelFromConfig(cfg)
+		morphology, err = stats.ResolveRunMorphologyLabel(c.benchmarksDir, runID, cfg)
+		if err != nil {
+			return ExportSummary{}, err
+		}
 	}
 	return c.exportRunByID(runID, morphology, req.OutDir)
 }
@@ -1469,7 +1484,7 @@ func (c *Client) EpitopesReplay(ctx context.Context, req EpitopesReplayRequest) 
 		return EpitopesReplaySummary{}, err
 	}
 
-	runCfg, ok, err := stats.ReadRunConfig(c.benchmarksDir, runID)
+	runCfg, ok, err := readRunConfigWithProfileHints(c.benchmarksDir, runID)
 	if err != nil {
 		return EpitopesReplaySummary{}, err
 	}

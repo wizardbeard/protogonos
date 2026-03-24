@@ -226,6 +226,129 @@ func BenchmarkMorphologyLabelFromConfig(cfg RunConfig) string {
 	return BenchmarkMorphologyLabel(cfg.Scape, cfg.GTSAProfile, cfg.FXProfile, cfg.EpitopesProfile, cfg.LLVMProfile, cfg.FlatlandScannerProfile)
 }
 
+func ParseBenchmarkMorphologyLabel(label string) (scape, profile string, ok bool) {
+	label = strings.TrimSpace(label)
+	if label == "" {
+		return "", "", false
+	}
+	open := strings.IndexByte(label, '[')
+	close := strings.LastIndexByte(label, ']')
+	if open <= 0 || close != len(label)-1 || close <= open+1 {
+		return label, "", false
+	}
+	return strings.TrimSpace(label[:open]), strings.TrimSpace(label[open+1 : close]), true
+}
+
+func ApplyMorphologyLabelToRunConfig(cfg RunConfig, label string) RunConfig {
+	scape, profile, ok := ParseBenchmarkMorphologyLabel(label)
+	if cfg.Scape == "" && scape != "" {
+		cfg.Scape = scape
+	}
+	if !ok || profile == "" {
+		return cfg
+	}
+	if cfg.Scape != "" && !strings.EqualFold(strings.TrimSpace(cfg.Scape), scape) {
+		return cfg
+	}
+	switch strings.ToLower(strings.TrimSpace(scape)) {
+	case "gtsa":
+		if cfg.GTSAProfile == "" {
+			cfg.GTSAProfile = profile
+		}
+	case "fx":
+		if cfg.FXProfile == "" {
+			cfg.FXProfile = profile
+		}
+	case "epitopes":
+		if cfg.EpitopesProfile == "" {
+			cfg.EpitopesProfile = profile
+		}
+	case "llvm-phase-ordering":
+		if cfg.LLVMProfile == "" {
+			cfg.LLVMProfile = profile
+		}
+	case "flatland":
+		if cfg.FlatlandScannerProfile == "" {
+			cfg.FlatlandScannerProfile = profile
+		}
+	}
+	return cfg
+}
+
+func FillRunConfigProfileHints(baseDir, runID string, cfg RunConfig) (RunConfig, error) {
+	applyHints := func(scape, gtsaProfile, fxProfile, epitopesProfile, llvmProfile, flatlandScannerProfile, morphology string) {
+		if cfg.Scape == "" && strings.TrimSpace(scape) != "" {
+			cfg.Scape = strings.TrimSpace(scape)
+		}
+		if cfg.GTSAProfile == "" && strings.TrimSpace(gtsaProfile) != "" {
+			cfg.GTSAProfile = strings.TrimSpace(gtsaProfile)
+		}
+		if cfg.FXProfile == "" && strings.TrimSpace(fxProfile) != "" {
+			cfg.FXProfile = strings.TrimSpace(fxProfile)
+		}
+		if cfg.EpitopesProfile == "" && strings.TrimSpace(epitopesProfile) != "" {
+			cfg.EpitopesProfile = strings.TrimSpace(epitopesProfile)
+		}
+		if cfg.LLVMProfile == "" && strings.TrimSpace(llvmProfile) != "" {
+			cfg.LLVMProfile = strings.TrimSpace(llvmProfile)
+		}
+		if cfg.FlatlandScannerProfile == "" && strings.TrimSpace(flatlandScannerProfile) != "" {
+			cfg.FlatlandScannerProfile = strings.TrimSpace(flatlandScannerProfile)
+		}
+		cfg = ApplyMorphologyLabelToRunConfig(cfg, morphology)
+	}
+
+	summary, ok, err := ReadBenchmarkSummary(baseDir, runID)
+	if err != nil {
+		return RunConfig{}, err
+	}
+	if ok {
+		applyHints(summary.Scape, summary.GTSAProfile, summary.FXProfile, summary.EpitopesProfile, summary.LLVMProfile, summary.FlatlandScannerProfile, summary.Morphology)
+	}
+
+	index, err := ListRunIndex(baseDir)
+	if err != nil {
+		return RunConfig{}, err
+	}
+	for _, entry := range index {
+		if entry.RunID != runID {
+			continue
+		}
+		applyHints(entry.Scape, entry.GTSAProfile, entry.FXProfile, entry.EpitopesProfile, entry.LLVMProfile, entry.FlatlandScannerProfile, entry.Morphology)
+		break
+	}
+
+	return cfg, nil
+}
+
+func ResolveRunMorphologyLabel(baseDir, runID string, cfg RunConfig) (string, error) {
+	cfg, err := FillRunConfigProfileHints(baseDir, runID, cfg)
+	if err != nil {
+		return "", err
+	}
+	label := BenchmarkMorphologyLabelFromConfig(cfg)
+	if cfg.Scape != "" && label != "" && label != cfg.Scape {
+		return label, nil
+	}
+	summary, ok, err := ReadBenchmarkSummary(baseDir, runID)
+	if err != nil {
+		return "", err
+	}
+	if ok && strings.TrimSpace(summary.Morphology) != "" {
+		return strings.TrimSpace(summary.Morphology), nil
+	}
+	index, err := ListRunIndex(baseDir)
+	if err != nil {
+		return "", err
+	}
+	for _, entry := range index {
+		if entry.RunID == runID && strings.TrimSpace(entry.Morphology) != "" {
+			return strings.TrimSpace(entry.Morphology), nil
+		}
+	}
+	return label, nil
+}
+
 func WriteRunArtifacts(baseDir string, artifacts RunArtifacts) (string, error) {
 	if artifacts.Config.RunID == "" {
 		return "", fmt.Errorf("run id is required")
