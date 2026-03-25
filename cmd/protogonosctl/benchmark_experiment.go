@@ -145,10 +145,12 @@ func runBenchmarkExperimentShow(args []string) error {
 		return fmt.Errorf("benchmark experiment not found: %s", strings.TrimSpace(*id))
 	}
 	if *jsonOut {
+		exp = enrichBenchmarkExperimentMorphologies(exp)
 		enc := json.NewEncoder(os.Stdout)
 		enc.SetIndent("", "  ")
 		return enc.Encode(exp)
 	}
+	exp = enrichBenchmarkExperimentMorphologies(exp)
 	fmt.Printf("id=%s progress=%s run_index=%d total_runs=%d started=%s completed=%s interruptions=%d notes=%s\n",
 		exp.ID,
 		exp.ProgressFlag,
@@ -804,6 +806,7 @@ func runBenchmarkExperimentUnconsult(args []string) error {
 				items = append(items, runID)
 			}
 		case "summaries":
+			exp = enrichBenchmarkExperimentMorphologies(exp)
 			for _, summary := range exp.Summaries {
 				items = append(items, summary)
 			}
@@ -833,6 +836,7 @@ func runBenchmarkExperimentUnconsult(args []string) error {
 }
 
 func benchmarkExperimentMorphologies(exp stats.BenchmarkExperiment) []string {
+	exp = enrichBenchmarkExperimentMorphologies(exp)
 	values := make([]string, 0, len(exp.Summaries))
 	seen := make(map[string]struct{}, len(exp.Summaries))
 	for _, summary := range exp.Summaries {
@@ -851,6 +855,56 @@ func benchmarkExperimentMorphologies(exp stats.BenchmarkExperiment) []string {
 	}
 	sort.Strings(values)
 	return values
+}
+
+func enrichBenchmarkExperimentMorphologies(exp stats.BenchmarkExperiment) stats.BenchmarkExperiment {
+	if len(exp.Summaries) == 0 {
+		return exp
+	}
+	for i := range exp.Summaries {
+		summary := &exp.Summaries[i]
+		if strings.TrimSpace(summary.Morphology) != "" {
+			continue
+		}
+		runID := strings.TrimSpace(summary.RunID)
+		if runID == "" && i < len(exp.RunIDs) {
+			runID = strings.TrimSpace(exp.RunIDs[i])
+		}
+		if runID == "" {
+			summary.Morphology = strings.TrimSpace(summary.Scape)
+			continue
+		}
+		cfg, ok, err := stats.ReadRunConfigWithProfileHints(benchmarksDir, runID)
+		if err != nil || !ok {
+			summary.Morphology = strings.TrimSpace(summary.Scape)
+			continue
+		}
+		morphology, err := stats.ResolveRunMorphologyLabel(benchmarksDir, runID, cfg)
+		if err != nil {
+			summary.Morphology = strings.TrimSpace(summary.Scape)
+			continue
+		}
+		summary.Morphology = strings.TrimSpace(morphology)
+		if summary.Scape == "" {
+			summary.Scape = cfg.Scape
+		}
+		if summary.GTSAProfile == "" {
+			summary.GTSAProfile = cfg.GTSAProfile
+		}
+		if summary.FXProfile == "" {
+			summary.FXProfile = cfg.FXProfile
+		}
+		if summary.EpitopesProfile == "" {
+			summary.EpitopesProfile = cfg.EpitopesProfile
+		}
+		if summary.LLVMProfile == "" {
+			summary.LLVMProfile = cfg.LLVMProfile
+		}
+		if summary.FlatlandScannerProfile == "" {
+			summary.FlatlandScannerProfile = cfg.FlatlandScannerProfile
+		}
+	}
+	return exp
 }
 
 func benchmarkExperimentMorphologiesFromItems(items []any) []string {

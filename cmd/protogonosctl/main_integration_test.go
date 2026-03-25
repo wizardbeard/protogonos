@@ -553,6 +553,67 @@ func TestExportCommandRecoversLegacyMorphologyLabel(t *testing.T) {
 	}
 }
 
+func TestBenchmarkExperimentShowRecoversLegacySummaryMorphology(t *testing.T) {
+	origWD, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("getwd: %v", err)
+	}
+	workdir := t.TempDir()
+	if err := os.Chdir(workdir); err != nil {
+		t.Fatalf("chdir tempdir: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = os.Chdir(origWD)
+	})
+
+	runID := "legacy-exp-run"
+	runDir, err := stats.WriteRunArtifacts("benchmarks", stats.RunArtifacts{
+		Config: stats.RunConfig{
+			RunID:          runID,
+			Scape:          "fx",
+			PopulationSize: 2,
+			Generations:    1,
+			Seed:           45,
+		},
+		BestByGeneration: []float64{0.3},
+		FinalBestFitness: 0.3,
+	})
+	if err != nil {
+		t.Fatalf("write run artifacts: %v", err)
+	}
+	if err := stats.WriteBenchmarkSummary(runDir, stats.BenchmarkSummary{
+		RunID:      runID,
+		Scape:      "fx",
+		Morphology: "fx[market]",
+	}); err != nil {
+		t.Fatalf("write benchmark summary: %v", err)
+	}
+	if err := stats.AppendRunIndex("benchmarks", stats.RunIndexEntry{
+		RunID:      runID,
+		Scape:      "fx",
+		Morphology: "fx[market]",
+	}); err != nil {
+		t.Fatalf("append run index: %v", err)
+	}
+	if err := stats.WriteBenchmarkExperiment("benchmarks", stats.BenchmarkExperiment{
+		ID:        "legacy-exp",
+		RunIDs:    []string{runID},
+		Summaries: []stats.BenchmarkSummary{{RunID: runID, Scape: "fx", FinalBest: 0.3}},
+	}); err != nil {
+		t.Fatalf("write benchmark experiment: %v", err)
+	}
+
+	output, err := captureStdout(func() error {
+		return run(context.Background(), []string{"benchmark-experiment", "show", "--id", "legacy-exp"})
+	})
+	if err != nil {
+		t.Fatalf("benchmark-experiment show: %v", err)
+	}
+	if !strings.Contains(output, "morphology=fx[market]") {
+		t.Fatalf("expected recovered profiled morphology in benchmark-experiment show output, got %s", output)
+	}
+}
+
 func TestLineageCommandSQLiteReadsPersistedLineage(t *testing.T) {
 	origWD, err := os.Getwd()
 	if err != nil {
