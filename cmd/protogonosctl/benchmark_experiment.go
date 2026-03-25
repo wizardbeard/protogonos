@@ -563,7 +563,7 @@ func runBenchmarkExperimentChangeMorphology(args []string) error {
 	}
 
 	if targetRunID != "" {
-		cfg, ok, err := stats.ReadRunConfig(benchmarksDir, targetRunID)
+		cfg, ok, err := stats.ReadRunConfigWithProfileHints(benchmarksDir, targetRunID)
 		if err != nil {
 			return err
 		}

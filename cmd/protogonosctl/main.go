@@ -1636,10 +1636,13 @@ func runExport(_ context.Context, args []string) error {
 	}
 
 	morphology := ""
-	if cfg, ok, err := stats.ReadRunConfig(benchmarksDir, *runID); err != nil {
+	if cfg, ok, err := stats.ReadRunConfigWithProfileHints(benchmarksDir, *runID); err != nil {
 		return err
 	} else if ok {
-		morphology = stats.BenchmarkMorphologyLabelFromConfig(cfg)
+		morphology, err = stats.ResolveRunMorphologyLabel(benchmarksDir, *runID, cfg)
+		if err != nil {
+			return err
+		}
 	}
 	fmt.Printf("exported run_id=%s morphology=%s to=%s\n", *runID, morphology, filepath.Clean(exportedDir))
 	return nil

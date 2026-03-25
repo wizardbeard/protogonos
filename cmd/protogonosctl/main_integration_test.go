@@ -496,6 +496,63 @@ func TestExportLatestSQLiteCopiesArtifacts(t *testing.T) {
 	}
 }
 
+func TestExportCommandRecoversLegacyMorphologyLabel(t *testing.T) {
+	origWD, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("getwd: %v", err)
+	}
+	workdir := t.TempDir()
+	if err := os.Chdir(workdir); err != nil {
+		t.Fatalf("chdir tempdir: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = os.Chdir(origWD)
+	})
+
+	runID := "legacy-export-run"
+	runDir, err := stats.WriteRunArtifacts("benchmarks", stats.RunArtifacts{
+		Config: stats.RunConfig{
+			RunID:          runID,
+			Scape:          "fx",
+			PopulationSize: 2,
+			Generations:    1,
+			Seed:           44,
+		},
+		BestByGeneration: []float64{0.25},
+		FinalBestFitness: 0.25,
+	})
+	if err != nil {
+		t.Fatalf("write run artifacts: %v", err)
+	}
+	if err := stats.WriteBenchmarkSummary(runDir, stats.BenchmarkSummary{
+		RunID:      runID,
+		Scape:      "fx",
+		Morphology: "fx[market]",
+	}); err != nil {
+		t.Fatalf("write benchmark summary: %v", err)
+	}
+	if err := stats.AppendRunIndex("benchmarks", stats.RunIndexEntry{
+		RunID:      runID,
+		Scape:      "fx",
+		Morphology: "fx[market]",
+	}); err != nil {
+		t.Fatalf("append run index: %v", err)
+	}
+
+	output, err := captureStdout(func() error {
+		return run(context.Background(), []string{"export", "--run-id", runID})
+	})
+	if err != nil {
+		t.Fatalf("export command: %v", err)
+	}
+	if !strings.Contains(output, "morphology=fx[market]") {
+		t.Fatalf("expected recovered profiled morphology in export output, got %s", output)
+	}
+	if _, err := os.Stat(filepath.Join("exports", runID, "config.json")); err != nil {
+		t.Fatalf("expected exported config artifact: %v", err)
+	}
+}
+
 func TestLineageCommandSQLiteReadsPersistedLineage(t *testing.T) {
 	origWD, err := os.Getwd()
 	if err != nil {
