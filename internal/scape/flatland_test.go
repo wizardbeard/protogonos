@@ -178,6 +178,55 @@ func TestFlatlandScapePublicUpdateAndListAgents(t *testing.T) {
 	}
 }
 
+func TestFlatlandScapePublicUpdateRevivesTerminatedAgent(t *testing.T) {
+	scape := FlatlandScape{}
+	if err := scape.Start(context.Background()); err != nil {
+		t.Fatalf("start: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = scape.Stop(context.Background())
+	})
+
+	if err := scape.EnterPublicAgent(FlatlandPublicAgent{ID: "seed"}); err != nil {
+		t.Fatalf("enter seed: %v", err)
+	}
+
+	flatlandPublicWorld.mu.Lock()
+	state := flatlandPublicWorld.agents["seed"]
+	if state == nil {
+		flatlandPublicWorld.mu.Unlock()
+		t.Fatal("expected public agent state")
+	}
+	state.terminated = true
+	oldEpisode := state.episode
+	flatlandPublicWorld.mu.Unlock()
+
+	if err := scape.UpdatePublicAgents([]FlatlandPublicAgent{{ID: "seed"}}); err != nil {
+		t.Fatalf("update public agents: %v", err)
+	}
+
+	flatlandPublicWorld.mu.RLock()
+	updated := flatlandPublicWorld.agents["seed"]
+	flatlandPublicWorld.mu.RUnlock()
+	if updated == nil {
+		t.Fatal("expected updated public agent state")
+	}
+	if updated.terminated {
+		t.Fatalf("expected update to revive terminated agent, state=%+v", updated)
+	}
+	if updated.episode == oldEpisode {
+		t.Fatal("expected update to rebuild episode for terminated agent")
+	}
+
+	trace, err := scape.TickPublic(context.Background())
+	if err != nil {
+		t.Fatalf("tick after revive: %v", err)
+	}
+	if terminated, _ := trace["terminated_agents"].(int); terminated != 0 {
+		t.Fatalf("expected no terminated agents after revive, trace=%+v", trace)
+	}
+}
+
 func TestFlatlandScapeRunPublicTicksUntilCancel(t *testing.T) {
 	scape := FlatlandScape{}
 	if err := scape.Start(context.Background()); err != nil {

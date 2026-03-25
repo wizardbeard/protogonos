@@ -188,17 +188,21 @@ func (FlatlandScape) UpdatePublicAgents(agents []FlatlandPublicAgent) error {
 			if mode == "" {
 				mode = flatlandPublicWorld.config.mode
 			}
+			modeCfg, err := flatlandConfigForMode(mode)
+			if err != nil {
+				return err
+			}
 			if strings.TrimSpace(agent.Mode) != "" {
-				modeCfg, err := flatlandConfigForMode(agent.Mode)
+				modeCfg, err = flatlandConfigForMode(agent.Mode)
 				if err != nil {
 					return err
 				}
 				mode = modeCfg.mode
-				if mode != existing.mode {
-					existing.mode = mode
-					existing.episode = newFlatlandEpisodeForAgent(modeCfg, agentID)
-					existing.terminated = false
-				}
+			}
+			if mode != existing.mode || existing.terminated {
+				existing.mode = mode
+				existing.episode = newFlatlandEpisodeForAgent(modeCfg, agentID)
+				existing.terminated = false
 			}
 			if agent.Decide != nil || existing.decide == nil {
 				existing.decide = agent.Decide
