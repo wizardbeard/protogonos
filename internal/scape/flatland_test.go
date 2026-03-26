@@ -227,6 +227,42 @@ func TestFlatlandScapePublicUpdateRevivesTerminatedAgent(t *testing.T) {
 	}
 }
 
+func TestFlatlandScapePublicUpdateCanClearCustomDecider(t *testing.T) {
+	scape := FlatlandScape{}
+	if err := scape.Start(context.Background()); err != nil {
+		t.Fatalf("start: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = scape.Stop(context.Background())
+	})
+
+	custom := func(_ []float64) []float64 { return []float64{1} }
+	if err := scape.EnterPublicAgent(FlatlandPublicAgent{ID: "seed", Decide: custom}); err != nil {
+		t.Fatalf("enter seed: %v", err)
+	}
+
+	flatlandPublicWorld.mu.RLock()
+	initial := flatlandPublicWorld.agents["seed"]
+	flatlandPublicWorld.mu.RUnlock()
+	if initial == nil || initial.decide == nil {
+		t.Fatalf("expected initial custom decider, state=%+v", initial)
+	}
+
+	if err := scape.UpdatePublicAgents([]FlatlandPublicAgent{{ID: "seed"}}); err != nil {
+		t.Fatalf("update public agents: %v", err)
+	}
+
+	flatlandPublicWorld.mu.RLock()
+	updated := flatlandPublicWorld.agents["seed"]
+	flatlandPublicWorld.mu.RUnlock()
+	if updated == nil {
+		t.Fatal("expected updated public agent state")
+	}
+	if updated.decide != nil {
+		t.Fatalf("expected nil update decider to restore default policy, state=%+v", updated)
+	}
+}
+
 func TestFlatlandScapeRunPublicTicksUntilCancel(t *testing.T) {
 	scape := FlatlandScape{}
 	if err := scape.Start(context.Background()); err != nil {

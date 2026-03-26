@@ -204,9 +204,7 @@ func (FlatlandScape) UpdatePublicAgents(agents []FlatlandPublicAgent) error {
 				existing.episode = newFlatlandEpisodeForAgent(modeCfg, agentID)
 				existing.terminated = false
 			}
-			if agent.Decide != nil || existing.decide == nil {
-				existing.decide = agent.Decide
-			}
+			existing.decide = agent.Decide
 			next[agentID] = existing
 			continue
 		}
