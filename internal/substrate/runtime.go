@@ -121,11 +121,17 @@ func (r *SimpleRuntime) step(ctx context.Context, inputs []float64, faninSignals
 	if err != nil {
 		return nil, fmt.Errorf("cpp %s compute: %w", r.cpp.Name(), err)
 	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	controlSignals, err := r.computeControlSignals(ctx, inputs, delta, faninSignals)
 	if err != nil {
 		return nil, err
 	}
 	for i := range r.weights {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
 		actors := r.cepActors
 		if i < len(r.cepActorsByWeight) && len(r.cepActorsByWeight[i]) > 0 {
 			actors = r.cepActorsByWeight[i]
@@ -133,6 +139,9 @@ func (r *SimpleRuntime) step(ctx context.Context, inputs []float64, faninSignals
 		expectedInits := scopeCEPActorInitsForWeight(r.cepActorInits, i)
 		next := r.weights[i]
 		for cepIdx, cep := range r.ceps {
+			if err := ctx.Err(); err != nil {
+				return nil, err
+			}
 			if cepIdx < len(actors) {
 				actor := actors[cepIdx]
 				if actor == nil {

@@ -33,6 +33,19 @@ func (c vectorRuntimeCPP) ComputeVector(_ context.Context, _ []float64, _ map[st
 	return append([]float64(nil), c.signals...), nil
 }
 
+type cancelingRuntimeCPP struct{}
+
+var cancelingRuntimeCPPHook context.CancelFunc
+
+func (c cancelingRuntimeCPP) Name() string { return "canceling_runtime_cpp" }
+
+func (c cancelingRuntimeCPP) Compute(_ context.Context, _ []float64, _ map[string]float64) (float64, error) {
+	if cancelingRuntimeCPPHook != nil {
+		cancelingRuntimeCPPHook()
+	}
+	return 1, nil
+}
+
 func TestSimpleRuntimeStep(t *testing.T) {
 	resetRegistriesForTests()
 	t.Cleanup(resetRegistriesForTests)
@@ -68,6 +81,38 @@ func TestSimpleRuntimeStep(t *testing.T) {
 		if v != 1 {
 			t.Fatalf("unexpected weight[%d]=%f", i, v)
 		}
+	}
+}
+
+func TestSimpleRuntimeStepStopsOnContextCancellationAfterCPPCompute(t *testing.T) {
+	resetRegistriesForTests()
+	t.Cleanup(resetRegistriesForTests)
+	cancelingRuntimeCPPHook = nil
+	t.Cleanup(func() { cancelingRuntimeCPPHook = nil })
+
+	if err := RegisterCPP("canceling_runtime_cpp", func() CPP {
+		return cancelingRuntimeCPP{}
+	}); err != nil {
+		t.Fatalf("register canceling cpp: %v", err)
+	}
+
+	rt, err := NewSimpleRuntime(Spec{
+		CPPName: "canceling_runtime_cpp",
+		CEPName: DefaultCEPName,
+	}, 2)
+	if err != nil {
+		t.Fatalf("new runtime: %v", err)
+	}
+
+	ctx, cancelFn := context.WithCancel(context.Background())
+	cancelingRuntimeCPPHook = cancelFn
+	defer cancelFn()
+
+	if _, err := rt.Step(ctx, []float64{1, 3}); !errors.Is(err, context.Canceled) {
+		t.Fatalf("expected context cancellation after cpp compute, got %v", err)
+	}
+	if weights := rt.Weights(); len(weights) != 2 || weights[0] != 0 || weights[1] != 0 {
+		t.Fatalf("expected canceled step to leave weights unchanged, got=%v", weights)
 	}
 }
 
