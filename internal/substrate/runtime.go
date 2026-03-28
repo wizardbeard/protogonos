@@ -176,6 +176,9 @@ func (r *SimpleRuntime) step(ctx context.Context, inputs []float64, faninSignals
 					if applyErr != nil {
 						return nil, fmt.Errorf("cep %s apply mailbox commands: %w", cep.Name(), applyErr)
 					}
+					if err := ctx.Err(); err != nil {
+						return nil, err
+					}
 					next = w
 					continue
 				}
@@ -190,7 +193,13 @@ func (r *SimpleRuntime) step(ctx context.Context, inputs []float64, faninSignals
 			if applyErr != nil {
 				return nil, fmt.Errorf("cep %s apply: %w", cep.Name(), applyErr)
 			}
+			if err := ctx.Err(); err != nil {
+				return nil, err
+			}
 			next = w
+		}
+		if err := ctx.Err(); err != nil {
+			return nil, err
 		}
 		r.weights[i] = next
 	}

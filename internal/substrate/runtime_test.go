@@ -46,6 +46,19 @@ func (c cancelingRuntimeCPP) Compute(_ context.Context, _ []float64, _ map[strin
 	return 1, nil
 }
 
+type cancelingRuntimeCEP struct{}
+
+var cancelingRuntimeCEPHook context.CancelFunc
+
+func (cancelingRuntimeCEP) Name() string { return "canceling_runtime_cep" }
+
+func (cancelingRuntimeCEP) Apply(_ context.Context, current float64, _ float64, _ map[string]float64) (float64, error) {
+	if cancelingRuntimeCEPHook != nil {
+		cancelingRuntimeCEPHook()
+	}
+	return current + 0.25, nil
+}
+
 func TestSimpleRuntimeStep(t *testing.T) {
 	resetRegistriesForTests()
 	t.Cleanup(resetRegistriesForTests)
@@ -110,6 +123,38 @@ func TestSimpleRuntimeStepStopsOnContextCancellationAfterCPPCompute(t *testing.T
 
 	if _, err := rt.Step(ctx, []float64{1, 3}); !errors.Is(err, context.Canceled) {
 		t.Fatalf("expected context cancellation after cpp compute, got %v", err)
+	}
+	if weights := rt.Weights(); len(weights) != 2 || weights[0] != 0 || weights[1] != 0 {
+		t.Fatalf("expected canceled step to leave weights unchanged, got=%v", weights)
+	}
+}
+
+func TestSimpleRuntimeStepStopsOnContextCancellationAfterCEPApply(t *testing.T) {
+	resetRegistriesForTests()
+	t.Cleanup(resetRegistriesForTests)
+	cancelingRuntimeCEPHook = nil
+	t.Cleanup(func() { cancelingRuntimeCEPHook = nil })
+
+	if err := RegisterCEP("canceling_runtime_cep", func() CEP {
+		return cancelingRuntimeCEP{}
+	}); err != nil {
+		t.Fatalf("register canceling cep: %v", err)
+	}
+
+	rt, err := NewSimpleRuntime(Spec{
+		CPPName: DefaultCPPName,
+		CEPName: "canceling_runtime_cep",
+	}, 2)
+	if err != nil {
+		t.Fatalf("new runtime: %v", err)
+	}
+
+	ctx, cancelFn := context.WithCancel(context.Background())
+	cancelingRuntimeCEPHook = cancelFn
+	defer cancelFn()
+
+	if _, err := rt.Step(ctx, []float64{1, 3}); !errors.Is(err, context.Canceled) {
+		t.Fatalf("expected context cancellation after cep apply, got %v", err)
 	}
 	if weights := rt.Weights(); len(weights) != 2 || weights[0] != 0 || weights[1] != 0 {
 		t.Fatalf("expected canceled step to leave weights unchanged, got=%v", weights)
