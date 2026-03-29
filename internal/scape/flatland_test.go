@@ -312,6 +312,9 @@ func TestFlatlandScapePublicStopReasons(t *testing.T) {
 	if err := scape.Start(context.Background()); err != nil {
 		t.Fatalf("start after shutdown: %v", err)
 	}
+	if reason := scape.LastPublicStopReason(); reason != "" {
+		t.Fatalf("expected start to clear prior stop reason, got=%q", reason)
+	}
 	if err := scape.Stop(context.Background()); err != nil {
 		t.Fatalf("stop: %v", err)
 	}

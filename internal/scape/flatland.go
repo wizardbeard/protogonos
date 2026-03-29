@@ -62,6 +62,7 @@ func (FlatlandScape) Start(_ context.Context) error {
 	flatlandPublicWorld.config = cfg
 	flatlandPublicWorld.tick = 0
 	flatlandPublicWorld.agents = make(map[string]*flatlandPublicAgentState)
+	flatlandPublicWorld.lastStopReason = ""
 	return nil
 }
 
