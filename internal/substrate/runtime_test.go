@@ -1632,6 +1632,95 @@ func TestAwaitSubstrateMailboxSyncHonorsContextCancellation(t *testing.T) {
 	}
 }
 
+func TestForwardCEPProcessHonorsCanceledContextBeforePosting(t *testing.T) {
+	actors, err := buildCEPActors([]cepActorInit{{
+		id:           "cep_ctx_cancel",
+		substratePID: "substrate_ctx_cancel",
+		cepName:      DefaultCEPName,
+		faninPIDs:    []string{"n1"},
+	}})
+	if err != nil {
+		t.Fatalf("build cep actors: %v", err)
+	}
+	if len(actors) != 1 || actors[0] == nil {
+		t.Fatalf("expected one actor, got=%v", actors)
+	}
+	actor := actors[0]
+	t.Cleanup(func() {
+		_ = actor.TerminateFrom(runtimeExoSelfProcessID)
+	})
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	rt := &SimpleRuntime{}
+	if _, ready, err := rt.forwardCEPProcess(ctx, actor, nil, []string{"n1"}, []float64{1}); !errors.Is(err, context.Canceled) || ready {
+		t.Fatalf("expected canceled forward before posting, ready=%t err=%v", ready, err)
+	}
+	if _, err := actor.NextCommand(); !errors.Is(err, ErrCEPActorNoCommandReady) {
+		t.Fatalf("expected no queued command after canceled forward, got %v", err)
+	}
+}
+
+func TestRouteCEPCommandHonorsCanceledContextBeforePosting(t *testing.T) {
+	resetRegistriesForTests()
+	t.Cleanup(resetRegistriesForTests)
+
+	rt, err := NewSimpleRuntime(Spec{
+		CPPName: DefaultCPPName,
+		CEPName: DefaultCEPName,
+	}, 1)
+	if err != nil {
+		t.Fatalf("new runtime: %v", err)
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	command := CEPCommand{
+		FromPID: "cep_1_w1",
+		ToPID:   "substrate_w1",
+		Command: SetIterativeCEPName,
+		Signal:  []float64{0.5},
+	}
+	if err := rt.routeCEPCommand(ctx, 0, 0, command); !errors.Is(err, context.Canceled) {
+		t.Fatalf("expected canceled route before posting, got %v", err)
+	}
+	if commands := rt.substrateMailboxes[0].Drain(); len(commands) != 0 {
+		t.Fatalf("expected no queued mailbox commands after canceled route, got=%v", commands)
+	}
+}
+
+func TestApplySubstrateMailboxHonorsCanceledContextBeforeSync(t *testing.T) {
+	resetRegistriesForTests()
+	t.Cleanup(resetRegistriesForTests)
+
+	rt, err := NewSimpleRuntime(Spec{
+		CPPName: DefaultCPPName,
+		CEPName: DefaultCEPName,
+	}, 1)
+	if err != nil {
+		t.Fatalf("new runtime: %v", err)
+	}
+	expectedInits := scopeCEPActorInitsForWeight(rt.cepActorInits, 0)
+	if err := rt.substrateMailboxes[0].Post(CEPCommand{
+		FromPID: expectedInits[0].id,
+		ToPID:   expectedInits[0].substratePID,
+		Command: SetIterativeCEPName,
+		Signal:  []float64{0.25},
+	}); err != nil {
+		t.Fatalf("post command: %v", err)
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if _, err := rt.applySubstrateMailbox(ctx, 0, 0, expectedInits, 0); !errors.Is(err, context.Canceled) {
+		t.Fatalf("expected canceled mailbox apply before sync, got %v", err)
+	}
+	if commands := rt.substrateMailboxes[0].Drain(); len(commands) != 1 {
+		t.Fatalf("expected queued mailbox command to remain after canceled apply, got=%v", commands)
+	}
+}
+
 func TestSimpleRuntimeBackupRestoreReset(t *testing.T) {
 	resetRegistriesForTests()
 	t.Cleanup(resetRegistriesForTests)

@@ -420,6 +420,9 @@ func (r *SimpleRuntime) forwardCEPProcess(ctx context.Context, actor *CEPActor, 
 	if len(signals) != len(faninPIDs) {
 		return CEPCommand{}, false, fmt.Errorf("%w: cep fan-in signal mismatch expected=%d got=%d", ErrInvalidCEPOutputWidth, len(faninPIDs), len(signals))
 	}
+	if err := ctx.Err(); err != nil {
+		return CEPCommand{}, false, err
+	}
 	if actor == nil {
 		return CEPCommand{}, false, ErrMissingCEPActor
 	}
@@ -469,8 +472,14 @@ func (r *SimpleRuntime) forwardCEPProcess(ctx context.Context, actor *CEPActor, 
 	if err := awaitCEPActorSync(ctx, actor, syncID); err != nil {
 		return CEPCommand{}, false, err
 	}
+	if err := ctx.Err(); err != nil {
+		return CEPCommand{}, false, err
+	}
 
 	for {
+		if err := ctx.Err(); err != nil {
+			return CEPCommand{}, false, err
+		}
 		nextErr := actor.NextError()
 		if errors.Is(nextErr, ErrCEPActorNoError) {
 			break
@@ -480,6 +489,9 @@ func (r *SimpleRuntime) forwardCEPProcess(ctx context.Context, actor *CEPActor, 
 		}
 	}
 
+	if err := ctx.Err(); err != nil {
+		return CEPCommand{}, false, err
+	}
 	nextCommand, err := actor.NextCommand()
 	if err == nil {
 		command = nextCommand
@@ -1530,6 +1542,9 @@ func buildCEPCommandRelayPool(inits []cepActorInit, mailboxes []*substrateComman
 }
 
 func (r *SimpleRuntime) routeCEPCommand(ctx context.Context, weightIdx int, cepIdx int, command CEPCommand) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	if weightIdx < 0 || weightIdx >= len(r.cepCommandRelays) {
 		return ErrMissingCEPCommandRelay
 	}
@@ -1551,7 +1566,13 @@ func (r *SimpleRuntime) routeCEPCommand(ctx context.Context, weightIdx int, cepI
 	if err := awaitCEPCommandRelaySync(ctx, relay, syncID); err != nil {
 		return err
 	}
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	for {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
 		nextErr := relay.NextError()
 		if errors.Is(nextErr, ErrCEPCommandRelayNoError) {
 			return nil
@@ -1578,6 +1599,9 @@ func (r *SimpleRuntime) postSubstrateCommand(weightIdx int, command CEPCommand) 
 }
 
 func (r *SimpleRuntime) applySubstrateMailbox(ctx context.Context, weightIdx int, cepIdx int, expectedInits []cepActorInit, current float64) (float64, error) {
+	if err := ctx.Err(); err != nil {
+		return 0, err
+	}
 	if weightIdx < 0 || weightIdx >= len(r.substrateMailboxes) {
 		return 0, ErrMissingSubstrateMailbox
 	}
@@ -1592,6 +1616,9 @@ func (r *SimpleRuntime) applySubstrateMailbox(ctx context.Context, weightIdx int
 	if err := awaitSubstrateMailboxSync(ctx, mailbox, syncID); err != nil {
 		return 0, err
 	}
+	if err := ctx.Err(); err != nil {
+		return 0, err
+	}
 	next := current
 	parameters := cloneFloatMap(r.params)
 	if weightIdx >= 0 && weightIdx < len(r.weightCEPParams) &&
@@ -1600,6 +1627,9 @@ func (r *SimpleRuntime) applySubstrateMailbox(ctx context.Context, weightIdx int
 		parameters = cloneFloatMap(r.weightCEPParams[weightIdx][cepIdx])
 	}
 	for _, command := range mailbox.Drain() {
+		if err := ctx.Err(); err != nil {
+			return 0, err
+		}
 		if cepIdx >= 0 && cepIdx < len(expectedInits) {
 			if envelopeErr := validateCEPCommandEnvelope(command, expectedInits[cepIdx]); envelopeErr != nil {
 				return 0, envelopeErr
