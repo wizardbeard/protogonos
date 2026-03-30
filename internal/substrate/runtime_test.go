@@ -1573,6 +1573,65 @@ func TestCEPCommandRelayMailboxForwardAndTerminate(t *testing.T) {
 	mailbox.Terminate()
 }
 
+func TestAwaitCEPFaninRelaySyncHonorsContextCancellation(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	relay := &CEPFaninRelay{
+		syncbox:     make(chan uint64),
+		pendingSync: map[uint64]struct{}{},
+		stop:        make(chan struct{}),
+		done:        make(chan struct{}),
+	}
+	if err := awaitCEPFaninRelaySync(ctx, relay, 1); !errors.Is(err, context.Canceled) {
+		t.Fatalf("expected context cancellation from fan-in relay sync, got %v", err)
+	}
+}
+
+func TestAwaitCEPActorSyncHonorsContextCancellation(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	actor := &CEPActor{
+		syncbox:     make(chan uint64),
+		pendingSync: map[uint64]struct{}{},
+		done:        make(chan struct{}),
+	}
+	if err := awaitCEPActorSync(ctx, actor, 1); !errors.Is(err, context.Canceled) {
+		t.Fatalf("expected context cancellation from cep actor sync, got %v", err)
+	}
+}
+
+func TestAwaitCEPCommandRelaySyncHonorsContextCancellation(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	relay := &CEPCommandRelay{
+		syncbox:     make(chan uint64),
+		pendingSync: map[uint64]struct{}{},
+		stop:        make(chan struct{}),
+		done:        make(chan struct{}),
+	}
+	if err := awaitCEPCommandRelaySync(ctx, relay, 1); !errors.Is(err, context.Canceled) {
+		t.Fatalf("expected context cancellation from command relay sync, got %v", err)
+	}
+}
+
+func TestAwaitSubstrateMailboxSyncHonorsContextCancellation(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	mailbox := &substrateCommandMailbox{
+		syncbox:     make(chan uint64),
+		pendingSync: map[uint64]struct{}{},
+		stop:        make(chan struct{}),
+		done:        make(chan struct{}),
+	}
+	if err := awaitSubstrateMailboxSync(ctx, mailbox, 1); !errors.Is(err, context.Canceled) {
+		t.Fatalf("expected context cancellation from substrate mailbox sync, got %v", err)
+	}
+}
+
 func TestSimpleRuntimeBackupRestoreReset(t *testing.T) {
 	resetRegistriesForTests()
 	t.Cleanup(resetRegistriesForTests)

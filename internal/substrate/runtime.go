@@ -159,7 +159,7 @@ func (r *SimpleRuntime) step(ctx context.Context, inputs []float64, faninSignals
 				if signalErr != nil {
 					return nil, fmt.Errorf("cep %s process signals: %w", cep.Name(), signalErr)
 				}
-				command, ready, err := r.forwardCEPProcess(actor, relays, faninPIDs, processSignals)
+				command, ready, err := r.forwardCEPProcess(ctx, actor, relays, faninPIDs, processSignals)
 				if err == nil {
 					if !ready {
 						break
@@ -169,10 +169,10 @@ func (r *SimpleRuntime) step(ctx context.Context, inputs []float64, faninSignals
 							return nil, fmt.Errorf("cep %s command envelope: %w", cep.Name(), envelopeErr)
 						}
 					}
-					if routeErr := r.routeCEPCommand(i, cepIdx, command); routeErr != nil {
+					if routeErr := r.routeCEPCommand(ctx, i, cepIdx, command); routeErr != nil {
 						return nil, fmt.Errorf("cep %s command relay: %w", cep.Name(), routeErr)
 					}
-					w, applyErr := r.applySubstrateMailbox(i, cepIdx, expectedInits, next)
+					w, applyErr := r.applySubstrateMailbox(ctx, i, cepIdx, expectedInits, next)
 					if applyErr != nil {
 						return nil, fmt.Errorf("cep %s apply mailbox commands: %w", cep.Name(), applyErr)
 					}
@@ -416,7 +416,7 @@ func (r *SimpleRuntime) resolveProcessSignals(faninPIDs []string, controlSignals
 	return out, nil
 }
 
-func (r *SimpleRuntime) forwardCEPProcess(actor *CEPActor, relays []*CEPFaninRelay, faninPIDs []string, signals []float64) (CEPCommand, bool, error) {
+func (r *SimpleRuntime) forwardCEPProcess(ctx context.Context, actor *CEPActor, relays []*CEPFaninRelay, faninPIDs []string, signals []float64) (CEPCommand, bool, error) {
 	if len(signals) != len(faninPIDs) {
 		return CEPCommand{}, false, fmt.Errorf("%w: cep fan-in signal mismatch expected=%d got=%d", ErrInvalidCEPOutputWidth, len(faninPIDs), len(signals))
 	}
@@ -444,7 +444,7 @@ func (r *SimpleRuntime) forwardCEPProcess(actor *CEPActor, relays []*CEPFaninRel
 			if err != nil {
 				return CEPCommand{}, false, err
 			}
-			if err := relay.AwaitSync(syncID); err != nil {
+			if err := awaitCEPFaninRelaySync(ctx, relay, syncID); err != nil {
 				return CEPCommand{}, false, err
 			}
 		}
@@ -466,7 +466,7 @@ func (r *SimpleRuntime) forwardCEPProcess(actor *CEPActor, relays []*CEPFaninRel
 	if err != nil {
 		return CEPCommand{}, false, err
 	}
-	if err := actor.AwaitSync(syncID); err != nil {
+	if err := awaitCEPActorSync(ctx, actor, syncID); err != nil {
 		return CEPCommand{}, false, err
 	}
 
@@ -490,6 +490,100 @@ func (r *SimpleRuntime) forwardCEPProcess(actor *CEPActor, relays []*CEPFaninRel
 		return CEPCommand{}, false, nil
 	}
 	return CEPCommand{}, false, err
+}
+
+func awaitCEPFaninRelaySync(ctx context.Context, relay *CEPFaninRelay, syncID uint64) error {
+	if relay == nil {
+		return ErrMissingCEPFaninRelay
+	}
+	if relay.consumePendingSync(syncID) {
+		return nil
+	}
+	for {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case doneID := <-relay.syncbox:
+			if doneID == syncID {
+				return nil
+			}
+			relay.storePendingSync(doneID)
+		case <-relay.stop:
+			return ErrCEPFaninRelayTerminated
+		case <-relay.done:
+			return ErrCEPFaninRelayTerminated
+		}
+	}
+}
+
+func awaitCEPActorSync(ctx context.Context, actor *CEPActor, syncID uint64) error {
+	if actor == nil {
+		return ErrMissingCEPActor
+	}
+	if actor.consumePendingSync(syncID) {
+		return nil
+	}
+	for {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case doneID := <-actor.syncbox:
+			if doneID == syncID {
+				return nil
+			}
+			actor.storePendingSync(doneID)
+		case <-actor.done:
+			return ErrCEPActorTerminated
+		}
+	}
+}
+
+func awaitCEPCommandRelaySync(ctx context.Context, relay *CEPCommandRelay, syncID uint64) error {
+	if relay == nil {
+		return ErrMissingCEPCommandRelay
+	}
+	if relay.consumePendingSync(syncID) {
+		return nil
+	}
+	for {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case doneID := <-relay.syncbox:
+			if doneID == syncID {
+				return nil
+			}
+			relay.storePendingSync(doneID)
+		case <-relay.stop:
+			return ErrCEPCommandRelayTerminated
+		case <-relay.done:
+			return ErrCEPCommandRelayTerminated
+		}
+	}
+}
+
+func awaitSubstrateMailboxSync(ctx context.Context, mailbox *substrateCommandMailbox, syncID uint64) error {
+	if mailbox == nil {
+		return ErrMissingSubstrateMailbox
+	}
+	if mailbox.consumePendingSync(syncID) {
+		return nil
+	}
+	for {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case doneID := <-mailbox.syncbox:
+			if doneID == syncID {
+				return nil
+			}
+			mailbox.storePendingSync(doneID)
+		case <-mailbox.stop:
+			return ErrSubstrateMailboxTerminated
+		case <-mailbox.done:
+			return ErrSubstrateMailboxTerminated
+		}
+	}
 }
 
 type CEPFaninRelay struct {
@@ -1435,7 +1529,7 @@ func buildCEPCommandRelayPool(inits []cepActorInit, mailboxes []*substrateComman
 	return pool
 }
 
-func (r *SimpleRuntime) routeCEPCommand(weightIdx int, cepIdx int, command CEPCommand) error {
+func (r *SimpleRuntime) routeCEPCommand(ctx context.Context, weightIdx int, cepIdx int, command CEPCommand) error {
 	if weightIdx < 0 || weightIdx >= len(r.cepCommandRelays) {
 		return ErrMissingCEPCommandRelay
 	}
@@ -1454,7 +1548,7 @@ func (r *SimpleRuntime) routeCEPCommand(weightIdx int, cepIdx int, command CEPCo
 	if err != nil {
 		return err
 	}
-	if err := relay.AwaitSync(syncID); err != nil {
+	if err := awaitCEPCommandRelaySync(ctx, relay, syncID); err != nil {
 		return err
 	}
 	for {
@@ -1483,7 +1577,7 @@ func (r *SimpleRuntime) postSubstrateCommand(weightIdx int, command CEPCommand) 
 	return mailbox.Post(command)
 }
 
-func (r *SimpleRuntime) applySubstrateMailbox(weightIdx int, cepIdx int, expectedInits []cepActorInit, current float64) (float64, error) {
+func (r *SimpleRuntime) applySubstrateMailbox(ctx context.Context, weightIdx int, cepIdx int, expectedInits []cepActorInit, current float64) (float64, error) {
 	if weightIdx < 0 || weightIdx >= len(r.substrateMailboxes) {
 		return 0, ErrMissingSubstrateMailbox
 	}
@@ -1495,7 +1589,7 @@ func (r *SimpleRuntime) applySubstrateMailbox(weightIdx int, cepIdx int, expecte
 	if err != nil {
 		return 0, err
 	}
-	if err := mailbox.AwaitSync(syncID); err != nil {
+	if err := awaitSubstrateMailboxSync(ctx, mailbox, syncID); err != nil {
 		return 0, err
 	}
 	next := current
