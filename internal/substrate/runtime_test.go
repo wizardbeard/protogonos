@@ -1721,6 +1721,105 @@ func TestApplySubstrateMailboxHonorsCanceledContextBeforeSync(t *testing.T) {
 	}
 }
 
+type errAfterNContext struct {
+	context.Context
+	nilCount int
+	calls    int
+}
+
+func (c *errAfterNContext) Err() error {
+	c.calls++
+	if c.calls <= c.nilCount {
+		return nil
+	}
+	return context.Canceled
+}
+
+func TestForwardCEPProcessStopsPostingDirectSignalsAfterCancellation(t *testing.T) {
+	actor := &CEPActor{
+		inbox:       make(chan cepActorRequest, 4),
+		syncbox:     make(chan uint64, 1),
+		pendingSync: map[uint64]struct{}{},
+		done:        make(chan struct{}),
+	}
+	ctx := &errAfterNContext{
+		Context:  context.Background(),
+		nilCount: 2,
+	}
+
+	rt := &SimpleRuntime{}
+	if _, ready, err := rt.forwardCEPProcess(ctx, actor, nil, []string{"n1", "n2"}, []float64{1, 2}); !errors.Is(err, context.Canceled) || ready {
+		t.Fatalf("expected canceled forward during direct signal posting, ready=%t err=%v", ready, err)
+	}
+
+	if got := len(actor.inbox); got != 1 {
+		t.Fatalf("expected one posted direct signal before cancellation, got=%d", got)
+	}
+	req := <-actor.inbox
+	message, ok := req.message.(CEPForwardMessage)
+	if !ok {
+		t.Fatalf("expected cep forward message, got=%T", req.message)
+	}
+	if message.FromPID != "n1" || len(message.Input) != 1 || message.Input[0] != 1 {
+		t.Fatalf("unexpected forwarded message: %+v", message)
+	}
+	select {
+	case extra := <-actor.inbox:
+		t.Fatalf("expected cancellation to stop further actor posts, got=%+v", extra)
+	default:
+	}
+}
+
+func TestForwardCEPProcessStopsPostingRelaySignalsAfterCancellation(t *testing.T) {
+	relays := []*CEPFaninRelay{
+		{
+			actor:       &CEPActor{},
+			inbox:       make(chan cepFaninRelayRequest, 2),
+			syncbox:     make(chan uint64, 1),
+			pendingSync: map[uint64]struct{}{},
+			stop:        make(chan struct{}),
+			done:        make(chan struct{}),
+		},
+		{
+			actor:       &CEPActor{},
+			inbox:       make(chan cepFaninRelayRequest, 2),
+			syncbox:     make(chan uint64, 1),
+			pendingSync: map[uint64]struct{}{},
+			stop:        make(chan struct{}),
+			done:        make(chan struct{}),
+		},
+	}
+	actor := &CEPActor{
+		inbox:       make(chan cepActorRequest, 2),
+		syncbox:     make(chan uint64, 1),
+		pendingSync: map[uint64]struct{}{},
+		done:        make(chan struct{}),
+	}
+	ctx := &errAfterNContext{
+		Context:  context.Background(),
+		nilCount: 2,
+	}
+
+	rt := &SimpleRuntime{}
+	if _, ready, err := rt.forwardCEPProcess(ctx, actor, relays, []string{"n1", "n2"}, []float64{1, 2}); !errors.Is(err, context.Canceled) || ready {
+		t.Fatalf("expected canceled forward during relay signal posting, ready=%t err=%v", ready, err)
+	}
+
+	if got := len(relays[0].inbox); got != 1 {
+		t.Fatalf("expected first relay to receive one signal before cancellation, got=%d", got)
+	}
+	req := <-relays[0].inbox
+	if req.isSync || len(req.input) != 1 || req.input[0] != 1 {
+		t.Fatalf("unexpected first relay request: %+v", req)
+	}
+	if got := len(relays[1].inbox); got != 0 {
+		t.Fatalf("expected cancellation to stop later relay posts, got=%d", got)
+	}
+	if got := len(actor.inbox); got != 0 {
+		t.Fatalf("expected no direct actor posts when relay forwarding canceled early, got=%d", got)
+	}
+}
+
 func TestSimpleRuntimeBackupRestoreReset(t *testing.T) {
 	resetRegistriesForTests()
 	t.Cleanup(resetRegistriesForTests)

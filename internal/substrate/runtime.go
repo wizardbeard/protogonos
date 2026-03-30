@@ -433,6 +433,9 @@ func (r *SimpleRuntime) forwardCEPProcess(ctx context.Context, actor *CEPActor, 
 			return CEPCommand{}, false, fmt.Errorf("%w: fan-in relay mismatch expected=%d got=%d", ErrMissingCEPFaninRelay, len(faninPIDs), len(relays))
 		}
 		for i, signal := range signals {
+			if err := ctx.Err(); err != nil {
+				return CEPCommand{}, false, err
+			}
 			relay := relays[i]
 			if relay == nil {
 				return CEPCommand{}, false, fmt.Errorf("%w: nil fan-in relay at index=%d", ErrMissingCEPFaninRelay, i)
@@ -442,6 +445,9 @@ func (r *SimpleRuntime) forwardCEPProcess(ctx context.Context, actor *CEPActor, 
 			}
 		}
 		for i := range relays {
+			if err := ctx.Err(); err != nil {
+				return CEPCommand{}, false, err
+			}
 			relay := relays[i]
 			syncID, err := relay.PostSync()
 			if err != nil {
@@ -453,6 +459,9 @@ func (r *SimpleRuntime) forwardCEPProcess(ctx context.Context, actor *CEPActor, 
 		}
 	} else {
 		for i, signal := range signals {
+			if err := ctx.Err(); err != nil {
+				return CEPCommand{}, false, err
+			}
 			message := CEPForwardMessage{
 				FromPID: faninPIDs[i],
 				Input:   []float64{signal},
@@ -465,6 +474,9 @@ func (r *SimpleRuntime) forwardCEPProcess(ctx context.Context, actor *CEPActor, 
 
 	// Synchronize with the actor loop so posted fan-in messages are fully
 	// processed before draining command/error mailboxes.
+	if err := ctx.Err(); err != nil {
+		return CEPCommand{}, false, err
+	}
 	syncID, err := actor.PostSync()
 	if err != nil {
 		return CEPCommand{}, false, err
