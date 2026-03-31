@@ -1571,6 +1571,9 @@ func (r *SimpleRuntime) routeCEPCommand(ctx context.Context, weightIdx int, cepI
 	if err := relay.Post(command); err != nil {
 		return err
 	}
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	syncID, err := relay.PostSync()
 	if err != nil {
 		return err

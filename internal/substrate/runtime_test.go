@@ -1690,6 +1690,36 @@ func TestRouteCEPCommandHonorsCanceledContextBeforePosting(t *testing.T) {
 	}
 }
 
+func TestRouteCEPCommandHonorsCanceledContextAfterPosting(t *testing.T) {
+	resetRegistriesForTests()
+	t.Cleanup(resetRegistriesForTests)
+
+	rt, err := NewSimpleRuntime(Spec{
+		CPPName: DefaultCPPName,
+		CEPName: DefaultCEPName,
+	}, 1)
+	if err != nil {
+		t.Fatalf("new runtime: %v", err)
+	}
+
+	ctx := &errAfterNContext{
+		Context:  context.Background(),
+		nilCount: 1,
+	}
+	command := CEPCommand{
+		FromPID: "cep_1_w1",
+		ToPID:   "substrate_w1",
+		Command: SetIterativeCEPName,
+		Signal:  []float64{0.5},
+	}
+	if err := rt.routeCEPCommand(ctx, 0, 0, command); !errors.Is(err, context.Canceled) {
+		t.Fatalf("expected canceled route after posting, got %v", err)
+	}
+	if got := rt.cepCommandRelays[0][0].nextSyncID; got != 0 {
+		t.Fatalf("expected canceled route before posting relay sync, got nextSyncID=%d", got)
+	}
+}
+
 func TestApplySubstrateMailboxHonorsCanceledContextBeforeSync(t *testing.T) {
 	resetRegistriesForTests()
 	t.Cleanup(resetRegistriesForTests)
