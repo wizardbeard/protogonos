@@ -1413,6 +1413,22 @@ func (m *substrateCommandMailbox) Drain() []CEPCommand {
 	}
 }
 
+func (m *substrateCommandMailbox) Restore(commands []CEPCommand) error {
+	if m == nil {
+		return ErrMissingSubstrateMailbox
+	}
+	for _, command := range commands {
+		select {
+		case <-m.stop:
+			return ErrSubstrateMailboxTerminated
+		case <-m.done:
+			return ErrSubstrateMailboxTerminated
+		case m.outbox <- command:
+		}
+	}
+	return nil
+}
+
 func (m *substrateCommandMailbox) PostSync() (uint64, error) {
 	if m == nil {
 		return 0, ErrMissingSubstrateMailbox
@@ -1641,8 +1657,12 @@ func (r *SimpleRuntime) applySubstrateMailbox(ctx context.Context, weightIdx int
 		len(r.weightCEPParams[weightIdx][cepIdx]) > 0 {
 		parameters = cloneFloatMap(r.weightCEPParams[weightIdx][cepIdx])
 	}
-	for _, command := range mailbox.Drain() {
+	commands := mailbox.Drain()
+	for i, command := range commands {
 		if err := ctx.Err(); err != nil {
+			if restoreErr := mailbox.Restore(commands[i:]); restoreErr != nil {
+				return 0, restoreErr
+			}
 			return 0, err
 		}
 		if cepIdx >= 0 && cepIdx < len(expectedInits) {

@@ -1740,6 +1740,13 @@ func TestApplySubstrateMailboxHonorsCanceledContextBeforeSync(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("post command: %v", err)
 	}
+	syncID, err := rt.substrateMailboxes[0].PostSync()
+	if err != nil {
+		t.Fatalf("post sync: %v", err)
+	}
+	if err := awaitSubstrateMailboxSync(context.Background(), rt.substrateMailboxes[0], syncID); err != nil {
+		t.Fatalf("await sync: %v", err)
+	}
 
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
@@ -1748,6 +1755,53 @@ func TestApplySubstrateMailboxHonorsCanceledContextBeforeSync(t *testing.T) {
 	}
 	if commands := rt.substrateMailboxes[0].Drain(); len(commands) != 1 {
 		t.Fatalf("expected queued mailbox command to remain after canceled apply, got=%v", commands)
+	}
+}
+
+func TestApplySubstrateMailboxRestoresDrainedCommandsOnCancellation(t *testing.T) {
+	resetRegistriesForTests()
+	t.Cleanup(resetRegistriesForTests)
+
+	rt, err := NewSimpleRuntime(Spec{
+		CPPName: DefaultCPPName,
+		CEPName: DefaultCEPName,
+	}, 1)
+	if err != nil {
+		t.Fatalf("new runtime: %v", err)
+	}
+	expectedInits := scopeCEPActorInitsForWeight(rt.cepActorInits, 0)
+	commandA := CEPCommand{
+		FromPID: expectedInits[0].id,
+		ToPID:   expectedInits[0].substratePID,
+		Command: SetIterativeCEPName,
+		Signal:  []float64{0.25},
+	}
+	commandB := CEPCommand{
+		FromPID: expectedInits[0].id,
+		ToPID:   expectedInits[0].substratePID,
+		Command: SetIterativeCEPName,
+		Signal:  []float64{0.5},
+	}
+	if err := rt.substrateMailboxes[0].Post(commandA); err != nil {
+		t.Fatalf("post commandA: %v", err)
+	}
+	if err := rt.substrateMailboxes[0].Post(commandB); err != nil {
+		t.Fatalf("post commandB: %v", err)
+	}
+
+	ctx := &errAfterNContext{
+		Context:  context.Background(),
+		nilCount: 2,
+	}
+	if _, err := rt.applySubstrateMailbox(ctx, 0, 0, expectedInits, 0); !errors.Is(err, context.Canceled) {
+		t.Fatalf("expected canceled mailbox apply after drain, got %v", err)
+	}
+	commands := rt.substrateMailboxes[0].Drain()
+	if len(commands) != 2 {
+		t.Fatalf("expected drained commands restored after cancellation, got=%v", commands)
+	}
+	if commands[0].Signal[0] != 0.25 || commands[1].Signal[0] != 0.5 {
+		t.Fatalf("expected restored commands to keep order, got=%v", commands)
 	}
 }
 
