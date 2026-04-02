@@ -43,6 +43,14 @@ type SimpleRuntime struct {
 	terminated            bool
 }
 
+type runtimeProcessState struct {
+	cepActorsByWeight  [][]*CEPActor
+	cepActors          []*CEPActor
+	cepFaninRelays     [][][]*CEPFaninRelay
+	substrateMailboxes []*substrateCommandMailbox
+	cepCommandRelays   [][]*CEPCommandRelay
+}
+
 func NewSimpleRuntime(spec Spec, weightCount int) (*SimpleRuntime, error) {
 	if weightCount <= 0 {
 		return nil, errors.New("weight count must be > 0")
@@ -69,16 +77,9 @@ func NewSimpleRuntime(spec Spec, weightCount int) (*SimpleRuntime, error) {
 	if err != nil {
 		return nil, err
 	}
-	cepActorPool, err := buildCEPActorPool(cepActorInits, weightCount)
+	processState, err := buildRuntimeProcessState(cepActorInits, cepProcessFaninPIDs, weightCount)
 	if err != nil {
 		return nil, err
-	}
-	cepFaninRelays := buildCEPFaninRelayPool(cepActorPool, cepProcessFaninPIDs)
-	substrateMailboxes := buildSubstrateCommandMailboxPool(cepActorInits, weightCount)
-	cepCommandRelays := buildCEPCommandRelayPool(cepActorInits, substrateMailboxes)
-	var cepActors []*CEPActor
-	if len(cepActorPool) > 0 {
-		cepActors = cepActorPool[0]
 	}
 	weightCEPParams := make([][]map[string]float64, weightCount)
 	for i := range weightCEPParams {
@@ -87,12 +88,12 @@ func NewSimpleRuntime(spec Spec, weightCount int) (*SimpleRuntime, error) {
 	return &SimpleRuntime{
 		cpp:                 cpp,
 		ceps:                ceps,
-		cepActors:           cepActors,
-		cepActorsByWeight:   cepActorPool,
+		cepActors:           processState.cepActors,
+		cepActorsByWeight:   processState.cepActorsByWeight,
 		cepActorInits:       cloneCEPActorInits(cepActorInits),
-		cepFaninRelays:      cepFaninRelays,
-		cepCommandRelays:    cepCommandRelays,
-		substrateMailboxes:  substrateMailboxes,
+		cepFaninRelays:      processState.cepFaninRelays,
+		cepCommandRelays:    processState.cepCommandRelays,
+		substrateMailboxes:  processState.substrateMailboxes,
 		cepProcessFaninPIDs: cepProcessFaninPIDs,
 		cepFaninPIDs:        append([]string(nil), cepFaninPIDs...),
 		params:              params,
@@ -298,26 +299,26 @@ func (r *SimpleRuntime) Restore() error {
 	if len(r.backup) == 0 {
 		return ErrNoSubstrateBackup
 	}
-	if len(r.weights) != len(r.backup) {
-		r.weights = make([]float64, len(r.backup))
-	}
-	copy(r.weights, r.backup)
-	r.weightCEPParams = cloneCEPWeightParamSet(r.backupWeightCEPParams)
+	nextWeights := append([]float64(nil), r.backup...)
+	nextWeightCEPParams := cloneCEPWeightParamSet(r.backupWeightCEPParams)
 	if err := r.rebuildProcessState(); err != nil {
 		return err
 	}
+	r.weights = nextWeights
+	r.weightCEPParams = nextWeightCEPParams
 	r.terminated = false
 	return nil
 }
 
 func (r *SimpleRuntime) Reset() {
-	for i := range r.weights {
-		r.weights[i] = 0
-	}
-	for i := range r.weightCEPParams {
-		r.weightCEPParams[i] = cloneCEPWeightParamRow(r.cepActorInits)
+	nextWeights := make([]float64, len(r.weights))
+	nextWeightCEPParams := make([][]map[string]float64, len(r.weightCEPParams))
+	for i := range nextWeightCEPParams {
+		nextWeightCEPParams[i] = cloneCEPWeightParamRow(r.cepActorInits)
 	}
 	if err := r.rebuildProcessState(); err == nil {
+		r.weights = nextWeights
+		r.weightCEPParams = nextWeightCEPParams
 		r.terminated = false
 	}
 }
@@ -1257,22 +1258,39 @@ func cloneCEPWeightParamSet(in [][]map[string]float64) [][]map[string]float64 {
 	return out
 }
 
+func buildRuntimeProcessState(inits []cepActorInit, cepProcessFaninPIDs [][]string, weightCount int) (runtimeProcessState, error) {
+	cepActorPool, err := buildCEPActorPool(inits, weightCount)
+	if err != nil {
+		return runtimeProcessState{}, err
+	}
+	cepFaninRelays := buildCEPFaninRelayPool(cepActorPool, cepProcessFaninPIDs)
+	substrateMailboxes := buildSubstrateCommandMailboxPool(inits, weightCount)
+	cepCommandRelays := buildCEPCommandRelayPool(inits, substrateMailboxes)
+	var cepActors []*CEPActor
+	if len(cepActorPool) > 0 {
+		cepActors = cepActorPool[0]
+	}
+	return runtimeProcessState{
+		cepActorsByWeight:  cepActorPool,
+		cepActors:          cepActors,
+		cepFaninRelays:     cepFaninRelays,
+		substrateMailboxes: substrateMailboxes,
+		cepCommandRelays:   cepCommandRelays,
+	}, nil
+}
+
 func (r *SimpleRuntime) rebuildProcessState() error {
 	weightCount := len(r.weights)
-	r.terminateProcessState()
-
-	cepActorPool, err := buildCEPActorPool(r.cepActorInits, weightCount)
+	nextState, err := buildRuntimeProcessState(r.cepActorInits, r.cepProcessFaninPIDs, weightCount)
 	if err != nil {
 		return err
 	}
-	r.cepActorsByWeight = cepActorPool
-	r.cepActors = nil
-	if len(cepActorPool) > 0 {
-		r.cepActors = cepActorPool[0]
-	}
-	r.cepFaninRelays = buildCEPFaninRelayPool(cepActorPool, r.cepProcessFaninPIDs)
-	r.substrateMailboxes = buildSubstrateCommandMailboxPool(r.cepActorInits, weightCount)
-	r.cepCommandRelays = buildCEPCommandRelayPool(r.cepActorInits, r.substrateMailboxes)
+	r.terminateProcessState()
+	r.cepActorsByWeight = nextState.cepActorsByWeight
+	r.cepActors = nextState.cepActors
+	r.cepFaninRelays = nextState.cepFaninRelays
+	r.substrateMailboxes = nextState.substrateMailboxes
+	r.cepCommandRelays = nextState.cepCommandRelays
 	return nil
 }
 

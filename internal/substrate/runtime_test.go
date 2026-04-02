@@ -2007,6 +2007,95 @@ func TestSimpleRuntimeRestoreRequiresBackup(t *testing.T) {
 	}
 }
 
+func TestSimpleRuntimeRestorePreservesStateOnRebuildFailure(t *testing.T) {
+	resetRegistriesForTests()
+	t.Cleanup(resetRegistriesForTests)
+
+	rt, err := NewSimpleRuntime(Spec{
+		CPPName:      DefaultCPPName,
+		CEPName:      SetABCNCEPName,
+		CEPFaninPIDs: []string{"n1", "n2", "n3", "n4", "n5"},
+	}, 1)
+	if err != nil {
+		t.Fatalf("new runtime: %v", err)
+	}
+	if _, err := rt.StepWithFanin(context.Background(), []float64{0, 0, 0, 0, 0}, map[string]float64{
+		"n1": 1,
+		"n2": 0.2,
+		"n3": 0.5,
+		"n4": -0.1,
+		"n5": 0.8,
+	}); err != nil {
+		t.Fatalf("prime step: %v", err)
+	}
+	rt.Backup()
+	if _, err := rt.StepWithFanin(context.Background(), []float64{0, 0, 0, 0, 0}, map[string]float64{
+		"n1": 1,
+		"n2": 1.0,
+		"n3": 0.0,
+		"n4": 0.0,
+		"n5": 1.0,
+	}); err != nil {
+		t.Fatalf("mutating step: %v", err)
+	}
+	beforeWeights := rt.Weights()
+	beforeParams := cloneCEPWeightParamSet(rt.weightCEPParams)
+	rt.terminated = true
+	rt.cepActorInits[0].faninPIDs = nil
+
+	if err := rt.Restore(); err == nil {
+		t.Fatal("expected restore rebuild failure")
+	}
+	if got := rt.Weights(); len(got) != len(beforeWeights) || math.Abs(got[0]-beforeWeights[0]) > 1e-9 {
+		t.Fatalf("expected restore failure to preserve weights, got=%v want=%v", got, beforeWeights)
+	}
+	if !reflect.DeepEqual(rt.weightCEPParams, beforeParams) {
+		t.Fatalf("expected restore failure to preserve cep params, got=%v want=%v", rt.weightCEPParams, beforeParams)
+	}
+	if !rt.terminated {
+		t.Fatal("expected restore failure to preserve terminated flag")
+	}
+}
+
+func TestSimpleRuntimeResetPreservesStateOnRebuildFailure(t *testing.T) {
+	resetRegistriesForTests()
+	t.Cleanup(resetRegistriesForTests)
+
+	rt, err := NewSimpleRuntime(Spec{
+		CPPName:      DefaultCPPName,
+		CEPName:      SetABCNCEPName,
+		CEPFaninPIDs: []string{"n1", "n2", "n3", "n4", "n5"},
+	}, 1)
+	if err != nil {
+		t.Fatalf("new runtime: %v", err)
+	}
+	if _, err := rt.StepWithFanin(context.Background(), []float64{0, 0, 0, 0, 0}, map[string]float64{
+		"n1": 1,
+		"n2": 1.0,
+		"n3": 0.0,
+		"n4": 0.0,
+		"n5": 1.0,
+	}); err != nil {
+		t.Fatalf("prime step: %v", err)
+	}
+	beforeWeights := rt.Weights()
+	beforeParams := cloneCEPWeightParamSet(rt.weightCEPParams)
+	rt.terminated = true
+	rt.cepActorInits[0].faninPIDs = nil
+
+	rt.Reset()
+
+	if got := rt.Weights(); len(got) != len(beforeWeights) || math.Abs(got[0]-beforeWeights[0]) > 1e-9 {
+		t.Fatalf("expected reset failure to preserve weights, got=%v want=%v", got, beforeWeights)
+	}
+	if !reflect.DeepEqual(rt.weightCEPParams, beforeParams) {
+		t.Fatalf("expected reset failure to preserve cep params, got=%v want=%v", rt.weightCEPParams, beforeParams)
+	}
+	if !rt.terminated {
+		t.Fatal("expected reset failure to preserve terminated flag")
+	}
+}
+
 func TestSimpleRuntimeBackupRestoreIncludesPersistentWeightParameters(t *testing.T) {
 	resetRegistriesForTests()
 	t.Cleanup(resetRegistriesForTests)
