@@ -1791,7 +1791,7 @@ func TestApplySubstrateMailboxRestoresDrainedCommandsOnCancellation(t *testing.T
 
 	ctx := &errAfterNContext{
 		Context:  context.Background(),
-		nilCount: 2,
+		nilCount: 3,
 	}
 	if _, err := rt.applySubstrateMailbox(ctx, 0, 0, expectedInits, 0); !errors.Is(err, context.Canceled) {
 		t.Fatalf("expected canceled mailbox apply after drain, got %v", err)
@@ -1802,6 +1802,52 @@ func TestApplySubstrateMailboxRestoresDrainedCommandsOnCancellation(t *testing.T
 	}
 	if commands[0].Signal[0] != 0.25 || commands[1].Signal[0] != 0.5 {
 		t.Fatalf("expected restored commands to keep order, got=%v", commands)
+	}
+}
+
+func TestApplySubstrateMailboxRestoresDrainedCommandsOnEnvelopeError(t *testing.T) {
+	resetRegistriesForTests()
+	t.Cleanup(resetRegistriesForTests)
+
+	rt, err := NewSimpleRuntime(Spec{
+		CPPName:  DefaultCPPName,
+		CEPNames: []string{DefaultCEPName, DefaultCEPName},
+	}, 1)
+	if err != nil {
+		t.Fatalf("new runtime: %v", err)
+	}
+	expectedInits := scopeCEPActorInitsForWeight(rt.cepActorInits, 0)
+	if len(expectedInits) < 2 {
+		t.Fatalf("expected two scoped cep inits, got=%v", expectedInits)
+	}
+	commandA := CEPCommand{
+		FromPID: expectedInits[1].id,
+		ToPID:   expectedInits[1].substratePID,
+		Command: SetIterativeCEPName,
+		Signal:  []float64{0.25},
+	}
+	commandB := CEPCommand{
+		FromPID: expectedInits[0].id,
+		ToPID:   expectedInits[0].substratePID,
+		Command: SetIterativeCEPName,
+		Signal:  []float64{0.5},
+	}
+	if err := rt.substrateMailboxes[0].Post(commandA); err != nil {
+		t.Fatalf("post commandA: %v", err)
+	}
+	if err := rt.substrateMailboxes[0].Post(commandB); err != nil {
+		t.Fatalf("post commandB: %v", err)
+	}
+
+	if _, err := rt.applySubstrateMailbox(context.Background(), 0, 0, expectedInits, 0); !errors.Is(err, ErrUnexpectedCEPCommandSender) {
+		t.Fatalf("expected unexpected sender error, got %v", err)
+	}
+	commands := rt.substrateMailboxes[0].Drain()
+	if len(commands) != 2 {
+		t.Fatalf("expected full drained batch restored after envelope error, got=%v", commands)
+	}
+	if commands[0].FromPID != commandA.FromPID || commands[1].FromPID != commandB.FromPID {
+		t.Fatalf("expected restored command order after envelope error, got=%v", commands)
 	}
 }
 

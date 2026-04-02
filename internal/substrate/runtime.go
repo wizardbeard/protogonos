@@ -1658,21 +1658,24 @@ func (r *SimpleRuntime) applySubstrateMailbox(ctx context.Context, weightIdx int
 		parameters = cloneFloatMap(r.weightCEPParams[weightIdx][cepIdx])
 	}
 	commands := mailbox.Drain()
-	for i, command := range commands {
+	restoreCommands := func(cause error) (float64, error) {
+		if restoreErr := mailbox.Restore(commands); restoreErr != nil {
+			return 0, restoreErr
+		}
+		return 0, cause
+	}
+	for _, command := range commands {
 		if err := ctx.Err(); err != nil {
-			if restoreErr := mailbox.Restore(commands[i:]); restoreErr != nil {
-				return 0, restoreErr
-			}
-			return 0, err
+			return restoreCommands(err)
 		}
 		if cepIdx >= 0 && cepIdx < len(expectedInits) {
 			if envelopeErr := validateCEPCommandEnvelope(command, expectedInits[cepIdx]); envelopeErr != nil {
-				return 0, envelopeErr
+				return restoreCommands(envelopeErr)
 			}
 		}
 		updated, nextParams, applyErr := ApplyCEPCommandWithParameters(next, command, parameters)
 		if applyErr != nil {
-			return 0, applyErr
+			return restoreCommands(applyErr)
 		}
 		next = updated
 		parameters = nextParams
