@@ -1369,6 +1369,40 @@ func TestSimpleRuntimeStepRejectsUnexpectedMailboxCommandSender(t *testing.T) {
 	}
 }
 
+func TestSimpleRuntimeStepRollsBackEarlierWeightUpdatesOnLaterFailure(t *testing.T) {
+	resetRegistriesForTests()
+	t.Cleanup(resetRegistriesForTests)
+
+	rt, err := NewSimpleRuntime(Spec{
+		CPPName:      DefaultCPPName,
+		CEPName:      SetABCNCEPName,
+		CEPFaninPIDs: []string{"n1", "n2", "n3", "n4", "n5"},
+	}, 2)
+	if err != nil {
+		t.Fatalf("new runtime: %v", err)
+	}
+	if len(rt.cepActorsByWeight) < 2 || len(rt.cepActorsByWeight[1]) == 0 {
+		t.Fatalf("expected two weight actor pools, got=%v", rt.cepActorsByWeight)
+	}
+	rt.cepActorsByWeight[1][0] = nil
+
+	if _, err := rt.StepWithFanin(context.Background(), []float64{0, 0, 0, 0, 0}, map[string]float64{
+		"n1": 1,
+		"n2": 0.2,
+		"n3": 0.5,
+		"n4": -0.1,
+		"n5": 0.8,
+	}); !errors.Is(err, ErrMissingCEPActor) {
+		t.Fatalf("expected missing cep actor, got %v", err)
+	}
+	if got := rt.Weights(); len(got) != 2 || got[0] != 0 || got[1] != 0 {
+		t.Fatalf("expected whole-step rollback on later weight failure, got=%v", got)
+	}
+	if len(rt.weightCEPParams) != 2 || rt.weightCEPParams[0][0] != nil || rt.weightCEPParams[1][0] != nil {
+		t.Fatalf("expected persisted cep params rollback on later weight failure, got=%v", rt.weightCEPParams)
+	}
+}
+
 func TestSubstrateCommandMailboxActorSyncAndTerminate(t *testing.T) {
 	mailbox := newSubstrateCommandMailbox("substrate_w1")
 	commandA := CEPCommand{
@@ -1750,7 +1784,7 @@ func TestApplySubstrateMailboxHonorsCanceledContextBeforeSync(t *testing.T) {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
-	if _, err := rt.applySubstrateMailbox(ctx, 0, 0, expectedInits, 0); !errors.Is(err, context.Canceled) {
+	if _, _, err := rt.applySubstrateMailbox(ctx, 0, 0, expectedInits, 0, nil); !errors.Is(err, context.Canceled) {
 		t.Fatalf("expected canceled mailbox apply before sync, got %v", err)
 	}
 	if commands := rt.substrateMailboxes[0].Drain(); len(commands) != 1 {
@@ -1793,7 +1827,7 @@ func TestApplySubstrateMailboxRestoresDrainedCommandsOnCancellation(t *testing.T
 		Context:  context.Background(),
 		nilCount: 3,
 	}
-	if _, err := rt.applySubstrateMailbox(ctx, 0, 0, expectedInits, 0); !errors.Is(err, context.Canceled) {
+	if _, _, err := rt.applySubstrateMailbox(ctx, 0, 0, expectedInits, 0, nil); !errors.Is(err, context.Canceled) {
 		t.Fatalf("expected canceled mailbox apply after drain, got %v", err)
 	}
 	commands := rt.substrateMailboxes[0].Drain()
@@ -1839,7 +1873,7 @@ func TestApplySubstrateMailboxRestoresDrainedCommandsOnEnvelopeError(t *testing.
 		t.Fatalf("post commandB: %v", err)
 	}
 
-	if _, err := rt.applySubstrateMailbox(context.Background(), 0, 0, expectedInits, 0); !errors.Is(err, ErrUnexpectedCEPCommandSender) {
+	if _, _, err := rt.applySubstrateMailbox(context.Background(), 0, 0, expectedInits, 0, nil); !errors.Is(err, ErrUnexpectedCEPCommandSender) {
 		t.Fatalf("expected unexpected sender error, got %v", err)
 	}
 	commands := rt.substrateMailboxes[0].Drain()

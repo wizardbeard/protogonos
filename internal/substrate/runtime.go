@@ -129,7 +129,9 @@ func (r *SimpleRuntime) step(ctx context.Context, inputs []float64, faninSignals
 	if err != nil {
 		return nil, err
 	}
-	for i := range r.weights {
+	nextWeights := append([]float64(nil), r.weights...)
+	nextWeightCEPParams := cloneCEPWeightParamSet(r.weightCEPParams)
+	for i := range nextWeights {
 		if err := ctx.Err(); err != nil {
 			return nil, err
 		}
@@ -138,7 +140,7 @@ func (r *SimpleRuntime) step(ctx context.Context, inputs []float64, faninSignals
 			actors = r.cepActorsByWeight[i]
 		}
 		expectedInits := scopeCEPActorInitsForWeight(r.cepActorInits, i)
-		next := r.weights[i]
+		next := nextWeights[i]
 		for cepIdx, cep := range r.ceps {
 			if err := ctx.Err(); err != nil {
 				return nil, err
@@ -173,7 +175,12 @@ func (r *SimpleRuntime) step(ctx context.Context, inputs []float64, faninSignals
 					if routeErr := r.routeCEPCommand(ctx, i, cepIdx, command); routeErr != nil {
 						return nil, fmt.Errorf("cep %s command relay: %w", cep.Name(), routeErr)
 					}
-					w, applyErr := r.applySubstrateMailbox(ctx, i, cepIdx, expectedInits, next)
+					stageParams := map[string]float64(nil)
+					if i >= 0 && i < len(nextWeightCEPParams) &&
+						cepIdx >= 0 && cepIdx < len(nextWeightCEPParams[i]) {
+						stageParams = cloneFloatMap(nextWeightCEPParams[i][cepIdx])
+					}
+					w, persistedParams, applyErr := r.applySubstrateMailbox(ctx, i, cepIdx, expectedInits, next, stageParams)
 					if applyErr != nil {
 						return nil, fmt.Errorf("cep %s apply mailbox commands: %w", cep.Name(), applyErr)
 					}
@@ -181,6 +188,10 @@ func (r *SimpleRuntime) step(ctx context.Context, inputs []float64, faninSignals
 						return nil, err
 					}
 					next = w
+					if i >= 0 && i < len(nextWeightCEPParams) &&
+						cepIdx >= 0 && cepIdx < len(nextWeightCEPParams[i]) {
+						nextWeightCEPParams[i][cepIdx] = cloneFloatMap(persistedParams)
+					}
 					continue
 				}
 				if !errors.Is(err, ErrUnsupportedCEPCommand) {
@@ -202,8 +213,10 @@ func (r *SimpleRuntime) step(ctx context.Context, inputs []float64, faninSignals
 		if err := ctx.Err(); err != nil {
 			return nil, err
 		}
-		r.weights[i] = next
+		nextWeights[i] = next
 	}
+	r.weights = nextWeights
+	r.weightCEPParams = nextWeightCEPParams
 	return r.Weights(), nil
 }
 
@@ -1647,40 +1660,38 @@ func (r *SimpleRuntime) postSubstrateCommand(weightIdx int, command CEPCommand) 
 	return mailbox.Post(command)
 }
 
-func (r *SimpleRuntime) applySubstrateMailbox(ctx context.Context, weightIdx int, cepIdx int, expectedInits []cepActorInit, current float64) (float64, error) {
+func (r *SimpleRuntime) applySubstrateMailbox(ctx context.Context, weightIdx int, cepIdx int, expectedInits []cepActorInit, current float64, persistedParams map[string]float64) (float64, map[string]float64, error) {
 	if err := ctx.Err(); err != nil {
-		return 0, err
+		return 0, nil, err
 	}
 	if weightIdx < 0 || weightIdx >= len(r.substrateMailboxes) {
-		return 0, ErrMissingSubstrateMailbox
+		return 0, nil, ErrMissingSubstrateMailbox
 	}
 	mailbox := r.substrateMailboxes[weightIdx]
 	if mailbox == nil {
-		return 0, ErrMissingSubstrateMailbox
+		return 0, nil, ErrMissingSubstrateMailbox
 	}
 	syncID, err := mailbox.PostSync()
 	if err != nil {
-		return 0, err
+		return 0, nil, err
 	}
 	if err := awaitSubstrateMailboxSync(ctx, mailbox, syncID); err != nil {
-		return 0, err
+		return 0, nil, err
 	}
 	if err := ctx.Err(); err != nil {
-		return 0, err
+		return 0, nil, err
 	}
 	next := current
 	parameters := cloneFloatMap(r.params)
-	if weightIdx >= 0 && weightIdx < len(r.weightCEPParams) &&
-		cepIdx >= 0 && cepIdx < len(r.weightCEPParams[weightIdx]) &&
-		len(r.weightCEPParams[weightIdx][cepIdx]) > 0 {
-		parameters = cloneFloatMap(r.weightCEPParams[weightIdx][cepIdx])
+	if len(persistedParams) > 0 {
+		parameters = cloneFloatMap(persistedParams)
 	}
 	commands := mailbox.Drain()
-	restoreCommands := func(cause error) (float64, error) {
+	restoreCommands := func(cause error) (float64, map[string]float64, error) {
 		if restoreErr := mailbox.Restore(commands); restoreErr != nil {
-			return 0, restoreErr
+			return 0, nil, restoreErr
 		}
-		return 0, cause
+		return 0, nil, cause
 	}
 	for _, command := range commands {
 		if err := ctx.Err(); err != nil {
@@ -1698,11 +1709,7 @@ func (r *SimpleRuntime) applySubstrateMailbox(ctx context.Context, weightIdx int
 		next = updated
 		parameters = nextParams
 	}
-	if weightIdx >= 0 && weightIdx < len(r.weightCEPParams) &&
-		cepIdx >= 0 && cepIdx < len(r.weightCEPParams[weightIdx]) {
-		r.weightCEPParams[weightIdx][cepIdx] = cloneFloatMap(parameters)
-	}
-	return next, nil
+	return next, cloneFloatMap(parameters), nil
 }
 
 func validateCEPCommandEnvelope(command CEPCommand, expected cepActorInit) error {
