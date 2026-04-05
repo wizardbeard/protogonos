@@ -313,6 +313,42 @@ func TestFlatlandScapePublicTraceIncludesTerminatedAgentAggregates(t *testing.T)
 	}
 }
 
+func TestFlatlandScapePublicTraceAggregatesMatchActiveAgentTrace(t *testing.T) {
+	scape := FlatlandScape{}
+	if err := scape.Start(context.Background()); err != nil {
+		t.Fatalf("start: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = scape.Stop(context.Background())
+	})
+
+	if err := scape.EnterPublicAgent(FlatlandPublicAgent{ID: "seed"}); err != nil {
+		t.Fatalf("enter public agent: %v", err)
+	}
+
+	trace, err := scape.TickPublic(context.Background())
+	if err != nil {
+		t.Fatalf("tick public: %v", err)
+	}
+	agents, ok := trace["agents"].([]Trace)
+	if !ok || len(agents) != 1 {
+		t.Fatalf("expected one public agent trace, trace=%+v", trace)
+	}
+	agent := agents[0]
+	if avgEnergy, _ := trace["avg_energy"].(float64); avgEnergy != agent["energy"] {
+		t.Fatalf("expected avg_energy to match active agent trace, trace=%+v agent=%+v", trace, agent)
+	}
+	if totalFood, _ := trace["total_food_collected"].(int); totalFood != agent["food_collected"] {
+		t.Fatalf("expected total_food_collected to match active agent trace, trace=%+v agent=%+v", trace, agent)
+	}
+	if totalPrey, _ := trace["total_prey_collected"].(int); totalPrey != agent["prey_collected"] {
+		t.Fatalf("expected total_prey_collected to match active agent trace, trace=%+v agent=%+v", trace, agent)
+	}
+	if totalHits, _ := trace["total_predator_hits"].(int); totalHits != agent["predator_hits"] {
+		t.Fatalf("expected total_predator_hits to match active agent trace, trace=%+v agent=%+v", trace, agent)
+	}
+}
+
 func TestFlatlandScapeRunPublicTicksUntilCancel(t *testing.T) {
 	scape := FlatlandScape{}
 	if err := scape.Start(context.Background()); err != nil {
