@@ -275,6 +275,10 @@ func (FlatlandScape) TickPublic(ctx context.Context) (Trace, error) {
 			return nil, err
 		}
 		state := flatlandPublicWorld.agents[id]
+		totalEnergy += state.episode.energy
+		totalFood += state.episode.foodCollected
+		totalPrey += state.episode.preyCollected
+		totalPredatorHits += state.episode.predatorHits
 		if state.terminated {
 			terminated++
 			agentStates = append(agentStates, flatlandPublicAgentTrace(state))
@@ -299,11 +303,6 @@ func (FlatlandScape) TickPublic(ctx context.Context) (Trace, error) {
 			state.terminated = true
 			terminated++
 		}
-
-		totalEnergy += state.episode.energy
-		totalFood += state.episode.foodCollected
-		totalPrey += state.episode.preyCollected
-		totalPredatorHits += state.episode.predatorHits
 		agentStates = append(agentStates, flatlandPublicAgentTrace(state))
 	}
 

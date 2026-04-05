@@ -263,6 +263,56 @@ func TestFlatlandScapePublicUpdateCanClearCustomDecider(t *testing.T) {
 	}
 }
 
+func TestFlatlandScapePublicTraceIncludesTerminatedAgentAggregates(t *testing.T) {
+	scape := FlatlandScape{}
+	if err := scape.Start(context.Background()); err != nil {
+		t.Fatalf("start: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = scape.Stop(context.Background())
+	})
+
+	if err := scape.EnterPublicAgent(FlatlandPublicAgent{ID: "seed"}); err != nil {
+		t.Fatalf("enter public agent: %v", err)
+	}
+
+	flatlandPublicWorld.mu.Lock()
+	state := flatlandPublicWorld.agents["seed"]
+	if state == nil || state.episode == nil {
+		flatlandPublicWorld.mu.Unlock()
+		t.Fatal("expected public agent episode state")
+	}
+	state.terminated = true
+	state.episode.energy = 7.5
+	state.episode.foodCollected = 3
+	state.episode.preyCollected = 2
+	state.episode.predatorHits = 1
+	flatlandPublicWorld.mu.Unlock()
+
+	trace, err := scape.TickPublic(context.Background())
+	if err != nil {
+		t.Fatalf("tick public: %v", err)
+	}
+	if active, _ := trace["active_agents"].(int); active != 1 {
+		t.Fatalf("expected active_agents=1, trace=%+v", trace)
+	}
+	if terminated, _ := trace["terminated_agents"].(int); terminated != 1 {
+		t.Fatalf("expected terminated_agents=1, trace=%+v", trace)
+	}
+	if avgEnergy, _ := trace["avg_energy"].(float64); avgEnergy != 7.5 {
+		t.Fatalf("expected avg_energy to include terminated agent energy, trace=%+v", trace)
+	}
+	if totalFood, _ := trace["total_food_collected"].(int); totalFood != 3 {
+		t.Fatalf("expected total_food_collected to include terminated agent totals, trace=%+v", trace)
+	}
+	if totalPrey, _ := trace["total_prey_collected"].(int); totalPrey != 2 {
+		t.Fatalf("expected total_prey_collected to include terminated agent totals, trace=%+v", trace)
+	}
+	if totalHits, _ := trace["total_predator_hits"].(int); totalHits != 1 {
+		t.Fatalf("expected total_predator_hits to include terminated agent totals, trace=%+v", trace)
+	}
+}
+
 func TestFlatlandScapeRunPublicTicksUntilCancel(t *testing.T) {
 	scape := FlatlandScape{}
 	if err := scape.Start(context.Background()); err != nil {
