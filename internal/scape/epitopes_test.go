@@ -330,6 +330,12 @@ func TestEpitopesScapeTraceIncludesTableWindowState(t *testing.T) {
 	if progress, ok := trace["mean_progress"].(float64); !ok || progress < 0 || progress > 1 {
 		t.Fatalf("trace missing mean_progress in [0,1]: %+v", trace)
 	}
+	if current, ok := trace["index_current"].(int); !ok || current != 0 {
+		t.Fatalf("expected halted benchmark session to report index_current=0, got %+v", trace)
+	}
+	if progress, _ := trace["mean_progress"].(float64); progress >= 1 {
+		t.Fatalf("expected mean_progress to reflect post-classify session state, got %+v", trace)
+	}
 }
 
 func TestEpitopesScapeLoadTableCSV(t *testing.T) {

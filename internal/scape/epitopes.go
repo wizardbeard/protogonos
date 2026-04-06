@@ -470,6 +470,10 @@ func evaluateEpitopes(
 		if err != nil {
 			return 0, nil, err
 		}
+		postProgress := 0.0
+		if session.indexCurrent > 0 {
+			postProgress = epitopesSessionProgress(session.indexCurrent, session.startIndex, session.endIndex)
+		}
 
 		if target == 1 {
 			positiveTargets++
@@ -486,7 +490,7 @@ func evaluateEpitopes(
 		signalAcc += row.signal
 		memoryAcc += row.memory
 		targetAcc += targetSigned
-		progressAcc += progress
+		progressAcc += postProgress
 		decisionMarginAcc += decisionMargin
 		evaluated++
 		if halt {
