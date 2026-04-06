@@ -297,6 +297,33 @@ func TestLLVMPhaseOrderingScapeSupportsVectorOptimizationSurface(t *testing.T) {
 	}
 }
 
+func TestLLVMPhaseOrderingScapeRecordsTerminalDoneDecision(t *testing.T) {
+	scape := LLVMPhaseOrderingScape{}
+	doneFirst := scriptedStepAgent{
+		id: "llvm-done-first",
+		fn: func(_ []float64) []float64 {
+			out := make([]float64, len(defaultLLVMOptimizations))
+			out[0] = 1
+			return out
+		},
+	}
+
+	_, trace, err := scape.Evaluate(context.Background(), doneFirst)
+	if err != nil {
+		t.Fatalf("evaluate done-first: %v", err)
+	}
+	if reason, _ := trace["termination_reason"].(string); reason != "done_action" {
+		t.Fatalf("expected done_action termination, got %+v", trace)
+	}
+	history, ok := trace["selected_optimizations"].([]string)
+	if !ok || len(history) != 1 || history[0] != "done" {
+		t.Fatalf("expected done recorded in optimization history, got %+v", trace)
+	}
+	if unique, ok := trace["unique_optimizations"].(int); !ok || unique != 1 {
+		t.Fatalf("expected unique_optimizations=1 for done action, got %+v", trace)
+	}
+}
+
 func TestLLVMPhaseOrderingScapeEvaluateWithSeedVectorCortex(t *testing.T) {
 	seed, err := genotype.ConstructSeedPopulation("llvm-phase-ordering", 1, 71)
 	if err != nil {

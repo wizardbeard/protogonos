@@ -233,6 +233,8 @@ func evaluateLLVMPhaseOrdering(
 		runtimeGainAcc += runtimeGain
 		phasesUsed++
 		lastAlignment = decision.alignment
+		optimizationHistory = append(optimizationHistory, decision.optimization)
+		uniqueOpts[decision.optimization] = struct{}{}
 
 		if decision.done {
 			done = true
@@ -240,8 +242,6 @@ func evaluateLLVMPhaseOrdering(
 			break
 		}
 
-		optimizationHistory = append(optimizationHistory, decision.optimization)
-		uniqueOpts[decision.optimization] = struct{}{}
 		gain := llvmOptimizationGain(cfg, decision, phase, complexity, optimizationHistory)
 		complexity = clampLLVM(complexity-gain, 0.03, 2.5)
 		if complexity < bestComplexity {
