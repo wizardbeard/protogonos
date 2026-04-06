@@ -155,6 +155,7 @@ func evaluateFX(
 	lastAction := 0.0
 	lastQuote := fxPrice(series, cfg.startStep)
 	prevQuote := fxPrice(series, maxIntFX(0, cfg.startStep-1))
+	executedSteps := 0
 
 	for i := 0; i < cfg.steps; i++ {
 		if err := ctx.Err(); err != nil {
@@ -204,8 +205,10 @@ func evaluateFX(
 		updateFXMarkToMarket(&account, quote)
 		if account.netAssetValue <= fxMarginCallFloor {
 			marginCall = true
+			executedSteps = i + 1
 			break
 		}
+		executedSteps = i + 1
 	}
 
 	if !marginCall && account.order != nil {
@@ -251,7 +254,7 @@ func evaluateFX(
 		"equity":                 netWorth / fxInitialBalance,
 		"turnover":               turnover,
 		"mode":                   cfg.mode,
-		"steps":                  cfg.steps,
+		"steps":                  executedSteps,
 		"start_step":             cfg.startStep,
 		"series_name":            series.name,
 		"series_points":          len(series.values),

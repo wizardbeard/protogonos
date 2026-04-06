@@ -309,6 +309,41 @@ func TestFXScapeTraceIncludesAccountLifecycle(t *testing.T) {
 	}
 }
 
+func TestFXScapeTraceStepsReflectEarlyMarginCall(t *testing.T) {
+	ResetFXSeriesSource()
+	t.Cleanup(ResetFXSeriesSource)
+
+	fxSeriesSourceMu.Lock()
+	fxSeriesSource = fxSeries{
+		name: "fx.test.crash",
+		values: []float64{
+			1.0, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2,
+		},
+	}
+	fxSeriesSourceMu.Unlock()
+
+	scape := FXScape{}
+	longOnly := scriptedStepAgent{
+		id: "long-only",
+		fn: func(_ []float64) []float64 { return []float64{1} },
+	}
+
+	_, trace, err := scape.Evaluate(context.Background(), longOnly)
+	if err != nil {
+		t.Fatalf("evaluate long-only: %v", err)
+	}
+	if marginCall, _ := trace["margin_call"].(bool); !marginCall {
+		t.Fatalf("expected forced margin call, got %+v", trace)
+	}
+	steps, ok := trace["steps"].(int)
+	if !ok {
+		t.Fatalf("trace missing steps: %+v", trace)
+	}
+	if steps <= 0 || steps >= 64 {
+		t.Fatalf("expected early-terminated step count, got %+v", trace)
+	}
+}
+
 func TestFXScapeStepPerceptIncludesMarketInternals(t *testing.T) {
 	scape := FXScape{}
 	maxPerceptWidth := 0
