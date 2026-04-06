@@ -179,7 +179,6 @@ func evaluateGTSA(
 	predictionJitter := 0.0
 	absDeltaAcc := 0.0
 	windowMeanAcc := 0.0
-	lastProgress := 0.0
 	prevPrediction := 0.0
 	hasPrevPrediction := false
 	scoredSteps := 0
@@ -219,7 +218,6 @@ func evaluateGTSA(
 		}
 		absDeltaAcc += math.Abs(percept.delta)
 		windowMeanAcc += percept.windowMean
-		lastProgress = percept.progress
 		prevPrediction = predicted
 		hasPrevPrediction = true
 		scoredSteps++
@@ -259,6 +257,10 @@ func evaluateGTSA(
 	}
 	meanAbsDelta := absDeltaAcc / float64(scoredSteps)
 	meanWindowValue := windowMeanAcc / float64(scoredSteps)
+	finalProgress := 0.0
+	progressDenom := maxGTSA(1, state.indexEnd-state.indexStart)
+	finalProgress = float64(state.indexCurrent-state.indexStart) / float64(progressDenom)
+	finalProgress = clampGTSA(finalProgress, 0, 1)
 
 	base := 1.0 / (1.0 + mae + 0.5*mse)
 	directionTerm := 0.75 + 0.25*directionAccuracy
@@ -285,7 +287,7 @@ func evaluateGTSA(
 		"index_end":          state.indexEnd,
 		"mean_abs_delta":     meanAbsDelta,
 		"mean_window_value":  meanWindowValue,
-		"last_progress":      lastProgress,
+		"last_progress":      finalProgress,
 	}, nil
 }
 

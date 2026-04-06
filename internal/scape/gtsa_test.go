@@ -3,6 +3,7 @@ package scape
 import (
 	"context"
 	"fmt"
+	"math"
 	"os"
 	"path/filepath"
 	"strings"
@@ -322,6 +323,14 @@ func TestGTSAScapeTraceIncludesTableWindowState(t *testing.T) {
 	}
 	if current < start || current > end {
 		t.Fatalf("index_current out of bounds in trace: %+v", trace)
+	}
+	progress, pok := trace["last_progress"].(float64)
+	if !pok {
+		t.Fatalf("trace missing last_progress: %+v", trace)
+	}
+	wantProgress := float64(current-start) / float64(maxGTSA(1, end-start))
+	if math.Abs(progress-wantProgress) > 1e-9 {
+		t.Fatalf("expected last_progress=%f from final index window, got %+v", wantProgress, trace)
 	}
 }
 
