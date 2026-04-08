@@ -342,6 +342,12 @@ func TestFXScapeTraceStepsReflectEarlyMarginCall(t *testing.T) {
 	if steps <= 0 || steps >= 64 {
 		t.Fatalf("expected early-terminated step count, got %+v", trace)
 	}
+	if position, ok := trace["position"].(float64); !ok || position != 0 {
+		t.Fatalf("expected margin call to liquidate open position, got %+v", trace)
+	}
+	if closed, ok := trace["orders_closed"].(int); !ok || closed <= 0 {
+		t.Fatalf("expected margin call liquidation to count as closed order, got %+v", trace)
+	}
 }
 
 func TestFXScapeStepPerceptIncludesMarketInternals(t *testing.T) {

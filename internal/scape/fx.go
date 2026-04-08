@@ -205,6 +205,11 @@ func evaluateFX(
 		updateFXMarkToMarket(&account, quote)
 		if account.netAssetValue <= fxMarginCallFloor {
 			marginCall = true
+			if account.order != nil {
+				if closeFXOrder(&account, quote) {
+					ordersClosed++
+				}
+			}
 			executedSteps = i + 1
 			break
 		}
