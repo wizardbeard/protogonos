@@ -293,8 +293,8 @@ func TestFlatlandScapePublicTraceIncludesTerminatedAgentAggregates(t *testing.T)
 	if err != nil {
 		t.Fatalf("tick public: %v", err)
 	}
-	if active, _ := trace["active_agents"].(int); active != 1 {
-		t.Fatalf("expected active_agents=1, trace=%+v", trace)
+	if active, _ := trace["active_agents"].(int); active != 0 {
+		t.Fatalf("expected active_agents=0 when all public agents are terminated, trace=%+v", trace)
 	}
 	if terminated, _ := trace["terminated_agents"].(int); terminated != 1 {
 		t.Fatalf("expected terminated_agents=1, trace=%+v", trace)

@@ -58,6 +58,7 @@ Status legend:
 
 ## Latest iteration updates
 
+- 2026-04-09: tightened Flatland public-world summary semantics so `active_agents` now counts only non-terminated agents, instead of reporting all registered agents while `terminated_agents` already accounts for completed episodes.
 - 2026-04-08: tightened pole2 balancing runtime accounting so an executed terminal step now contributes to `fitness_acc`, `avg_step_fitness`, and `last_fitness_signal`, keeping damping-oriented fitness summaries aligned with the final stepped state instead of dropping the terminating step.
 - 2026-03-01: expanded substrate CEP `set_abcn` weight-state fidelity by persisting signal-provided coefficient state (`A/B/C/N`) per runtime weight across command/stage application, closer to reference `set_abcn` weight-parameter carry semantics.
 - 2026-03-01: expanded substrate CEP chain-topology fidelity by expanding singular CEP-name chains to match non-empty CEP endpoint count when endpoint count exceeds explicit chain length.

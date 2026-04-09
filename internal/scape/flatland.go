@@ -318,7 +318,7 @@ func (FlatlandScape) TickPublic(ctx context.Context) (Trace, error) {
 	return Trace{
 		"mode":                 flatlandPublicWorld.config.mode,
 		"tick":                 flatlandPublicWorld.tick,
-		"active_agents":        len(ids),
+		"active_agents":        len(ids) - terminated,
 		"terminated_agents":    terminated,
 		"avg_energy":           avgEnergy,
 		"total_food_collected": totalFood,
