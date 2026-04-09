@@ -96,6 +96,12 @@ func (FlatlandScape) LastPublicStopReason() string {
 	return flatlandPublicWorld.lastStopReason
 }
 
+func flatlandPublicStarted() bool {
+	flatlandPublicWorld.mu.RLock()
+	defer flatlandPublicWorld.mu.RUnlock()
+	return flatlandPublicWorld.started
+}
+
 func normalizeFlatlandPublicStopReason(raw string) string {
 	switch strings.TrimSpace(strings.ToLower(raw)) {
 	case "", "normal":
@@ -332,6 +338,9 @@ func (s FlatlandScape) RunPublic(ctx context.Context, interval time.Duration) er
 	if interval <= 0 {
 		return fmt.Errorf("flatland public tick interval must be > 0")
 	}
+	if !flatlandPublicStarted() {
+		return fmt.Errorf("flatland public world is not started")
+	}
 
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
@@ -343,6 +352,9 @@ func (s FlatlandScape) RunPublic(ctx context.Context, interval time.Duration) er
 		case <-ticker.C:
 			if _, err := s.TickPublic(ctx); err != nil {
 				if ctx.Err() != nil {
+					return nil
+				}
+				if !flatlandPublicStarted() {
 					return nil
 				}
 				return err

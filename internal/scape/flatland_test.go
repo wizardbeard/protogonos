@@ -383,6 +383,35 @@ func TestFlatlandScapeRunPublicRejectsNonPositiveInterval(t *testing.T) {
 	}
 }
 
+func TestFlatlandScapeRunPublicStopsCleanlyWhenWorldStops(t *testing.T) {
+	scape := FlatlandScape{}
+	if err := scape.Start(context.Background()); err != nil {
+		t.Fatalf("start: %v", err)
+	}
+	if err := scape.EnterPublicAgent(FlatlandPublicAgent{ID: "runner"}); err != nil {
+		t.Fatalf("enter runner: %v", err)
+	}
+
+	done := make(chan error, 1)
+	go func() {
+		done <- scape.RunPublic(context.Background(), 2*time.Millisecond)
+	}()
+
+	time.Sleep(10 * time.Millisecond)
+	if err := scape.Stop(context.Background()); err != nil {
+		t.Fatalf("stop during run public: %v", err)
+	}
+
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatalf("expected run public to stop cleanly after world stop, got %v", err)
+		}
+	case <-time.After(100 * time.Millisecond):
+		t.Fatal("run public did not exit after world stop")
+	}
+}
+
 func TestFlatlandScapePublicStopReasons(t *testing.T) {
 	scape := FlatlandScape{}
 	if err := scape.Start(context.Background()); err != nil {
