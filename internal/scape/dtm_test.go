@@ -449,3 +449,43 @@ func TestDTMScapeTraceIncludesRunDiagnostics(t *testing.T) {
 		t.Fatalf("expected reset last_step_index=0 after terminal episode completion, got %+v", trace)
 	}
 }
+
+func TestDTMScapeSingleRunDoesNotTriggerRewardSwitch(t *testing.T) {
+	cfg := dtmModeConfig{
+		mode:           "unit",
+		totalRuns:      1,
+		maxStepsPerRun: 0,
+		switchFloor:    20,
+		switchSpread:   20,
+	}
+
+	fitness, trace, err := evaluateDTM(
+		context.Background(),
+		"dtm-single-run",
+		cfg,
+		"step_input",
+		7,
+		"step_output",
+		func(_ context.Context, sense dtmSenseInput) (float64, error) {
+			if len(sense.vector) >= 3 && sense.vector[0] > 0.5 && sense.vector[2] > 0.5 {
+				return 1, nil
+			}
+			return 0, nil
+		},
+	)
+	if err != nil {
+		t.Fatalf("evaluate single-run dtm: %v", err)
+	}
+	if fitness <= 0 {
+		t.Fatalf("expected positive fitness from single terminal run, got %f", fitness)
+	}
+	if switched, ok := trace["switched"].(bool); !ok || switched {
+		t.Fatalf("expected single-run episode to skip reward switch, got %+v", trace)
+	}
+	if triggered, ok := trace["switch_triggered_at"].(int); !ok || triggered != -1 {
+		t.Fatalf("expected switch_triggered_at=-1 for single-run episode, got %+v", trace)
+	}
+	if totalRuns, ok := trace["total_runs"].(int); !ok || totalRuns != 1 {
+		t.Fatalf("expected total_runs=1, got %+v", trace)
+	}
+}

@@ -225,7 +225,7 @@ func evaluateDTM(
 			return 0, nil, err
 		}
 
-		if episode.runIndex == episode.switchEvent && !episode.switched {
+		if episode.switchEvent >= 0 && episode.runIndex == episode.switchEvent && !episode.switched {
 			episode.swapRewardSectors()
 			episode.switched = true
 			switchTriggeredAt = episode.runIndex
@@ -384,7 +384,7 @@ func newDTMEpisode(agentID string, cfg dtmModeConfig) dtmEpisode {
 
 func deterministicDTMSwitch(agentID string, totalRuns, floor, spread int) int {
 	if totalRuns <= 1 {
-		return 0
+		return -1
 	}
 	if floor < 0 {
 		floor = 0
