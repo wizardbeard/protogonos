@@ -58,6 +58,7 @@ Status legend:
 
 ## Latest iteration updates
 
+- 2026-04-08: tightened pole2 balancing runtime accounting so an executed terminal step now contributes to `fitness_acc`, `avg_step_fitness`, and `last_fitness_signal`, keeping damping-oriented fitness summaries aligned with the final stepped state instead of dropping the terminating step.
 - 2026-03-01: expanded substrate CEP `set_abcn` weight-state fidelity by persisting signal-provided coefficient state (`A/B/C/N`) per runtime weight across command/stage application, closer to reference `set_abcn` weight-parameter carry semantics.
 - 2026-03-01: expanded substrate CEP chain-topology fidelity by expanding singular CEP-name chains to match non-empty CEP endpoint count when endpoint count exceeds explicit chain length.
 - 2026-03-01: expanded substrate CEP default fan-in sender fidelity by wiring genome CPP endpoint IDs (`SubstrateConfig.CPPIDs`) into runtime config (`Spec.CPPIDs`) and selecting the first non-empty CPP endpoint ID as fallback CEP fan-in PID when explicit fan-in IDs are absent.

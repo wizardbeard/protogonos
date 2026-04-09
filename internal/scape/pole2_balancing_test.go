@@ -2,6 +2,7 @@ package scape
 
 import (
 	"context"
+	"math"
 	"testing"
 
 	"protogonos/internal/agent"
@@ -386,5 +387,54 @@ func TestPole2BalancingScapeSupportsVectorPushControls(t *testing.T) {
 	singlePoleSteps, ok := trace["single_pole_steps"].(int)
 	if !ok || singlePoleSteps <= 0 {
 		t.Fatalf("expected positive single_pole_steps, got %+v", trace)
+	}
+}
+
+func TestPole2BalancingCountsTerminalStepFitness(t *testing.T) {
+	cfg := pole2ModeConfig{
+		mode:       "terminal-step",
+		maxSteps:   8,
+		goalSteps:  100,
+		angleLimit: 0.01,
+		initAngle1: 0.02,
+		damping:    true,
+		doublePole: true,
+	}
+
+	_, trace, err := evaluatePole2Balancing(
+		context.Background(),
+		cfg,
+		"step-agent",
+		"derived",
+		func(_ context.Context, _ pole2State, _ pole2WorkflowSignal) (pole2Control, error) {
+			return pole2Control{force: 0, damping: true, doublePole: true}, nil
+		},
+	)
+	if err != nil {
+		t.Fatalf("evaluate terminal-step config: %v", err)
+	}
+
+	if steps, ok := trace["steps_survived"].(int); !ok || steps != 1 {
+		t.Fatalf("expected single executed step before termination, got %+v", trace)
+	}
+	want := pole2StepFitness(1, pole2State{
+		cartPosition: trace["cart_position"].(float64),
+		cartVelocity: trace["cart_velocity"].(float64),
+		angle1:       trace["angle1"].(float64),
+		velocity1:    trace["velocity1"].(float64),
+		angle2:       trace["angle2"].(float64),
+		velocity2:    trace["velocity2"].(float64),
+	}, true)
+	if got, ok := trace["fitness_acc"].(float64); !ok || math.Abs(got-want) > 1e-9 {
+		t.Fatalf("expected terminal step fitness_acc=%f, got %+v", want, trace)
+	}
+	if got, ok := trace["avg_step_fitness"].(float64); !ok || math.Abs(got-want) > 1e-9 {
+		t.Fatalf("expected avg_step_fitness to include terminal step, want=%f got=%+v", want, trace)
+	}
+	if got, ok := trace["last_fitness_signal"].(float64); !ok || math.Abs(got-want) > 1e-9 {
+		t.Fatalf("expected last_fitness_signal to reflect terminal step, want=%f got=%+v", want, trace)
+	}
+	if reason, ok := trace["termination_reason"].(string); !ok || reason != "angle1_limit" {
+		t.Fatalf("expected angle1_limit termination, got %+v", trace)
 	}
 }

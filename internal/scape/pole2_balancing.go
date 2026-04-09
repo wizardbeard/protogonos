@@ -313,6 +313,12 @@ func evaluatePole2Balancing(
 		state = simulateDoublePole(force*10, state, 2)
 		stepsSurvived++
 
+		// Count the executed step's damping-oriented fitness even if it also
+		// terminates the episode, so the summary reflects the final stepped state.
+		stepFitness := pole2StepFitness(stepsSurvived, state, control.damping)
+		fitnessAcc += stepFitness
+		lastStepFitness = stepFitness
+
 		terminated, reason, reachedGoal := pole2Termination(state, cfg, stepsSurvived, control.doublePole)
 		if terminated {
 			terminationReason = reason
@@ -321,10 +327,6 @@ func evaluatePole2Balancing(
 			break
 		}
 
-		// Mirror the reference damping-oriented fitness accumulator while the run is active.
-		stepFitness := pole2StepFitness(stepsSurvived, state, control.damping)
-		fitnessAcc += stepFitness
-		lastStepFitness = stepFitness
 	}
 
 	avgStepFitness := 0.0
