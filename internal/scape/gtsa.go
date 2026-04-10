@@ -202,9 +202,6 @@ func evaluateGTSA(
 		if err != nil {
 			return 0, nil, err
 		}
-		if done {
-			break
-		}
 
 		delta := predicted - expected
 		squaredErr += delta * delta
@@ -221,6 +218,9 @@ func evaluateGTSA(
 		prevPrediction = predicted
 		hasPrevPrediction = true
 		scoredSteps++
+		if done {
+			break
+		}
 	}
 
 	if scoredSteps <= 0 {

@@ -334,6 +334,49 @@ func TestGTSAScapeTraceIncludesTableWindowState(t *testing.T) {
 	}
 }
 
+func TestGTSAScapeCountsFinalScoredPrediction(t *testing.T) {
+	cfg := gtsaModeConfig{
+		mode:       "gt",
+		startIndex: 1,
+		scoreSteps: 1,
+		windowRows: 1,
+	}
+	ctx := context.WithValue(context.Background(), gtsaDataSourceContextKey{}, gtsaTable{
+		info: gtsaInfo{
+			name:   "unit",
+			ivl:    1,
+			ovl:    1,
+			trnEnd: 2,
+			valEnd: 2,
+			tstEnd: 2,
+		},
+		values: []float64{0, 2, 3},
+	})
+
+	fitness, trace, err := evaluateGTSA(
+		ctx,
+		cfg,
+		func(_ context.Context, percept gtsaPercept) (float64, error) {
+			return percept.current, nil
+		},
+	)
+	if err != nil {
+		t.Fatalf("evaluate unit gtsa: %v", err)
+	}
+	if steps, ok := trace["steps"].(int); !ok || steps != 1 {
+		t.Fatalf("expected single scored step, got %+v", trace)
+	}
+	if mse, ok := trace["mse"].(float64); !ok || mse != 9 {
+		t.Fatalf("expected final scored mse=9, got %+v", trace)
+	}
+	if mae, ok := trace["mae"].(float64); !ok || mae != 3 {
+		t.Fatalf("expected final scored mae=3, got %+v", trace)
+	}
+	if fitness <= 0 {
+		t.Fatalf("expected positive fitness from counted terminal prediction, got %f trace=%+v", fitness, trace)
+	}
+}
+
 func TestGTSAScapeLoadTableCSV(t *testing.T) {
 	ResetGTSATableSource()
 	t.Cleanup(ResetGTSATableSource)

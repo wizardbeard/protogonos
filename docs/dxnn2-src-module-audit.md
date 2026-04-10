@@ -58,6 +58,7 @@ Status legend:
 
 ## Latest iteration updates
 
+- 2026-04-09: tightened GTSA end-of-window scoring semantics so the final applied prediction is still counted in `mse`/`mae`/direction/jitter aggregates before terminal completion, instead of being dropped when `applyPrediction()` advances into the last scored step.
 - 2026-04-09: tightened Flatland public runner lifecycle semantics so `RunPublic` now fails fast when the world was never started, but exits cleanly when the public world is stopped during an active timed run instead of surfacing a spurious `not started` error.
 - 2026-04-09: tightened Flatland public-world summary semantics so `active_agents` now counts only non-terminated agents, instead of reporting all registered agents while `terminated_agents` already accounts for completed episodes.
 - 2026-04-08: tightened pole2 balancing runtime accounting so an executed terminal step now contributes to `fitness_acc`, `avg_step_fitness`, and `last_fitness_signal`, keeping damping-oriented fitness summaries aligned with the final stepped state instead of dropping the terminating step.
