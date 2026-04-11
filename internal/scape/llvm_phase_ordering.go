@@ -180,6 +180,45 @@ func evaluateLLVMPhaseOrdering(
 	uniqueOpts := make(map[string]struct{}, cfg.maxPhases)
 	runtimeBaseline := cfg.baseRuntime * (0.7 + 1.1*cfg.initialComplexity)
 
+	if complexity <= cfg.targetComplexity {
+		runtimeEstimate := llvmRuntimeEstimate(cfg, complexity, 0, 0, true)
+		runtimeScore := 1.0 / (1.0 + runtimeEstimate)
+		fitness := clampLLVM(0.56*runtimeScore, 0, 1.5)
+		improvement := 0.0
+		if runtimeBaseline > 0 {
+			improvement = (runtimeBaseline - runtimeEstimate) / runtimeBaseline
+		}
+		return Fitness(fitness), Trace{
+			"fitness":                fitness,
+			"phases":                 0,
+			"max_phases":             cfg.maxPhases,
+			"done":                   true,
+			"alignment":              0.0,
+			"final_complexity":       complexity,
+			"best_complexity":        bestComplexity,
+			"estimated_runtime":      runtimeEstimate,
+			"runtime_improvement":    improvement,
+			"mode":                   cfg.mode,
+			"program":                cfg.program,
+			"termination_reason":     "target_complexity",
+			"workflow_name":          cfg.workflowName,
+			"sensor_surface":         sensorSurface,
+			"sensor_width":           sensorWidth,
+			"control_surface":        controlSurface,
+			"optimization_surface":   len(cfg.optimizations),
+			"percept_width":          llvmPerceptWidth,
+			"percept_layout":         "legacy2+extended29",
+			"selected_optimizations": optimizationHistory,
+			"unique_optimizations":   0,
+			"scalar_decisions":       0,
+			"vector_decisions":       0,
+			"mean_alignment_signal":  0.0,
+			"mean_diversity":         0.0,
+			"mean_runtime_gain":      0.0,
+			"last_alignment":         0.0,
+		}, nil
+	}
+
 	for phase := 1; phase <= cfg.maxPhases; phase++ {
 		if err := ctx.Err(); err != nil {
 			return 0, nil, err

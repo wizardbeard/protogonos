@@ -324,6 +324,50 @@ func TestLLVMPhaseOrderingScapeRecordsTerminalDoneDecision(t *testing.T) {
 	}
 }
 
+func TestLLVMPhaseOrderingSkipsDecisionsWhenAlreadyAtTargetComplexity(t *testing.T) {
+	cfg := llvmPhaseOrderingConfig{
+		mode:              "unit",
+		program:           "unit",
+		maxPhases:         5,
+		initialComplexity: 0.20,
+		targetComplexity:  0.25,
+		baseRuntime:       1.0,
+		workflowName:      "unit",
+		optimizations:     append([]string(nil), defaultLLVMOptimizations...),
+	}
+
+	called := false
+	fitness, trace, err := evaluateLLVMPhaseOrdering(
+		context.Background(),
+		cfg,
+		"step_input",
+		llvmPerceptWidth,
+		"step_output",
+		func(context.Context, llvmSenseInput) ([]float64, error) {
+			called = true
+			return []float64{1}, nil
+		},
+	)
+	if err != nil {
+		t.Fatalf("evaluate already-satisfied target: %v", err)
+	}
+	if called {
+		t.Fatalf("expected no optimization decisions when target complexity is already satisfied")
+	}
+	if phases, ok := trace["phases"].(int); !ok || phases != 0 {
+		t.Fatalf("expected phases=0 for already-satisfied target, got %+v", trace)
+	}
+	if reason, ok := trace["termination_reason"].(string); !ok || reason != "target_complexity" {
+		t.Fatalf("expected target_complexity termination, got %+v", trace)
+	}
+	if done, ok := trace["done"].(bool); !ok || !done {
+		t.Fatalf("expected done=true for already-satisfied target, got %+v", trace)
+	}
+	if fitness <= 0 {
+		t.Fatalf("expected positive fitness for already-satisfied target, got %f trace=%+v", fitness, trace)
+	}
+}
+
 func TestLLVMPhaseOrderingScapeEvaluateWithSeedVectorCortex(t *testing.T) {
 	seed, err := genotype.ConstructSeedPopulation("llvm-phase-ordering", 1, 71)
 	if err != nil {
