@@ -181,42 +181,8 @@ func evaluateLLVMPhaseOrdering(
 	runtimeBaseline := cfg.baseRuntime * (0.7 + 1.1*cfg.initialComplexity)
 
 	if complexity <= cfg.targetComplexity {
-		runtimeEstimate := llvmRuntimeEstimate(cfg, complexity, 0, 0, true)
-		runtimeScore := 1.0 / (1.0 + runtimeEstimate)
-		fitness := clampLLVM(0.56*runtimeScore, 0, 1.5)
-		improvement := 0.0
-		if runtimeBaseline > 0 {
-			improvement = (runtimeBaseline - runtimeEstimate) / runtimeBaseline
-		}
-		return Fitness(fitness), Trace{
-			"fitness":                fitness,
-			"phases":                 0,
-			"max_phases":             cfg.maxPhases,
-			"done":                   true,
-			"alignment":              0.0,
-			"final_complexity":       complexity,
-			"best_complexity":        bestComplexity,
-			"estimated_runtime":      runtimeEstimate,
-			"runtime_improvement":    improvement,
-			"mode":                   cfg.mode,
-			"program":                cfg.program,
-			"termination_reason":     "target_complexity",
-			"workflow_name":          cfg.workflowName,
-			"sensor_surface":         sensorSurface,
-			"sensor_width":           sensorWidth,
-			"control_surface":        controlSurface,
-			"optimization_surface":   len(cfg.optimizations),
-			"percept_width":          llvmPerceptWidth,
-			"percept_layout":         "legacy2+extended29",
-			"selected_optimizations": optimizationHistory,
-			"unique_optimizations":   0,
-			"scalar_decisions":       0,
-			"vector_decisions":       0,
-			"mean_alignment_signal":  0.0,
-			"mean_diversity":         0.0,
-			"mean_runtime_gain":      0.0,
-			"last_alignment":         0.0,
-		}, nil
+		fitness, trace := summarizeLLVMTrace(cfg, sensorSurface, sensorWidth, controlSurface, complexity, bestComplexity, runtimeBaseline, 0, true, "target_complexity", optimizationHistory, 0, 0, 0, 0, 0, 0)
+		return fitness, trace, nil
 	}
 
 	for phase := 1; phase <= cfg.maxPhases; phase++ {
@@ -294,7 +260,8 @@ func evaluateLLVMPhaseOrdering(
 	}
 
 	if phasesUsed == 0 {
-		return 0, Trace{"phases": 0, "final_complexity": complexity}, nil
+		fitness, trace := summarizeLLVMTrace(cfg, sensorSurface, sensorWidth, controlSurface, complexity, bestComplexity, runtimeBaseline, 0, false, "max_phases", optimizationHistory, 0, 0, 0, 0, 0, 0)
+		return fitness, trace, nil
 	}
 
 	alignmentAvg := alignmentAcc / float64(phasesUsed)
@@ -343,6 +310,79 @@ func evaluateLLVMPhaseOrdering(
 		"mean_runtime_gain":      runtimeGainAvg,
 		"last_alignment":         lastAlignment,
 	}, nil
+}
+
+func summarizeLLVMTrace(
+	cfg llvmPhaseOrderingConfig,
+	sensorSurface string,
+	sensorWidth int,
+	controlSurface string,
+	complexity float64,
+	bestComplexity float64,
+	runtimeBaseline float64,
+	phasesUsed int,
+	done bool,
+	terminationReason string,
+	optimizationHistory []string,
+	scalarDecisions int,
+	vectorDecisions int,
+	alignmentAvg float64,
+	alignmentSignalAvg float64,
+	diversityAvg float64,
+	runtimeGainAvg float64,
+) (Fitness, Trace) {
+	diversity := float64(countUniqueStrings(optimizationHistory)) / float64(maxIntLLVM(1, len(optimizationHistory)))
+	runtimeEstimate := llvmRuntimeEstimate(cfg, complexity, phasesUsed, diversity, done)
+	runtimeScore := 1.0 / (1.0 + runtimeEstimate)
+	fitness := 0.56*runtimeScore + 0.24*alignmentAvg + 0.20*diversity
+	if !done && phasesUsed >= cfg.maxPhases {
+		fitness -= 0.03
+	}
+	fitness = clampLLVM(fitness, 0, 1.5)
+	improvement := 0.0
+	if runtimeBaseline > 0 {
+		improvement = (runtimeBaseline - runtimeEstimate) / runtimeBaseline
+	}
+	return Fitness(fitness), Trace{
+		"fitness":                fitness,
+		"phases":                 phasesUsed,
+		"max_phases":             cfg.maxPhases,
+		"done":                   done,
+		"alignment":              alignmentAvg,
+		"final_complexity":       complexity,
+		"best_complexity":        bestComplexity,
+		"estimated_runtime":      runtimeEstimate,
+		"runtime_improvement":    improvement,
+		"mode":                   cfg.mode,
+		"program":                cfg.program,
+		"termination_reason":     terminationReason,
+		"workflow_name":          cfg.workflowName,
+		"sensor_surface":         sensorSurface,
+		"sensor_width":           sensorWidth,
+		"control_surface":        controlSurface,
+		"optimization_surface":   len(cfg.optimizations),
+		"percept_width":          llvmPerceptWidth,
+		"percept_layout":         "legacy2+extended29",
+		"selected_optimizations": optimizationHistory,
+		"unique_optimizations":   countUniqueStrings(optimizationHistory),
+		"scalar_decisions":       scalarDecisions,
+		"vector_decisions":       vectorDecisions,
+		"mean_alignment_signal":  alignmentSignalAvg,
+		"mean_diversity":         diversityAvg,
+		"mean_runtime_gain":      runtimeGainAvg,
+		"last_alignment":         alignmentAvg,
+	}
+}
+
+func countUniqueStrings(items []string) int {
+	if len(items) == 0 {
+		return 0
+	}
+	seen := make(map[string]struct{}, len(items))
+	for _, item := range items {
+		seen[item] = struct{}{}
+	}
+	return len(seen)
 }
 
 type llvmSenseInput struct {

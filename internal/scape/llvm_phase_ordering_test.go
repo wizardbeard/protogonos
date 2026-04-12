@@ -368,6 +368,53 @@ func TestLLVMPhaseOrderingSkipsDecisionsWhenAlreadyAtTargetComplexity(t *testing
 	}
 }
 
+func TestLLVMPhaseOrderingZeroMaxPhasesReturnsFullTerminalTrace(t *testing.T) {
+	cfg := llvmPhaseOrderingConfig{
+		mode:              "unit",
+		program:           "unit",
+		maxPhases:         0,
+		initialComplexity: 1.0,
+		targetComplexity:  0.25,
+		baseRuntime:       1.0,
+		workflowName:      "unit",
+		optimizations:     append([]string(nil), defaultLLVMOptimizations...),
+	}
+
+	called := false
+	fitness, trace, err := evaluateLLVMPhaseOrdering(
+		context.Background(),
+		cfg,
+		"step_input",
+		llvmPerceptWidth,
+		"step_output",
+		func(context.Context, llvmSenseInput) ([]float64, error) {
+			called = true
+			return []float64{1}, nil
+		},
+	)
+	if err != nil {
+		t.Fatalf("evaluate zero-phase llvm: %v", err)
+	}
+	if called {
+		t.Fatalf("expected no optimization decisions when max_phases=0")
+	}
+	if phases, ok := trace["phases"].(int); !ok || phases != 0 {
+		t.Fatalf("expected phases=0, got %+v", trace)
+	}
+	if reason, ok := trace["termination_reason"].(string); !ok || reason != "max_phases" {
+		t.Fatalf("expected max_phases termination, got %+v", trace)
+	}
+	if done, ok := trace["done"].(bool); !ok || done {
+		t.Fatalf("expected done=false for zero-phase budget exhaustion, got %+v", trace)
+	}
+	if _, ok := trace["estimated_runtime"].(float64); !ok {
+		t.Fatalf("expected full zero-phase trace with estimated_runtime, got %+v", trace)
+	}
+	if fitness <= 0 {
+		t.Fatalf("expected positive fitness for zero-phase trace, got %f trace=%+v", fitness, trace)
+	}
+}
+
 func TestLLVMPhaseOrderingScapeEvaluateWithSeedVectorCortex(t *testing.T) {
 	seed, err := genotype.ConstructSeedPopulation("llvm-phase-ordering", 1, 71)
 	if err != nil {
