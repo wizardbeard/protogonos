@@ -314,6 +314,10 @@ func evaluateDTM(
 	meanRunProgress := 0.0
 	meanStepProgress := 0.0
 	meanSwitchedSignal := 0.0
+	lastRunIndex := -1
+	if episode.runIndex > 0 {
+		lastRunIndex = episode.runIndex - 1
+	}
 	if steps > 0 {
 		denom := float64(steps)
 		meanRunProgress = runProgressAcc / denom
@@ -340,7 +344,7 @@ func evaluateDTM(
 		"avg_steps_per_run":      avgStepsPerRun,
 		"mode":                   cfg.mode,
 		"max_steps":              cfg.maxStepsPerRun,
-		"last_run_index":         episode.runIndex,
+		"last_run_index":         lastRunIndex,
 		"last_step_index":        episode.stepIndex,
 		"switch_spread_floor":    cfg.switchFloor,
 		"switch_spread_interval": cfg.switchSpread,

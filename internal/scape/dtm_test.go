@@ -448,6 +448,13 @@ func TestDTMScapeTraceIncludesRunDiagnostics(t *testing.T) {
 	if stepIndex, ok := trace["last_step_index"].(int); !ok || stepIndex != 0 {
 		t.Fatalf("expected reset last_step_index=0 after terminal episode completion, got %+v", trace)
 	}
+	totalRuns, ok := trace["total_runs"].(int)
+	if !ok || totalRuns <= 0 {
+		t.Fatalf("trace missing positive total_runs: %+v", trace)
+	}
+	if runIndex, ok := trace["last_run_index"].(int); !ok || runIndex != totalRuns-1 {
+		t.Fatalf("expected last_run_index to report the final completed run, got %+v", trace)
+	}
 }
 
 func TestDTMScapeSingleRunDoesNotTriggerRewardSwitch(t *testing.T) {
@@ -487,5 +494,8 @@ func TestDTMScapeSingleRunDoesNotTriggerRewardSwitch(t *testing.T) {
 	}
 	if totalRuns, ok := trace["total_runs"].(int); !ok || totalRuns != 1 {
 		t.Fatalf("expected total_runs=1, got %+v", trace)
+	}
+	if runIndex, ok := trace["last_run_index"].(int); !ok || runIndex != 0 {
+		t.Fatalf("expected single completed run to report last_run_index=0, got %+v", trace)
 	}
 }
