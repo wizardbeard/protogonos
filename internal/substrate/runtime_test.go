@@ -1885,6 +1885,50 @@ func TestApplySubstrateMailboxRestoresDrainedCommandsOnEnvelopeError(t *testing.
 	}
 }
 
+func TestApplySubstrateMailboxUsesStageInitParametersAsBaseline(t *testing.T) {
+	resetRegistriesForTests()
+	t.Cleanup(resetRegistriesForTests)
+
+	rt, err := NewSimpleRuntime(Spec{
+		CPPName:  DefaultCPPName,
+		CEPNames: []string{SetABCNCEPName, SetABCNCEPName},
+	}, 1)
+	if err != nil {
+		t.Fatalf("new runtime: %v", err)
+	}
+	expectedInits := scopeCEPActorInitsForWeight(rt.cepActorInits, 0)
+	if len(expectedInits) < 2 {
+		t.Fatalf("expected two scoped cep inits, got=%v", expectedInits)
+	}
+	expectedInits[1].parameters = map[string]float64{
+		"A": 0,
+		"B": 0,
+		"C": 0,
+		"N": 0,
+	}
+
+	command := CEPCommand{
+		FromPID: expectedInits[1].id,
+		ToPID:   expectedInits[1].substratePID,
+		Command: SetABCNCEPName,
+		Signal:  []float64{1},
+	}
+	if err := rt.substrateMailboxes[0].Post(command); err != nil {
+		t.Fatalf("post command: %v", err)
+	}
+
+	updated, persisted, err := rt.applySubstrateMailbox(context.Background(), 0, 1, expectedInits, 0.4, nil)
+	if err != nil {
+		t.Fatalf("apply mailbox: %v", err)
+	}
+	if math.Abs(updated-0.4) > 1e-9 {
+		t.Fatalf("expected zero-coefficient stage baseline to preserve current weight, got=%v", updated)
+	}
+	if persisted["A"] != 0 || persisted["B"] != 0 || persisted["C"] != 0 || persisted["N"] != 0 {
+		t.Fatalf("expected stage init parameters to persist as baseline, got=%v", persisted)
+	}
+}
+
 type errAfterNContext struct {
 	context.Context
 	nilCount int

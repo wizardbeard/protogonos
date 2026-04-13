@@ -1683,6 +1683,9 @@ func (r *SimpleRuntime) applySubstrateMailbox(ctx context.Context, weightIdx int
 	}
 	next := current
 	parameters := cloneFloatMap(r.params)
+	if cepIdx >= 0 && cepIdx < len(expectedInits) && len(expectedInits[cepIdx].parameters) > 0 {
+		parameters = cloneFloatMap(expectedInits[cepIdx].parameters)
+	}
 	if len(persistedParams) > 0 {
 		parameters = cloneFloatMap(persistedParams)
 	}
