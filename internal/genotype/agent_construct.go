@@ -8,6 +8,7 @@ import (
 	protoio "protogonos/internal/io"
 	"protogonos/internal/model"
 	"protogonos/internal/morphology"
+	"protogonos/internal/scapeid"
 	"protogonos/internal/storage"
 )
 
@@ -329,6 +330,9 @@ func resolveConstructMorphology(raw string) (morphology.Morphology, error) {
 	case "llvm-phase-ordering", "llvm-phase-ordering-v1", "llvmphaseordering", "scape-llvmphaseordering":
 		return morphology.LLVMPhaseOrderingMorphology{}, nil
 	default:
+		if canonical := scapeid.Normalize(raw); canonical != "" && canonical != key {
+			return resolveConstructMorphology(canonical)
+		}
 		return nil, fmt.Errorf("unsupported morphology: %s", raw)
 	}
 }
