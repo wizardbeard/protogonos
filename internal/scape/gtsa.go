@@ -149,6 +149,7 @@ func evaluateGTSA(
 	}
 
 	if cfg.scoreSteps <= 0 {
+		finalProgress := gtsaProgress(state.indexStart, state.indexCurrent, state.indexEnd)
 		return 0, Trace{
 			"mse":                0.0,
 			"mae":                0.0,
@@ -169,7 +170,7 @@ func evaluateGTSA(
 			"index_end":          state.indexEnd,
 			"mean_abs_delta":     0.0,
 			"mean_window_value":  0.0,
-			"last_progress":      0.0,
+			"last_progress":      finalProgress,
 		}, nil
 	}
 
@@ -224,6 +225,7 @@ func evaluateGTSA(
 	}
 
 	if scoredSteps <= 0 {
+		finalProgress := gtsaProgress(state.indexStart, state.indexCurrent, state.indexEnd)
 		return 0, Trace{
 			"mse":                0.0,
 			"mae":                0.0,
@@ -244,7 +246,7 @@ func evaluateGTSA(
 			"index_end":          state.indexEnd,
 			"mean_abs_delta":     0.0,
 			"mean_window_value":  0.0,
-			"last_progress":      0.0,
+			"last_progress":      finalProgress,
 		}, nil
 	}
 
@@ -257,10 +259,7 @@ func evaluateGTSA(
 	}
 	meanAbsDelta := absDeltaAcc / float64(scoredSteps)
 	meanWindowValue := windowMeanAcc / float64(scoredSteps)
-	finalProgress := 0.0
-	progressDenom := maxGTSA(1, state.indexEnd-state.indexStart)
-	finalProgress = float64(state.indexCurrent-state.indexStart) / float64(progressDenom)
-	finalProgress = clampGTSA(finalProgress, 0, 1)
+	finalProgress := gtsaProgress(state.indexStart, state.indexCurrent, state.indexEnd)
 
 	base := 1.0 / (1.0 + mae + 0.5*mse)
 	directionTerm := 0.75 + 0.25*directionAccuracy
@@ -717,9 +716,7 @@ func (s *gtsaWindowState) getPercept() (gtsaPercept, error) {
 	if len(s.window) > 0 {
 		windowMean /= float64(len(s.window))
 	}
-	progressDenom := maxGTSA(1, s.indexEnd-s.indexStart)
-	progress := float64(s.indexCurrent-s.indexStart) / float64(progressDenom)
-	progress = clampGTSA(progress, 0, 1)
+	progress := gtsaProgress(s.indexStart, s.indexCurrent, s.indexEnd)
 
 	return gtsaPercept{
 		vector:     vector,
@@ -728,6 +725,12 @@ func (s *gtsaWindowState) getPercept() (gtsaPercept, error) {
 		windowMean: windowMean,
 		progress:   progress,
 	}, nil
+}
+
+func gtsaProgress(indexStart, indexCurrent, indexEnd int) float64 {
+	progressDenom := maxGTSA(1, indexEnd-indexStart)
+	progress := float64(indexCurrent-indexStart) / float64(progressDenom)
+	return clampGTSA(progress, 0, 1)
 }
 
 func (s *gtsaWindowState) applyPrediction() (expected float64, done bool, err error) {

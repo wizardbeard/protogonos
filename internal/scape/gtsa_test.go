@@ -377,6 +377,58 @@ func TestGTSAScapeCountsFinalScoredPrediction(t *testing.T) {
 	}
 }
 
+func TestGTSAScapeZeroScoreTraceUsesFinalProgress(t *testing.T) {
+	cfg := gtsaModeConfig{
+		mode:        "gt",
+		startIndex:  1,
+		warmupSteps: 1,
+		scoreSteps:  0,
+		windowRows:  1,
+	}
+	ctx := context.WithValue(context.Background(), gtsaDataSourceContextKey{}, gtsaTable{
+		info: gtsaInfo{
+			name:   "unit",
+			ivl:    1,
+			ovl:    1,
+			trnEnd: 2,
+			valEnd: 2,
+			tstEnd: 2,
+		},
+		values: []float64{0, 2, 3},
+	})
+
+	_, trace, err := evaluateGTSA(
+		ctx,
+		cfg,
+		func(_ context.Context, percept gtsaPercept) (float64, error) {
+			return percept.current, nil
+		},
+	)
+	if err != nil {
+		t.Fatalf("evaluate zero-score gtsa: %v", err)
+	}
+	if warmup, ok := trace["warmup_steps"].(int); !ok || warmup != 1 {
+		t.Fatalf("expected warmup_steps=1, got %+v", trace)
+	}
+	if steps, ok := trace["steps"].(int); !ok || steps != 0 {
+		t.Fatalf("expected steps=0 for zero-score path, got %+v", trace)
+	}
+	start, sok := trace["index_start"].(int)
+	current, cok := trace["index_current"].(int)
+	end, eok := trace["index_end"].(int)
+	if !sok || !cok || !eok {
+		t.Fatalf("trace missing index window fields: %+v", trace)
+	}
+	progress, pok := trace["last_progress"].(float64)
+	if !pok {
+		t.Fatalf("trace missing last_progress: %+v", trace)
+	}
+	wantProgress := float64(current-start) / float64(maxGTSA(1, end-start))
+	if math.Abs(progress-wantProgress) > 1e-9 {
+		t.Fatalf("expected zero-score last_progress=%f from final index window, got %+v", wantProgress, trace)
+	}
+}
+
 func TestGTSAScapeLoadTableCSV(t *testing.T) {
 	ResetGTSATableSource()
 	t.Cleanup(ResetGTSATableSource)
