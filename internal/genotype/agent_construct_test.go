@@ -182,6 +182,100 @@ func TestConstructCortexSupportsProfiledMorphologyAliases(t *testing.T) {
 	}
 }
 
+func TestConstructCortexSupportsLegacyDefaultMorphologyAliases(t *testing.T) {
+	tests := []struct {
+		name         string
+		morphology   string
+		seed         int64
+		wantSensors  []string
+		wantActuator string
+		wantOutputs  int
+	}{
+		{
+			name:         "flatland default",
+			morphology:   "flatland_v1",
+			seed:         41,
+			wantSensors:  []string{protoio.FlatlandDistanceSensorName, protoio.FlatlandEnergySensorName, protoio.FlatlandPreySensorName, protoio.FlatlandPredatorSensorName, protoio.FlatlandPoisonSensorName, protoio.FlatlandWallSensorName, protoio.FlatlandFoodProximitySensorName, protoio.FlatlandPreyProximitySensorName, protoio.FlatlandPredatorProximitySensorName, protoio.FlatlandPoisonProximitySensorName, protoio.FlatlandWallProximitySensorName, protoio.FlatlandResourceBalanceSensorName, protoio.FlatlandDistanceScan0SensorName, protoio.FlatlandDistanceScan1SensorName, protoio.FlatlandDistanceScan2SensorName, protoio.FlatlandDistanceScan3SensorName, protoio.FlatlandDistanceScan4SensorName, protoio.FlatlandColorScan0SensorName, protoio.FlatlandColorScan1SensorName, protoio.FlatlandColorScan2SensorName, protoio.FlatlandColorScan3SensorName, protoio.FlatlandColorScan4SensorName, protoio.FlatlandEnergyScan0SensorName, protoio.FlatlandEnergyScan1SensorName, protoio.FlatlandEnergyScan2SensorName, protoio.FlatlandEnergyScan3SensorName, protoio.FlatlandEnergyScan4SensorName},
+			wantActuator: protoio.FlatlandMoveActuatorName,
+			wantOutputs:  1,
+		},
+		{
+			name:         "dtm default",
+			morphology:   "dtm_v1",
+			seed:         42,
+			wantSensors:  []string{protoio.DTMRangeLeftSensorName, protoio.DTMRangeFrontSensorName, protoio.DTMRangeRightSensorName, protoio.DTMRewardSensorName, protoio.DTMRunProgressSensorName, protoio.DTMStepProgressSensorName, protoio.DTMSwitchedSensorName},
+			wantActuator: protoio.DTMMoveActuatorName,
+			wantOutputs:  1,
+		},
+		{
+			name:         "fx default",
+			morphology:   "fx_v1",
+			seed:         43,
+			wantSensors:  []string{protoio.FXPriceSensorName, protoio.FXSignalSensorName, protoio.FXMomentumSensorName, protoio.FXVolatilitySensorName, protoio.FXNAVSensorName, protoio.FXDrawdownSensorName, protoio.FXPositionSensorName, protoio.FXEntrySensorName, protoio.FXPercentChangeSensorName, protoio.FXPrevPercentChangeSensorName, protoio.FXProfitSensorName},
+			wantActuator: protoio.FXTradeActuatorName,
+			wantOutputs:  1,
+		},
+		{
+			name:         "gtsa default",
+			morphology:   "gtsa_v1",
+			seed:         44,
+			wantSensors:  []string{protoio.GTSAInputSensorName, protoio.GTSADeltaSensorName, protoio.GTSAWindowMeanSensorName, protoio.GTSAProgressSensorName},
+			wantActuator: protoio.GTSAPredictActuatorName,
+			wantOutputs:  1,
+		},
+		{
+			name:         "epitopes default",
+			morphology:   "epitopes_v1",
+			seed:         45,
+			wantSensors:  []string{protoio.EpitopesSignalSensorName, protoio.EpitopesMemorySensorName, protoio.EpitopesTargetSensorName, protoio.EpitopesProgressSensorName, protoio.EpitopesMarginSensorName},
+			wantActuator: protoio.EpitopesResponseActuatorName,
+			wantOutputs:  1,
+		},
+		{
+			name:         "llvm default",
+			morphology:   "llvm_phase_ordering_v1",
+			seed:         46,
+			wantSensors:  []string{protoio.LLVMComplexitySensorName, protoio.LLVMPassIndexSensorName, protoio.LLVMAlignmentSensorName, protoio.LLVMDiversitySensorName, protoio.LLVMRuntimeGainSensorName},
+			wantActuator: protoio.LLVMPhaseActuatorName,
+			wantOutputs:  1,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			constraint := DefaultConstructConstraint()
+			constraint.Morphology = tt.morphology
+
+			out, err := ConstructCortex(
+				"agent-"+tt.name,
+				0,
+				constraint,
+				"neural",
+				"none",
+				"l2l_feedforward",
+				rand.New(rand.NewSource(tt.seed)),
+			)
+			if err != nil {
+				t.Fatalf("construct cortex: %v", err)
+			}
+			if len(out.Genome.SensorIDs) != len(tt.wantSensors) {
+				t.Fatalf("unexpected sensor count: got=%v want=%v", out.Genome.SensorIDs, tt.wantSensors)
+			}
+			for i, want := range tt.wantSensors {
+				if out.Genome.SensorIDs[i] != want {
+					t.Fatalf("unexpected sensors: got=%v want=%v", out.Genome.SensorIDs, tt.wantSensors)
+				}
+			}
+			if len(out.Genome.ActuatorIDs) != 1 || out.Genome.ActuatorIDs[0] != tt.wantActuator {
+				t.Fatalf("unexpected actuator ids: %v", out.Genome.ActuatorIDs)
+			}
+			if len(out.InputNeuronIDs) != len(tt.wantSensors) || len(out.OutputNeuronIDs) != tt.wantOutputs {
+				t.Fatalf("unexpected input/output ids: in=%v out=%v", out.InputNeuronIDs, out.OutputNeuronIDs)
+			}
+		})
+	}
+}
+
 func TestConstructCortexSupportsEpitopesCoreMorphologyAlias(t *testing.T) {
 	constraint := DefaultConstructConstraint()
 	constraint.Morphology = "epitopes_core_v1"
