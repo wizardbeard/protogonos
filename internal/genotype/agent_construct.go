@@ -330,11 +330,55 @@ func resolveConstructMorphology(raw string) (morphology.Morphology, error) {
 	case "llvm-phase-ordering", "llvm-phase-ordering-v1", "llvmphaseordering", "scape-llvmphaseordering":
 		return morphology.LLVMPhaseOrderingMorphology{}, nil
 	default:
-		if canonical := scapeid.Normalize(raw); canonical != "" && canonical != key {
+		if canonical := normalizeConstructMorphologyAlias(key); canonical != "" && canonical != key {
 			return resolveConstructMorphology(canonical)
 		}
 		return nil, fmt.Errorf("unsupported morphology: %s", raw)
 	}
+}
+
+func normalizeConstructMorphologyAlias(key string) string {
+	if canonical := scapeid.Normalize(key); canonical != "" && canonical != key {
+		return canonical
+	}
+
+	profileSuffixes := []string{
+		"-range-sense-v1",
+		"-range-sense",
+		"-scanner-v1",
+		"-scanner",
+		"-classic-v1",
+		"-classic",
+		"-reward-v1",
+		"-reward",
+		"-market-v1",
+		"-market",
+		"-core-v1",
+		"-core",
+		"-2-v1",
+		"-2",
+		"-3-v1",
+		"-3",
+		"-4-v1",
+		"-4",
+		"-6-v1",
+		"-6",
+	}
+	for _, suffix := range profileSuffixes {
+		if !strings.HasSuffix(key, suffix) {
+			continue
+		}
+		base := strings.TrimSuffix(key, suffix)
+		if base == "" {
+			continue
+		}
+		canonicalBase := scapeid.Normalize(base)
+		if canonicalBase == "" || canonicalBase == base {
+			continue
+		}
+		return canonicalBase + suffix
+	}
+	return ""
 }
 
 func pickString(rng *rand.Rand, values []string, fallback string) string {
