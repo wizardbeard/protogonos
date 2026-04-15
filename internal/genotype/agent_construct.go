@@ -400,6 +400,14 @@ func normalizeBracketedConstructMorphology(key string) string {
 	if canonicalBase := scapeid.Normalize(base); canonicalBase != "" {
 		base = canonicalBase
 	}
+	if base == "flatland" {
+		switch profile {
+		case "classic":
+			return "flatland-classic"
+		case "balanced5", "core3", "forward5", "scanner":
+			return "flatland-scanner"
+		}
+	}
 	return base + "-" + profile
 }
 

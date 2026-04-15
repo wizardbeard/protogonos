@@ -380,6 +380,7 @@ func TestConstructCortexSupportsBracketedMorphologyLabels(t *testing.T) {
 		wantOutputs  int
 	}{
 		{name: "flatland classic label", morphology: "flatland[classic]", seed: 71, wantSensors: 2, wantActuator: protoio.FlatlandMoveActuatorName, wantOutputs: 1},
+		{name: "flatland core3 label", morphology: "flatland[core3]", seed: 78, wantSensors: 20, wantActuator: protoio.FlatlandTwoWheelsActuatorName, wantOutputs: 2},
 		{name: "dtm reward label", morphology: "dtm[reward]", seed: 72, wantSensors: 1, wantActuator: protoio.DTMMoveActuatorName, wantOutputs: 1},
 		{name: "gtsa core label", morphology: "gtsa[core]", seed: 73, wantSensors: 1, wantActuator: protoio.GTSAPredictActuatorName, wantOutputs: 1},
 		{name: "fx market label", morphology: "fx[market]", seed: 74, wantSensors: 2, wantActuator: protoio.FXTradeActuatorName, wantOutputs: 1},
