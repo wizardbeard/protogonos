@@ -284,6 +284,9 @@ func ConstructCortex(
 func resolveConstructMorphology(raw string) (morphology.Morphology, error) {
 	key := strings.ToLower(strings.TrimSpace(raw))
 	key = strings.ReplaceAll(key, "_", "-")
+	if bracketed := normalizeBracketedConstructMorphology(key); bracketed != "" && bracketed != key {
+		return resolveConstructMorphology(bracketed)
+	}
 	switch key {
 	case "", "xor", "xor-v1", "xor-mimic":
 		return morphology.XORMorphology{}, nil
@@ -379,6 +382,25 @@ func normalizeConstructMorphologyAlias(key string) string {
 		return canonicalBase + suffix
 	}
 	return ""
+}
+
+func normalizeBracketedConstructMorphology(key string) string {
+	open := strings.IndexByte(key, '[')
+	close := strings.LastIndexByte(key, ']')
+	if open <= 0 || close <= open+1 || close != len(key)-1 {
+		return ""
+	}
+	base := strings.TrimSpace(key[:open])
+	profile := strings.TrimSpace(key[open+1 : close])
+	if base == "" || profile == "" {
+		return ""
+	}
+	base = strings.ReplaceAll(base, "_", "-")
+	profile = strings.ReplaceAll(profile, "_", "-")
+	if canonicalBase := scapeid.Normalize(base); canonicalBase != "" {
+		base = canonicalBase
+	}
+	return base + "-" + profile
 }
 
 func pickString(rng *rand.Rand, values []string, fallback string) string {
