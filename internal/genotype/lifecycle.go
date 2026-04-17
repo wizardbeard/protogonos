@@ -67,6 +67,7 @@ func ConstructSeedPopulation(scapeName string, size int, seed int64) (SeedPopula
 }
 
 func ConstructSeedPopulationWithOptions(scapeName string, size int, seed int64, options SeedPopulationOptions) (SeedPopulation, error) {
+	scapeName, options = applySeedMorphologyLabel(scapeName, options)
 	scapeName = scapeid.Normalize(scapeName)
 	switch scapeName {
 	case "xor":
@@ -112,6 +113,61 @@ func ConstructSeedPopulationWithOptions(scapeName string, size int, seed int64, 
 	default:
 		return SeedPopulation{}, fmt.Errorf("unsupported scape: %s", scapeName)
 	}
+}
+
+func applySeedMorphologyLabel(scapeName string, options SeedPopulationOptions) (string, SeedPopulationOptions) {
+	label := strings.TrimSpace(scapeName)
+	open := strings.IndexByte(label, '[')
+	close := strings.LastIndexByte(label, ']')
+	if open <= 0 || close <= open+1 || close != len(label)-1 {
+		return scapeName, options
+	}
+	base := strings.TrimSpace(label[:open])
+	profile := strings.TrimSpace(label[open+1 : close])
+	if base == "" || profile == "" {
+		return scapeName, options
+	}
+	base = scapeid.Normalize(base)
+	switch base {
+	case "flatland":
+		switch normalizeFlatlandScannerSeedProfile(profile) {
+		case FlatlandScannerSeedProfileBalanced5, FlatlandScannerSeedProfileCore3, FlatlandScannerSeedProfileForward5:
+			if strings.TrimSpace(options.FlatlandProfile) == "" {
+				options.FlatlandProfile = FlatlandSeedProfileScanner
+			}
+			if strings.TrimSpace(options.FlatlandScannerProfile) == "" {
+				options.FlatlandScannerProfile = profile
+			}
+			return base, options
+		}
+		if normalizeFlatlandSeedProfile(profile) == FlatlandSeedProfileClassic {
+			if strings.TrimSpace(options.FlatlandProfile) == "" {
+				options.FlatlandProfile = profile
+			}
+			return base, options
+		}
+	case "gtsa":
+		if strings.TrimSpace(options.GTSAProfile) == "" {
+			options.GTSAProfile = profile
+		}
+		return base, options
+	case "fx":
+		if strings.TrimSpace(options.FXProfile) == "" {
+			options.FXProfile = profile
+		}
+		return base, options
+	case "epitopes":
+		if strings.TrimSpace(options.EpitopesProfile) == "" {
+			options.EpitopesProfile = profile
+		}
+		return base, options
+	case "llvm-phase-ordering":
+		if strings.TrimSpace(options.LLVMProfile) == "" {
+			options.LLVMProfile = profile
+		}
+		return base, options
+	}
+	return scapeName, options
 }
 
 func constructFlatlandSeedPopulation(size int, seed int64, options SeedPopulationOptions) (SeedPopulation, error) {

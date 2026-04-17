@@ -630,6 +630,46 @@ func TestConstructSeedPopulationSupportsReferenceScapeAliases(t *testing.T) {
 	}
 }
 
+func TestConstructSeedPopulationSupportsBracketedMorphologyLabels(t *testing.T) {
+	tests := []struct {
+		name          string
+		scape         string
+		wantInputs    int
+		wantOutputs   int
+		wantActuator  string
+		wantFirstInID string
+	}{
+		{name: "flatland classic", scape: "flatland[classic]", wantInputs: 2, wantOutputs: 1, wantActuator: protoio.FlatlandMoveActuatorName, wantFirstInID: "d"},
+		{name: "flatland core3", scape: "flatland[core3]", wantInputs: len(flatlandSeedInputNeuronIDs()), wantOutputs: len(flatlandSeedOutputNeuronIDs()), wantActuator: protoio.FlatlandTwoWheelsActuatorName, wantFirstInID: "d0"},
+		{name: "gtsa core", scape: "gtsa[core]", wantInputs: 1, wantOutputs: 1, wantActuator: protoio.GTSAPredictActuatorName, wantFirstInID: "x"},
+		{name: "fx market", scape: "fx[market]", wantInputs: 2, wantOutputs: 1, wantActuator: protoio.FXTradeActuatorName, wantFirstInID: "p"},
+		{name: "epitopes core", scape: "epitopes[core]", wantInputs: 2, wantOutputs: 1, wantActuator: protoio.EpitopesResponseActuatorName, wantFirstInID: "s"},
+		{name: "llvm core", scape: "llvm-phase-ordering[core]", wantInputs: 2, wantOutputs: 55, wantActuator: protoio.LLVMPhaseActuatorName, wantFirstInID: "c"},
+		{name: "aliased gtsa core", scape: "scape_GTSA[core]", wantInputs: 1, wantOutputs: 1, wantActuator: protoio.GTSAPredictActuatorName, wantFirstInID: "x"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			seed, err := ConstructSeedPopulation(tt.scape, 2, 91)
+			if err != nil {
+				t.Fatalf("construct seed population: %v", err)
+			}
+			if len(seed.Genomes) != 2 {
+				t.Fatalf("expected 2 genomes, got %d", len(seed.Genomes))
+			}
+			if len(seed.InputNeuronIDs) != tt.wantInputs || seed.InputNeuronIDs[0] != tt.wantFirstInID {
+				t.Fatalf("unexpected input ids: %v", seed.InputNeuronIDs)
+			}
+			if len(seed.OutputNeuronIDs) != tt.wantOutputs {
+				t.Fatalf("unexpected output ids: %v", seed.OutputNeuronIDs)
+			}
+			if len(seed.Genomes[0].ActuatorIDs) != 1 || seed.Genomes[0].ActuatorIDs[0] != tt.wantActuator {
+				t.Fatalf("unexpected actuator ids: %v", seed.Genomes[0].ActuatorIDs)
+			}
+		})
+	}
+}
+
 func TestCloneAgent(t *testing.T) {
 	in := model.Genome{
 		ID:          "g1",
