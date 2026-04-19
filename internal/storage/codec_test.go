@@ -17,6 +17,66 @@ func TestDecodeGenomeFixture(t *testing.T) {
 	}
 }
 
+func TestDecodeGenomeFixtureWithExplicitIOLinks(t *testing.T) {
+	genome := decodeGenomeFixture(t, "io_links_genome_v1.json")
+	if genome.ID != "genome-io-links-1" {
+		t.Fatalf("unexpected genome id: %s", genome.ID)
+	}
+	if len(genome.SensorNeuronLinks) != 3 {
+		t.Fatalf("unexpected sensor-neuron links: %+v", genome.SensorNeuronLinks)
+	}
+	if len(genome.NeuronActuatorLinks) != 3 {
+		t.Fatalf("unexpected neuron-actuator links: %+v", genome.NeuronActuatorLinks)
+	}
+	if genome.SensorLinks != len(genome.SensorNeuronLinks) {
+		t.Fatalf("sensor link counter mismatch: count=%d explicit=%d", genome.SensorLinks, len(genome.SensorNeuronLinks))
+	}
+	if genome.ActuatorLinks != len(genome.NeuronActuatorLinks) {
+		t.Fatalf("actuator link counter mismatch: count=%d explicit=%d", genome.ActuatorLinks, len(genome.NeuronActuatorLinks))
+	}
+}
+
+func TestDecodeGenomeFixtureWithVectorIO(t *testing.T) {
+	genome := decodeGenomeFixture(t, "vector_io_genome_v1.json")
+	if genome.ID != "genome-vector-io-1" {
+		t.Fatalf("unexpected genome id: %s", genome.ID)
+	}
+	if len(genome.SensorIDs) != 1 || genome.SensorIDs[0] != "vector_input" {
+		t.Fatalf("unexpected vector sensor ids: %+v", genome.SensorIDs)
+	}
+	if len(genome.ActuatorIDs) != 1 || genome.ActuatorIDs[0] != "vector_output" {
+		t.Fatalf("unexpected vector actuator ids: %+v", genome.ActuatorIDs)
+	}
+	if len(genome.SensorNeuronLinks) != 1 || genome.SensorNeuronLinks[0].SensorID != "vector_input" {
+		t.Fatalf("unexpected vector sensor-neuron links: %+v", genome.SensorNeuronLinks)
+	}
+	if len(genome.NeuronActuatorLinks) != 1 || genome.NeuronActuatorLinks[0].ActuatorID != "vector_output" {
+		t.Fatalf("unexpected vector neuron-actuator links: %+v", genome.NeuronActuatorLinks)
+	}
+}
+
+func TestDecodeGenomeFixtureWithSubstrateIO(t *testing.T) {
+	genome := decodeGenomeFixture(t, "substrate_io_genome_v1.json")
+	if genome.ID != "genome-substrate-io-1" {
+		t.Fatalf("unexpected genome id: %s", genome.ID)
+	}
+	if genome.Substrate == nil {
+		t.Fatal("expected substrate config")
+	}
+	if len(genome.Substrate.CPPIDs) != 1 || genome.Substrate.CPPIDs[0] != "substrate_cpp_0" {
+		t.Fatalf("unexpected substrate cpp ids: %+v", genome.Substrate.CPPIDs)
+	}
+	if len(genome.Substrate.CEPIDs) != 1 || genome.Substrate.CEPIDs[0] != "substrate_cep_0" {
+		t.Fatalf("unexpected substrate cep ids: %+v", genome.Substrate.CEPIDs)
+	}
+	if len(genome.SensorNeuronLinks) != 1 || genome.SensorNeuronLinks[0].SensorID != "substrate_cpp_0" {
+		t.Fatalf("unexpected substrate sensor-neuron links: %+v", genome.SensorNeuronLinks)
+	}
+	if len(genome.NeuronActuatorLinks) != 1 || genome.NeuronActuatorLinks[0].ActuatorID != "substrate_cep_0" {
+		t.Fatalf("unexpected substrate neuron-actuator links: %+v", genome.NeuronActuatorLinks)
+	}
+}
+
 func TestDecodeAgentFixture(t *testing.T) {
 	path := fixturePath("minimal_agent_v1.json")
 	data, err := os.ReadFile(path)
@@ -125,6 +185,57 @@ func TestAgentCodecRoundTrip(t *testing.T) {
 
 	if decoded.ID != input.ID || decoded.GenomeID != input.GenomeID {
 		t.Fatalf("decoded agent mismatch: got=%+v want=%+v", decoded, input)
+	}
+}
+
+func TestGenomeCodecRoundTripFixtureEqualityWithExplicitIOLinks(t *testing.T) {
+	expected := decodeGenomeFixture(t, "io_links_genome_v1.json")
+
+	encoded, err := EncodeGenome(expected)
+	if err != nil {
+		t.Fatalf("encode: %v", err)
+	}
+	actual, err := DecodeGenome(encoded)
+	if err != nil {
+		t.Fatalf("decode roundtrip: %v", err)
+	}
+
+	if !reflect.DeepEqual(actual, expected) {
+		t.Fatalf("roundtrip mismatch\nactual=%+v\nexpected=%+v", actual, expected)
+	}
+}
+
+func TestGenomeCodecRoundTripFixtureEqualityWithVectorIO(t *testing.T) {
+	expected := decodeGenomeFixture(t, "vector_io_genome_v1.json")
+
+	encoded, err := EncodeGenome(expected)
+	if err != nil {
+		t.Fatalf("encode: %v", err)
+	}
+	actual, err := DecodeGenome(encoded)
+	if err != nil {
+		t.Fatalf("decode roundtrip: %v", err)
+	}
+
+	if !reflect.DeepEqual(actual, expected) {
+		t.Fatalf("roundtrip mismatch\nactual=%+v\nexpected=%+v", actual, expected)
+	}
+}
+
+func TestGenomeCodecRoundTripFixtureEqualityWithSubstrateIO(t *testing.T) {
+	expected := decodeGenomeFixture(t, "substrate_io_genome_v1.json")
+
+	encoded, err := EncodeGenome(expected)
+	if err != nil {
+		t.Fatalf("encode: %v", err)
+	}
+	actual, err := DecodeGenome(encoded)
+	if err != nil {
+		t.Fatalf("decode roundtrip: %v", err)
+	}
+
+	if !reflect.DeepEqual(actual, expected) {
+		t.Fatalf("roundtrip mismatch\nactual=%+v\nexpected=%+v", actual, expected)
 	}
 }
 

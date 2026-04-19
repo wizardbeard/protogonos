@@ -1,11 +1,14 @@
 package morphology
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
 	protoio "protogonos/internal/io"
 	"protogonos/internal/model"
+	"protogonos/internal/storage"
 )
 
 func TestEnsureGenomeIOCompatibility(t *testing.T) {
@@ -97,6 +100,42 @@ func TestEnsureGenomeIOCompatibilityAllowsSubstrateEndpointLinks(t *testing.T) {
 	}
 }
 
+func TestEnsureGenomeIOCompatibilityAcceptsVectorIOFixture(t *testing.T) {
+	genome := decodeMorphologyGenomeFixture(t, "vector_io_genome_v1.json")
+	if err := EnsureGenomeIOCompatibility("regression-mimic", genome); err != nil {
+		t.Fatalf("expected vector IO fixture to be accepted for regression-mimic, got err=%v", err)
+	}
+}
+
+func TestEnsureGenomeIOCompatibilityAcceptsSubstrateIOFixture(t *testing.T) {
+	genome := decodeMorphologyGenomeFixture(t, "substrate_io_genome_v1.json")
+	if err := EnsureGenomeIOCompatibility("xor", genome); err != nil {
+		t.Fatalf("expected substrate IO fixture to be accepted for xor, got err=%v", err)
+	}
+}
+
+func TestEnsureGenomeIOCompatibilityRejectsVectorIOFixtureOnWrongScape(t *testing.T) {
+	genome := decodeMorphologyGenomeFixture(t, "vector_io_genome_v1.json")
+	err := EnsureGenomeIOCompatibility("xor", genome)
+	if err == nil {
+		t.Fatal("expected incompatible vector IO fixture on xor")
+	}
+	if !strings.Contains(err.Error(), "incompatible") {
+		t.Fatalf("expected incompatible in error, got %v", err)
+	}
+}
+
+func TestEnsureGenomeIOCompatibilityRejectsSubstrateIOFixtureOnWrongScape(t *testing.T) {
+	genome := decodeMorphologyGenomeFixture(t, "substrate_io_genome_v1.json")
+	err := EnsureGenomeIOCompatibility("regression-mimic", genome)
+	if err == nil {
+		t.Fatal("expected incompatible substrate IO fixture on regression-mimic")
+	}
+	if !strings.Contains(err.Error(), "incompatible") {
+		t.Fatalf("expected incompatible in error, got %v", err)
+	}
+}
+
 func TestEnsureScapeCompatibilitySupportsReferenceAliases(t *testing.T) {
 	aliases := []string{
 		"xor_sim",
@@ -118,4 +157,19 @@ func TestEnsureScapeCompatibilitySupportsReferenceAliases(t *testing.T) {
 			t.Fatalf("ensure compatibility alias=%s: %v", alias, err)
 		}
 	}
+}
+
+func decodeMorphologyGenomeFixture(t *testing.T, name string) model.Genome {
+	t.Helper()
+
+	path := filepath.Join("..", "..", "testdata", "fixtures", name)
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read fixture: %v", err)
+	}
+	genome, err := storage.DecodeGenome(data)
+	if err != nil {
+		t.Fatalf("decode fixture: %v", err)
+	}
+	return genome
 }

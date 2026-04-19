@@ -33,7 +33,7 @@ This checklist tracks module-level parity evidence against the DXNN2 responsibil
 - sqlite store: `done`
   - Evidence: `internal/storage/sqlite.go`, `internal/storage/sqlite_test.go`.
 - versioned codec coverage for core records: `done`
-  - Evidence: `internal/storage/codec.go`, `internal/storage/codec_test.go`, `testdata/fixtures/minimal_*.json`.
+  - Evidence: `internal/storage/codec.go`, `internal/storage/codec_test.go`, `testdata/fixtures/minimal_*.json`, `testdata/fixtures/io_links_genome_v1.json`, `testdata/fixtures/vector_io_genome_v1.json`, `testdata/fixtures/substrate_io_genome_v1.json`.
 
 ## Artifact and workflow parity
 
@@ -45,4 +45,5 @@ This checklist tracks module-level parity evidence against the DXNN2 responsibil
 ## Remaining parity hardening
 
 - Map every upstream DXNN2 `src/` module to explicit Go equivalent or gap note.
-- Expand golden fixture coverage for additional mutation and IO combinations.
+- Expand golden fixture coverage further for component-add and vector/substrate IO combinations.
+- Expand golden fixture coverage further for component-add mutation paths.

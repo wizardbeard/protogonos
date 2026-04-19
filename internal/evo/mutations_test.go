@@ -133,6 +133,51 @@ func TestRemoveSynapseOnIOXORGenomeMatchesFixture(t *testing.T) {
 	}
 }
 
+func TestAddRandomSensorLinkOnExplicitIOGenomeMatchesFixture(t *testing.T) {
+	input := decodeGenomeFixture(t, filepath.Join("..", "..", "testdata", "fixtures", "io_links_genome_v1.json"))
+	expected := decodeGenomeFixture(t, filepath.Join("..", "..", "testdata", "fixtures", "mutations", "expected_io_links_add_sensorlink_v1.json"))
+
+	op := &AddRandomSensorLink{Rand: rand.New(rand.NewSource(187))}
+	actual, err := op.Apply(context.Background(), input)
+	if err != nil {
+		t.Fatalf("apply operator: %v", err)
+	}
+	if !reflect.DeepEqual(actual, expected) {
+		t.Fatalf("mutation mismatch\nactual=%+v\nexpected=%+v", actual, expected)
+	}
+}
+
+func TestAddRandomActuatorLinkOnExplicitIOGenomeMatchesFixture(t *testing.T) {
+	input := decodeGenomeFixture(t, filepath.Join("..", "..", "testdata", "fixtures", "io_links_genome_v1.json"))
+	expected := decodeGenomeFixture(t, filepath.Join("..", "..", "testdata", "fixtures", "mutations", "expected_io_links_add_actuatorlink_v1.json"))
+
+	op := &AddRandomActuatorLink{Rand: rand.New(rand.NewSource(191))}
+	actual, err := op.Apply(context.Background(), input)
+	if err != nil {
+		t.Fatalf("apply operator: %v", err)
+	}
+	if !reflect.DeepEqual(actual, expected) {
+		t.Fatalf("mutation mismatch\nactual=%+v\nexpected=%+v", actual, expected)
+	}
+}
+
+func TestAddRandomSensorMatchesFixture(t *testing.T) {
+	input := decodeGenomeFixture(t, filepath.Join("..", "..", "testdata", "fixtures", "xor_single_sensor_genome_v1.json"))
+	expected := decodeGenomeFixture(t, filepath.Join("..", "..", "testdata", "fixtures", "mutations", "expected_xor_add_sensor_v1.json"))
+
+	op := &AddRandomSensor{
+		Rand:      rand.New(rand.NewSource(73)),
+		ScapeName: "xor",
+	}
+	actual, err := op.Apply(context.Background(), input)
+	if err != nil {
+		t.Fatalf("apply operator: %v", err)
+	}
+	if !reflect.DeepEqual(actual, expected) {
+		t.Fatalf("mutation mismatch\nactual=%+v\nexpected=%+v", actual, expected)
+	}
+}
+
 func TestPerturbWeightAtInvariants(t *testing.T) {
 	rng := rand.New(rand.NewSource(7))
 

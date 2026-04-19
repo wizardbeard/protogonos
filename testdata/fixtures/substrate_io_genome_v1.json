@@ -1,0 +1,56 @@
+{
+  "schema_version": 1,
+  "codec_version": 1,
+  "id": "genome-substrate-io-1",
+  "neurons": [
+    {
+      "id": "i",
+      "activation": "identity",
+      "bias": 0
+    },
+    {
+      "id": "o",
+      "activation": "identity",
+      "bias": 0
+    }
+  ],
+  "sensor_ids": [
+    "xor_input_left",
+    "xor_input_right"
+  ],
+  "actuator_ids": [
+    "xor_output"
+  ],
+  "sensor_neuron_links": [
+    {
+      "sensor_id": "substrate_cpp_0",
+      "neuron_id": "i"
+    }
+  ],
+  "neuron_actuator_links": [
+    {
+      "neuron_id": "o",
+      "actuator_id": "substrate_cep_0"
+    }
+  ],
+  "sensor_links": 1,
+  "actuator_links": 1,
+  "substrate": {
+    "cpp_name": "delta",
+    "cep_name": "delta_weight",
+    "cpp_ids": [
+      "substrate_cpp_0"
+    ],
+    "cep_ids": [
+      "substrate_cep_0"
+    ],
+    "dimensions": [
+      2,
+      1
+    ],
+    "parameters": {
+      "learning_rate": 0.1
+    },
+    "weight_count": 1
+  }
+}
