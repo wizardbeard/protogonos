@@ -251,6 +251,34 @@ func TestCutlinkFromNeuronToActuatorMatchesFixture(t *testing.T) {
 	}
 }
 
+func TestCutlinkFromSensorToNeuronCounterOnlyMatchesFixture(t *testing.T) {
+	input := decodeGenomeFixture(t, filepath.Join("..", "..", "testdata", "fixtures", "counter_only_io_genome_v1.json"))
+	expected := decodeGenomeFixture(t, filepath.Join("..", "..", "testdata", "fixtures", "mutations", "expected_counter_only_cut_sensorlink_v1.json"))
+
+	op := &CutlinkFromSensorToNeuron{Rand: rand.New(rand.NewSource(1401))}
+	actual, err := op.Apply(context.Background(), input)
+	if err != nil {
+		t.Fatalf("apply operator: %v", err)
+	}
+	if !reflect.DeepEqual(actual, expected) {
+		t.Fatalf("mutation mismatch\nactual=%+v\nexpected=%+v", actual, expected)
+	}
+}
+
+func TestCutlinkFromNeuronToActuatorCounterOnlyMatchesFixture(t *testing.T) {
+	input := decodeGenomeFixture(t, filepath.Join("..", "..", "testdata", "fixtures", "counter_only_io_genome_v1.json"))
+	expected := decodeGenomeFixture(t, filepath.Join("..", "..", "testdata", "fixtures", "mutations", "expected_counter_only_cut_actuatorlink_v1.json"))
+
+	op := &CutlinkFromNeuronToActuator{Rand: rand.New(rand.NewSource(1403))}
+	actual, err := op.Apply(context.Background(), input)
+	if err != nil {
+		t.Fatalf("apply operator: %v", err)
+	}
+	if !reflect.DeepEqual(actual, expected) {
+		t.Fatalf("mutation mismatch\nactual=%+v\nexpected=%+v", actual, expected)
+	}
+}
+
 func TestPerturbWeightAtInvariants(t *testing.T) {
 	rng := rand.New(rand.NewSource(7))
 

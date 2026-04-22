@@ -1,0 +1,22 @@
+{
+  "schema_version": 1,
+  "codec_version": 1,
+  "id": "genome-counter-only-io-1",
+  "neurons": [
+    {
+      "id": "n1",
+      "activation": "identity",
+      "bias": 0
+    }
+  ],
+  "sensor_ids": [
+    "xor_input_left",
+    "xor_input_right"
+  ],
+  "actuator_ids": [
+    "xor_output",
+    "fx_trade"
+  ],
+  "sensor_links": 1,
+  "actuator_links": 2
+}
