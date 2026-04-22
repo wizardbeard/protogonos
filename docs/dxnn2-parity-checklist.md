@@ -45,4 +45,4 @@ This checklist tracks module-level parity evidence against the DXNN2 responsibil
 ## Remaining parity hardening
 
 - Map every upstream DXNN2 `src/` module to explicit Go equivalent or gap note.
-- Expand golden fixture coverage further for remaining component-mutation paths.
+- Expand golden fixture coverage further for residual mutation paths with counter-only or fallback semantics.

@@ -1,0 +1,61 @@
+{
+  "schema_version": 1,
+  "codec_version": 1,
+  "id": "genome-io-links-1",
+  "neurons": [
+    {
+      "id": "n1",
+      "activation": "identity",
+      "bias": 0
+    },
+    {
+      "id": "n2",
+      "activation": "identity",
+      "bias": 0
+    }
+  ],
+  "synapses": [
+    {
+      "id": "s1",
+      "from": "n1",
+      "to": "n2",
+      "weight": 0.5,
+      "enabled": true,
+      "recurrent": false
+    }
+  ],
+  "sensor_ids": [
+    "xor_input_left",
+    "xor_input_right"
+  ],
+  "actuator_ids": [
+    "xor_output",
+    "fx_trade"
+  ],
+  "sensor_neuron_links": [
+    {
+      "sensor_id": "xor_input_left",
+      "neuron_id": "n1"
+    },
+    {
+      "sensor_id": "xor_input_left",
+      "neuron_id": "n2"
+    }
+  ],
+  "neuron_actuator_links": [
+    {
+      "neuron_id": "n1",
+      "actuator_id": "xor_output"
+    },
+    {
+      "neuron_id": "n1",
+      "actuator_id": "fx_trade"
+    },
+    {
+      "neuron_id": "n2",
+      "actuator_id": "xor_output"
+    }
+  ],
+  "sensor_links": 2,
+  "actuator_links": 3
+}
