@@ -178,6 +178,51 @@ func TestAddRandomSensorMatchesFixture(t *testing.T) {
 	}
 }
 
+func TestAddRandomActuatorMatchesFixture(t *testing.T) {
+	input := decodeGenomeFixture(t, filepath.Join("..", "..", "testdata", "fixtures", "fx_no_actuator_genome_v1.json"))
+	expected := decodeGenomeFixture(t, filepath.Join("..", "..", "testdata", "fixtures", "mutations", "expected_fx_add_actuator_v1.json"))
+
+	op := &AddRandomActuator{
+		Rand:      rand.New(rand.NewSource(79)),
+		ScapeName: "fx",
+	}
+	actual, err := op.Apply(context.Background(), input)
+	if err != nil {
+		t.Fatalf("apply operator: %v", err)
+	}
+	if !reflect.DeepEqual(actual, expected) {
+		t.Fatalf("mutation mismatch\nactual=%+v\nexpected=%+v", actual, expected)
+	}
+}
+
+func TestRemoveRandomSensorMatchesFixture(t *testing.T) {
+	input := decodeGenomeFixture(t, filepath.Join("..", "..", "testdata", "fixtures", "io_links_genome_v1.json"))
+	expected := decodeGenomeFixture(t, filepath.Join("..", "..", "testdata", "fixtures", "mutations", "expected_io_links_remove_sensor_v1.json"))
+
+	op := &RemoveRandomSensor{Rand: rand.New(rand.NewSource(97))}
+	actual, err := op.Apply(context.Background(), input)
+	if err != nil {
+		t.Fatalf("apply operator: %v", err)
+	}
+	if !reflect.DeepEqual(actual, expected) {
+		t.Fatalf("mutation mismatch\nactual=%+v\nexpected=%+v", actual, expected)
+	}
+}
+
+func TestRemoveRandomActuatorMatchesFixture(t *testing.T) {
+	input := decodeGenomeFixture(t, filepath.Join("..", "..", "testdata", "fixtures", "io_links_genome_v1.json"))
+	expected := decodeGenomeFixture(t, filepath.Join("..", "..", "testdata", "fixtures", "mutations", "expected_io_links_remove_actuator_v1.json"))
+
+	op := &RemoveRandomActuator{Rand: rand.New(rand.NewSource(101))}
+	actual, err := op.Apply(context.Background(), input)
+	if err != nil {
+		t.Fatalf("apply operator: %v", err)
+	}
+	if !reflect.DeepEqual(actual, expected) {
+		t.Fatalf("mutation mismatch\nactual=%+v\nexpected=%+v", actual, expected)
+	}
+}
+
 func TestPerturbWeightAtInvariants(t *testing.T) {
 	rng := rand.New(rand.NewSource(7))
 

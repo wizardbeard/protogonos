@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "codec_version": 1,
+  "id": "genome-fx-no-actuator-1",
+  "neurons": [
+    {
+      "id": "i",
+      "activation": "identity",
+      "bias": 0
+    },
+    {
+      "id": "o",
+      "activation": "identity",
+      "bias": 0
+    }
+  ],
+  "sensor_ids": [
+    "fx_price",
+    "fx_signal"
+  ]
+}

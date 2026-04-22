@@ -1,0 +1,49 @@
+{
+  "schema_version": 1,
+  "codec_version": 1,
+  "id": "genome-fx-no-actuator-1",
+  "neurons": [
+    {
+      "id": "i",
+      "activation": "identity",
+      "bias": 0
+    },
+    {
+      "id": "o",
+      "activation": "identity",
+      "bias": 0
+    },
+    {
+      "id": "nrand-3881631912389940999",
+      "activation": "tanh",
+      "bias": 0
+    }
+  ],
+  "synapses": [
+    {
+      "id": "srand-3529429936682944925",
+      "from": "i",
+      "to": "nrand-3881631912389940999",
+      "weight": 0.22433807885105916,
+      "enabled": true,
+      "recurrent": false
+    }
+  ],
+  "sensor_ids": [
+    "fx_price",
+    "fx_signal"
+  ],
+  "actuator_ids": [
+    "fx_trade"
+  ],
+  "actuator_generations": {
+    "fx_trade": 0
+  },
+  "neuron_actuator_links": [
+    {
+      "neuron_id": "nrand-3881631912389940999",
+      "actuator_id": "fx_trade"
+    }
+  ],
+  "actuator_links": 1
+}
