@@ -49,4 +49,4 @@ This checklist tracks module-level parity evidence against the DXNN2 responsibil
 
 ## Remaining parity hardening
 
-- Expand golden fixture coverage further for any remaining mutation fallback semantics outside the current IO/operator set.
+- Expand golden fixture coverage further only for mutation families outside the current IO and generic link-helper operator set.

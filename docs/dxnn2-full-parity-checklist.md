@@ -198,6 +198,7 @@ Status keys:
 - Tightened `add_cpp` structural parity by appending one sensor->neuron scaffold link when compatible endpoint candidates exist.
 - Tightened generic element-link helper parity so `link_FromElementToElement` and `cutlink_FromElementToElement` now operate across synapse and endpoint-link pools with cancellation on full exhaustion.
 - Tightened neuron-only link helper parity so `link_FromNeuronToNeuron` and `cutlink_FromNeuronToNeuron` now use candidate-aware applicability and cancellation on exhausted pools.
+- Expanded genome mutator golden-fixture coverage so `cutlink_FromElementToElement` and `cutlink_FromNeuronToNeuron` are pinned against both direct synapse-removal and endpoint-link-removal fixtures.
 - Mutation operator gating by genome/scape compatibility added.
 - New parity scapes added: `pole2-balancing`, `dtm`, `epitopes`, and `llvm-phase-ordering` with morphology/IO/seed/registration wiring.
 - Parity profile loader added for `.ref` benchmark profiles (`--profile`).

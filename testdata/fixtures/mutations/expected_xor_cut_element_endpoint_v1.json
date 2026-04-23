@@ -1,0 +1,24 @@
+{
+  "schema_version": 1,
+  "codec_version": 1,
+  "id": "genome-xor-single-sensor-1",
+  "neurons": [
+    {
+      "id": "n1",
+      "activation": "identity",
+      "bias": 0
+    }
+  ],
+  "synapses": [],
+  "sensor_ids": [
+    "xor_input_left",
+    "xor_input_right"
+  ],
+  "actuator_ids": [
+    "xor_output"
+  ],
+  "sensor_neuron_links": [],
+  "neuron_actuator_links": [],
+  "sensor_links": 0,
+  "actuator_links": 0
+}

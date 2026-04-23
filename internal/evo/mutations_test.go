@@ -279,6 +279,48 @@ func TestCutlinkFromNeuronToActuatorCounterOnlyMatchesFixture(t *testing.T) {
 	}
 }
 
+func TestCutlinkFromNeuronToNeuronMatchesFixture(t *testing.T) {
+	input := decodeGenomeFixture(t, filepath.Join("..", "..", "testdata", "fixtures", "minimal_genome_v1.json"))
+	expected := decodeGenomeFixture(t, filepath.Join("..", "..", "testdata", "fixtures", "mutations", "expected_remove_synapse_v1.json"))
+
+	op := &CutlinkFromNeuronToNeuron{Rand: rand.New(rand.NewSource(173))}
+	actual, err := op.Apply(context.Background(), input)
+	if err != nil {
+		t.Fatalf("apply operator: %v", err)
+	}
+	if !reflect.DeepEqual(actual, expected) {
+		t.Fatalf("mutation mismatch\nactual=%+v\nexpected=%+v", actual, expected)
+	}
+}
+
+func TestCutlinkFromElementToElementMatchesSynapseFixture(t *testing.T) {
+	input := decodeGenomeFixture(t, filepath.Join("..", "..", "testdata", "fixtures", "minimal_genome_v1.json"))
+	expected := decodeGenomeFixture(t, filepath.Join("..", "..", "testdata", "fixtures", "mutations", "expected_remove_synapse_v1.json"))
+
+	op := &CutlinkFromElementToElement{Rand: rand.New(rand.NewSource(179))}
+	actual, err := op.Apply(context.Background(), input)
+	if err != nil {
+		t.Fatalf("apply operator: %v", err)
+	}
+	if !reflect.DeepEqual(actual, expected) {
+		t.Fatalf("mutation mismatch\nactual=%+v\nexpected=%+v", actual, expected)
+	}
+}
+
+func TestCutlinkFromElementToElementMatchesEndpointFixture(t *testing.T) {
+	input := decodeGenomeFixture(t, filepath.Join("..", "..", "testdata", "fixtures", "mutations", "expected_xor_add_sensor_v1.json"))
+	expected := decodeGenomeFixture(t, filepath.Join("..", "..", "testdata", "fixtures", "mutations", "expected_xor_cut_element_endpoint_v1.json"))
+
+	op := &CutlinkFromElementToElement{Rand: rand.New(rand.NewSource(1801))}
+	actual, err := op.Apply(context.Background(), input)
+	if err != nil {
+		t.Fatalf("apply operator: %v", err)
+	}
+	if !reflect.DeepEqual(normalizeGenomeForComparison(actual), normalizeGenomeForComparison(expected)) {
+		t.Fatalf("mutation mismatch\nactual=%+v\nexpected=%+v", actual, expected)
+	}
+}
+
 func TestPerturbWeightAtInvariants(t *testing.T) {
 	rng := rand.New(rand.NewSource(7))
 
@@ -3395,6 +3437,35 @@ func decodeGenomeFixture(t *testing.T, path string) model.Genome {
 		t.Fatalf("decode fixture: %v", err)
 	}
 	return genome
+}
+
+func normalizeGenomeForComparison(in model.Genome) model.Genome {
+	out := in
+	if out.Neurons == nil {
+		out.Neurons = []model.Neuron{}
+	}
+	if out.Synapses == nil {
+		out.Synapses = []model.Synapse{}
+	}
+	if out.SensorIDs == nil {
+		out.SensorIDs = []string{}
+	}
+	if out.ActuatorIDs == nil {
+		out.ActuatorIDs = []string{}
+	}
+	if out.SensorNeuronLinks == nil {
+		out.SensorNeuronLinks = []model.SensorNeuronLink{}
+	}
+	if out.NeuronActuatorLinks == nil {
+		out.NeuronActuatorLinks = []model.NeuronActuatorLink{}
+	}
+	if out.ActuatorTunables == nil {
+		out.ActuatorTunables = map[string]float64{}
+	}
+	if out.ActuatorGenerations == nil {
+		out.ActuatorGenerations = map[string]int{}
+	}
+	return out
 }
 
 func randomGenome(rng *rand.Rand) model.Genome {
