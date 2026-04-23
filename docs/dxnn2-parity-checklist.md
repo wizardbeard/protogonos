@@ -42,7 +42,11 @@ This checklist tracks module-level parity evidence against the DXNN2 responsibil
 - reproducible acceptance script: `done`
   - Evidence: `scripts/done_check.sh`.
 
+## Upstream coverage
+
+- upstream `src/` module mapping: `done`
+  - Evidence: `docs/dxnn2-src-module-audit.md` maps every audited reference module to a Go equivalent or explicit parity gap note.
+
 ## Remaining parity hardening
 
-- Map every upstream DXNN2 `src/` module to explicit Go equivalent or gap note.
 - Expand golden fixture coverage further for any remaining mutation fallback semantics outside the current IO/operator set.
