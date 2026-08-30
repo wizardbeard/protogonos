@@ -59,6 +59,22 @@ func (cancelingRuntimeCEP) Apply(_ context.Context, current float64, _ float64, 
 	return current + 0.25, nil
 }
 
+type coordinateABCNRuntimeCPP struct{}
+
+func (coordinateABCNRuntimeCPP) Name() string { return "coordinate_abcn_runtime_cpp" }
+
+func (coordinateABCNRuntimeCPP) Compute(_ context.Context, _ []float64, _ map[string]float64) (float64, error) {
+	return 0, nil
+}
+
+func (coordinateABCNRuntimeCPP) ComputeCoordinates(_ context.Context, _ []float64, _ []float64, _ map[string]float64) ([]float64, error) {
+	return []float64{1, 0.2, 0.5, -0.1, 0.8}, nil
+}
+
+func (coordinateABCNRuntimeCPP) ComputeCoordinatesIOW(_ context.Context, _ []float64, _ []float64, iow []float64, _ map[string]float64) ([]float64, error) {
+	return append([]float64(nil), iow...), nil
+}
+
 func TestSimpleRuntimeStep(t *testing.T) {
 	resetRegistriesForTests()
 	t.Cleanup(resetRegistriesForTests)
@@ -618,6 +634,82 @@ func TestSimpleRuntimeUsesCPPActorBackedCompute(t *testing.T) {
 	}
 	if len(w) != 1 || w[0] != 1 {
 		t.Fatalf("unexpected actor-backed set_weight result: %v", w)
+	}
+}
+
+func TestSimpleRuntimeStepCoordinatesUpdatesSelectedWeight(t *testing.T) {
+	resetRegistriesForTests()
+	t.Cleanup(resetRegistriesForTests)
+
+	if err := RegisterCPP("coordinate_runtime_cpp", func() CPP {
+		return coordinateRuntimeCPP{}
+	}); err != nil {
+		t.Fatalf("register coordinate cpp: %v", err)
+	}
+
+	rt, err := NewSimpleRuntime(Spec{
+		CPPName:      "coordinate_runtime_cpp",
+		CEPName:      WeightExpressionCEPName,
+		CEPFaninPIDs: []string{"cpp1", "cpp2"},
+		Parameters: map[string]float64{
+			"scale": 2,
+		},
+	}, 2)
+	if err != nil {
+		t.Fatalf("new runtime: %v", err)
+	}
+
+	weights, err := rt.StepCoordinates(context.Background(), 1, []float64{0.25, 0.75}, []float64{0.5, 0.25}, nil)
+	if err != nil {
+		t.Fatalf("step coordinates: %v", err)
+	}
+	if len(weights) != 2 || weights[0] != 0 || math.Abs(weights[1]-1.5) > 1e-9 {
+		t.Fatalf("unexpected coordinate-step weights: got=%v want=[0 1.5]", weights)
+	}
+}
+
+func TestSimpleRuntimeStepCoordinatesIOWUsesCEPCommandPath(t *testing.T) {
+	resetRegistriesForTests()
+	t.Cleanup(resetRegistriesForTests)
+
+	if err := RegisterCPP("coordinate_abcn_runtime_cpp", func() CPP {
+		return coordinateABCNRuntimeCPP{}
+	}); err != nil {
+		t.Fatalf("register coordinate abcn cpp: %v", err)
+	}
+
+	rt, err := NewSimpleRuntime(Spec{
+		CPPName:      "coordinate_abcn_runtime_cpp",
+		CEPName:      SetABCNCEPName,
+		CEPFaninPIDs: []string{"cpp1", "cpp2", "cpp3", "cpp4", "cpp5"},
+	}, 1)
+	if err != nil {
+		t.Fatalf("new runtime: %v", err)
+	}
+
+	weights, err := rt.StepCoordinates(context.Background(), 0, []float64{0}, []float64{1}, []float64{1, 0.2, 0.5, -0.1, 0.8})
+	if err != nil {
+		t.Fatalf("step coordinates with iow: %v", err)
+	}
+	if len(weights) != 1 || math.Abs(weights[0]-0.4) > 1e-9 {
+		t.Fatalf("unexpected coordinate-iow weights: got=%v want=[0.4]", weights)
+	}
+}
+
+func TestSimpleRuntimeStepCoordinatesValidatesWeightIndex(t *testing.T) {
+	resetRegistriesForTests()
+	t.Cleanup(resetRegistriesForTests)
+
+	rt, err := NewSimpleRuntime(Spec{
+		CPPName: DefaultCPPName,
+		CEPName: DefaultCEPName,
+	}, 1)
+	if err != nil {
+		t.Fatalf("new runtime: %v", err)
+	}
+
+	if _, err := rt.StepCoordinates(context.Background(), 2, []float64{0}, []float64{1}, nil); !errors.Is(err, ErrInvalidSubstrateWeightIndex) {
+		t.Fatalf("expected ErrInvalidSubstrateWeightIndex, got %v", err)
 	}
 }
 

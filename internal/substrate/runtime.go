@@ -10,18 +10,19 @@ import (
 )
 
 var (
-	ErrNoSubstrateBackup          = errors.New("no substrate backup available")
-	ErrSubstrateRuntimeTerminated = errors.New("substrate runtime terminated")
-	ErrMissingCEPActor            = errors.New("missing cep actor")
-	ErrMissingSubstrateMailbox    = errors.New("missing substrate mailbox")
-	ErrSubstrateMailboxTerminated = errors.New("substrate mailbox terminated")
-	ErrMissingCEPFaninRelay       = errors.New("missing cep fan-in relay")
-	ErrCEPFaninRelayTerminated    = errors.New("cep fan-in relay terminated")
-	ErrMissingCEPCommandRelay     = errors.New("missing cep command relay")
-	ErrCEPCommandRelayTerminated  = errors.New("cep command relay terminated")
-	ErrCEPCommandRelayNoError     = errors.New("cep command relay no error")
-	ErrUnexpectedCEPCommandSender = errors.New("unexpected cep command sender")
-	ErrUnexpectedCEPCommandTarget = errors.New("unexpected cep command target")
+	ErrNoSubstrateBackup           = errors.New("no substrate backup available")
+	ErrSubstrateRuntimeTerminated  = errors.New("substrate runtime terminated")
+	ErrMissingCEPActor             = errors.New("missing cep actor")
+	ErrMissingSubstrateMailbox     = errors.New("missing substrate mailbox")
+	ErrSubstrateMailboxTerminated  = errors.New("substrate mailbox terminated")
+	ErrMissingCEPFaninRelay        = errors.New("missing cep fan-in relay")
+	ErrCEPFaninRelayTerminated     = errors.New("cep fan-in relay terminated")
+	ErrMissingCEPCommandRelay      = errors.New("missing cep command relay")
+	ErrCEPCommandRelayTerminated   = errors.New("cep command relay terminated")
+	ErrCEPCommandRelayNoError      = errors.New("cep command relay no error")
+	ErrUnexpectedCEPCommandSender  = errors.New("unexpected cep command sender")
+	ErrUnexpectedCEPCommandTarget  = errors.New("unexpected cep command target")
+	ErrInvalidSubstrateWeightIndex = errors.New("invalid substrate weight index")
 )
 
 type SimpleRuntime struct {
@@ -144,86 +145,46 @@ func (r *SimpleRuntime) step(ctx context.Context, inputs []float64, faninSignals
 		if err := ctx.Err(); err != nil {
 			return nil, err
 		}
-		actors := r.cepActors
-		if i < len(r.cepActorsByWeight) && len(r.cepActorsByWeight[i]) > 0 {
-			actors = r.cepActorsByWeight[i]
-		}
-		expectedInits := scopeCEPActorInitsForWeight(r.cepActorInits, i)
-		next := nextWeights[i]
-		for cepIdx, cep := range r.ceps {
-			if err := ctx.Err(); err != nil {
-				return nil, err
-			}
-			if cepIdx < len(actors) {
-				actor := actors[cepIdx]
-				if actor == nil {
-					return nil, fmt.Errorf("cep %s process actor: %w", cep.Name(), ErrMissingCEPActor)
-				}
-				var relays []*CEPFaninRelay
-				if i < len(r.cepFaninRelays) && cepIdx < len(r.cepFaninRelays[i]) {
-					relays = r.cepFaninRelays[i][cepIdx]
-				}
-				faninPIDs := []string{runtimeCPPProcessID}
-				if cepIdx < len(r.cepProcessFaninPIDs) && len(r.cepProcessFaninPIDs[cepIdx]) > 0 {
-					faninPIDs = r.cepProcessFaninPIDs[cepIdx]
-				}
-				processSignals, signalErr := r.resolveProcessSignals(faninPIDs, controlSignals)
-				if signalErr != nil {
-					return nil, fmt.Errorf("cep %s process signals: %w", cep.Name(), signalErr)
-				}
-				command, ready, err := r.forwardCEPProcess(ctx, actor, relays, faninPIDs, processSignals)
-				if err == nil {
-					if !ready {
-						break
-					}
-					if cepIdx < len(expectedInits) {
-						if envelopeErr := validateCEPCommandEnvelope(command, expectedInits[cepIdx]); envelopeErr != nil {
-							return nil, fmt.Errorf("cep %s command envelope: %w", cep.Name(), envelopeErr)
-						}
-					}
-					if routeErr := r.routeCEPCommand(ctx, i, cepIdx, command); routeErr != nil {
-						return nil, fmt.Errorf("cep %s command relay: %w", cep.Name(), routeErr)
-					}
-					stageParams := map[string]float64(nil)
-					if i >= 0 && i < len(nextWeightCEPParams) &&
-						cepIdx >= 0 && cepIdx < len(nextWeightCEPParams[i]) {
-						stageParams = cloneFloatMap(nextWeightCEPParams[i][cepIdx])
-					}
-					w, persistedParams, applyErr := r.applySubstrateMailbox(ctx, i, cepIdx, expectedInits, next, stageParams)
-					if applyErr != nil {
-						return nil, fmt.Errorf("cep %s apply mailbox commands: %w", cep.Name(), applyErr)
-					}
-					if err := ctx.Err(); err != nil {
-						return nil, err
-					}
-					next = w
-					if i >= 0 && i < len(nextWeightCEPParams) &&
-						cepIdx >= 0 && cepIdx < len(nextWeightCEPParams[i]) {
-						nextWeightCEPParams[i][cepIdx] = cloneFloatMap(persistedParams)
-					}
-					continue
-				}
-				if !errors.Is(err, ErrUnsupportedCEPCommand) {
-					return nil, fmt.Errorf("cep %s process forward: %w", cep.Name(), err)
-				}
-			}
-
-			// Keep custom CEP compatibility when a CEP name is not part of the
-			// reference command surface.
-			w, applyErr := cep.Apply(ctx, next, delta, r.params)
-			if applyErr != nil {
-				return nil, fmt.Errorf("cep %s apply: %w", cep.Name(), applyErr)
-			}
-			if err := ctx.Err(); err != nil {
-				return nil, err
-			}
-			next = w
+		next, err := r.applyCEPChainToWeight(ctx, i, nextWeights[i], delta, controlSignals, nextWeightCEPParams)
+		if err != nil {
+			return nil, err
 		}
 		if err := ctx.Err(); err != nil {
 			return nil, err
 		}
 		nextWeights[i] = next
 	}
+	r.weights = nextWeights
+	r.weightCEPParams = nextWeightCEPParams
+	return r.Weights(), nil
+}
+
+func (r *SimpleRuntime) StepCoordinates(ctx context.Context, weightIdx int, presynaptic []float64, postsynaptic []float64, iow []float64) ([]float64, error) {
+	if r.terminated {
+		return nil, ErrSubstrateRuntimeTerminated
+	}
+	if weightIdx < 0 || weightIdx >= len(r.weights) {
+		return nil, fmt.Errorf("%w: %d", ErrInvalidSubstrateWeightIndex, weightIdx)
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+
+	controlSignals, err := r.computeCPPCoordinates(ctx, presynaptic, postsynaptic, iow)
+	if err != nil {
+		return nil, fmt.Errorf("cpp %s coordinate compute: %w", r.cpp.Name(), err)
+	}
+	delta := 0.0
+	if len(controlSignals) > 0 {
+		delta = controlSignals[0]
+	}
+	nextWeights := append([]float64(nil), r.weights...)
+	nextWeightCEPParams := cloneCEPWeightParamSet(r.weightCEPParams)
+	next, err := r.applyCEPChainToWeight(ctx, weightIdx, nextWeights[weightIdx], delta, controlSignals, nextWeightCEPParams)
+	if err != nil {
+		return nil, err
+	}
+	nextWeights[weightIdx] = next
 	r.weights = nextWeights
 	r.weightCEPParams = nextWeightCEPParams
 	return r.Weights(), nil
@@ -396,6 +357,98 @@ func (r *SimpleRuntime) computeCPPVector(ctx context.Context, inputs []float64) 
 		return vectorCPP.ComputeVector(ctx, inputs, r.params)
 	}
 	return r.cppActor.ComputeVectorFrom(ctx, runtimeSubstrateProcessID, inputs)
+}
+
+func (r *SimpleRuntime) computeCPPCoordinates(ctx context.Context, presynaptic []float64, postsynaptic []float64, iow []float64) ([]float64, error) {
+	if r.cppActor == nil {
+		if len(iow) > 0 {
+			cpp, ok := r.cpp.(CoordinateIOWCPP)
+			if !ok {
+				return nil, ErrCPPCoordinateNotSupported
+			}
+			return cpp.ComputeCoordinatesIOW(ctx, presynaptic, postsynaptic, iow, r.params)
+		}
+		cpp, ok := r.cpp.(CoordinateCPP)
+		if !ok {
+			return nil, ErrCPPCoordinateNotSupported
+		}
+		return cpp.ComputeCoordinates(ctx, presynaptic, postsynaptic, r.params)
+	}
+	if len(iow) > 0 {
+		return r.cppActor.ComputeCoordinatesIOWFrom(ctx, runtimeSubstrateProcessID, presynaptic, postsynaptic, iow)
+	}
+	return r.cppActor.ComputeCoordinatesFrom(ctx, runtimeSubstrateProcessID, presynaptic, postsynaptic)
+}
+
+func (r *SimpleRuntime) applyCEPChainToWeight(ctx context.Context, weightIdx int, current float64, delta float64, controlSignals []float64, nextWeightCEPParams [][]map[string]float64) (float64, error) {
+	actors := r.cepActors
+	if weightIdx < len(r.cepActorsByWeight) && len(r.cepActorsByWeight[weightIdx]) > 0 {
+		actors = r.cepActorsByWeight[weightIdx]
+	}
+	expectedInits := scopeCEPActorInitsForWeight(r.cepActorInits, weightIdx)
+	next := current
+	for cepIdx, cep := range r.ceps {
+		if err := ctx.Err(); err != nil {
+			return 0, err
+		}
+		if cepIdx < len(actors) {
+			actor := actors[cepIdx]
+			if actor == nil {
+				return 0, fmt.Errorf("cep %s process actor: %w", cep.Name(), ErrMissingCEPActor)
+			}
+			var relays []*CEPFaninRelay
+			if weightIdx < len(r.cepFaninRelays) && cepIdx < len(r.cepFaninRelays[weightIdx]) {
+				relays = r.cepFaninRelays[weightIdx][cepIdx]
+			}
+			faninPIDs := []string{runtimeCPPProcessID}
+			if cepIdx < len(r.cepProcessFaninPIDs) && len(r.cepProcessFaninPIDs[cepIdx]) > 0 {
+				faninPIDs = r.cepProcessFaninPIDs[cepIdx]
+			}
+			processSignals, signalErr := r.resolveProcessSignals(faninPIDs, controlSignals)
+			if signalErr != nil {
+				return 0, fmt.Errorf("cep %s process signals: %w", cep.Name(), signalErr)
+			}
+			command, ready, err := r.forwardCEPProcess(ctx, actor, relays, faninPIDs, processSignals)
+			if err == nil {
+				if !ready {
+					break
+				}
+				if cepIdx < len(expectedInits) {
+					if envelopeErr := validateCEPCommandEnvelope(command, expectedInits[cepIdx]); envelopeErr != nil {
+						return 0, fmt.Errorf("cep %s command envelope: %w", cep.Name(), envelopeErr)
+					}
+				}
+				if routeErr := r.routeCEPCommand(ctx, weightIdx, cepIdx, command); routeErr != nil {
+					return 0, fmt.Errorf("cep %s command relay: %w", cep.Name(), routeErr)
+				}
+				stageParams := map[string]float64(nil)
+				if weightIdx >= 0 && weightIdx < len(nextWeightCEPParams) &&
+					cepIdx >= 0 && cepIdx < len(nextWeightCEPParams[weightIdx]) {
+					stageParams = cloneFloatMap(nextWeightCEPParams[weightIdx][cepIdx])
+				}
+				w, persistedParams, applyErr := r.applySubstrateMailbox(ctx, weightIdx, cepIdx, expectedInits, next, stageParams)
+				if applyErr != nil {
+					return 0, fmt.Errorf("cep %s apply mailbox commands: %w", cep.Name(), applyErr)
+				}
+				next = w
+				if weightIdx >= 0 && weightIdx < len(nextWeightCEPParams) &&
+					cepIdx >= 0 && cepIdx < len(nextWeightCEPParams[weightIdx]) {
+					nextWeightCEPParams[weightIdx][cepIdx] = cloneFloatMap(persistedParams)
+				}
+				continue
+			}
+			if !errors.Is(err, ErrUnsupportedCEPCommand) {
+				return 0, fmt.Errorf("cep %s process forward: %w", cep.Name(), err)
+			}
+		}
+
+		w, applyErr := cep.Apply(ctx, next, delta, r.params)
+		if applyErr != nil {
+			return 0, fmt.Errorf("cep %s apply: %w", cep.Name(), applyErr)
+		}
+		next = w
+	}
+	return next, nil
 }
 
 func (r *SimpleRuntime) controlSignalsFromFaninMap(faninSignals map[string]float64) ([]float64, bool) {
