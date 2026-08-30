@@ -26,6 +26,8 @@ var (
 
 type SimpleRuntime struct {
 	cpp                   CPP
+	cppActor              *CPPActor
+	cppProcessID          string
 	ceps                  []CEP
 	cepActors             []*CEPActor
 	cepActorsByWeight     [][]*CEPActor
@@ -62,6 +64,11 @@ func NewSimpleRuntime(spec Spec, weightCount int) (*SimpleRuntime, error) {
 	if err != nil {
 		return nil, err
 	}
+	cppProcessID := firstNonEmptyString(spec.CPPIDs)
+	cppProcess, err := NewCPPProcess(cppProcessID, runtimeSubstrateProcessID, runtimeExoSelfProcessID, cpp, spec.Parameters)
+	if err != nil {
+		return nil, err
+	}
 	ceps, err := resolveCEPChain(spec)
 	if err != nil {
 		return nil, err
@@ -87,6 +94,8 @@ func NewSimpleRuntime(spec Spec, weightCount int) (*SimpleRuntime, error) {
 	}
 	return &SimpleRuntime{
 		cpp:                 cpp,
+		cppActor:            NewCPPActor(cppProcess),
+		cppProcessID:        cppProcessID,
 		ceps:                ceps,
 		cepActors:           processState.cepActors,
 		cepActorsByWeight:   processState.cepActorsByWeight,
@@ -118,7 +127,7 @@ func (r *SimpleRuntime) step(ctx context.Context, inputs []float64, faninSignals
 		return nil, err
 	}
 
-	delta, err := r.cpp.Compute(ctx, inputs, r.params)
+	delta, err := r.computeCPP(ctx, inputs)
 	if err != nil {
 		return nil, fmt.Errorf("cpp %s compute: %w", r.cpp.Name(), err)
 	}
@@ -225,6 +234,9 @@ func (r *SimpleRuntime) Terminate() {
 		return
 	}
 	r.terminated = true
+	if r.cppActor != nil {
+		_ = r.cppActor.TerminateFrom(runtimeExoSelfProcessID)
+	}
 	terminated := map[*CEPActor]struct{}{}
 	if len(r.cepActorsByWeight) > 0 {
 		for _, actors := range r.cepActorsByWeight {
@@ -317,6 +329,9 @@ func (r *SimpleRuntime) Restore() error {
 	if err := r.rebuildProcessState(); err != nil {
 		return err
 	}
+	if err := r.rebuildCPPProcessState(); err != nil {
+		return err
+	}
 	r.weights = nextWeights
 	r.weightCEPParams = nextWeightCEPParams
 	r.terminated = false
@@ -329,7 +344,7 @@ func (r *SimpleRuntime) Reset() {
 	for i := range nextWeightCEPParams {
 		nextWeightCEPParams[i] = cloneCEPWeightParamRow(r.cepActorInits)
 	}
-	if err := r.rebuildProcessState(); err == nil {
+	if err := r.rebuildProcessState(); err == nil && r.rebuildCPPProcessState() == nil {
 		r.weights = nextWeights
 		r.weightCEPParams = nextWeightCEPParams
 		r.terminated = false
@@ -346,14 +361,13 @@ func (r *SimpleRuntime) computeControlSignals(ctx context.Context, inputs []floa
 		return signals, nil
 	}
 
-	vectorCPP, ok := r.cpp.(VectorCPP)
-	if !ok {
+	if _, ok := r.cpp.(VectorCPP); !ok {
 		if len(r.cepFaninPIDs) > 1 && len(inputs) == len(r.cepFaninPIDs) && canUseInputFanInSignals(r.ceps) {
 			return append([]float64(nil), inputs...), nil
 		}
 		return []float64{scalar}, nil
 	}
-	signals, err := vectorCPP.ComputeVector(ctx, inputs, r.params)
+	signals, err := r.computeCPPVector(ctx, inputs)
 	if err != nil {
 		return nil, fmt.Errorf("cpp %s compute vector: %w", r.cpp.Name(), err)
 	}
@@ -364,6 +378,24 @@ func (r *SimpleRuntime) computeControlSignals(ctx context.Context, inputs []floa
 		return []float64{scalar}, nil
 	}
 	return append([]float64(nil), signals...), nil
+}
+
+func (r *SimpleRuntime) computeCPP(ctx context.Context, inputs []float64) (float64, error) {
+	if r.cppActor == nil {
+		return r.cpp.Compute(ctx, inputs, r.params)
+	}
+	return r.cppActor.ComputeFrom(ctx, runtimeSubstrateProcessID, inputs)
+}
+
+func (r *SimpleRuntime) computeCPPVector(ctx context.Context, inputs []float64) ([]float64, error) {
+	if r.cppActor == nil {
+		vectorCPP, ok := r.cpp.(VectorCPP)
+		if !ok {
+			return nil, ErrCPPVectorComputeNotSupport
+		}
+		return vectorCPP.ComputeVector(ctx, inputs, r.params)
+	}
+	return r.cppActor.ComputeVectorFrom(ctx, runtimeSubstrateProcessID, inputs)
 }
 
 func (r *SimpleRuntime) controlSignalsFromFaninMap(faninSignals map[string]float64) ([]float64, bool) {
@@ -1304,6 +1336,18 @@ func (r *SimpleRuntime) rebuildProcessState() error {
 	r.cepFaninRelays = nextState.cepFaninRelays
 	r.substrateMailboxes = nextState.substrateMailboxes
 	r.cepCommandRelays = nextState.cepCommandRelays
+	return nil
+}
+
+func (r *SimpleRuntime) rebuildCPPProcessState() error {
+	process, err := NewCPPProcess(r.cppProcessID, runtimeSubstrateProcessID, runtimeExoSelfProcessID, r.cpp, r.params)
+	if err != nil {
+		return err
+	}
+	if r.cppActor != nil {
+		_ = r.cppActor.TerminateFrom(runtimeExoSelfProcessID)
+	}
+	r.cppActor = NewCPPActor(process)
 	return nil
 }
 

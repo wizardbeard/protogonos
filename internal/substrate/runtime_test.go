@@ -593,6 +593,34 @@ func TestResolveGlobalCEPFaninPIDsUsesAllCPPIDsForMultiSignalCEP(t *testing.T) {
 	}
 }
 
+func TestSimpleRuntimeUsesCPPActorBackedCompute(t *testing.T) {
+	resetRegistriesForTests()
+	t.Cleanup(resetRegistriesForTests)
+
+	rt, err := NewSimpleRuntime(Spec{
+		CPPName: DefaultCPPName,
+		CPPIDs:  []string{"cpp_endpoint_1"},
+		CEPName: SetWeightCEPName,
+	}, 1)
+	if err != nil {
+		t.Fatalf("new runtime: %v", err)
+	}
+	if rt.cppActor == nil || rt.cppActor.process == nil {
+		t.Fatal("expected cpp actor process to be initialized")
+	}
+	if rt.cppActor.process.ID() != "cpp_endpoint_1" {
+		t.Fatalf("expected cpp process id from CPPIDs, got=%q", rt.cppActor.process.ID())
+	}
+
+	w, err := rt.Step(context.Background(), []float64{1})
+	if err != nil {
+		t.Fatalf("step through cpp actor: %v", err)
+	}
+	if len(w) != 1 || w[0] != 1 {
+		t.Fatalf("unexpected actor-backed set_weight result: %v", w)
+	}
+}
+
 func TestSimpleRuntimeCEPChainAppliesInOrder(t *testing.T) {
 	resetRegistriesForTests()
 	t.Cleanup(resetRegistriesForTests)
