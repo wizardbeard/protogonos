@@ -15,6 +15,7 @@ var (
 	ErrUnexpectedCPPComputePID    = errors.New("unexpected cpp compute sender")
 	ErrUnexpectedCPPTerminatePID  = errors.New("unexpected cpp terminate sender")
 	ErrCPPVectorComputeNotSupport = errors.New("cpp vector compute not supported")
+	ErrCPPCoordinateNotSupported  = errors.New("cpp coordinate compute not supported")
 	ErrInvalidCPPMessage          = errors.New("invalid cpp message")
 )
 
@@ -32,6 +33,17 @@ type CPPComputeMessage struct {
 }
 
 func (CPPComputeMessage) isCPPMessage() {}
+
+// CPPCoordinateMessage mirrors substrate_cpp coordinate compute messages:
+// `{SubstratePid, PresynapticCoords, PostsynapticCoords}` and the IOW variant.
+type CPPCoordinateMessage struct {
+	FromPID            string
+	PresynapticCoords  []float64
+	PostsynapticCoords []float64
+	IOW                []float64
+}
+
+func (CPPCoordinateMessage) isCPPMessage() {}
 
 // CPPTerminateMessage mirrors `{ExoSelfPid,terminate}`.
 type CPPTerminateMessage struct {
@@ -86,6 +98,8 @@ func (p *CPPProcess) HandleMessage(ctx context.Context, message CPPMessage) ([]f
 	switch msg := message.(type) {
 	case CPPComputeMessage:
 		return p.handleCompute(ctx, msg)
+	case CPPCoordinateMessage:
+		return p.handleCoordinateCompute(ctx, msg)
 	case CPPTerminateMessage:
 		if p.terminatePID != "" && strings.TrimSpace(msg.FromPID) != p.terminatePID {
 			return nil, nil
@@ -123,6 +137,49 @@ func (p *CPPProcess) handleCompute(ctx context.Context, msg CPPComputeMessage) (
 		return nil, err
 	}
 	return []float64{out}, nil
+}
+
+func (p *CPPProcess) handleCoordinateCompute(ctx context.Context, msg CPPCoordinateMessage) ([]float64, error) {
+	if p.terminated {
+		return nil, ErrCPPProcessTerminated
+	}
+	if p.substratePID != "" && strings.TrimSpace(msg.FromPID) != p.substratePID {
+		return nil, fmt.Errorf("%w: expected=%s got=%s", ErrUnexpectedCPPComputePID, p.substratePID, strings.TrimSpace(msg.FromPID))
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	if len(msg.IOW) > 0 {
+		cpp, ok := p.cpp.(CoordinateIOWCPP)
+		if !ok {
+			return nil, ErrCPPCoordinateNotSupported
+		}
+		out, err := cpp.ComputeCoordinatesIOW(
+			ctx,
+			append([]float64(nil), msg.PresynapticCoords...),
+			append([]float64(nil), msg.PostsynapticCoords...),
+			append([]float64(nil), msg.IOW...),
+			cloneFloatMap(p.parameters),
+		)
+		if err != nil {
+			return nil, err
+		}
+		return append([]float64(nil), out...), nil
+	}
+	cpp, ok := p.cpp.(CoordinateCPP)
+	if !ok {
+		return nil, ErrCPPCoordinateNotSupported
+	}
+	out, err := cpp.ComputeCoordinates(
+		ctx,
+		append([]float64(nil), msg.PresynapticCoords...),
+		append([]float64(nil), msg.PostsynapticCoords...),
+		cloneFloatMap(p.parameters),
+	)
+	if err != nil {
+		return nil, err
+	}
+	return append([]float64(nil), out...), nil
 }
 
 type cppActorRequest struct {
@@ -219,6 +276,23 @@ func (a *CPPActor) ComputeVectorFrom(ctx context.Context, fromPID string, input 
 		FromPID: fromPID,
 		Input:   input,
 		Vector:  true,
+	})
+}
+
+func (a *CPPActor) ComputeCoordinatesFrom(ctx context.Context, fromPID string, presynaptic []float64, postsynaptic []float64) ([]float64, error) {
+	return a.Call(ctx, CPPCoordinateMessage{
+		FromPID:            fromPID,
+		PresynapticCoords:  presynaptic,
+		PostsynapticCoords: postsynaptic,
+	})
+}
+
+func (a *CPPActor) ComputeCoordinatesIOWFrom(ctx context.Context, fromPID string, presynaptic []float64, postsynaptic []float64, iow []float64) ([]float64, error) {
+	return a.Call(ctx, CPPCoordinateMessage{
+		FromPID:            fromPID,
+		PresynapticCoords:  presynaptic,
+		PostsynapticCoords: postsynaptic,
+		IOW:                iow,
 	})
 }
 

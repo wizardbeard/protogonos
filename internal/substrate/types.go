@@ -14,6 +14,18 @@ type VectorCPP interface {
 	ComputeVector(ctx context.Context, inputs []float64, params map[string]float64) ([]float64, error)
 }
 
+// CoordinateCPP is an optional CPP capability matching substrate_cpp's
+// `{SubstratePid, PresynapticCoords, PostsynapticCoords}` message shape.
+type CoordinateCPP interface {
+	ComputeCoordinates(ctx context.Context, presynaptic []float64, postsynaptic []float64, params map[string]float64) ([]float64, error)
+}
+
+// CoordinateIOWCPP is an optional CPP capability matching substrate_cpp's
+// `{SubstratePid, PresynapticCoords, PostsynapticCoords, IOW}` message shape.
+type CoordinateIOWCPP interface {
+	ComputeCoordinatesIOW(ctx context.Context, presynaptic []float64, postsynaptic []float64, iow []float64, params map[string]float64) ([]float64, error)
+}
+
 // CEP applies a computed update signal to an existing weight.
 type CEP interface {
 	Name() string
