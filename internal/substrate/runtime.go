@@ -170,24 +170,61 @@ func (r *SimpleRuntime) StepCoordinates(ctx context.Context, weightIdx int, pres
 		return nil, err
 	}
 
-	controlSignals, err := r.computeCPPCoordinates(ctx, presynaptic, postsynaptic, iow)
+	nextWeights := append([]float64(nil), r.weights...)
+	nextWeightCEPParams := cloneCEPWeightParamSet(r.weightCEPParams)
+	if err := r.applyCoordinatePairToWeight(ctx, weightIdx, CoordinatePair{
+		PresynapticCoords:  presynaptic,
+		PostsynapticCoords: postsynaptic,
+		IOW:                iow,
+	}, nextWeights, nextWeightCEPParams); err != nil {
+		return nil, err
+	}
+	r.weights = nextWeights
+	r.weightCEPParams = nextWeightCEPParams
+	return r.Weights(), nil
+}
+
+func (r *SimpleRuntime) StepCoordinateBatch(ctx context.Context, pairs []CoordinatePair) ([]float64, error) {
+	if r.terminated {
+		return nil, ErrSubstrateRuntimeTerminated
+	}
+	if len(pairs) > len(r.weights) {
+		return nil, fmt.Errorf("%w: batch size=%d weights=%d", ErrInvalidSubstrateWeightIndex, len(pairs), len(r.weights))
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+
+	nextWeights := append([]float64(nil), r.weights...)
+	nextWeightCEPParams := cloneCEPWeightParamSet(r.weightCEPParams)
+	for weightIdx, pair := range pairs {
+		if err := r.applyCoordinatePairToWeight(ctx, weightIdx, pair, nextWeights, nextWeightCEPParams); err != nil {
+			return nil, err
+		}
+	}
+	r.weights = nextWeights
+	r.weightCEPParams = nextWeightCEPParams
+	return r.Weights(), nil
+}
+
+func (r *SimpleRuntime) applyCoordinatePairToWeight(ctx context.Context, weightIdx int, pair CoordinatePair, nextWeights []float64, nextWeightCEPParams [][]map[string]float64) error {
+	if weightIdx < 0 || weightIdx >= len(nextWeights) {
+		return fmt.Errorf("%w: %d", ErrInvalidSubstrateWeightIndex, weightIdx)
+	}
+	controlSignals, err := r.computeCPPCoordinates(ctx, pair.PresynapticCoords, pair.PostsynapticCoords, pair.IOW)
 	if err != nil {
-		return nil, fmt.Errorf("cpp %s coordinate compute: %w", r.cpp.Name(), err)
+		return fmt.Errorf("cpp %s coordinate compute: %w", r.cpp.Name(), err)
 	}
 	delta := 0.0
 	if len(controlSignals) > 0 {
 		delta = controlSignals[0]
 	}
-	nextWeights := append([]float64(nil), r.weights...)
-	nextWeightCEPParams := cloneCEPWeightParamSet(r.weightCEPParams)
 	next, err := r.applyCEPChainToWeight(ctx, weightIdx, nextWeights[weightIdx], delta, controlSignals, nextWeightCEPParams)
 	if err != nil {
-		return nil, err
+		return err
 	}
 	nextWeights[weightIdx] = next
-	r.weights = nextWeights
-	r.weightCEPParams = nextWeightCEPParams
-	return r.Weights(), nil
+	return nil
 }
 
 func (r *SimpleRuntime) Terminate() {

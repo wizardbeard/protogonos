@@ -26,6 +26,14 @@ type CoordinateIOWCPP interface {
 	ComputeCoordinatesIOW(ctx context.Context, presynaptic []float64, postsynaptic []float64, iow []float64, params map[string]float64) ([]float64, error)
 }
 
+// CoordinatePair describes one substrate coordinate edge to populate through
+// a CPP->CEP weight update.
+type CoordinatePair struct {
+	PresynapticCoords  []float64
+	PostsynapticCoords []float64
+	IOW                []float64
+}
+
 // CEP applies a computed update signal to an existing weight.
 type CEP interface {
 	Name() string

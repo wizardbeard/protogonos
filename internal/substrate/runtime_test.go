@@ -696,6 +696,112 @@ func TestSimpleRuntimeStepCoordinatesIOWUsesCEPCommandPath(t *testing.T) {
 	}
 }
 
+func TestSimpleRuntimeStepCoordinateBatchUpdatesOrderedWeights(t *testing.T) {
+	resetRegistriesForTests()
+	t.Cleanup(resetRegistriesForTests)
+
+	if err := RegisterCPP("coordinate_runtime_cpp", func() CPP {
+		return coordinateRuntimeCPP{}
+	}); err != nil {
+		t.Fatalf("register coordinate cpp: %v", err)
+	}
+
+	rt, err := NewSimpleRuntime(Spec{
+		CPPName:      "coordinate_runtime_cpp",
+		CEPName:      WeightExpressionCEPName,
+		CEPFaninPIDs: []string{"cpp1", "cpp2"},
+		Parameters: map[string]float64{
+			"scale": 2,
+		},
+	}, 3)
+	if err != nil {
+		t.Fatalf("new runtime: %v", err)
+	}
+
+	weights, err := rt.StepCoordinateBatch(context.Background(), []CoordinatePair{
+		{
+			PresynapticCoords:  []float64{0.25, 0.75},
+			PostsynapticCoords: []float64{0.5, 0.25},
+		},
+		{
+			PresynapticCoords:  []float64{0.1, 0.6},
+			PostsynapticCoords: []float64{0.2, 0.1},
+		},
+	})
+	if err != nil {
+		t.Fatalf("step coordinate batch: %v", err)
+	}
+	if len(weights) != 3 || math.Abs(weights[0]-1.5) > 1e-9 || math.Abs(weights[1]-0.6) > 1e-9 || weights[2] != 0 {
+		t.Fatalf("unexpected coordinate batch weights: got=%v want=[1.5 0.6 0]", weights)
+	}
+}
+
+func TestSimpleRuntimeStepCoordinateBatchSupportsIOW(t *testing.T) {
+	resetRegistriesForTests()
+	t.Cleanup(resetRegistriesForTests)
+
+	if err := RegisterCPP("coordinate_abcn_runtime_cpp", func() CPP {
+		return coordinateABCNRuntimeCPP{}
+	}); err != nil {
+		t.Fatalf("register coordinate abcn cpp: %v", err)
+	}
+
+	rt, err := NewSimpleRuntime(Spec{
+		CPPName:      "coordinate_abcn_runtime_cpp",
+		CEPName:      SetABCNCEPName,
+		CEPFaninPIDs: []string{"cpp1", "cpp2", "cpp3", "cpp4", "cpp5"},
+	}, 2)
+	if err != nil {
+		t.Fatalf("new runtime: %v", err)
+	}
+
+	weights, err := rt.StepCoordinateBatch(context.Background(), []CoordinatePair{
+		{
+			PresynapticCoords:  []float64{0},
+			PostsynapticCoords: []float64{1},
+			IOW:                []float64{1, 0.2, 0.5, -0.1, 0.8},
+		},
+		{
+			PresynapticCoords:  []float64{0},
+			PostsynapticCoords: []float64{1},
+			IOW:                []float64{1, 1, 0, 0, 1},
+		},
+	})
+	if err != nil {
+		t.Fatalf("step coordinate batch with iow: %v", err)
+	}
+	if len(weights) != 2 || math.Abs(weights[0]-0.4) > 1e-9 || math.Abs(weights[1]-0) > 1e-9 {
+		t.Fatalf("unexpected coordinate iow batch weights: got=%v want=[0.4 0]", weights)
+	}
+}
+
+func TestSimpleRuntimeStepCoordinateBatchValidatesBatchSize(t *testing.T) {
+	resetRegistriesForTests()
+	t.Cleanup(resetRegistriesForTests)
+
+	if err := RegisterCPP("coordinate_runtime_cpp", func() CPP {
+		return coordinateRuntimeCPP{}
+	}); err != nil {
+		t.Fatalf("register coordinate cpp: %v", err)
+	}
+
+	rt, err := NewSimpleRuntime(Spec{
+		CPPName:      "coordinate_runtime_cpp",
+		CEPName:      WeightExpressionCEPName,
+		CEPFaninPIDs: []string{"cpp1", "cpp2"},
+	}, 1)
+	if err != nil {
+		t.Fatalf("new runtime: %v", err)
+	}
+
+	if _, err := rt.StepCoordinateBatch(context.Background(), []CoordinatePair{{}, {}}); !errors.Is(err, ErrInvalidSubstrateWeightIndex) {
+		t.Fatalf("expected ErrInvalidSubstrateWeightIndex, got %v", err)
+	}
+	if weights := rt.Weights(); len(weights) != 1 || weights[0] != 0 {
+		t.Fatalf("expected oversized batch to preserve weights, got=%v", weights)
+	}
+}
+
 func TestSimpleRuntimeStepCoordinatesValidatesWeightIndex(t *testing.T) {
 	resetRegistriesForTests()
 	t.Cleanup(resetRegistriesForTests)
