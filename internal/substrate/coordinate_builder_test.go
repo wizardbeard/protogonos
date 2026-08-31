@@ -20,6 +20,99 @@ func (sumCoordinateBuilderCPP) ComputeCoordinates(_ context.Context, presynaptic
 	return []float64{presynaptic[0] + postsynaptic[0], 1}, nil
 }
 
+func TestBuildCoordinatePairsForLinkFormDispatchesL2LFeedforward(t *testing.T) {
+	req := CoordinatePairBuildRequest{
+		LinkForm:            LinkFormL2LFeedforward,
+		PreviousLayerCoords: [][]float64{{0}, {1}},
+		CurrentLayerCoords:  [][]float64{{10}},
+	}
+
+	got, err := BuildCoordinatePairsForLinkForm(req)
+	if err != nil {
+		t.Fatalf("dispatch coordinate pairs: %v", err)
+	}
+	want, err := BuildL2LFeedforwardCoordinatePairs(req.PreviousLayerCoords, req.CurrentLayerCoords)
+	if err != nil {
+		t.Fatalf("build l2l coordinate pairs: %v", err)
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("unexpected l2l dispatch output: got=%v want=%v", got, want)
+	}
+}
+
+func TestBuildCoordinatePairsForLinkFormDispatchesFullyInterconnected(t *testing.T) {
+	req := CoordinatePairBuildRequest{
+		LinkForm:            LinkFormFullyInterconnected,
+		FlatSubstrateCoords: [][]float64{{0}, {1}, {90}},
+		CurrentLayerCoords:  [][]float64{{10}},
+	}
+
+	got, err := BuildCoordinatePairsForLinkForm(req)
+	if err != nil {
+		t.Fatalf("dispatch coordinate pairs: %v", err)
+	}
+	want, err := BuildFullyInterconnectedCoordinatePairs(req.FlatSubstrateCoords, req.CurrentLayerCoords)
+	if err != nil {
+		t.Fatalf("build fully interconnected coordinate pairs: %v", err)
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("unexpected fully interconnected dispatch output: got=%v want=%v", got, want)
+	}
+}
+
+func TestBuildCoordinatePairsForLinkFormDispatchesJordanRecurrent(t *testing.T) {
+	req := CoordinatePairBuildRequest{
+		LinkForm:          LinkFormJordanRecurrent,
+		InputLayerCoords:  [][]float64{{0}, {1}},
+		OutputLayerCoords: [][]float64{{90}},
+		CurrentLayerCoords: [][]float64{
+			{10},
+		},
+	}
+
+	got, err := BuildCoordinatePairsForLinkForm(req)
+	if err != nil {
+		t.Fatalf("dispatch coordinate pairs: %v", err)
+	}
+	want, err := BuildJordanRecurrentCoordinatePairs(req.InputLayerCoords, req.OutputLayerCoords, req.CurrentLayerCoords)
+	if err != nil {
+		t.Fatalf("build jordan coordinate pairs: %v", err)
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("unexpected jordan dispatch output: got=%v want=%v", got, want)
+	}
+}
+
+func TestBuildCoordinatePairsForLinkFormDispatchesNeuronSelfRecurrent(t *testing.T) {
+	req := CoordinatePairBuildRequest{
+		LinkForm:            LinkFormNeuronSelfRecurrent,
+		PreviousLayerCoords: [][]float64{{0}, {1}},
+		CurrentLayerCoords:  [][]float64{{10}},
+	}
+
+	got, err := BuildCoordinatePairsForLinkForm(req)
+	if err != nil {
+		t.Fatalf("dispatch coordinate pairs: %v", err)
+	}
+	want, err := BuildNeuronSelfRecurrentCoordinatePairs(req.PreviousLayerCoords, req.CurrentLayerCoords)
+	if err != nil {
+		t.Fatalf("build neuron-self coordinate pairs: %v", err)
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("unexpected neuron-self dispatch output: got=%v want=%v", got, want)
+	}
+}
+
+func TestBuildCoordinatePairsForLinkFormRejectsUnsupportedLinkForm(t *testing.T) {
+	_, err := BuildCoordinatePairsForLinkForm(CoordinatePairBuildRequest{
+		LinkForm:           "planeself_recurrent",
+		CurrentLayerCoords: [][]float64{{1}},
+	})
+	if !errors.Is(err, ErrUnsupportedSubstrateLink) {
+		t.Fatalf("expected ErrUnsupportedSubstrateLink, got %v", err)
+	}
+}
+
 func TestBuildL2LFeedforwardCoordinatePairsOrdersCurrentThenPreviousLayer(t *testing.T) {
 	pairs, err := BuildL2LFeedforwardCoordinatePairs(
 		[][]float64{{0}, {1}},

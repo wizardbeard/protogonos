@@ -5,7 +5,45 @@ import (
 	"fmt"
 )
 
-var ErrInvalidSubstrateCoordinates = errors.New("invalid substrate coordinates")
+const (
+	LinkFormL2LFeedforward      = "l2l_feedforward"
+	LinkFormFullyInterconnected = "fully_interconnected"
+	LinkFormJordanRecurrent     = "jordan_recurrent"
+	LinkFormNeuronSelfRecurrent = "neuronself_recurrent"
+)
+
+var (
+	ErrInvalidSubstrateCoordinates = errors.New("invalid substrate coordinates")
+	ErrUnsupportedSubstrateLink    = errors.New("unsupported substrate link form")
+)
+
+// CoordinatePairBuildRequest carries the coordinate sources needed by each
+// substrate.erl link-form population path.
+type CoordinatePairBuildRequest struct {
+	LinkForm            string
+	PreviousLayerCoords [][]float64
+	CurrentLayerCoords  [][]float64
+	FlatSubstrateCoords [][]float64
+	InputLayerCoords    [][]float64
+	OutputLayerCoords   [][]float64
+}
+
+// BuildCoordinatePairsForLinkForm dispatches to the coordinate-pair builder
+// matching the reference substrate link form.
+func BuildCoordinatePairsForLinkForm(req CoordinatePairBuildRequest) ([]CoordinatePair, error) {
+	switch req.LinkForm {
+	case LinkFormL2LFeedforward:
+		return BuildL2LFeedforwardCoordinatePairs(req.PreviousLayerCoords, req.CurrentLayerCoords)
+	case LinkFormFullyInterconnected:
+		return BuildFullyInterconnectedCoordinatePairs(req.FlatSubstrateCoords, req.CurrentLayerCoords)
+	case LinkFormJordanRecurrent:
+		return BuildJordanRecurrentCoordinatePairs(req.InputLayerCoords, req.OutputLayerCoords, req.CurrentLayerCoords)
+	case LinkFormNeuronSelfRecurrent:
+		return BuildNeuronSelfRecurrentCoordinatePairs(req.PreviousLayerCoords, req.CurrentLayerCoords)
+	default:
+		return nil, fmt.Errorf("%w: %q", ErrUnsupportedSubstrateLink, req.LinkForm)
+	}
+}
 
 // BuildL2LFeedforwardCoordinatePairs returns coordinate pairs in the same
 // previous-layer/current-layer order used by substrate.erl's l2l_feedforward
