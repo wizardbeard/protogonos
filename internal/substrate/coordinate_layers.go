@@ -1,6 +1,9 @@
 package substrate
 
-import "fmt"
+import (
+	"fmt"
+	"math"
+)
 
 // NeurodeCoordinate mirrors the coordinate/output/weights tuple used by the
 // reference substrate hyperlayers while keeping runtime-specific state optional.
@@ -145,6 +148,54 @@ func PopulateInputHyperlayer(layer CoordinateHyperlayer, input []float64) (Coord
 		})
 	}
 	return out, nil
+}
+
+// CalculateNeurodeOutputStd mirrors calculate_neurode_output_std/3 for the
+// non-plastic substrate path: tanh(sum(previous_output * weight)).
+func CalculateNeurodeOutputStd(previous CoordinateHyperlayer, neurode NeurodeCoordinate) (NeurodeCoordinate, error) {
+	if len(previous) != len(neurode.Weights) {
+		return NeurodeCoordinate{}, fmt.Errorf("%w: previous neurode count %d does not match weight count %d", ErrInvalidSubstrateCoordinates, len(previous), len(neurode.Weights))
+	}
+
+	sum := 0.0
+	for i, prev := range previous {
+		sum += prev.Output * neurode.Weights[i]
+	}
+	return NeurodeCoordinate{
+		Coords:  append([]float64(nil), neurode.Coords...),
+		Output:  math.Tanh(sum),
+		Weights: append([]float64(nil), neurode.Weights...),
+	}, nil
+}
+
+// CalculateOutputStd mirrors the l2l_feedforward calculate_output_std path for
+// already-populated input and process/output hyperlayers with non-plastic weights.
+func CalculateOutputStd(input CoordinateHyperlayer, layers []CoordinateHyperlayer) ([]float64, []CoordinateHyperlayer, error) {
+	if len(layers) == 0 {
+		return nil, nil, fmt.Errorf("%w: missing process/output hyperlayers", ErrInvalidSubstrateCoordinates)
+	}
+
+	previous := cloneCoordinateHyperlayer(input)
+	updated := make([]CoordinateHyperlayer, 0, len(layers))
+	for layerIdx, layer := range layers {
+		current := make(CoordinateHyperlayer, 0, len(layer))
+		for neurodeIdx, neurode := range layer {
+			calculated, err := CalculateNeurodeOutputStd(previous, neurode)
+			if err != nil {
+				return nil, nil, fmt.Errorf("layer %d neurode %d: %w", layerIdx, neurodeIdx, err)
+			}
+			current = append(current, calculated)
+		}
+		updated = append(updated, current)
+		previous = current
+	}
+
+	outputLayer := updated[len(updated)-1]
+	outputs := make([]float64, 0, len(outputLayer))
+	for _, neurode := range outputLayer {
+		outputs = append(outputs, neurode.Output)
+	}
+	return outputs, updated, nil
 }
 
 // BuildCoordList mirrors substrate.erl build_CoordList/1. Density 1 maps to a

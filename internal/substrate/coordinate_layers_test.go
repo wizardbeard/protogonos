@@ -232,6 +232,97 @@ func TestPopulateInputHyperlayerValidatesInputLength(t *testing.T) {
 	}
 }
 
+func TestCalculateNeurodeOutputStdAppliesWeightedTanh(t *testing.T) {
+	previous := CoordinateHyperlayer{
+		{Coords: []float64{-1}, Output: 0.5},
+		{Coords: []float64{1}, Output: -0.25},
+	}
+	neurode := NeurodeCoordinate{
+		Coords:  []float64{0},
+		Output:  99,
+		Weights: []float64{0.8, -0.4},
+	}
+
+	got, err := CalculateNeurodeOutputStd(previous, neurode)
+	if err != nil {
+		t.Fatalf("calculate neurode output: %v", err)
+	}
+	want := math.Tanh(0.5*0.8 + -0.25*-0.4)
+	if math.Abs(got.Output-want) > 1e-12 {
+		t.Fatalf("unexpected neurode output: got=%v want=%v", got.Output, want)
+	}
+	if !reflect.DeepEqual(got.Coords, []float64{0}) {
+		t.Fatalf("unexpected neurode coords: %v", got.Coords)
+	}
+	if !reflect.DeepEqual(got.Weights, []float64{0.8, -0.4}) {
+		t.Fatalf("unexpected neurode weights: %v", got.Weights)
+	}
+
+	neurode.Coords[0] = 99
+	neurode.Weights[0] = 99
+	if got.Coords[0] != 0 || got.Weights[0] != 0.8 {
+		t.Fatalf("expected calculated neurode to be copied, got=%v", got)
+	}
+}
+
+func TestCalculateNeurodeOutputStdValidatesWeightCount(t *testing.T) {
+	_, err := CalculateNeurodeOutputStd(
+		CoordinateHyperlayer{{Coords: []float64{0}, Output: 1}},
+		NeurodeCoordinate{Coords: []float64{1}, Weights: []float64{0.1, 0.2}},
+	)
+	if !errors.Is(err, ErrInvalidSubstrateCoordinates) {
+		t.Fatalf("expected ErrInvalidSubstrateCoordinates, got %v", err)
+	}
+}
+
+func TestCalculateOutputStdPropagatesL2LLayers(t *testing.T) {
+	input := CoordinateHyperlayer{
+		{Coords: []float64{-1}, Output: 0.5},
+		{Coords: []float64{1}, Output: -0.25},
+	}
+	hidden := CoordinateHyperlayer{
+		{Coords: []float64{0}, Output: 9, Weights: []float64{0.8, -0.4}},
+	}
+	output := CoordinateHyperlayer{
+		{Coords: []float64{1}, Output: 8, Weights: []float64{0.3}},
+		{Coords: []float64{-1}, Output: 7, Weights: []float64{-0.2}},
+	}
+
+	outputs, updated, err := CalculateOutputStd(input, []CoordinateHyperlayer{hidden, output})
+	if err != nil {
+		t.Fatalf("calculate output std: %v", err)
+	}
+	hiddenOut := math.Tanh(0.5*0.8 + -0.25*-0.4)
+	wantOutputs := []float64{math.Tanh(hiddenOut * 0.3), math.Tanh(hiddenOut * -0.2)}
+	if !reflect.DeepEqual(outputs, wantOutputs) {
+		t.Fatalf("unexpected outputs: got=%v want=%v", outputs, wantOutputs)
+	}
+	if len(updated) != 2 {
+		t.Fatalf("unexpected updated layer count: got=%d want=2", len(updated))
+	}
+	if math.Abs(updated[0][0].Output-hiddenOut) > 1e-12 {
+		t.Fatalf("unexpected hidden output: got=%v want=%v", updated[0][0].Output, hiddenOut)
+	}
+	if !reflect.DeepEqual(updated[1].Coordinates(), [][]float64{{1}, {-1}}) {
+		t.Fatalf("unexpected updated output coords: %v", updated[1].Coordinates())
+	}
+
+	hidden[0].Weights[0] = 99
+	if updated[0][0].Weights[0] != 0.8 {
+		t.Fatalf("expected updated layers to be copied, got=%v", updated[0][0].Weights)
+	}
+}
+
+func TestCalculateOutputStdValidatesInputs(t *testing.T) {
+	input := CoordinateHyperlayer{{Coords: []float64{0}, Output: 1}}
+	if _, _, err := CalculateOutputStd(input, nil); !errors.Is(err, ErrInvalidSubstrateCoordinates) {
+		t.Fatalf("expected ErrInvalidSubstrateCoordinates for missing layers, got %v", err)
+	}
+	if _, _, err := CalculateOutputStd(input, []CoordinateHyperlayer{{{Coords: []float64{1}, Weights: []float64{0.1, 0.2}}}}); !errors.Is(err, ErrInvalidSubstrateCoordinates) {
+		t.Fatalf("expected ErrInvalidSubstrateCoordinates for weight mismatch, got %v", err)
+	}
+}
+
 func TestBuildCoordListMatchesReferenceOrder(t *testing.T) {
 	tests := []struct {
 		name    string
