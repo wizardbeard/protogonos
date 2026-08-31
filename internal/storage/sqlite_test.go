@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"protogonos/internal/model"
+	"protogonos/internal/substrate"
 )
 
 func TestSQLiteStoreGenomeAndPopulationRoundTrip(t *testing.T) {
@@ -144,7 +145,17 @@ func TestSQLiteStoreGenomeAndPopulationRoundTrip(t *testing.T) {
 	}
 
 	top := []model.TopGenomeRecord{
-		{Rank: 1, Fitness: 0.9, Genome: model.Genome{ID: "g1"}},
+		{
+			Rank:    1,
+			Fitness: 0.9,
+			Genome:  model.Genome{ID: "g1"},
+			SubstrateSnapshot: &substrate.LayerRuntimeSnapshot{
+				Plasticity: substrate.SubstratePlasticityNone,
+				LinkForm:   substrate.LinkFormL2LFeedforward,
+				StateMode:  substrate.SubstrateStateHold,
+				Weights:    []float64{0.25},
+			},
+		},
 	}
 	if err := store.SaveTopGenomes(ctx, "run-1", top); err != nil {
 		t.Fatalf("save top genomes: %v", err)
@@ -158,6 +169,9 @@ func TestSQLiteStoreGenomeAndPopulationRoundTrip(t *testing.T) {
 	}
 	if len(loadedTop) != 1 || loadedTop[0].Rank != 1 {
 		t.Fatalf("unexpected top genomes loaded: %+v", loadedTop)
+	}
+	if loadedTop[0].SubstrateSnapshot == nil || loadedTop[0].SubstrateSnapshot.StateMode != substrate.SubstrateStateHold {
+		t.Fatalf("unexpected top genome substrate snapshot loaded: %+v", loadedTop[0].SubstrateSnapshot)
 	}
 
 	speciesHistory := []model.SpeciesGeneration{

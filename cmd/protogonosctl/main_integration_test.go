@@ -1001,7 +1001,7 @@ func TestTopCommandSQLiteReadsPersistedTopGenomes(t *testing.T) {
 	if err != nil {
 		t.Fatalf("top command: %v", err)
 	}
-	if !strings.Contains(out, "rank=1") || !strings.Contains(out, "genome_id=") {
+	if !strings.Contains(out, "rank=1") || !strings.Contains(out, "genome_id=") || !strings.Contains(out, "substrate_snapshot=") {
 		t.Fatalf("unexpected top output: %s", out)
 	}
 

@@ -1,5 +1,7 @@
 package model
 
+import "protogonos/internal/substrate"
+
 // VersionedRecord captures schema and codec evolution for persistent data.
 type VersionedRecord struct {
 	SchemaVersion int `json:"schema_version"`
@@ -169,9 +171,10 @@ type SpeciesMetrics struct {
 }
 
 type TopGenomeRecord struct {
-	Rank    int     `json:"rank"`
-	Fitness float64 `json:"fitness"`
-	Genome  Genome  `json:"genome"`
+	Rank              int                             `json:"rank"`
+	Fitness           float64                         `json:"fitness"`
+	Genome            Genome                          `json:"genome"`
+	SubstrateSnapshot *substrate.LayerRuntimeSnapshot `json:"substrate_snapshot,omitempty"`
 }
 
 type ScapeSummary struct {

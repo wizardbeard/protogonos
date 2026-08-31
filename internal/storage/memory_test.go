@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"protogonos/internal/model"
+	"protogonos/internal/substrate"
 )
 
 func TestMemoryStoreLineageRoundTrip(t *testing.T) {
@@ -129,12 +130,23 @@ func TestMemoryStoreTopGenomesRoundTrip(t *testing.T) {
 	}
 
 	input := []model.TopGenomeRecord{
-		{Rank: 1, Fitness: 0.9, Genome: model.Genome{ID: "g1"}},
+		{
+			Rank:    1,
+			Fitness: 0.9,
+			Genome:  model.Genome{ID: "g1"},
+			SubstrateSnapshot: &substrate.LayerRuntimeSnapshot{
+				Plasticity: substrate.SubstratePlasticityNone,
+				LinkForm:   substrate.LinkFormL2LFeedforward,
+				StateMode:  substrate.SubstrateStateHold,
+				Weights:    []float64{0.25},
+			},
+		},
 		{Rank: 2, Fitness: 0.8, Genome: model.Genome{ID: "g2"}},
 	}
 	if err := store.SaveTopGenomes(ctx, "run-1", input); err != nil {
 		t.Fatalf("save top genomes: %v", err)
 	}
+	input[0].SubstrateSnapshot.StateMode = substrate.SubstrateStateReset
 	output, ok, err := store.GetTopGenomes(ctx, "run-1")
 	if err != nil {
 		t.Fatalf("get top genomes: %v", err)
@@ -144,6 +156,20 @@ func TestMemoryStoreTopGenomesRoundTrip(t *testing.T) {
 	}
 	if len(output) != len(input) || output[0].Genome.ID != input[0].Genome.ID {
 		t.Fatalf("unexpected top genomes: %+v", output)
+	}
+	if output[0].SubstrateSnapshot == nil || output[0].SubstrateSnapshot.StateMode != substrate.SubstrateStateHold {
+		t.Fatalf("unexpected top genome substrate snapshot: %+v", output[0].SubstrateSnapshot)
+	}
+	output[0].SubstrateSnapshot.StateMode = substrate.SubstrateStateReset
+	outputAgain, ok, err := store.GetTopGenomes(ctx, "run-1")
+	if err != nil {
+		t.Fatalf("get top genomes again: %v", err)
+	}
+	if !ok {
+		t.Fatal("expected persisted top genomes on second read")
+	}
+	if outputAgain[0].SubstrateSnapshot == nil || outputAgain[0].SubstrateSnapshot.StateMode != substrate.SubstrateStateHold {
+		t.Fatalf("expected memory store to isolate returned snapshots, got %+v", outputAgain[0].SubstrateSnapshot)
 	}
 }
 

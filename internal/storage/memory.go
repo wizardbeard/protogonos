@@ -5,6 +5,7 @@ import (
 	"sync"
 
 	"protogonos/internal/model"
+	"protogonos/internal/substrate"
 )
 
 type MemoryStore struct {
@@ -156,9 +157,7 @@ func (s *MemoryStore) SaveTopGenomes(_ context.Context, runID string, top []mode
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	copied := make([]model.TopGenomeRecord, len(top))
-	copy(copied, top)
-	s.topGenomes[runID] = copied
+	s.topGenomes[runID] = cloneTopGenomeRecords(top)
 	return nil
 }
 
@@ -211,9 +210,16 @@ func (s *MemoryStore) GetTopGenomes(_ context.Context, runID string) ([]model.To
 	if !ok {
 		return nil, false, nil
 	}
+	return cloneTopGenomeRecords(top), true, nil
+}
+
+func cloneTopGenomeRecords(top []model.TopGenomeRecord) []model.TopGenomeRecord {
 	copied := make([]model.TopGenomeRecord, len(top))
-	copy(copied, top)
-	return copied, true, nil
+	for i, item := range top {
+		copied[i] = item
+		copied[i].SubstrateSnapshot = substrate.CloneLayerRuntimeSnapshot(item.SubstrateSnapshot)
+	}
+	return copied
 }
 
 func (s *MemoryStore) SaveLineage(_ context.Context, runID string, lineage []model.LineageRecord) error {

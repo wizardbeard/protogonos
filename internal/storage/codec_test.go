@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"protogonos/internal/model"
+	"protogonos/internal/substrate"
 )
 
 func TestDecodeGenomeFixture(t *testing.T) {
@@ -476,7 +477,17 @@ func TestSpeciesHistoryCodecRoundTrip(t *testing.T) {
 
 func TestTopGenomesCodecRoundTrip(t *testing.T) {
 	input := []model.TopGenomeRecord{
-		{Rank: 1, Fitness: 0.9, Genome: model.Genome{ID: "g1"}},
+		{
+			Rank:    1,
+			Fitness: 0.9,
+			Genome:  model.Genome{ID: "g1"},
+			SubstrateSnapshot: &substrate.LayerRuntimeSnapshot{
+				Plasticity: substrate.SubstratePlasticityNone,
+				LinkForm:   substrate.LinkFormL2LFeedforward,
+				StateMode:  substrate.SubstrateStateHold,
+				Weights:    []float64{0.25},
+			},
+		},
 		{Rank: 2, Fitness: 0.8, Genome: model.Genome{ID: "g2"}},
 	}
 	encoded, err := EncodeTopGenomes(input)

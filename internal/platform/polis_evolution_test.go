@@ -11,6 +11,7 @@ import (
 	"protogonos/internal/model"
 	"protogonos/internal/scape"
 	"protogonos/internal/storage"
+	"protogonos/internal/substrate"
 )
 
 type linearScape struct{}
@@ -165,6 +166,27 @@ func TestPolisRunEvolution(t *testing.T) {
 	}
 	if summary.BestFitness != result.BestFinalFitness {
 		t.Fatalf("scape summary best mismatch: got=%f want=%f", summary.BestFitness, result.BestFinalFitness)
+	}
+}
+
+func TestToModelTopGenomesPreservesSubstrateSnapshot(t *testing.T) {
+	top := toModelTopGenomes([]evo.ScoredGenome{
+		{
+			Genome:  model.Genome{ID: "g1"},
+			Fitness: 0.9,
+			SubstrateSnapshot: &substrate.LayerRuntimeSnapshot{
+				Plasticity: substrate.SubstratePlasticityNone,
+				LinkForm:   substrate.LinkFormL2LFeedforward,
+				StateMode:  substrate.SubstrateStateHold,
+				Weights:    []float64{0.25},
+			},
+		},
+	})
+	if len(top) != 1 {
+		t.Fatalf("unexpected top genome count: %d", len(top))
+	}
+	if top[0].SubstrateSnapshot == nil || top[0].SubstrateSnapshot.StateMode != substrate.SubstrateStateHold {
+		t.Fatalf("expected persisted substrate snapshot, got %+v", top[0].SubstrateSnapshot)
 	}
 }
 

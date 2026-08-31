@@ -160,6 +160,21 @@ func (r *LayerRuntime) Snapshot() LayerRuntimeSnapshot {
 	}
 }
 
+func CloneLayerRuntimeSnapshot(snapshot *LayerRuntimeSnapshot) *LayerRuntimeSnapshot {
+	if snapshot == nil {
+		return nil
+	}
+	return &LayerRuntimeSnapshot{
+		Plasticity: snapshot.Plasticity,
+		LinkForm:   snapshot.LinkForm,
+		StateMode:  snapshot.StateMode,
+		Terminated: snapshot.Terminated,
+		Substrate:  cloneCoordinateHyperlayers(snapshot.Substrate),
+		ABCN:       cloneABCNSubstrate(snapshot.ABCN),
+		Weights:    append([]float64(nil), snapshot.Weights...),
+	}
+}
+
 // Backup saves the current runtime state for a later Restore.
 func (r *LayerRuntime) Backup() {
 	r.mu.Lock()

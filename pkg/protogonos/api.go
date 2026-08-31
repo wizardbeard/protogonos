@@ -805,8 +805,7 @@ func buildTopGenomeArtifacts(scored []evo.ScoredGenome, outputNeuronIDs []string
 	for i, item := range scored {
 		artifact := stats.TopGenome{Rank: i + 1, Fitness: item.Fitness, Genome: item.Genome}
 		if item.SubstrateSnapshot != nil {
-			snapshot := *item.SubstrateSnapshot
-			artifact.SubstrateSnapshot = &snapshot
+			artifact.SubstrateSnapshot = substrate.CloneLayerRuntimeSnapshot(item.SubstrateSnapshot)
 		} else {
 			snapshot, err := replaySubstrateSnapshot(item.Genome, outputNeuronIDs)
 			if err != nil {

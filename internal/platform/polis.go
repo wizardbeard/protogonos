@@ -1083,9 +1083,10 @@ func toModelTopGenomes(top []evo.ScoredGenome) []model.TopGenomeRecord {
 	out := make([]model.TopGenomeRecord, 0, len(top))
 	for i, item := range top {
 		out = append(out, model.TopGenomeRecord{
-			Rank:    i + 1,
-			Fitness: item.Fitness,
-			Genome:  item.Genome,
+			Rank:              i + 1,
+			Fitness:           item.Fitness,
+			Genome:            item.Genome,
+			SubstrateSnapshot: item.SubstrateSnapshot,
 		})
 	}
 	return out

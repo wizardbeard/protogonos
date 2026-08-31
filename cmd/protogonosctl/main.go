@@ -824,12 +824,14 @@ func runTop(ctx context.Context, args []string) error {
 	}
 
 	for _, item := range top {
-		fmt.Printf("rank=%d fitness=%.6f genome_id=%s neurons=%d synapses=%d\n",
+		hasSubstrateSnapshot := item.SubstrateSnapshot != nil
+		fmt.Printf("rank=%d fitness=%.6f genome_id=%s neurons=%d synapses=%d substrate_snapshot=%t\n",
 			item.Rank,
 			item.Fitness,
 			item.Genome.ID,
 			len(item.Genome.Neurons),
 			len(item.Genome.Synapses),
+			hasSubstrateSnapshot,
 		)
 	}
 	return nil
