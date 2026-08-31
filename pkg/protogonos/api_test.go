@@ -2084,3 +2084,33 @@ func TestBuildReplaySubstrateUsesTypedABCNLayerRuntime(t *testing.T) {
 		t.Fatalf("expected typed abcn runtime to populate through configured components, got weights=%v", weights)
 	}
 }
+
+func TestBuildReplaySubstrateUsesTypedIterativeLayerRuntime(t *testing.T) {
+	rt, err := buildReplaySubstrate(model.Genome{
+		ID: "typed-iterative-substrate-replay",
+		Substrate: &model.SubstrateConfig{
+			Dimensions:  []int{0, 2, 2},
+			CEPName:     internalsubstrate.WeightExpressionCEPName,
+			Plasticity:  internalsubstrate.SubstratePlasticityIterative,
+			LinkForm:    internalsubstrate.LinkFormL2LFeedforward,
+			WeightCount: 1,
+		},
+	}, []string{"o1", "o2"})
+	if err != nil {
+		t.Fatalf("build replay substrate: %v", err)
+	}
+	if _, ok := rt.(*internalsubstrate.LayerRuntime); !ok {
+		t.Fatalf("expected typed layer runtime, got %T", rt)
+	}
+	if got, err := rt.Step(context.Background(), []float64{1, 1}); err != nil || len(got) != 1 {
+		t.Fatalf("step typed iterative layer runtime: got=%v err=%v", got, err)
+	}
+	firstWeights := rt.Weights()
+	if got, err := rt.Step(context.Background(), []float64{1, 1}); err != nil || len(got) != 1 {
+		t.Fatalf("step typed iterative layer runtime again: got=%v err=%v", got, err)
+	}
+	secondWeights := rt.Weights()
+	if len(secondWeights) != len(firstWeights) || secondWeights[0] == firstWeights[0] || secondWeights[1] == firstWeights[1] {
+		t.Fatalf("expected repeated iterative population to update weights, first=%v second=%v", firstWeights, secondWeights)
+	}
+}

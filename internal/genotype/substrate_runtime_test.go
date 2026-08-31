@@ -78,6 +78,46 @@ func TestBuildSubstrateLayerRuntimeUsesABCNConfig(t *testing.T) {
 	}
 }
 
+func TestBuildSubstrateLayerRuntimeUsesIterativeConfig(t *testing.T) {
+	rt, handled, err := BuildSubstrateLayerRuntime(SubstrateLayerRuntimeBuildRequest{
+		Genome: model.Genome{
+			ID: "typed-iterative-substrate-runtime",
+			Substrate: &model.SubstrateConfig{
+				Dimensions: []int{0, 2, 2},
+				CEPName:    substrate.WeightExpressionCEPName,
+				Plasticity: substrate.SubstratePlasticityIterative,
+				LinkForm:   substrate.LinkFormL2LFeedforward,
+			},
+		},
+		InputWidth:  2,
+		OutputWidth: 1,
+	})
+	if err != nil {
+		t.Fatalf("build typed iterative substrate runtime: %v", err)
+	}
+	if !handled {
+		t.Fatalf("expected explicit iterative config to be handled")
+	}
+	if _, ok := rt.(*substrate.LayerRuntime); !ok {
+		t.Fatalf("expected LayerRuntime, got %T", rt)
+	}
+
+	if got, err := rt.Step(context.Background(), []float64{1, 1}); err != nil || len(got) != 1 {
+		t.Fatalf("step typed iterative substrate runtime: got=%v err=%v", got, err)
+	}
+	firstWeights := rt.Weights()
+	if len(firstWeights) != 2 || firstWeights[0] == 0 || firstWeights[1] == 0 {
+		t.Fatalf("expected first iterative population, got weights=%v", firstWeights)
+	}
+	if got, err := rt.Step(context.Background(), []float64{1, 1}); err != nil || len(got) != 1 {
+		t.Fatalf("step typed iterative substrate runtime again: got=%v err=%v", got, err)
+	}
+	secondWeights := rt.Weights()
+	if len(secondWeights) != len(firstWeights) || secondWeights[0] == firstWeights[0] || secondWeights[1] == firstWeights[1] {
+		t.Fatalf("expected repeated iterative population to update weights, first=%v second=%v", firstWeights, secondWeights)
+	}
+}
+
 func TestBuildSubstrateLayerRuntimeLeavesLegacyComponentConfigUnhandled(t *testing.T) {
 	rt, handled, err := BuildSubstrateLayerRuntime(SubstrateLayerRuntimeBuildRequest{
 		Genome: model.Genome{

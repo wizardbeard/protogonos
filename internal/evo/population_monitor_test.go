@@ -1903,6 +1903,51 @@ func TestPopulationMonitorBuildSubstrateUsesTypedABCNLayerRuntime(t *testing.T) 
 	}
 }
 
+func TestPopulationMonitorBuildSubstrateUsesTypedIterativeLayerRuntime(t *testing.T) {
+	monitor, err := NewPopulationMonitor(MonitorConfig{
+		Scape:           oneDimScape{},
+		Mutation:        PerturbWeightAt{Index: 0, Delta: 0},
+		PopulationSize:  1,
+		EliteCount:      1,
+		Generations:     1,
+		Workers:         1,
+		Seed:            1,
+		InputNeuronIDs:  []string{"i"},
+		OutputNeuronIDs: []string{"o1", "o2"},
+	})
+	if err != nil {
+		t.Fatalf("new monitor: %v", err)
+	}
+
+	rt, err := monitor.buildSubstrate(model.Genome{
+		ID: "typed-iterative-substrate-monitor",
+		Substrate: &model.SubstrateConfig{
+			Dimensions:  []int{0, 2, 2},
+			CEPName:     substrate.WeightExpressionCEPName,
+			Plasticity:  substrate.SubstratePlasticityIterative,
+			LinkForm:    substrate.LinkFormL2LFeedforward,
+			WeightCount: 1,
+		},
+	})
+	if err != nil {
+		t.Fatalf("build substrate: %v", err)
+	}
+	if _, ok := rt.(*substrate.LayerRuntime); !ok {
+		t.Fatalf("expected typed layer runtime, got %T", rt)
+	}
+	if got, err := rt.Step(context.Background(), []float64{1, 1}); err != nil || len(got) != 1 {
+		t.Fatalf("step typed iterative layer runtime: got=%v err=%v", got, err)
+	}
+	firstWeights := rt.Weights()
+	if got, err := rt.Step(context.Background(), []float64{1, 1}); err != nil || len(got) != 1 {
+		t.Fatalf("step typed iterative layer runtime again: got=%v err=%v", got, err)
+	}
+	secondWeights := rt.Weights()
+	if len(secondWeights) != len(firstWeights) || secondWeights[0] == firstWeights[0] || secondWeights[1] == firstWeights[1] {
+		t.Fatalf("expected repeated iterative population to update weights, first=%v second=%v", firstWeights, secondWeights)
+	}
+}
+
 func TestPopulationMonitorBuildSubstrateDerivesCEPFaninFromGenomeLinks(t *testing.T) {
 	cppName := "pm_vector_cpp_cep_fanin"
 	if err := substrate.RegisterCPP(cppName, func() substrate.CPP {
