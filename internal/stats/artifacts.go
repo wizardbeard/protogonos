@@ -565,7 +565,105 @@ func ReadTopGenomes(baseDir, runID string) ([]TopGenome, bool, error) {
 	if err := json.Unmarshal(data, &top); err != nil {
 		return nil, false, err
 	}
+	if err := ValidateTopGenomes(top); err != nil {
+		return nil, false, err
+	}
 	return top, true, nil
+}
+
+func ValidateTopGenomes(top []TopGenome) error {
+	for i, item := range top {
+		if item.SubstrateSnapshot == nil {
+			continue
+		}
+		if err := validateLayerRuntimeSnapshot(item.SubstrateSnapshot); err != nil {
+			return fmt.Errorf("top genome rank %d substrate snapshot: %w", item.RankOrIndex(i), err)
+		}
+	}
+	return nil
+}
+
+func (g TopGenome) RankOrIndex(index int) int {
+	if g.Rank > 0 {
+		return g.Rank
+	}
+	return index + 1
+}
+
+func validateLayerRuntimeSnapshot(snapshot *substrate.LayerRuntimeSnapshot) error {
+	if snapshot == nil {
+		return nil
+	}
+	if !validSubstratePlasticity(snapshot.Plasticity) {
+		return fmt.Errorf("unsupported plasticity %q", snapshot.Plasticity)
+	}
+	if !validSubstrateLinkForm(snapshot.LinkForm) {
+		return fmt.Errorf("unsupported link form %q", snapshot.LinkForm)
+	}
+	if !validSubstrateStateMode(snapshot.StateMode) {
+		return fmt.Errorf("unsupported state mode %q", snapshot.StateMode)
+	}
+
+	if snapshot.Plasticity == substrate.SubstratePlasticityABCN {
+		weightCount := countABCNWeights(snapshot.ABCN)
+		if weightCount > 0 && len(snapshot.Weights) > 0 && len(snapshot.Weights) != weightCount {
+			return fmt.Errorf("abcn weight count mismatch: weights=%d layers=%d", len(snapshot.Weights), weightCount)
+		}
+		return nil
+	}
+
+	weightCount := countCoordinateWeights(snapshot.Substrate)
+	if weightCount > 0 && len(snapshot.Weights) > 0 && len(snapshot.Weights) != weightCount {
+		return fmt.Errorf("scalar weight count mismatch: weights=%d layers=%d", len(snapshot.Weights), weightCount)
+	}
+	return nil
+}
+
+func validSubstratePlasticity(plasticity string) bool {
+	switch plasticity {
+	case substrate.SubstratePlasticityNone, substrate.SubstratePlasticityIterative, substrate.SubstratePlasticityABCN:
+		return true
+	default:
+		return false
+	}
+}
+
+func validSubstrateLinkForm(linkForm string) bool {
+	switch linkForm {
+	case substrate.LinkFormL2LFeedforward, substrate.LinkFormFullyInterconnected, substrate.LinkFormJordanRecurrent, substrate.LinkFormNeuronSelfRecurrent:
+		return true
+	default:
+		return false
+	}
+}
+
+func validSubstrateStateMode(stateMode string) bool {
+	switch stateMode {
+	case substrate.SubstrateStateReset, substrate.SubstrateStateHold, substrate.SubstrateStateIterative:
+		return true
+	default:
+		return false
+	}
+}
+
+func countCoordinateWeights(layers []substrate.CoordinateHyperlayer) int {
+	total := 0
+	for _, layer := range layers {
+		for _, neurode := range layer {
+			total += len(neurode.Weights)
+		}
+	}
+	return total
+}
+
+func countABCNWeights(state substrate.ABCNSubstrate) int {
+	total := 0
+	for _, layer := range state.Layers {
+		for _, neurode := range layer {
+			total += len(neurode.Weights)
+		}
+	}
+	return total
 }
 
 func ReadTraceAcc(baseDir, runID string) ([]TraceGeneration, bool, error) {

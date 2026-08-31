@@ -288,6 +288,103 @@ func TestReadRunConfigAndTopGenomesMissingReturnsNotFound(t *testing.T) {
 	}
 }
 
+func TestReadTopGenomesAllowsLegacyRecordsWithoutSubstrateSnapshot(t *testing.T) {
+	baseDir := t.TempDir()
+	runID := "legacy-top"
+	runDir := filepath.Join(baseDir, runID)
+	if err := os.MkdirAll(runDir, 0o755); err != nil {
+		t.Fatalf("mkdir run dir: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(runDir, "top_genomes.json"), []byte(`[
+		{"rank":1,"fitness":0.9,"genome":{"id":"g1"}},
+		{"rank":2,"fitness":0.8,"genome":{"id":"g2"}}
+	]`), 0o644); err != nil {
+		t.Fatalf("write top genomes: %v", err)
+	}
+
+	top, ok, err := ReadTopGenomes(baseDir, runID)
+	if err != nil {
+		t.Fatalf("read top genomes: %v", err)
+	}
+	if !ok || len(top) != 2 {
+		t.Fatalf("unexpected top genomes: ok=%t top=%+v", ok, top)
+	}
+	if top[0].SubstrateSnapshot != nil {
+		t.Fatalf("expected legacy record without substrate snapshot, got %+v", top[0].SubstrateSnapshot)
+	}
+}
+
+func TestReadTopGenomesValidatesSubstrateSnapshotShape(t *testing.T) {
+	baseDir := t.TempDir()
+	runID := "snapshot-top"
+	runDir := filepath.Join(baseDir, runID)
+	if err := os.MkdirAll(runDir, 0o755); err != nil {
+		t.Fatalf("mkdir run dir: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(runDir, "top_genomes.json"), []byte(`[
+		{
+			"rank":1,
+			"fitness":0.9,
+			"genome":{"id":"g1"},
+			"substrate_snapshot":{
+				"plasticity":"none",
+				"link_form":"l2l_feedforward",
+				"state_mode":"hold",
+				"substrate":[
+					[{"coords":[0],"output":1}],
+					[{"coords":[1],"output":0.5,"weights":[0.25]}]
+				],
+				"weights":[0.25]
+			}
+		}
+	]`), 0o644); err != nil {
+		t.Fatalf("write top genomes: %v", err)
+	}
+
+	top, ok, err := ReadTopGenomes(baseDir, runID)
+	if err != nil {
+		t.Fatalf("read top genomes: %v", err)
+	}
+	if !ok || len(top) != 1 || top[0].SubstrateSnapshot == nil {
+		t.Fatalf("unexpected top genomes: ok=%t top=%+v", ok, top)
+	}
+	if top[0].SubstrateSnapshot.StateMode != substrate.SubstrateStateHold {
+		t.Fatalf("unexpected snapshot state mode: %+v", top[0].SubstrateSnapshot)
+	}
+}
+
+func TestReadTopGenomesRejectsInvalidSubstrateSnapshotShape(t *testing.T) {
+	baseDir := t.TempDir()
+	runID := "bad-snapshot-top"
+	runDir := filepath.Join(baseDir, runID)
+	if err := os.MkdirAll(runDir, 0o755); err != nil {
+		t.Fatalf("mkdir run dir: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(runDir, "top_genomes.json"), []byte(`[
+		{
+			"rank":1,
+			"fitness":0.9,
+			"genome":{"id":"g1"},
+			"substrate_snapshot":{
+				"plasticity":"none",
+				"link_form":"l2l_feedforward",
+				"state_mode":"hold",
+				"substrate":[
+					[{"coords":[0],"output":1}],
+					[{"coords":[1],"output":0.5,"weights":[0.25,0.5]}]
+				],
+				"weights":[0.25]
+			}
+		}
+	]`), 0o644); err != nil {
+		t.Fatalf("write top genomes: %v", err)
+	}
+
+	if _, _, err := ReadTopGenomes(baseDir, runID); err == nil || !strings.Contains(err.Error(), "weight count mismatch") {
+		t.Fatalf("expected weight count validation error, got %v", err)
+	}
+}
+
 func TestWriteRunConfig(t *testing.T) {
 	baseDir := t.TempDir()
 	runID := "write-config-run"
