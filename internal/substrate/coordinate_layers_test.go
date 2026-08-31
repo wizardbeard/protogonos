@@ -515,6 +515,65 @@ func TestComposeOutputSubstrateAttachesWeights(t *testing.T) {
 	}
 }
 
+func TestComposeInputSubstrateSupportsSymmetric(t *testing.T) {
+	layer, err := ComposeInputSubstrate([]IOCoordinateSpec{
+		{Format: CoordinateFormatSymmetric, Resolutions: []int{2, 3}},
+	})
+	if err != nil {
+		t.Fatalf("compose input substrate: %v", err)
+	}
+
+	want := [][]float64{
+		{-1, -1},
+		{-1, 1},
+		{0, -1},
+		{0, 1},
+		{1, -1},
+		{1, 1},
+	}
+	if got := layer.Coordinates(); !reflect.DeepEqual(got, want) {
+		t.Fatalf("unexpected symmetric input coords: got=%v want=%v", got, want)
+	}
+	for i, neurode := range layer {
+		if neurode.Output != 0 {
+			t.Fatalf("expected zero symmetric input output at neurode %d, got=%v", i, neurode.Output)
+		}
+		if neurode.Weights != nil {
+			t.Fatalf("expected nil symmetric input weights at neurode %d, got=%v", i, neurode.Weights)
+		}
+	}
+}
+
+func TestComposeOutputSubstrateSupportsSymmetric(t *testing.T) {
+	weights := []float64{0.1, 0.2}
+	layer, err := ComposeOutputSubstrate([]IOCoordinateSpec{
+		{Format: CoordinateFormatSymmetric, Resolutions: []int{2, 2}},
+	}, weights)
+	if err != nil {
+		t.Fatalf("compose output substrate: %v", err)
+	}
+
+	want := [][]float64{
+		{-1, -1},
+		{-1, 1},
+		{1, -1},
+		{1, 1},
+	}
+	if got := layer.Coordinates(); !reflect.DeepEqual(got, want) {
+		t.Fatalf("unexpected symmetric output coords: got=%v want=%v", got, want)
+	}
+	for i, neurode := range layer {
+		if !reflect.DeepEqual(neurode.Weights, []float64{0.1, 0.2}) {
+			t.Fatalf("unexpected symmetric output weights at neurode %d: %v", i, neurode.Weights)
+		}
+	}
+
+	weights[0] = 99
+	if layer[0].Weights[0] != 0.1 {
+		t.Fatalf("expected symmetric output weights to be copied, got=%v", layer[0].Weights)
+	}
+}
+
 func TestComposeBaseIOSubstrateValidatesSpecs(t *testing.T) {
 	tests := []struct {
 		name string
@@ -526,14 +585,26 @@ func TestComposeBaseIOSubstrateValidatesSpecs(t *testing.T) {
 		{name: "invalid input vl", fn: func() (CoordinateHyperlayer, error) {
 			return ComposeInputSubstrate([]IOCoordinateSpec{{Format: CoordinateFormatNoGeo, VL: 0}})
 		}},
+		{name: "missing symmetric input resolutions", fn: func() (CoordinateHyperlayer, error) {
+			return ComposeInputSubstrate([]IOCoordinateSpec{{Format: CoordinateFormatSymmetric}})
+		}},
+		{name: "invalid symmetric input resolutions", fn: func() (CoordinateHyperlayer, error) {
+			return ComposeInputSubstrate([]IOCoordinateSpec{{Format: CoordinateFormatSymmetric, Resolutions: []int{2, 0}}})
+		}},
 		{name: "unsupported input format", fn: func() (CoordinateHyperlayer, error) {
-			return ComposeInputSubstrate([]IOCoordinateSpec{{Format: "symmetric", VL: 2}})
+			return ComposeInputSubstrate([]IOCoordinateSpec{{Format: "asymmetric", VL: 2}})
 		}},
 		{name: "missing output specs", fn: func() (CoordinateHyperlayer, error) {
 			return ComposeOutputSubstrate(nil, []float64{0})
 		}},
 		{name: "invalid output vl", fn: func() (CoordinateHyperlayer, error) {
 			return ComposeOutputSubstrate([]IOCoordinateSpec{{Format: CoordinateFormatNoGeo, VL: -1}}, []float64{0})
+		}},
+		{name: "missing symmetric output resolutions", fn: func() (CoordinateHyperlayer, error) {
+			return ComposeOutputSubstrate([]IOCoordinateSpec{{Format: CoordinateFormatSymmetric}}, []float64{0})
+		}},
+		{name: "invalid symmetric output resolutions", fn: func() (CoordinateHyperlayer, error) {
+			return ComposeOutputSubstrate([]IOCoordinateSpec{{Format: CoordinateFormatSymmetric, Resolutions: []int{0}}}, []float64{0})
 		}},
 		{name: "unsupported output format", fn: func() (CoordinateHyperlayer, error) {
 			return ComposeOutputSubstrate([]IOCoordinateSpec{{Format: "coorded", VL: 2}}, []float64{0})

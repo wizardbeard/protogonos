@@ -61,13 +61,15 @@ type SubstrateLayerBuildRequest struct {
 const (
 	CoordinateFormatUndefined = "undefined"
 	CoordinateFormatNoGeo     = "no_geo"
+	CoordinateFormatSymmetric = "symmetric"
 )
 
 // IOCoordinateSpec describes the base substrate IO formats used by
 // compose_ISubstrate and compose_OSubstrate.
 type IOCoordinateSpec struct {
-	Format string
-	VL     int
+	Format      string
+	VL          int
+	Resolutions []int
 }
 
 // BuildCoordinatePairsForLinkFormLayers builds coordinate pairs from typed
@@ -217,6 +219,23 @@ func composeBaseIOParts(specs []IOCoordinateSpec, weights []float64) ([]Coordina
 				return nil, fmt.Errorf("%w: vl must be > 0: %d", ErrInvalidSubstrateCoordinates, spec.VL)
 			}
 			coords, err := CreateCoordLists([]int{spec.VL})
+			if err != nil {
+				return nil, err
+			}
+			layer := make(CoordinateHyperlayer, 0, len(coords))
+			for _, coord := range coords {
+				layer = append(layer, NeurodeCoordinate{
+					Coords:  append([]float64(nil), coord...),
+					Output:  0,
+					Weights: append([]float64(nil), weights...),
+				})
+			}
+			parts = append(parts, layer)
+		case CoordinateFormatSymmetric:
+			if len(spec.Resolutions) == 0 {
+				return nil, fmt.Errorf("%w: missing symmetric resolutions", ErrInvalidSubstrateCoordinates)
+			}
+			coords, err := CreateCoordLists(spec.Resolutions)
 			if err != nil {
 				return nil, err
 			}
