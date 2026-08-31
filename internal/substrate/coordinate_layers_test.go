@@ -1543,6 +1543,49 @@ func TestCreateSubstrateValidatesInputs(t *testing.T) {
 	}
 }
 
+func TestCreateABCNSubstratePromotesConstructedLayers(t *testing.T) {
+	got, err := CreateABCNSubstrate(ABCNSubstrateBuildRequest{
+		CreateSubstrateRequest: CreateSubstrateRequest{
+			InputSpecs:  []IOCoordinateSpec{{Format: CoordinateFormatNoGeo, VL: 2}},
+			Densities:   []int{0, 2, 2},
+			OutputSpecs: []IOCoordinateSpec{{Format: CoordinateFormatNoGeo, VL: 1}},
+			LinkForm:    LinkFormL2LFeedforward,
+		},
+		InitialA: 0.1,
+		InitialB: 0.2,
+		InitialC: 0.3,
+		InitialN: 0.4,
+	})
+	if err != nil {
+		t.Fatalf("create abcn substrate: %v", err)
+	}
+	if len(got.InputLayer) != 2 || len(got.Layers) != 1 || len(got.Layers[0]) != 1 {
+		t.Fatalf("unexpected abcn substrate shape: %+v", got)
+	}
+	if gotWeight := got.Layers[0][0].Weights[0]; gotWeight != (ABCNWeight{Weight: 0, A: 0.1, B: 0.2, C: 0.3, N: 0.4}) {
+		t.Fatalf("unexpected constructed abcn weight: got=%+v", gotWeight)
+	}
+	if coords := got.InputLayer.Coordinates(); !reflect.DeepEqual(coords, [][]float64{{-1, 0, -1}, {-1, 0, 1}}) {
+		t.Fatalf("unexpected constructed abcn input coords: got=%v", coords)
+	}
+	if coords := got.Layers[0].Coordinates(); !reflect.DeepEqual(coords, [][]float64{{1, 0, 0}}) {
+		t.Fatalf("unexpected constructed abcn output coords: got=%v", coords)
+	}
+}
+
+func TestCreateABCNSubstratePropagatesCreateValidation(t *testing.T) {
+	_, err := CreateABCNSubstrate(ABCNSubstrateBuildRequest{
+		CreateSubstrateRequest: CreateSubstrateRequest{
+			InputSpecs:  []IOCoordinateSpec{{Format: CoordinateFormatNoGeo, VL: 1}},
+			OutputSpecs: []IOCoordinateSpec{{Format: CoordinateFormatNoGeo, VL: 1}},
+			LinkForm:    LinkFormL2LFeedforward,
+		},
+	})
+	if !errors.Is(err, ErrInvalidSubstrateCoordinates) {
+		t.Fatalf("expected ErrInvalidSubstrateCoordinates, got %v", err)
+	}
+}
+
 func TestBuildSubstrateLayersDepthZeroAttachesInputWeightsToOutput(t *testing.T) {
 	input := CoordinateHyperlayer{{Coords: []float64{-1}}, {Coords: []float64{1}}}
 	output := CoordinateHyperlayer{{Coords: []float64{0.5}}}
@@ -1722,6 +1765,54 @@ func TestBuildSubstrateLayersCopiesInputsOutputsAndWeights(t *testing.T) {
 	}
 	if got := layers[1][0].Weights; !reflect.DeepEqual(got, []float64{0}) {
 		t.Fatalf("expected output weights attached independently, got=%v", got)
+	}
+}
+
+func TestPromoteSubstrateToABCNPreservesShapeWeightsAndCoefficients(t *testing.T) {
+	substrateLayers := []CoordinateHyperlayer{
+		{{Coords: []float64{-1}, Output: 0.5, Weights: []float64{7}}},
+		{{Coords: []float64{0}, Output: 0.25, Weights: []float64{0.2}}},
+		{{Coords: []float64{1}, Output: -0.25, Weights: []float64{-0.3}}},
+	}
+
+	got, err := PromoteSubstrateToABCN(substrateLayers, ABCNWeight{A: 0.1, B: 0.2, C: 0.3, N: 0.4})
+	if err != nil {
+		t.Fatalf("promote substrate to abcn: %v", err)
+	}
+	if !reflect.DeepEqual(got.InputLayer, substrateLayers[0]) {
+		t.Fatalf("unexpected promoted input layer: got=%+v want=%+v", got.InputLayer, substrateLayers[0])
+	}
+	if len(got.Layers) != 2 {
+		t.Fatalf("unexpected promoted layer count: got=%d want=2", len(got.Layers))
+	}
+	wantHidden := ABCNWeight{Weight: 0.2, A: 0.1, B: 0.2, C: 0.3, N: 0.4}
+	wantOutput := ABCNWeight{Weight: -0.3, A: 0.1, B: 0.2, C: 0.3, N: 0.4}
+	if got.Layers[0][0].Weights[0] != wantHidden {
+		t.Fatalf("unexpected promoted hidden weight: got=%+v want=%+v", got.Layers[0][0].Weights[0], wantHidden)
+	}
+	if got.Layers[1][0].Weights[0] != wantOutput {
+		t.Fatalf("unexpected promoted output weight: got=%+v want=%+v", got.Layers[1][0].Weights[0], wantOutput)
+	}
+
+	substrateLayers[0][0].Coords[0] = 99
+	substrateLayers[1][0].Weights[0] = 88
+	if got.InputLayer[0].Coords[0] != -1 || got.Layers[0][0].Weights[0] != wantHidden {
+		t.Fatalf("expected promoted abcn substrate to be copied, got=%+v", got)
+	}
+}
+
+func TestPromoteSubstrateToABCNValidatesShape(t *testing.T) {
+	if _, err := PromoteSubstrateToABCN(nil, ABCNWeight{}); !errors.Is(err, ErrInvalidSubstrateCoordinates) {
+		t.Fatalf("expected ErrInvalidSubstrateCoordinates for missing substrate, got %v", err)
+	}
+	if _, err := PromoteSubstrateToABCN([]CoordinateHyperlayer{{{Coords: []float64{0}}}}, ABCNWeight{}); !errors.Is(err, ErrInvalidSubstrateCoordinates) {
+		t.Fatalf("expected ErrInvalidSubstrateCoordinates for shallow substrate, got %v", err)
+	}
+	if _, err := PromoteSubstrateToABCN([]CoordinateHyperlayer{nil, {{Coords: []float64{1}}}}, ABCNWeight{}); !errors.Is(err, ErrInvalidSubstrateCoordinates) {
+		t.Fatalf("expected ErrInvalidSubstrateCoordinates for missing input layer, got %v", err)
+	}
+	if _, err := PromoteSubstrateToABCN([]CoordinateHyperlayer{{{Coords: []float64{0}}}, nil}, ABCNWeight{}); !errors.Is(err, ErrInvalidSubstrateCoordinates) {
+		t.Fatalf("expected ErrInvalidSubstrateCoordinates for missing process layer, got %v", err)
 	}
 }
 

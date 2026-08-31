@@ -92,6 +92,15 @@ func (h CoordinateHyperlayer) Coordinates() [][]float64 {
 	return coords
 }
 
+// Coordinates returns copied ABCN neurode coordinates in layer traversal order.
+func (h ABCNCoordinateHyperlayer) Coordinates() [][]float64 {
+	coords := make([][]float64, 0, len(h))
+	for _, neurode := range h {
+		coords = append(coords, append([]float64(nil), neurode.Coords...))
+	}
+	return coords
+}
+
 // FlattenCoordinateHyperlayers returns copied coordinates from all layers in
 // the supplied order. It matches the flattened source-list shape used by
 // substrate.erl's fully_interconnected path.
@@ -135,6 +144,16 @@ type CreateSubstrateRequest struct {
 	Densities   []int
 	OutputSpecs []IOCoordinateSpec
 	LinkForm    string
+}
+
+// ABCNSubstrateBuildRequest creates a reference-shaped substrate and promotes
+// process/output weights into ABCN tuples for Plasticity=abcn.
+type ABCNSubstrateBuildRequest struct {
+	CreateSubstrateRequest
+	InitialA float64
+	InitialB float64
+	InitialC float64
+	InitialN float64
 }
 
 const (
@@ -1616,6 +1635,21 @@ func CreateSubstrate(req CreateSubstrateRequest) ([]CoordinateHyperlayer, error)
 	})
 }
 
+// CreateABCNSubstrate mirrors create_substrate for the ABCN plasticity path by
+// reusing scalar layer construction, then promoting each process/output weight.
+func CreateABCNSubstrate(req ABCNSubstrateBuildRequest) (ABCNSubstrate, error) {
+	layers, err := CreateSubstrate(req.CreateSubstrateRequest)
+	if err != nil {
+		return ABCNSubstrate{}, err
+	}
+	return PromoteSubstrateToABCN(layers, ABCNWeight{
+		A: req.InitialA,
+		B: req.InitialB,
+		C: req.InitialC,
+		N: req.InitialN,
+	})
+}
+
 // BuildSubstrateLayers mirrors the density/link-form layer shape of
 // substrate.erl create_substrate after input/output coordinate layers have
 // already been composed.
@@ -1686,6 +1720,49 @@ func BuildSubstrateLayers(req SubstrateLayerBuildRequest) ([]CoordinateHyperlaye
 		layers = append(layers, attachWeightsToLayer(req.OutputLayer, hWeights))
 		return layers, nil
 	}
+}
+
+// PromoteSubstrateToABCN converts a scalar substrate into the typed ABCN shape.
+// The scalar weight value is preserved and supplied coefficients fill A/B/C/N.
+func PromoteSubstrateToABCN(substrate []CoordinateHyperlayer, coefficients ABCNWeight) (ABCNSubstrate, error) {
+	if len(substrate) < 2 {
+		return ABCNSubstrate{}, fmt.Errorf("%w: substrate must include input and process/output layers", ErrInvalidSubstrateCoordinates)
+	}
+	if len(substrate[0]) == 0 {
+		return ABCNSubstrate{}, fmt.Errorf("%w: missing input hyperlayer", ErrInvalidSubstrateCoordinates)
+	}
+
+	layers := make([]ABCNCoordinateHyperlayer, 0, len(substrate)-1)
+	for layerIdx, layer := range substrate[1:] {
+		if len(layer) == 0 {
+			return ABCNSubstrate{}, fmt.Errorf("%w: missing process/output hyperlayer at index %d", ErrInvalidSubstrateCoordinates, layerIdx+1)
+		}
+
+		abcnLayer := make(ABCNCoordinateHyperlayer, 0, len(layer))
+		for _, neurode := range layer {
+			weights := make([]ABCNWeight, 0, len(neurode.Weights))
+			for _, weight := range neurode.Weights {
+				weights = append(weights, ABCNWeight{
+					Weight: weight,
+					A:      coefficients.A,
+					B:      coefficients.B,
+					C:      coefficients.C,
+					N:      coefficients.N,
+				})
+			}
+			abcnLayer = append(abcnLayer, ABCNNeurodeCoordinate{
+				Coords:  append([]float64(nil), neurode.Coords...),
+				Output:  neurode.Output,
+				Weights: weights,
+			})
+		}
+		layers = append(layers, abcnLayer)
+	}
+
+	return ABCNSubstrate{
+		InputLayer: cloneCoordinateHyperlayer(substrate[0]),
+		Layers:     layers,
+	}, nil
 }
 
 func substrateLayerWeightTemplates(linkForm string, depth int, subDensities []int, inputCount int, outputCount int) ([]float64, []float64, error) {
