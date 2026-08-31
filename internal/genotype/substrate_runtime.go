@@ -89,13 +89,13 @@ func resolveLayerRuntimeComponents(cfg *model.SubstrateConfig, plasticity string
 		staticCPP    substrate.CoordinateCPP
 		iterativeCPP substrate.CoordinateIOWCPP
 	)
-	if name := strings.TrimSpace(cfg.CPPName); name != "" && !isSubstratePlasticityName(name) {
+	if name := layerRuntimeCPPName(cfg); name != "" {
 		cpp, err := substrate.ResolveCPP(name)
 		if err != nil {
 			return nil, nil, nil, false, err
 		}
-		staticCPP, _ = cpp.(substrate.CoordinateCPP)
-		iterativeCPP, _ = cpp.(substrate.CoordinateIOWCPP)
+		staticCPP = substrate.AdaptCoordinateCPP(cpp)
+		iterativeCPP = substrate.AdaptCoordinateIOWCPP(cpp)
 	}
 
 	ceps, err := resolveLayerRuntimeCEPs(cfg)
@@ -111,6 +111,17 @@ func resolveLayerRuntimeComponents(cfg *model.SubstrateConfig, plasticity string
 	default:
 		return nil, nil, nil, false, fmt.Errorf("unsupported substrate plasticity %q", plasticity)
 	}
+}
+
+func layerRuntimeCPPName(cfg *model.SubstrateConfig) string {
+	if cfg == nil {
+		return ""
+	}
+	name := strings.TrimSpace(cfg.CPPName)
+	if name == "" || isSubstratePlasticityName(name) {
+		return substrate.DefaultCPPName
+	}
+	return name
 }
 
 func resolveLayerRuntimeCEPs(cfg *model.SubstrateConfig) ([]substrate.CEP, error) {
@@ -147,7 +158,7 @@ func layerRuntimeCEPNames(cfg *model.SubstrateConfig) []string {
 	if name := strings.TrimSpace(cfg.CEPName); name != "" && !isSubstrateLinkFormName(name) {
 		return []string{name}
 	}
-	return nil
+	return []string{substrate.DefaultCEPName}
 }
 
 func isSubstratePlasticityName(value string) bool {

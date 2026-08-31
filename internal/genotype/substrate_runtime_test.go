@@ -14,11 +14,12 @@ func TestBuildSubstrateLayerRuntimeUsesExplicitTypedConfig(t *testing.T) {
 			ID: "typed-substrate-runtime",
 			Substrate: &model.SubstrateConfig{
 				Dimensions: []int{0, 2, 2},
+				CEPName:    substrate.WeightExpressionCEPName,
 				Plasticity: substrate.SubstratePlasticityNone,
 				LinkForm:   substrate.LinkFormL2LFeedforward,
 			},
 		},
-		InputWidth:  1,
+		InputWidth:  2,
 		OutputWidth: 1,
 	})
 	if err != nil {
@@ -30,8 +31,12 @@ func TestBuildSubstrateLayerRuntimeUsesExplicitTypedConfig(t *testing.T) {
 	if _, ok := rt.(*substrate.LayerRuntime); !ok {
 		t.Fatalf("expected LayerRuntime, got %T", rt)
 	}
-	if got, err := rt.Step(context.Background(), []float64{1}); err != nil || len(got) != 1 {
+	if got, err := rt.Step(context.Background(), []float64{1, 1}); err != nil || len(got) != 1 {
 		t.Fatalf("step typed substrate runtime: got=%v err=%v", got, err)
+	}
+	weights := rt.Weights()
+	if len(weights) != 2 || weights[0] == 0 || weights[1] == 0 {
+		t.Fatalf("expected default coordinate population, got weights=%v", weights)
 	}
 }
 
