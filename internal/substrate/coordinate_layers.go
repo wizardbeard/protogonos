@@ -206,6 +206,20 @@ func ComposeOutputSubstrate(specs []IOCoordinateSpec, weights []float64) (Coordi
 	return flattenCoordinateHyperlayerParts(parts), nil
 }
 
+// ComposeInputSubstrateForDimension mirrors substrate.erl compose_ISubstrate/2
+// by padding IO coordinates to substrateDimension-2 and prepending input lead
+// and IO-depth coordinates.
+func ComposeInputSubstrateForDimension(specs []IOCoordinateSpec, substrateDimension int) (CoordinateHyperlayer, error) {
+	return composeIOSubstrateForDimension(specs, nil, substrateDimension, -1)
+}
+
+// ComposeOutputSubstrateForDimension mirrors substrate.erl compose_OSubstrate/3
+// by padding IO coordinates to substrateDimension-2 and prepending output lead
+// and IO-depth coordinates.
+func ComposeOutputSubstrateForDimension(specs []IOCoordinateSpec, substrateDimension int, weights []float64) (CoordinateHyperlayer, error) {
+	return composeIOSubstrateForDimension(specs, weights, substrateDimension, 1)
+}
+
 func composeBaseIOParts(specs []IOCoordinateSpec, weights []float64) ([]CoordinateHyperlayer, error) {
 	if len(specs) == 0 {
 		return nil, fmt.Errorf("%w: missing io specs", ErrInvalidSubstrateCoordinates)
@@ -264,6 +278,39 @@ func composeBaseIOParts(specs []IOCoordinateSpec, weights []float64) ([]Coordina
 	return parts, nil
 }
 
+func composeIOSubstrateForDimension(specs []IOCoordinateSpec, weights []float64, substrateDimension int, leadCoord float64) (CoordinateHyperlayer, error) {
+	requiredDim := substrateDimension - 2
+	if requiredDim < 0 {
+		return nil, fmt.Errorf("%w: substrate dimension must be >= 2: %d", ErrInvalidSubstrateCoordinates, substrateDimension)
+	}
+
+	parts, err := composeBaseIOParts(specs, weights)
+	if err != nil {
+		return nil, err
+	}
+	maxDim, err := maxIOCoordinateDim(specs)
+	if err != nil {
+		return nil, err
+	}
+	if requiredDim < maxDim {
+		return nil, fmt.Errorf("%w: required io coordinate dimension %d is less than max io dimension %d", ErrInvalidSubstrateCoordinates, requiredDim, maxDim)
+	}
+
+	depthCoords, err := BuildCoordList(len(parts))
+	if err != nil {
+		return nil, err
+	}
+	total := 0
+	for _, part := range parts {
+		total += len(part)
+	}
+	out := make(CoordinateHyperlayer, 0, total)
+	for i, part := range parts {
+		out = append(out, advExtrudeIOPart(part, requiredDim, leadCoord, depthCoords[i])...)
+	}
+	return out, nil
+}
+
 func composeCoordedIOPart(spec IOCoordinateSpec, weights []float64) (CoordinateHyperlayer, error) {
 	if spec.Dim <= 0 {
 		return nil, fmt.Errorf("%w: coorded dim must be > 0: %d", ErrInvalidSubstrateCoordinates, spec.Dim)
@@ -289,6 +336,61 @@ func composeCoordedIOPart(spec IOCoordinateSpec, weights []float64) (CoordinateH
 		})
 	}
 	return layer, nil
+}
+
+func maxIOCoordinateDim(specs []IOCoordinateSpec) (int, error) {
+	maxDim := 1
+	for _, spec := range specs {
+		dim, err := ioCoordinateDim(spec)
+		if err != nil {
+			return 0, err
+		}
+		if dim > maxDim {
+			maxDim = dim
+		}
+	}
+	return maxDim, nil
+}
+
+func ioCoordinateDim(spec IOCoordinateSpec) (int, error) {
+	format := spec.Format
+	if format == "" {
+		format = CoordinateFormatUndefined
+	}
+	switch format {
+	case CoordinateFormatUndefined, CoordinateFormatNoGeo:
+		return 1, nil
+	case CoordinateFormatSymmetric:
+		if len(spec.Resolutions) == 0 {
+			return 0, fmt.Errorf("%w: missing symmetric resolutions", ErrInvalidSubstrateCoordinates)
+		}
+		return len(spec.Resolutions), nil
+	case CoordinateFormatCoorded:
+		if spec.Dim <= 0 {
+			return 0, fmt.Errorf("%w: coorded dim must be > 0: %d", ErrInvalidSubstrateCoordinates, spec.Dim)
+		}
+		return spec.Dim, nil
+	default:
+		return 0, fmt.Errorf("%w: unsupported io coordinate format %q", ErrInvalidSubstrateCoordinates, spec.Format)
+	}
+}
+
+func advExtrudeIOPart(part CoordinateHyperlayer, requiredDim int, leadCoord float64, depthCoord float64) CoordinateHyperlayer {
+	out := make(CoordinateHyperlayer, 0, len(part))
+	for _, neurode := range part {
+		coords := make([]float64, 0, requiredDim+2)
+		coords = append(coords, leadCoord, depthCoord)
+		for i := 0; i < requiredDim-len(neurode.Coords); i++ {
+			coords = append(coords, 0)
+		}
+		coords = append(coords, neurode.Coords...)
+		out = append(out, NeurodeCoordinate{
+			Coords:  coords,
+			Output:  neurode.Output,
+			Weights: append([]float64(nil), neurode.Weights...),
+		})
+	}
+	return out
 }
 
 func flattenCoordinateHyperlayerParts(parts []CoordinateHyperlayer) CoordinateHyperlayer {

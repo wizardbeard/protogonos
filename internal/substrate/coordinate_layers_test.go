@@ -637,6 +637,85 @@ func TestComposeOutputSubstrateSupportsCoorded(t *testing.T) {
 	}
 }
 
+func TestComposeInputSubstrateForDimensionAdvExtrudesParts(t *testing.T) {
+	layer, err := ComposeInputSubstrateForDimension([]IOCoordinateSpec{
+		{Format: CoordinateFormatNoGeo, VL: 2},
+		{Format: CoordinateFormatSymmetric, Resolutions: []int{2, 2}},
+	}, 4)
+	if err != nil {
+		t.Fatalf("compose input substrate for dimension: %v", err)
+	}
+
+	want := [][]float64{
+		{-1, -1, 0, -1},
+		{-1, -1, 0, 1},
+		{-1, 1, -1, -1},
+		{-1, 1, -1, 1},
+		{-1, 1, 1, -1},
+		{-1, 1, 1, 1},
+	}
+	if got := layer.Coordinates(); !reflect.DeepEqual(got, want) {
+		t.Fatalf("unexpected dimensioned input coords: got=%v want=%v", got, want)
+	}
+	for i, neurode := range layer {
+		if neurode.Output != 0 {
+			t.Fatalf("expected zero dimensioned input output at neurode %d, got=%v", i, neurode.Output)
+		}
+		if neurode.Weights != nil {
+			t.Fatalf("expected nil dimensioned input weights at neurode %d, got=%v", i, neurode.Weights)
+		}
+	}
+}
+
+func TestComposeOutputSubstrateForDimensionAdvExtrudesParts(t *testing.T) {
+	weights := []float64{0.1, 0.2}
+	layer, err := ComposeOutputSubstrateForDimension([]IOCoordinateSpec{
+		{Format: CoordinateFormatCoorded, Dim: 2, Neurodes: CoordinateHyperlayer{
+			{Coords: []float64{-0.5, 0.5}, Output: 0.75, Weights: []float64{99}},
+		}},
+		{Format: CoordinateFormatNoGeo, VL: 2},
+	}, 5, weights)
+	if err != nil {
+		t.Fatalf("compose output substrate for dimension: %v", err)
+	}
+
+	want := [][]float64{
+		{1, -1, 0, -0.5, 0.5},
+		{1, 1, 0, 0, -1},
+		{1, 1, 0, 0, 1},
+	}
+	if got := layer.Coordinates(); !reflect.DeepEqual(got, want) {
+		t.Fatalf("unexpected dimensioned output coords: got=%v want=%v", got, want)
+	}
+	if layer[0].Output != 0.75 || layer[1].Output != 0 || layer[2].Output != 0 {
+		t.Fatalf("unexpected dimensioned output values: %v", layer)
+	}
+	for i, neurode := range layer {
+		if !reflect.DeepEqual(neurode.Weights, []float64{0.1, 0.2}) {
+			t.Fatalf("unexpected dimensioned output weights at neurode %d: %v", i, neurode.Weights)
+		}
+	}
+
+	weights[0] = 99
+	if layer[0].Weights[0] != 0.1 {
+		t.Fatalf("expected dimensioned output weights to be copied, got=%v", layer[0].Weights)
+	}
+}
+
+func TestComposeIOSubstrateForDimensionValidatesRequiredDimension(t *testing.T) {
+	if _, err := ComposeInputSubstrateForDimension([]IOCoordinateSpec{
+		{Format: CoordinateFormatSymmetric, Resolutions: []int{2, 2}},
+	}, 3); !errors.Is(err, ErrInvalidSubstrateCoordinates) {
+		t.Fatalf("expected ErrInvalidSubstrateCoordinates for shallow input dimension, got %v", err)
+	}
+
+	if _, err := ComposeOutputSubstrateForDimension([]IOCoordinateSpec{
+		{Format: CoordinateFormatCoorded, Dim: 2, Neurodes: CoordinateHyperlayer{{Coords: []float64{-1, 1}}}},
+	}, 1, []float64{0}); !errors.Is(err, ErrInvalidSubstrateCoordinates) {
+		t.Fatalf("expected ErrInvalidSubstrateCoordinates for invalid substrate dimension, got %v", err)
+	}
+}
+
 func TestComposeBaseIOSubstrateValidatesSpecs(t *testing.T) {
 	tests := []struct {
 		name string
