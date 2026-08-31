@@ -405,6 +405,81 @@ func TestCalculateOutputForLinkFormDispatchesActiveForms(t *testing.T) {
 	}
 }
 
+func TestCalculateHoldOutputPopulatesInputAndReturnsUpdatedSubstrate(t *testing.T) {
+	substrateLayers := []CoordinateHyperlayer{
+		{{Coords: []float64{-1}, Output: 9}, {Coords: []float64{1}, Output: 8}},
+		{{Coords: []float64{0}, Output: 7, Weights: []float64{0.5, -0.25}}},
+		{{Coords: []float64{1}, Output: 6, Weights: []float64{0.75}}},
+	}
+
+	outputs, updated, err := CalculateHoldOutput(substrateLayers, [][]float64{{0.4}, {-0.2}}, LinkFormL2LFeedforward)
+	if err != nil {
+		t.Fatalf("calculate hold output: %v", err)
+	}
+	hiddenOut := math.Tanh(0.4*0.5 + -0.2*-0.25)
+	wantOutput := math.Tanh(hiddenOut * 0.75)
+	if len(outputs) != 1 || math.Abs(outputs[0]-wantOutput) > 1e-12 {
+		t.Fatalf("unexpected hold outputs: got=%v want=%v", outputs, []float64{wantOutput})
+	}
+	if len(updated) != 3 {
+		t.Fatalf("unexpected updated substrate layer count: got=%d want=3", len(updated))
+	}
+	if updated[0][0].Output != 9 || updated[0][1].Output != 8 {
+		t.Fatalf("expected original input layer to be retained, got=%v", updated[0])
+	}
+	if math.Abs(updated[1][0].Output-hiddenOut) > 1e-12 {
+		t.Fatalf("unexpected updated hidden output: got=%v want=%v", updated[1][0].Output, hiddenOut)
+	}
+	if math.Abs(updated[2][0].Output-wantOutput) > 1e-12 {
+		t.Fatalf("unexpected updated output neurode output: got=%v want=%v", updated[2][0].Output, wantOutput)
+	}
+
+	substrateLayers[1][0].Weights[0] = 99
+	if updated[1][0].Weights[0] != 0.5 {
+		t.Fatalf("expected updated substrate to be copied, got=%v", updated[1][0].Weights)
+	}
+}
+
+func TestCalculateResetOutputUsesSameTypedNonPlasticLifecycle(t *testing.T) {
+	substrateLayers := []CoordinateHyperlayer{
+		{{Coords: []float64{-1}, Output: 0}},
+		{{Coords: []float64{1}, Output: 0, Weights: []float64{-0.5}}},
+	}
+
+	outputs, updated, err := CalculateResetOutput(substrateLayers, [][]float64{{0.8}}, LinkFormL2LFeedforward)
+	if err != nil {
+		t.Fatalf("calculate reset output: %v", err)
+	}
+	wantOutput := math.Tanh(0.8 * -0.5)
+	if len(outputs) != 1 || math.Abs(outputs[0]-wantOutput) > 1e-12 {
+		t.Fatalf("unexpected reset outputs: got=%v want=%v", outputs, []float64{wantOutput})
+	}
+	if len(updated) != 2 || math.Abs(updated[1][0].Output-wantOutput) > 1e-12 {
+		t.Fatalf("unexpected reset updated substrate: %v", updated)
+	}
+}
+
+func TestCalculateTypedOutputLifecycleValidatesInputs(t *testing.T) {
+	if _, _, err := CalculateHoldOutput(nil, [][]float64{{1}}, LinkFormL2LFeedforward); !errors.Is(err, ErrInvalidSubstrateCoordinates) {
+		t.Fatalf("expected ErrInvalidSubstrateCoordinates for missing substrate, got %v", err)
+	}
+	if _, _, err := CalculateHoldOutput([]CoordinateHyperlayer{{{Coords: []float64{0}}}}, [][]float64{{1}}, LinkFormL2LFeedforward); !errors.Is(err, ErrInvalidSubstrateCoordinates) {
+		t.Fatalf("expected ErrInvalidSubstrateCoordinates for shallow substrate, got %v", err)
+	}
+	if _, _, err := CalculateHoldOutput([]CoordinateHyperlayer{
+		{{Coords: []float64{0}}},
+		{{Coords: []float64{1}, Weights: []float64{0.1}}},
+	}, nil, LinkFormL2LFeedforward); !errors.Is(err, ErrInvalidSubstrateCoordinates) {
+		t.Fatalf("expected ErrInvalidSubstrateCoordinates for input mismatch, got %v", err)
+	}
+	if _, _, err := CalculateHoldOutput([]CoordinateHyperlayer{
+		{{Coords: []float64{0}}},
+		{{Coords: []float64{1}, Weights: []float64{0.1}}},
+	}, [][]float64{{1}}, "planeself_recurrent"); !errors.Is(err, ErrUnsupportedSubstrateLink) {
+		t.Fatalf("expected ErrUnsupportedSubstrateLink, got %v", err)
+	}
+}
+
 func TestBuildCoordListMatchesReferenceOrder(t *testing.T) {
 	tests := []struct {
 		name    string

@@ -215,6 +215,39 @@ func CalculateOutputForLinkForm(linkForm string, input CoordinateHyperlayer, lay
 	}
 }
 
+// CalculateHoldOutput mirrors calculate_HoldOutput for the typed non-plastic
+// substrate path. It uses the existing process/output hyperlayers as stored.
+func CalculateHoldOutput(substrate []CoordinateHyperlayer, inputValues [][]float64, linkForm string) ([]float64, []CoordinateHyperlayer, error) {
+	return calculateTypedOutputLifecycle(substrate, inputValues, linkForm)
+}
+
+// CalculateResetOutput mirrors calculate_ResetOutput for the typed non-plastic
+// substrate path. CPP/CEP-driven weight repopulation is handled by runtime
+// paths; this helper preserves the typed layer state shape and output flow.
+func CalculateResetOutput(substrate []CoordinateHyperlayer, inputValues [][]float64, linkForm string) ([]float64, []CoordinateHyperlayer, error) {
+	return calculateTypedOutputLifecycle(substrate, inputValues, linkForm)
+}
+
+func calculateTypedOutputLifecycle(substrate []CoordinateHyperlayer, inputValues [][]float64, linkForm string) ([]float64, []CoordinateHyperlayer, error) {
+	if len(substrate) < 2 {
+		return nil, nil, fmt.Errorf("%w: substrate must include input and process/output layers", ErrInvalidSubstrateCoordinates)
+	}
+
+	populatedInput, err := PopulateInputHyperlayer(substrate[0], FlattenInputValues(inputValues...))
+	if err != nil {
+		return nil, nil, err
+	}
+	outputs, updatedLayers, err := CalculateOutputForLinkForm(linkForm, populatedInput, substrate[1:])
+	if err != nil {
+		return nil, nil, err
+	}
+
+	updatedSubstrate := make([]CoordinateHyperlayer, 0, len(substrate))
+	updatedSubstrate = append(updatedSubstrate, cloneCoordinateHyperlayer(substrate[0]))
+	updatedSubstrate = append(updatedSubstrate, updatedLayers...)
+	return outputs, updatedSubstrate, nil
+}
+
 // CalculateOutputFullyInterconnected mirrors calculate_output_fi for the
 // non-plastic typed path by using the flattened substrate as each layer source.
 func CalculateOutputFullyInterconnected(input CoordinateHyperlayer, layers []CoordinateHyperlayer) ([]float64, []CoordinateHyperlayer, error) {
