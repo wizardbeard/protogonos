@@ -51,6 +51,8 @@ type SubstrateConfig struct {
 	Dimensions  []int              `json:"dimensions"`
 	Parameters  map[string]float64 `json:"parameters"`
 	WeightCount int                `json:"weight_count"`
+	Plasticity  string             `json:"plasticity,omitempty"`
+	LinkForm    string             `json:"link_form,omitempty"`
 }
 
 type PlasticityConfig struct {

@@ -49,6 +49,7 @@ Status keys:
 
 ## Completed in latest iterations
 
+- Added genotype-level substrate materialization helpers that build scalar or ABCN typed substrate shapes from explicit genome substrate plasticity/link-form metadata, with legacy metadata fallback.
 - Added scalar-to-ABCN substrate construction adapters for direct `CreateSubstrate`/`BuildSubstrateLayers` promotion into `{W, abcn, [A,B,C,N]}` tuples.
 - Added CPP/CEP-backed ABCN process-hyperlayer population and wired `reset + abcn` lifecycle dispatch through it.
 - Added typed ABCN reset/hold output lifecycle helpers matching `calculate_HoldOutput` and `calculate_ResetOutput` when `Plasticity = abcn`.

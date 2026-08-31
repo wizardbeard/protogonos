@@ -257,6 +257,8 @@ func ConstructCortex(
 			CPPIDs:     append([]string(nil), substrateCPPIDs...),
 			CEPIDs:     append([]string(nil), substrateCEPIDs...),
 			Dimensions: substrateDensities,
+			Plasticity: strings.TrimSpace(substratePlasticity),
+			LinkForm:   strings.TrimSpace(substrateLinkform),
 			Parameters: map[string]float64{
 				"depth":          1,
 				"density":        5,

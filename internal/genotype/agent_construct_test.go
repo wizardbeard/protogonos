@@ -507,6 +507,9 @@ func TestConstructAgentMaterializesStrategyAndSubstrate(t *testing.T) {
 	if agent.Genome.Substrate.CPPName != "none" || agent.Genome.Substrate.CEPName != "l2l_feedforward" {
 		t.Fatalf("unexpected substrate metadata: %+v", agent.Genome.Substrate)
 	}
+	if agent.Genome.Substrate.Plasticity != "none" || agent.Genome.Substrate.LinkForm != "l2l_feedforward" {
+		t.Fatalf("unexpected explicit substrate mode fields: %+v", agent.Genome.Substrate)
+	}
 	if len(agent.Genome.Substrate.Dimensions) < 3 {
 		t.Fatalf("expected substrate density vector length >= 3, got=%v", agent.Genome.Substrate.Dimensions)
 	}
