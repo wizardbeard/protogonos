@@ -12,6 +12,7 @@ import (
 	"strings"
 
 	"protogonos/internal/model"
+	"protogonos/internal/substrate"
 )
 
 const runIndexFile = "run_index.json"
@@ -98,9 +99,10 @@ type RunConfig struct {
 }
 
 type TopGenome struct {
-	Rank    int          `json:"rank"`
-	Fitness float64      `json:"fitness"`
-	Genome  model.Genome `json:"genome"`
+	Rank              int                             `json:"rank"`
+	Fitness           float64                         `json:"fitness"`
+	Genome            model.Genome                    `json:"genome"`
+	SubstrateSnapshot *substrate.LayerRuntimeSnapshot `json:"substrate_snapshot,omitempty"`
 }
 
 type TraceGeneration struct {

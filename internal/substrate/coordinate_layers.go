@@ -9,9 +9,9 @@ import (
 // NeurodeCoordinate mirrors the coordinate/output/weights tuple used by the
 // reference substrate hyperlayers while keeping runtime-specific state optional.
 type NeurodeCoordinate struct {
-	Coords  []float64
-	Output  float64
-	Weights []float64
+	Coords  []float64 `json:"coords"`
+	Output  float64   `json:"output"`
+	Weights []float64 `json:"weights,omitempty"`
 }
 
 // CoordinateHyperlayer is an ordered substrate layer of coordinate neurodes.
@@ -19,19 +19,19 @@ type CoordinateHyperlayer []NeurodeCoordinate
 
 // ABCNWeight mirrors the reference `{W, abcn, [A,B,C,N]}` plastic weight tuple.
 type ABCNWeight struct {
-	Weight float64
-	A      float64
-	B      float64
-	C      float64
-	N      float64
+	Weight float64 `json:"weight"`
+	A      float64 `json:"a"`
+	B      float64 `json:"b"`
+	C      float64 `json:"c"`
+	N      float64 `json:"n"`
 }
 
 // ABCNNeurodeCoordinate carries coordinate/output state plus ABCN plastic
 // weight tuples for typed plastic output calculations.
 type ABCNNeurodeCoordinate struct {
-	Coords  []float64
-	Output  float64
-	Weights []ABCNWeight
+	Coords  []float64    `json:"coords"`
+	Output  float64      `json:"output"`
+	Weights []ABCNWeight `json:"weights,omitempty"`
 }
 
 // ABCNCoordinateHyperlayer is an ordered layer of ABCN plastic coordinate
@@ -41,8 +41,8 @@ type ABCNCoordinateHyperlayer []ABCNNeurodeCoordinate
 // ABCNSubstrate carries the scalar input layer and ABCN process/output layers
 // used by typed plastic reset/hold lifecycle helpers.
 type ABCNSubstrate struct {
-	InputLayer CoordinateHyperlayer
-	Layers     []ABCNCoordinateHyperlayer
+	InputLayer CoordinateHyperlayer       `json:"input_layer,omitempty"`
+	Layers     []ABCNCoordinateHyperlayer `json:"layers,omitempty"`
 }
 
 // Substrate output state and plasticity modes mirror the reference substrate

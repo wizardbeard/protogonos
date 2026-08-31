@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"protogonos/internal/evo"
 	"protogonos/internal/model"
 	internalscape "protogonos/internal/scape"
 	"protogonos/internal/stats"
@@ -2150,5 +2151,52 @@ func TestBuildReplaySubstrateSupportsTypedActiveLinkForms(t *testing.T) {
 				t.Fatalf("expected populated weight surface")
 			}
 		})
+	}
+}
+
+func TestBuildTopGenomeArtifactsIncludesTypedSubstrateSnapshot(t *testing.T) {
+	top, err := buildTopGenomeArtifacts([]evo.ScoredGenome{
+		{
+			Fitness: 0.9,
+			Genome: model.Genome{
+				ID: "typed-substrate-top",
+				Substrate: &model.SubstrateConfig{
+					Dimensions:  []int{0, 2, 2},
+					CEPName:     internalsubstrate.WeightExpressionCEPName,
+					Plasticity:  internalsubstrate.SubstratePlasticityABCN,
+					LinkForm:    internalsubstrate.LinkFormL2LFeedforward,
+					WeightCount: 1,
+					Parameters: map[string]float64{
+						"abcn_a": 0.1,
+						"abcn_b": 0.2,
+						"abcn_c": 0.3,
+						"abcn_n": 0.4,
+					},
+				},
+			},
+		},
+		{
+			Fitness: 0.8,
+			Genome:  model.Genome{ID: "plain-top"},
+		},
+	}, []string{"o1", "o2"})
+	if err != nil {
+		t.Fatalf("build top genome artifacts: %v", err)
+	}
+	if len(top) != 2 {
+		t.Fatalf("unexpected top genome artifact count: %d", len(top))
+	}
+	if top[0].SubstrateSnapshot == nil {
+		t.Fatalf("expected typed substrate snapshot")
+	}
+	if top[0].SubstrateSnapshot.Plasticity != internalsubstrate.SubstratePlasticityABCN || top[0].SubstrateSnapshot.LinkForm != internalsubstrate.LinkFormL2LFeedforward {
+		t.Fatalf("unexpected substrate snapshot modes: %+v", top[0].SubstrateSnapshot)
+	}
+	got := top[0].SubstrateSnapshot.ABCN.Layers[0][0].Weights[0]
+	if got.A != 0.1 || got.B != 0.2 || got.C != 0.3 || got.N != 0.4 {
+		t.Fatalf("unexpected substrate snapshot coefficients: %+v", got)
+	}
+	if top[1].SubstrateSnapshot != nil {
+		t.Fatalf("expected no substrate snapshot for genome without substrate, got %+v", top[1].SubstrateSnapshot)
 	}
 }

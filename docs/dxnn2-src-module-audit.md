@@ -135,6 +135,7 @@ Status legend:
 - 2026-08-31: added iterative typed-runtime integration coverage across genotype, population-monitor, and replay builders, proving explicit `plasticity=iterative` configs repeatedly repopulate weights through the typed coordinate+IOW path.
 - 2026-08-31: added typed-runtime integration coverage for `fully_interconnected`, `jordan_recurrent`, and `neuronself_recurrent` link forms across genotype, population-monitor, and replay builders.
 - 2026-08-31: added `LayerRuntime.Snapshot` diagnostics/export support so typed substrate state mode, link form, plasticity, termination state, scalar layer shape, ABCN coefficients, and flattened weights can be inspected through deep-copy state.
+- 2026-08-31: added top-genome artifact substrate snapshot persistence for typed `LayerRuntime` state, including JSON field tags for scalar/ABCN coordinate layers and normal export copying through `top_genomes.json`.
 - 2026-02-28: expanded substrate CEP bootstrap parity by switching runtime actor initialization to payload-style `CEPInitMessage` state handoff (`ID`/`CEPName`/`Parameters`/`FaninPIDs`) instead of direct process-pointer injection.
 - 2026-02-28: expanded substrate CEP actor-only runtime parity by removing direct runtime dependence on bootstrap `CEPProcess` handles after actor initialization so step/terminate flow remains mailbox-actor based.
 - 2026-02-28: expanded substrate CEP bootstrap/runtime cohesion by deriving runtime actor bootstrap directly from CEP-chain init payloads and removing preconstructed runtime CEP-process bootstrap state.

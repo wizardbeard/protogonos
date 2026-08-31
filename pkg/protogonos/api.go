@@ -549,9 +549,9 @@ func (c *Client) Run(ctx context.Context, req RunRequest) (RunSummary, error) {
 		}
 	}
 
-	top := make([]stats.TopGenome, 0, len(result.TopFinal))
-	for i, scored := range result.TopFinal {
-		top = append(top, stats.TopGenome{Rank: i + 1, Fitness: scored.Fitness, Genome: scored.Genome})
+	top, err := buildTopGenomeArtifacts(result.TopFinal, seedPopulation.OutputNeuronIDs)
+	if err != nil {
+		return RunSummary{}, err
 	}
 	lineage := make([]stats.LineageEntry, 0, len(result.Lineage))
 	for _, record := range result.Lineage {
@@ -798,6 +798,33 @@ func readRunConfigWithProfileHints(baseDir, runID string) (stats.RunConfig, bool
 		return stats.RunConfig{}, false, err
 	}
 	return cfg, true, nil
+}
+
+func buildTopGenomeArtifacts(scored []evo.ScoredGenome, outputNeuronIDs []string) ([]stats.TopGenome, error) {
+	top := make([]stats.TopGenome, 0, len(scored))
+	for i, item := range scored {
+		artifact := stats.TopGenome{Rank: i + 1, Fitness: item.Fitness, Genome: item.Genome}
+		snapshot, err := replaySubstrateSnapshot(item.Genome, outputNeuronIDs)
+		if err != nil {
+			return nil, err
+		}
+		artifact.SubstrateSnapshot = snapshot
+		top = append(top, artifact)
+	}
+	return top, nil
+}
+
+func replaySubstrateSnapshot(genome model.Genome, outputNeuronIDs []string) (*substrate.LayerRuntimeSnapshot, error) {
+	rt, err := buildReplaySubstrate(genome, outputNeuronIDs)
+	if err != nil {
+		return nil, err
+	}
+	layerRuntime, ok := rt.(*substrate.LayerRuntime)
+	if !ok || layerRuntime == nil {
+		return nil, nil
+	}
+	snapshot := layerRuntime.Snapshot()
+	return &snapshot, nil
 }
 
 func normalizeEpitopesReplayMode(raw string) (string, error) {

@@ -43,13 +43,13 @@ type LayerRuntime struct {
 
 // LayerRuntimeSnapshot is a read-only copy of typed substrate runtime state.
 type LayerRuntimeSnapshot struct {
-	Plasticity string
-	LinkForm   string
-	StateMode  string
-	Terminated bool
-	Substrate  []CoordinateHyperlayer
-	ABCN       ABCNSubstrate
-	Weights    []float64
+	Plasticity string                 `json:"plasticity"`
+	LinkForm   string                 `json:"link_form"`
+	StateMode  string                 `json:"state_mode"`
+	Terminated bool                   `json:"terminated"`
+	Substrate  []CoordinateHyperlayer `json:"substrate,omitempty"`
+	ABCN       ABCNSubstrate          `json:"abcn,omitempty"`
+	Weights    []float64              `json:"weights,omitempty"`
 }
 
 type layerRuntimeSnapshot struct {

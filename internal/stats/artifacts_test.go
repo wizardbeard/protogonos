@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"protogonos/internal/model"
+	"protogonos/internal/substrate"
 )
 
 func TestWriteAndExportRunArtifacts(t *testing.T) {
@@ -55,6 +56,18 @@ func TestWriteAndExportRunArtifacts(t *testing.T) {
 			Rank:    1,
 			Fitness: 0.7,
 			Genome:  model.Genome{ID: "g1"},
+			SubstrateSnapshot: &substrate.LayerRuntimeSnapshot{
+				Plasticity: substrate.SubstratePlasticityABCN,
+				LinkForm:   substrate.LinkFormL2LFeedforward,
+				StateMode:  substrate.SubstrateStateReset,
+				ABCN: substrate.ABCNSubstrate{
+					InputLayer: substrate.CoordinateHyperlayer{{Coords: []float64{0}}},
+					Layers: []substrate.ABCNCoordinateHyperlayer{
+						{{Coords: []float64{1}, Weights: []substrate.ABCNWeight{{Weight: 0.5, A: 0.1, B: 0.2, C: 0.3, N: 0.4}}}},
+					},
+				},
+				Weights: []float64{0.5},
+			},
 		}},
 		Lineage: []LineageEntry{{
 			GenomeID:   "g1",
@@ -156,6 +169,12 @@ func TestWriteAndExportRunArtifacts(t *testing.T) {
 	}
 	if len(readTop) != 1 || readTop[0].Genome.ID != "g1" {
 		t.Fatalf("unexpected top genomes payload: %+v", readTop)
+	}
+	if readTop[0].SubstrateSnapshot == nil {
+		t.Fatalf("expected substrate snapshot in top genome artifact")
+	}
+	if got := readTop[0].SubstrateSnapshot.ABCN.Layers[0][0].Weights[0]; got.A != 0.1 || got.N != 0.4 {
+		t.Fatalf("unexpected substrate snapshot coefficients: %+v", readTop[0].SubstrateSnapshot)
 	}
 
 	readTraceAcc, ok, err := ReadTraceAcc(baseDir, runID)
