@@ -1815,6 +1815,38 @@ func TestPopulationMonitorBuildSubstrateKeepsOutputFallbackOverCPPIDs(t *testing
 	}
 }
 
+func TestPopulationMonitorBuildSubstrateUsesTypedLayerRuntime(t *testing.T) {
+	monitor, err := NewPopulationMonitor(MonitorConfig{
+		Scape:           oneDimScape{},
+		Mutation:        PerturbWeightAt{Index: 0, Delta: 0},
+		PopulationSize:  1,
+		EliteCount:      1,
+		Generations:     1,
+		Workers:         1,
+		Seed:            1,
+		InputNeuronIDs:  []string{"i"},
+		OutputNeuronIDs: []string{"o"},
+	})
+	if err != nil {
+		t.Fatalf("new monitor: %v", err)
+	}
+
+	rt, err := monitor.buildSubstrate(model.Genome{
+		ID: "typed-substrate-monitor",
+		Substrate: &model.SubstrateConfig{
+			Dimensions: []int{0, 2, 2},
+			Plasticity: substrate.SubstratePlasticityNone,
+			LinkForm:   substrate.LinkFormL2LFeedforward,
+		},
+	})
+	if err != nil {
+		t.Fatalf("build substrate: %v", err)
+	}
+	if _, ok := rt.(*substrate.LayerRuntime); !ok {
+		t.Fatalf("expected typed layer runtime, got %T", rt)
+	}
+}
+
 func TestPopulationMonitorBuildSubstrateDerivesCEPFaninFromGenomeLinks(t *testing.T) {
 	cppName := "pm_vector_cpp_cep_fanin"
 	if err := substrate.RegisterCPP(cppName, func() substrate.CPP {

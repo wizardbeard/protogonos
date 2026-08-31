@@ -2026,3 +2026,20 @@ func TestBuildReplaySubstrateKeepsOutputFallbackOverCPPIDs(t *testing.T) {
 		t.Fatalf("expected output fallback fan-in update to 1, got=%v", w)
 	}
 }
+
+func TestBuildReplaySubstrateUsesTypedLayerRuntime(t *testing.T) {
+	rt, err := buildReplaySubstrate(model.Genome{
+		ID: "typed-substrate-replay",
+		Substrate: &model.SubstrateConfig{
+			Dimensions: []int{0, 2, 2},
+			Plasticity: internalsubstrate.SubstratePlasticityNone,
+			LinkForm:   internalsubstrate.LinkFormL2LFeedforward,
+		},
+	}, []string{"o"})
+	if err != nil {
+		t.Fatalf("build replay substrate: %v", err)
+	}
+	if _, ok := rt.(*internalsubstrate.LayerRuntime); !ok {
+		t.Fatalf("expected typed layer runtime, got %T", rt)
+	}
+}

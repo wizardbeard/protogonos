@@ -1953,6 +1953,20 @@ func (m *PopulationMonitor) buildSubstrate(genome model.Genome) (substrate.Runti
 		return nil, nil
 	}
 	cfg := genome.Substrate
+	outputWidth := cfg.WeightCount
+	if outputWidth <= 0 {
+		outputWidth = len(m.cfg.OutputNeuronIDs)
+	}
+	if rt, handled, err := genotype.BuildSubstrateLayerRuntime(genotype.SubstrateLayerRuntimeBuildRequest{
+		Genome:      genome,
+		InputWidth:  len(m.cfg.OutputNeuronIDs),
+		OutputWidth: outputWidth,
+	}); handled || err != nil {
+		if err != nil {
+			return nil, fmt.Errorf("build typed substrate runtime for genome %s: %w", genome.ID, err)
+		}
+		return rt, nil
+	}
 	faninByCEP := genotype.ResolveSubstrateCEPFaninPIDsByCEP(genome, m.cfg.OutputNeuronIDs)
 	faninPIDs := genotype.ResolveSubstrateCEPFaninPIDs(genome, m.cfg.OutputNeuronIDs)
 	if flattened := genotype.FlattenSubstrateCEPFaninPIDsByCEP(faninByCEP); len(flattened) > 0 {
@@ -1972,11 +1986,7 @@ func (m *PopulationMonitor) buildSubstrate(genome model.Genome) (substrate.Runti
 	for k, v := range cfg.Parameters {
 		spec.Parameters[k] = v
 	}
-	weightCount := cfg.WeightCount
-	if weightCount <= 0 {
-		weightCount = len(m.cfg.OutputNeuronIDs)
-	}
-	rt, err := substrate.NewSimpleRuntime(spec, weightCount)
+	rt, err := substrate.NewSimpleRuntime(spec, outputWidth)
 	if err != nil {
 		return nil, fmt.Errorf("build substrate runtime for genome %s: %w", genome.ID, err)
 	}

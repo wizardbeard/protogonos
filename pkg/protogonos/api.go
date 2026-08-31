@@ -894,6 +894,20 @@ func buildReplaySubstrate(genome model.Genome, outputNeuronIDs []string) (substr
 		return nil, nil
 	}
 	cfg := genome.Substrate
+	outputWidth := cfg.WeightCount
+	if outputWidth <= 0 {
+		outputWidth = len(outputNeuronIDs)
+	}
+	if rt, handled, err := genotype.BuildSubstrateLayerRuntime(genotype.SubstrateLayerRuntimeBuildRequest{
+		Genome:      genome,
+		InputWidth:  len(outputNeuronIDs),
+		OutputWidth: outputWidth,
+	}); handled || err != nil {
+		if err != nil {
+			return nil, fmt.Errorf("build typed substrate runtime for genome %s: %w", genome.ID, err)
+		}
+		return rt, nil
+	}
 	faninByCEP := genotype.ResolveSubstrateCEPFaninPIDsByCEP(genome, outputNeuronIDs)
 	faninPIDs := genotype.ResolveSubstrateCEPFaninPIDs(genome, outputNeuronIDs)
 	if flattened := genotype.FlattenSubstrateCEPFaninPIDsByCEP(faninByCEP); len(flattened) > 0 {
@@ -913,11 +927,7 @@ func buildReplaySubstrate(genome model.Genome, outputNeuronIDs []string) (substr
 	for k, v := range cfg.Parameters {
 		spec.Parameters[k] = v
 	}
-	weightCount := cfg.WeightCount
-	if weightCount <= 0 {
-		weightCount = len(outputNeuronIDs)
-	}
-	rt, err := substrate.NewSimpleRuntime(spec, weightCount)
+	rt, err := substrate.NewSimpleRuntime(spec, outputWidth)
 	if err != nil {
 		return nil, fmt.Errorf("build substrate runtime for genome %s: %w", genome.ID, err)
 	}
