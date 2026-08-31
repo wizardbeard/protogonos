@@ -2200,3 +2200,39 @@ func TestBuildTopGenomeArtifactsIncludesTypedSubstrateSnapshot(t *testing.T) {
 		t.Fatalf("expected no substrate snapshot for genome without substrate, got %+v", top[1].SubstrateSnapshot)
 	}
 }
+
+func TestBuildTopGenomeArtifactsPrefersEvaluatedSubstrateSnapshot(t *testing.T) {
+	top, err := buildTopGenomeArtifacts([]evo.ScoredGenome{
+		{
+			Fitness: 0.9,
+			Genome: model.Genome{
+				ID: "typed-substrate-top",
+				Substrate: &model.SubstrateConfig{
+					Dimensions:  []int{0, 1, 1},
+					CEPName:     internalsubstrate.WeightExpressionCEPName,
+					Plasticity:  internalsubstrate.SubstratePlasticityNone,
+					LinkForm:    internalsubstrate.LinkFormL2LFeedforward,
+					WeightCount: 1,
+				},
+			},
+			SubstrateSnapshot: &internalsubstrate.LayerRuntimeSnapshot{
+				Plasticity: internalsubstrate.SubstratePlasticityNone,
+				LinkForm:   internalsubstrate.LinkFormL2LFeedforward,
+				StateMode:  internalsubstrate.SubstrateStateHold,
+				Weights:    []float64{42},
+			},
+		},
+	}, []string{"o"})
+	if err != nil {
+		t.Fatalf("build top genome artifacts: %v", err)
+	}
+	if len(top) != 1 || top[0].SubstrateSnapshot == nil {
+		t.Fatalf("expected top genome substrate snapshot, got %+v", top)
+	}
+	if top[0].SubstrateSnapshot.StateMode != internalsubstrate.SubstrateStateHold {
+		t.Fatalf("expected evaluated snapshot state, got %+v", top[0].SubstrateSnapshot)
+	}
+	if len(top[0].SubstrateSnapshot.Weights) != 1 || top[0].SubstrateSnapshot.Weights[0] != 42 {
+		t.Fatalf("expected evaluated snapshot weights, got %+v", top[0].SubstrateSnapshot.Weights)
+	}
+}

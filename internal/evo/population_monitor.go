@@ -22,9 +22,10 @@ import (
 )
 
 type ScoredGenome struct {
-	Genome  model.Genome
-	Fitness float64
-	Trace   scape.Trace
+	Genome            model.Genome
+	Fitness           float64
+	Trace             scape.Trace
+	SubstrateSnapshot *substrate.LayerRuntimeSnapshot
 }
 
 type RunResult struct {
@@ -1686,12 +1687,12 @@ func (m *PopulationMonitor) evaluatePopulation(ctx context.Context, population [
 					}
 				}
 
-				fitness, trace, err := m.evaluateGenome(ctx, candidate, m.cfg.OpMode)
+				scoredCandidate, err := m.evaluateGenomeScored(ctx, candidate, m.cfg.OpMode)
 				if err != nil {
 					results <- result{idx: j.idx, err: err}
 					continue
 				}
-				results <- result{idx: j.idx, scored: ScoredGenome{Genome: candidate, Fitness: fitness, Trace: trace}, tune: tuneReport}
+				results <- result{idx: j.idx, scored: scoredCandidate, tune: tuneReport}
 			}
 		}()
 	}
@@ -1795,9 +1796,10 @@ func (m *PopulationMonitor) evaluateGenomeWithRuntimeTuning(
 	}
 
 	return ScoredGenome{
-		Genome:  runtimeResult.Genome,
-		Fitness: fitness,
-		Trace:   trace,
+		Genome:            runtimeResult.Genome,
+		Fitness:           fitness,
+		Trace:             trace,
+		SubstrateSnapshot: snapshotCortexLayerRuntime(cortex),
 	}, runtimeResult.Report, nil
 }
 
@@ -1824,11 +1826,39 @@ func (m *PopulationMonitor) applyQueuedControl(ctx context.Context) error {
 }
 
 func (m *PopulationMonitor) evaluateGenome(ctx context.Context, genome model.Genome, mode string) (float64, scape.Trace, error) {
-	cortex, err := m.buildCortex(genome)
+	scored, err := m.evaluateGenomeScored(ctx, genome, mode)
 	if err != nil {
 		return 0, nil, err
 	}
-	return m.evaluateCortex(ctx, cortex, mode)
+	return scored.Fitness, scored.Trace, nil
+}
+
+func (m *PopulationMonitor) evaluateGenomeScored(ctx context.Context, genome model.Genome, mode string) (ScoredGenome, error) {
+	cortex, err := m.buildCortex(genome)
+	if err != nil {
+		return ScoredGenome{}, err
+	}
+	fitness, trace, err := m.evaluateCortex(ctx, cortex, mode)
+	if err != nil {
+		return ScoredGenome{}, err
+	}
+	return ScoredGenome{
+		Genome:            genome,
+		Fitness:           fitness,
+		Trace:             trace,
+		SubstrateSnapshot: snapshotCortexLayerRuntime(cortex),
+	}, nil
+}
+
+func snapshotCortexLayerRuntime(cortex *agent.Cortex) *substrate.LayerRuntimeSnapshot {
+	if cortex == nil {
+		return nil
+	}
+	snapshot, ok := cortex.SubstrateLayerSnapshot()
+	if !ok {
+		return nil
+	}
+	return snapshot
 }
 
 func (m *PopulationMonitor) buildCortex(genome model.Genome) (*agent.Cortex, error) {

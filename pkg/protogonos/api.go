@@ -804,11 +804,16 @@ func buildTopGenomeArtifacts(scored []evo.ScoredGenome, outputNeuronIDs []string
 	top := make([]stats.TopGenome, 0, len(scored))
 	for i, item := range scored {
 		artifact := stats.TopGenome{Rank: i + 1, Fitness: item.Fitness, Genome: item.Genome}
-		snapshot, err := replaySubstrateSnapshot(item.Genome, outputNeuronIDs)
-		if err != nil {
-			return nil, err
+		if item.SubstrateSnapshot != nil {
+			snapshot := *item.SubstrateSnapshot
+			artifact.SubstrateSnapshot = &snapshot
+		} else {
+			snapshot, err := replaySubstrateSnapshot(item.Genome, outputNeuronIDs)
+			if err != nil {
+				return nil, err
+			}
+			artifact.SubstrateSnapshot = snapshot
 		}
-		artifact.SubstrateSnapshot = snapshot
 		top = append(top, artifact)
 	}
 	return top, nil

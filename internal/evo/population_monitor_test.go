@@ -1856,6 +1856,59 @@ func TestPopulationMonitorBuildSubstrateUsesTypedLayerRuntime(t *testing.T) {
 	}
 }
 
+func TestPopulationMonitorCapturesEvaluatedTypedSubstrateSnapshot(t *testing.T) {
+	monitor, err := NewPopulationMonitor(MonitorConfig{
+		Scape:           oneDimScape{},
+		Mutation:        PerturbWeightAt{Index: 0, Delta: 0},
+		PopulationSize:  1,
+		EliteCount:      1,
+		Generations:     1,
+		Workers:         1,
+		Seed:            1,
+		InputNeuronIDs:  []string{"i"},
+		OutputNeuronIDs: []string{"o"},
+	})
+	if err != nil {
+		t.Fatalf("new monitor: %v", err)
+	}
+
+	result, err := monitor.Run(context.Background(), []model.Genome{
+		{
+			ID: "typed-substrate-evaluated",
+			Neurons: []model.Neuron{
+				{ID: "i", Activation: "identity"},
+				{ID: "o", Activation: "identity"},
+			},
+			Synapses: []model.Synapse{
+				{From: "i", To: "o", Weight: 1.0, Enabled: true},
+			},
+			Substrate: &model.SubstrateConfig{
+				Dimensions:  []int{0, 1, 1},
+				CEPName:     substrate.WeightExpressionCEPName,
+				Plasticity:  substrate.SubstratePlasticityNone,
+				LinkForm:    substrate.LinkFormL2LFeedforward,
+				WeightCount: 1,
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("run monitor: %v", err)
+	}
+	if len(result.FinalPopulation) != 1 {
+		t.Fatalf("unexpected final population count: %d", len(result.FinalPopulation))
+	}
+	snapshot := result.FinalPopulation[0].SubstrateSnapshot
+	if snapshot == nil {
+		t.Fatalf("expected evaluated substrate snapshot")
+	}
+	if snapshot.StateMode != substrate.SubstrateStateHold {
+		t.Fatalf("expected post-evaluation hold state, got %+v", snapshot)
+	}
+	if len(snapshot.Weights) != 1 {
+		t.Fatalf("expected populated post-evaluation substrate weights, got %+v", snapshot.Weights)
+	}
+}
+
 func TestPopulationMonitorBuildSubstrateUsesTypedABCNLayerRuntime(t *testing.T) {
 	monitor, err := NewPopulationMonitor(MonitorConfig{
 		Scape:           oneDimScape{},

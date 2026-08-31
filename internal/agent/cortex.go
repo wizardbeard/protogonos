@@ -197,6 +197,17 @@ func (c *Cortex) SnapshotGenome() model.Genome {
 	return genotype.CloneGenome(c.genome)
 }
 
+func (c *Cortex) SubstrateLayerSnapshot() (*substrate.LayerRuntimeSnapshot, bool) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	layerRuntime, ok := c.substrate.(*substrate.LayerRuntime)
+	if !ok || layerRuntime == nil {
+		return nil, false
+	}
+	snapshot := layerRuntime.Snapshot()
+	return &snapshot, true
+}
+
 func (c *Cortex) ApplyGenome(genome model.Genome) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
