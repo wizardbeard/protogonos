@@ -49,6 +49,15 @@ type CoordinateLayerPairBuildRequest struct {
 	OutputLayer   CoordinateHyperlayer
 }
 
+// SubstrateLayerBuildRequest carries the prebuilt input/output coordinate
+// hyperlayers plus substrate densities needed by substrate.erl create_substrate.
+type SubstrateLayerBuildRequest struct {
+	InputLayer  CoordinateHyperlayer
+	Densities   []int
+	OutputLayer CoordinateHyperlayer
+	LinkForm    string
+}
+
 // BuildCoordinatePairsForLinkFormLayers builds coordinate pairs from typed
 // hyperlayers, then delegates to the raw coordinate dispatcher.
 func BuildCoordinatePairsForLinkFormLayers(req CoordinateLayerPairBuildRequest) ([]CoordinatePair, error) {
@@ -153,6 +162,141 @@ func ExtrudeCoordinateHyperlayer(newDimensionCoord float64, layer CoordinateHype
 		coords = append(coords, neurode.Coords...)
 		out = append(out, NeurodeCoordinate{
 			Coords:  coords,
+			Output:  neurode.Output,
+			Weights: append([]float64(nil), neurode.Weights...),
+		})
+	}
+	return out
+}
+
+// BuildSubstrateLayers mirrors the density/link-form layer shape of
+// substrate.erl create_substrate after input/output coordinate layers have
+// already been composed.
+func BuildSubstrateLayers(req SubstrateLayerBuildRequest) ([]CoordinateHyperlayer, error) {
+	if len(req.Densities) == 0 {
+		return nil, fmt.Errorf("%w: missing densities", ErrInvalidSubstrateCoordinates)
+	}
+	if len(req.InputLayer) == 0 {
+		return nil, fmt.Errorf("%w: missing input layer", ErrInvalidSubstrateCoordinates)
+	}
+	if len(req.OutputLayer) == 0 {
+		return nil, fmt.Errorf("%w: missing output layer", ErrInvalidSubstrateCoordinates)
+	}
+
+	depth := req.Densities[0]
+	if depth < 0 {
+		return nil, fmt.Errorf("%w: depth must be >= 0: %d", ErrInvalidSubstrateCoordinates, depth)
+	}
+	subDensities := append([]int(nil), req.Densities[1:]...)
+	if depth > 0 && len(subDensities) == 0 {
+		return nil, fmt.Errorf("%w: missing hidden-layer densities", ErrInvalidSubstrateCoordinates)
+	}
+
+	iWeights, hWeights, err := substrateLayerWeightTemplates(req.LinkForm, depth, subDensities, len(req.InputLayer), len(req.OutputLayer))
+	if err != nil {
+		return nil, err
+	}
+
+	inputLayer := cloneCoordinateHyperlayer(req.InputLayer)
+	switch depth {
+	case 0:
+		return []CoordinateHyperlayer{
+			inputLayer,
+			attachWeightsToLayer(req.OutputLayer, iWeights),
+		}, nil
+	case 1:
+		recurrentLayer, err := BuildCoordinateHypercube(subDensities, iWeights)
+		if err != nil {
+			return nil, err
+		}
+		return []CoordinateHyperlayer{
+			inputLayer,
+			ExtrudeCoordinateHyperlayer(0, recurrentLayer),
+			attachWeightsToLayer(req.OutputLayer, hWeights),
+		}, nil
+	default:
+		recurrentBase, err := BuildCoordinateHypercube(subDensities, iWeights)
+		if err != nil {
+			return nil, err
+		}
+		hiddenBase, err := BuildCoordinateHypercube(subDensities, hWeights)
+		if err != nil {
+			return nil, err
+		}
+		depthCoords, err := BuildCoordList(depth + 1)
+		if err != nil {
+			return nil, err
+		}
+		recurrentCoord := depthCoords[1]
+		hiddenCoords := append([]float64(nil), depthCoords[2:len(depthCoords)-1]...)
+
+		layers := make([]CoordinateHyperlayer, 0, depth+2)
+		layers = append(layers, inputLayer)
+		layers = append(layers, ExtrudeCoordinateHyperlayer(recurrentCoord, recurrentBase))
+		for _, hiddenCoord := range hiddenCoords {
+			layers = append(layers, ExtrudeCoordinateHyperlayer(hiddenCoord, hiddenBase))
+		}
+		layers = append(layers, attachWeightsToLayer(req.OutputLayer, hWeights))
+		return layers, nil
+	}
+}
+
+func substrateLayerWeightTemplates(linkForm string, depth int, subDensities []int, inputCount int, outputCount int) ([]float64, []float64, error) {
+	hiddenCount, err := multiplyDensities(subDensities)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	switch linkForm {
+	case LinkFormL2LFeedforward:
+		return make([]float64, inputCount), make([]float64, hiddenCount), nil
+	case LinkFormFullyInterconnected:
+		if depth == 0 {
+			return nil, nil, fmt.Errorf("%w: fully_interconnected requires depth > 0", ErrInvalidSubstrateCoordinates)
+		}
+		totalHidden, err := multiplyDensities(append([]int{depth - 1}, subDensities...))
+		if err != nil {
+			return nil, nil, err
+		}
+		totalWeights := totalHidden + inputCount + outputCount
+		weights := make([]float64, totalWeights)
+		return weights, append([]float64(nil), weights...), nil
+	case LinkFormJordanRecurrent:
+		return make([]float64, inputCount+outputCount), make([]float64, hiddenCount), nil
+	case LinkFormNeuronSelfRecurrent:
+		return make([]float64, inputCount+1), make([]float64, hiddenCount+1), nil
+	default:
+		return nil, nil, fmt.Errorf("%w: %q", ErrUnsupportedSubstrateLink, linkForm)
+	}
+}
+
+func multiplyDensities(densities []int) (int, error) {
+	if len(densities) == 0 {
+		return 0, fmt.Errorf("%w: missing densities", ErrInvalidSubstrateCoordinates)
+	}
+	product := 1
+	for _, density := range densities {
+		if density <= 0 {
+			return 0, fmt.Errorf("%w: density must be > 0: %d", ErrInvalidSubstrateCoordinates, density)
+		}
+		product *= density
+	}
+	return product, nil
+}
+
+func attachWeightsToLayer(layer CoordinateHyperlayer, weights []float64) CoordinateHyperlayer {
+	out := cloneCoordinateHyperlayer(layer)
+	for i := range out {
+		out[i].Weights = append([]float64(nil), weights...)
+	}
+	return out
+}
+
+func cloneCoordinateHyperlayer(layer CoordinateHyperlayer) CoordinateHyperlayer {
+	out := make(CoordinateHyperlayer, 0, len(layer))
+	for _, neurode := range layer {
+		out = append(out, NeurodeCoordinate{
+			Coords:  append([]float64(nil), neurode.Coords...),
 			Output:  neurode.Output,
 			Weights: append([]float64(nil), neurode.Weights...),
 		})

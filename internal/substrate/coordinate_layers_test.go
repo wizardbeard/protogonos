@@ -2,6 +2,7 @@ package substrate
 
 import (
 	"errors"
+	"math"
 	"reflect"
 	"testing"
 )
@@ -272,4 +273,203 @@ func TestExtrudeCoordinateHyperlayerPrependsDimensionAndCopiesState(t *testing.T
 	if got[0].Coords[1] != -1 || got[0].Weights[0] != 0.1 {
 		t.Fatalf("expected extruded layer copies, got=%+v", got[0])
 	}
+}
+
+func TestBuildSubstrateLayersDepthZeroAttachesInputWeightsToOutput(t *testing.T) {
+	input := CoordinateHyperlayer{{Coords: []float64{-1}}, {Coords: []float64{1}}}
+	output := CoordinateHyperlayer{{Coords: []float64{0.5}}}
+
+	layers, err := BuildSubstrateLayers(SubstrateLayerBuildRequest{
+		InputLayer:  input,
+		Densities:   []int{0, 2},
+		OutputLayer: output,
+		LinkForm:    LinkFormL2LFeedforward,
+	})
+	if err != nil {
+		t.Fatalf("build substrate layers: %v", err)
+	}
+	if len(layers) != 2 {
+		t.Fatalf("unexpected layer count: got=%d want=2", len(layers))
+	}
+	if got := layers[0].Coordinates(); !reflect.DeepEqual(got, [][]float64{{-1}, {1}}) {
+		t.Fatalf("unexpected input coordinates: got=%v", got)
+	}
+	if got := layers[1][0].Weights; !reflect.DeepEqual(got, []float64{0, 0}) {
+		t.Fatalf("unexpected output weights: got=%v want=[0 0]", got)
+	}
+}
+
+func TestBuildSubstrateLayersDepthOneBuildsExtrudedRecurrentLayer(t *testing.T) {
+	input := CoordinateHyperlayer{{Coords: []float64{-1}}, {Coords: []float64{1}}}
+	output := CoordinateHyperlayer{{Coords: []float64{0.5}}}
+
+	layers, err := BuildSubstrateLayers(SubstrateLayerBuildRequest{
+		InputLayer:  input,
+		Densities:   []int{1, 2, 3},
+		OutputLayer: output,
+		LinkForm:    LinkFormL2LFeedforward,
+	})
+	if err != nil {
+		t.Fatalf("build substrate layers: %v", err)
+	}
+	if len(layers) != 3 {
+		t.Fatalf("unexpected layer count: got=%d want=3", len(layers))
+	}
+	wantHidden := [][]float64{
+		{0, -1, -1},
+		{0, -1, 0},
+		{0, -1, 1},
+		{0, 1, -1},
+		{0, 1, 0},
+		{0, 1, 1},
+	}
+	if got := layers[1].Coordinates(); !reflect.DeepEqual(got, wantHidden) {
+		t.Fatalf("unexpected recurrent coordinates: got=%v want=%v", got, wantHidden)
+	}
+	if got := layers[1][0].Weights; !reflect.DeepEqual(got, []float64{0, 0}) {
+		t.Fatalf("unexpected recurrent input weights: got=%v want=[0 0]", got)
+	}
+	if got := layers[2][0].Weights; !reflect.DeepEqual(got, []float64{0, 0, 0, 0, 0, 0}) {
+		t.Fatalf("unexpected output hidden weights: got=%v", got)
+	}
+}
+
+func TestBuildSubstrateLayersDepthThreeBuildsReferenceDepthCoordinates(t *testing.T) {
+	input := CoordinateHyperlayer{{Coords: []float64{-1}}}
+	output := CoordinateHyperlayer{{Coords: []float64{1}}}
+
+	layers, err := BuildSubstrateLayers(SubstrateLayerBuildRequest{
+		InputLayer:  input,
+		Densities:   []int{3, 2},
+		OutputLayer: output,
+		LinkForm:    LinkFormL2LFeedforward,
+	})
+	if err != nil {
+		t.Fatalf("build substrate layers: %v", err)
+	}
+	if len(layers) != 4 {
+		t.Fatalf("unexpected layer count: got=%d want=4", len(layers))
+	}
+	recurrentCoord := -1 + 2.0/3.0
+	hiddenCoord := -1 + 4.0/3.0
+	if got := layers[1].Coordinates(); !coordsAlmostEqual(got, [][]float64{{recurrentCoord, -1}, {recurrentCoord, 1}}) {
+		t.Fatalf("unexpected recurrent depth coordinates: got=%v", got)
+	}
+	if got := layers[2].Coordinates(); !coordsAlmostEqual(got, [][]float64{{hiddenCoord, -1}, {hiddenCoord, 1}}) {
+		t.Fatalf("unexpected first hidden depth coordinates: got=%v", got)
+	}
+}
+
+func TestBuildSubstrateLayersSetsLinkFormWeightCounts(t *testing.T) {
+	input := CoordinateHyperlayer{{Coords: []float64{0}}, {Coords: []float64{1}}}
+	output := CoordinateHyperlayer{{Coords: []float64{9}}, {Coords: []float64{10}}}
+
+	tests := []struct {
+		name          string
+		linkForm      string
+		wantFirst     int
+		wantFollowing int
+	}{
+		{name: "l2l", linkForm: LinkFormL2LFeedforward, wantFirst: 2, wantFollowing: 6},
+		{name: "fully", linkForm: LinkFormFullyInterconnected, wantFirst: 10, wantFollowing: 10},
+		{name: "jordan", linkForm: LinkFormJordanRecurrent, wantFirst: 4, wantFollowing: 6},
+		{name: "neuronself", linkForm: LinkFormNeuronSelfRecurrent, wantFirst: 3, wantFollowing: 7},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			layers, err := BuildSubstrateLayers(SubstrateLayerBuildRequest{
+				InputLayer:  input,
+				Densities:   []int{2, 2, 3},
+				OutputLayer: output,
+				LinkForm:    tt.linkForm,
+			})
+			if err != nil {
+				t.Fatalf("build substrate layers: %v", err)
+			}
+			if got := len(layers[1][0].Weights); got != tt.wantFirst {
+				t.Fatalf("unexpected first hidden weight count: got=%d want=%d", got, tt.wantFirst)
+			}
+			if got := len(layers[2][0].Weights); got != tt.wantFollowing {
+				t.Fatalf("unexpected output weight count: got=%d want=%d", got, tt.wantFollowing)
+			}
+		})
+	}
+}
+
+func TestBuildSubstrateLayersValidatesInput(t *testing.T) {
+	input := CoordinateHyperlayer{{Coords: []float64{0}}}
+	output := CoordinateHyperlayer{{Coords: []float64{1}}}
+
+	tests := []struct {
+		name string
+		req  SubstrateLayerBuildRequest
+		err  error
+	}{
+		{name: "missing densities", req: SubstrateLayerBuildRequest{InputLayer: input, OutputLayer: output, LinkForm: LinkFormL2LFeedforward}, err: ErrInvalidSubstrateCoordinates},
+		{name: "missing input", req: SubstrateLayerBuildRequest{Densities: []int{0}, OutputLayer: output, LinkForm: LinkFormL2LFeedforward}, err: ErrInvalidSubstrateCoordinates},
+		{name: "missing output", req: SubstrateLayerBuildRequest{InputLayer: input, Densities: []int{0}, LinkForm: LinkFormL2LFeedforward}, err: ErrInvalidSubstrateCoordinates},
+		{name: "negative depth", req: SubstrateLayerBuildRequest{InputLayer: input, Densities: []int{-1, 2}, OutputLayer: output, LinkForm: LinkFormL2LFeedforward}, err: ErrInvalidSubstrateCoordinates},
+		{name: "missing hidden densities", req: SubstrateLayerBuildRequest{InputLayer: input, Densities: []int{1}, OutputLayer: output, LinkForm: LinkFormL2LFeedforward}, err: ErrInvalidSubstrateCoordinates},
+		{name: "unsupported link", req: SubstrateLayerBuildRequest{InputLayer: input, Densities: []int{0, 2}, OutputLayer: output, LinkForm: "planeself_recurrent"}, err: ErrUnsupportedSubstrateLink},
+		{name: "fully zero depth", req: SubstrateLayerBuildRequest{InputLayer: input, Densities: []int{0, 2}, OutputLayer: output, LinkForm: LinkFormFullyInterconnected}, err: ErrInvalidSubstrateCoordinates},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if _, err := BuildSubstrateLayers(tt.req); !errors.Is(err, tt.err) {
+				t.Fatalf("expected %v, got %v", tt.err, err)
+			}
+		})
+	}
+}
+
+func TestBuildSubstrateLayersCopiesInputsOutputsAndWeights(t *testing.T) {
+	input := CoordinateHyperlayer{{Coords: []float64{0}, Weights: []float64{7}}}
+	output := CoordinateHyperlayer{{Coords: []float64{1}, Weights: []float64{8}}}
+
+	layers, err := BuildSubstrateLayers(SubstrateLayerBuildRequest{
+		InputLayer:  input,
+		Densities:   []int{0, 2},
+		OutputLayer: output,
+		LinkForm:    LinkFormL2LFeedforward,
+	})
+	if err != nil {
+		t.Fatalf("build substrate layers: %v", err)
+	}
+
+	input[0].Coords[0] = 99
+	input[0].Weights[0] = 88
+	output[0].Coords[0] = 77
+	output[0].Weights[0] = 66
+
+	if got := layers[0][0].Coords[0]; got != 0 {
+		t.Fatalf("expected input coord copy, got=%v", got)
+	}
+	if got := layers[0][0].Weights[0]; got != 7 {
+		t.Fatalf("expected input weight copy, got=%v", got)
+	}
+	if got := layers[1][0].Coords[0]; got != 1 {
+		t.Fatalf("expected output coord copy, got=%v", got)
+	}
+	if got := layers[1][0].Weights; !reflect.DeepEqual(got, []float64{0}) {
+		t.Fatalf("expected output weights attached independently, got=%v", got)
+	}
+}
+
+func coordsAlmostEqual(got [][]float64, want [][]float64) bool {
+	if len(got) != len(want) {
+		return false
+	}
+	for i := range want {
+		if len(got[i]) != len(want[i]) {
+			return false
+		}
+		for j := range want[i] {
+			if math.Abs(got[i][j]-want[i][j]) > 1e-12 {
+				return false
+			}
+		}
+	}
+	return true
 }
