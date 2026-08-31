@@ -17,6 +17,27 @@ type NeurodeCoordinate struct {
 // CoordinateHyperlayer is an ordered substrate layer of coordinate neurodes.
 type CoordinateHyperlayer []NeurodeCoordinate
 
+// ABCNWeight mirrors the reference `{W, abcn, [A,B,C,N]}` plastic weight tuple.
+type ABCNWeight struct {
+	Weight float64
+	A      float64
+	B      float64
+	C      float64
+	N      float64
+}
+
+// ABCNNeurodeCoordinate carries coordinate/output state plus ABCN plastic
+// weight tuples for typed plastic output calculations.
+type ABCNNeurodeCoordinate struct {
+	Coords  []float64
+	Output  float64
+	Weights []ABCNWeight
+}
+
+// ABCNCoordinateHyperlayer is an ordered layer of ABCN plastic coordinate
+// neurodes.
+type ABCNCoordinateHyperlayer []ABCNNeurodeCoordinate
+
 // Coordinates returns copied neurode coordinates in layer traversal order.
 func (h CoordinateHyperlayer) Coordinates() [][]float64 {
 	coords := make([][]float64, 0, len(h))
@@ -189,6 +210,72 @@ func CalculateOutputStd(input CoordinateHyperlayer, layers []CoordinateHyperlaye
 		}
 		updated = append(updated, current)
 		previous = current
+	}
+
+	outputLayer := updated[len(updated)-1]
+	outputs := make([]float64, 0, len(outputLayer))
+	for _, neurode := range outputLayer {
+		outputs = append(outputs, neurode.Output)
+	}
+	return outputs, updated, nil
+}
+
+// ABCNWeightUpdate mirrors substrate.erl abcn/4.
+func ABCNWeightUpdate(input float64, output float64, weight ABCNWeight) ABCNWeight {
+	updated := weight
+	updated.Weight += weight.N * (weight.A*input*output + weight.B*input + weight.C*output)
+	return updated
+}
+
+// CalculateNeurodeOutputABCN mirrors calculate_neurode_output_plast followed by
+// update_neurode for one neurode.
+func CalculateNeurodeOutputABCN(previous CoordinateHyperlayer, neurode ABCNNeurodeCoordinate) (ABCNNeurodeCoordinate, error) {
+	if len(previous) != len(neurode.Weights) {
+		return ABCNNeurodeCoordinate{}, fmt.Errorf("%w: previous neurode count %d does not match abcn weight count %d", ErrInvalidSubstrateCoordinates, len(previous), len(neurode.Weights))
+	}
+
+	sum := 0.0
+	for i, prev := range previous {
+		sum += prev.Output * neurode.Weights[i].Weight
+	}
+	output := math.Tanh(sum)
+
+	updatedWeights := make([]ABCNWeight, 0, len(neurode.Weights))
+	for i, weight := range neurode.Weights {
+		updatedWeights = append(updatedWeights, ABCNWeightUpdate(previous[i].Output, output, weight))
+	}
+	return ABCNNeurodeCoordinate{
+		Coords:  append([]float64(nil), neurode.Coords...),
+		Output:  output,
+		Weights: updatedWeights,
+	}, nil
+}
+
+// CalculateOutputABCNStd mirrors the l2l calculate_output_std path when
+// Plasticity is abcn.
+func CalculateOutputABCNStd(input CoordinateHyperlayer, layers []ABCNCoordinateHyperlayer) ([]float64, []ABCNCoordinateHyperlayer, error) {
+	if len(layers) == 0 {
+		return nil, nil, fmt.Errorf("%w: missing abcn process/output hyperlayers", ErrInvalidSubstrateCoordinates)
+	}
+
+	previous := cloneCoordinateHyperlayer(input)
+	updated := make([]ABCNCoordinateHyperlayer, 0, len(layers))
+	for layerIdx, layer := range layers {
+		current := make(ABCNCoordinateHyperlayer, 0, len(layer))
+		currentScalar := make(CoordinateHyperlayer, 0, len(layer))
+		for neurodeIdx, neurode := range layer {
+			calculated, err := CalculateNeurodeOutputABCN(previous, neurode)
+			if err != nil {
+				return nil, nil, fmt.Errorf("layer %d neurode %d: %w", layerIdx, neurodeIdx, err)
+			}
+			current = append(current, calculated)
+			currentScalar = append(currentScalar, NeurodeCoordinate{
+				Coords: append([]float64(nil), calculated.Coords...),
+				Output: calculated.Output,
+			})
+		}
+		updated = append(updated, current)
+		previous = currentScalar
 	}
 
 	outputLayer := updated[len(updated)-1]

@@ -362,6 +362,110 @@ func TestCalculateOutputStdValidatesInputs(t *testing.T) {
 	}
 }
 
+func TestABCNWeightUpdateMatchesReferenceRule(t *testing.T) {
+	weight := ABCNWeight{Weight: 0.5, A: 0.2, B: -0.3, C: 0.4, N: 0.1}
+	got := ABCNWeightUpdate(0.25, -0.5, weight)
+	want := 0.5 + 0.1*(0.2*0.25*-0.5+-0.3*0.25+0.4*-0.5)
+	if math.Abs(got.Weight-want) > 1e-12 {
+		t.Fatalf("unexpected abcn weight update: got=%v want=%v", got.Weight, want)
+	}
+	if got.A != 0.2 || got.B != -0.3 || got.C != 0.4 || got.N != 0.1 {
+		t.Fatalf("expected abcn parameters to be preserved, got=%+v", got)
+	}
+}
+
+func TestCalculateNeurodeOutputABCNUpdatesWeights(t *testing.T) {
+	previous := CoordinateHyperlayer{
+		{Coords: []float64{-1}, Output: 0.5},
+		{Coords: []float64{1}, Output: -0.25},
+	}
+	neurode := ABCNNeurodeCoordinate{
+		Coords: []float64{0},
+		Output: 99,
+		Weights: []ABCNWeight{
+			{Weight: 0.8, A: 0.1, B: 0.2, C: 0.3, N: 0.4},
+			{Weight: -0.4, A: -0.2, B: 0.1, C: -0.3, N: 0.5},
+		},
+	}
+
+	got, err := CalculateNeurodeOutputABCN(previous, neurode)
+	if err != nil {
+		t.Fatalf("calculate abcn neurode output: %v", err)
+	}
+	output := math.Tanh(0.5*0.8 + -0.25*-0.4)
+	if math.Abs(got.Output-output) > 1e-12 {
+		t.Fatalf("unexpected abcn neurode output: got=%v want=%v", got.Output, output)
+	}
+	wantFirst := ABCNWeightUpdate(0.5, output, neurode.Weights[0])
+	wantSecond := ABCNWeightUpdate(-0.25, output, neurode.Weights[1])
+	if got.Weights[0] != wantFirst || got.Weights[1] != wantSecond {
+		t.Fatalf("unexpected abcn updated weights: got=%+v want=%+v", got.Weights, []ABCNWeight{wantFirst, wantSecond})
+	}
+
+	neurode.Coords[0] = 99
+	neurode.Weights[0].Weight = 99
+	if got.Coords[0] != 0 || math.Abs(got.Weights[0].Weight-wantFirst.Weight) > 1e-12 {
+		t.Fatalf("expected abcn neurode result to be copied, got=%+v", got)
+	}
+}
+
+func TestCalculateNeurodeOutputABCNValidatesWeightCount(t *testing.T) {
+	_, err := CalculateNeurodeOutputABCN(
+		CoordinateHyperlayer{{Coords: []float64{0}, Output: 1}},
+		ABCNNeurodeCoordinate{Coords: []float64{1}, Weights: []ABCNWeight{{}, {}}},
+	)
+	if !errors.Is(err, ErrInvalidSubstrateCoordinates) {
+		t.Fatalf("expected ErrInvalidSubstrateCoordinates, got %v", err)
+	}
+}
+
+func TestCalculateOutputABCNStdPropagatesAndUpdatesLayers(t *testing.T) {
+	input := CoordinateHyperlayer{
+		{Coords: []float64{-1}, Output: 0.5},
+		{Coords: []float64{1}, Output: -0.25},
+	}
+	hidden := ABCNCoordinateHyperlayer{
+		{Coords: []float64{0}, Output: 9, Weights: []ABCNWeight{
+			{Weight: 0.8, A: 0.1, B: 0.2, C: 0.3, N: 0.4},
+			{Weight: -0.4, A: -0.2, B: 0.1, C: -0.3, N: 0.5},
+		}},
+	}
+
+	outputs, updated, err := CalculateOutputABCNStd(input, []ABCNCoordinateHyperlayer{hidden})
+	if err != nil {
+		t.Fatalf("calculate abcn output std: %v", err)
+	}
+	wantOutput := math.Tanh(0.5*0.8 + -0.25*-0.4)
+	if len(outputs) != 1 || math.Abs(outputs[0]-wantOutput) > 1e-12 {
+		t.Fatalf("unexpected abcn outputs: got=%v want=%v", outputs, []float64{wantOutput})
+	}
+	if len(updated) != 1 || len(updated[0]) != 1 {
+		t.Fatalf("unexpected abcn updated layer shape: %v", updated)
+	}
+	if math.Abs(updated[0][0].Output-wantOutput) > 1e-12 {
+		t.Fatalf("unexpected abcn updated output: got=%v want=%v", updated[0][0].Output, wantOutput)
+	}
+	wantWeight := ABCNWeightUpdate(0.5, wantOutput, hidden[0].Weights[0])
+	if updated[0][0].Weights[0] != wantWeight {
+		t.Fatalf("unexpected abcn updated layer weight: got=%+v want=%+v", updated[0][0].Weights[0], wantWeight)
+	}
+
+	hidden[0].Weights[0].Weight = 99
+	if math.Abs(updated[0][0].Weights[0].Weight-wantWeight.Weight) > 1e-12 {
+		t.Fatalf("expected abcn updated layers to be copied, got=%+v", updated[0][0].Weights[0])
+	}
+}
+
+func TestCalculateOutputABCNStdValidatesInputs(t *testing.T) {
+	input := CoordinateHyperlayer{{Coords: []float64{0}, Output: 1}}
+	if _, _, err := CalculateOutputABCNStd(input, nil); !errors.Is(err, ErrInvalidSubstrateCoordinates) {
+		t.Fatalf("expected ErrInvalidSubstrateCoordinates for missing abcn layers, got %v", err)
+	}
+	if _, _, err := CalculateOutputABCNStd(input, []ABCNCoordinateHyperlayer{{{Coords: []float64{1}, Weights: []ABCNWeight{{}, {}}}}}); !errors.Is(err, ErrInvalidSubstrateCoordinates) {
+		t.Fatalf("expected ErrInvalidSubstrateCoordinates for abcn weight mismatch, got %v", err)
+	}
+}
+
 func TestCalculateOutputFullyInterconnectedUsesFlattenedSubstrateSource(t *testing.T) {
 	input := CoordinateHyperlayer{{Coords: []float64{-1}, Output: 0.5}}
 	hidden := CoordinateHyperlayer{{Coords: []float64{0}, Output: 0.1, Weights: []float64{1, 2, 3}}}
