@@ -719,6 +719,99 @@ func TestCalculateTypedOutputLifecycleValidatesInputs(t *testing.T) {
 	}
 }
 
+func TestCalculateHoldOutputABCNPopulatesInputAndReturnsUpdatedSubstrate(t *testing.T) {
+	substrateLayers := ABCNSubstrate{
+		InputLayer: CoordinateHyperlayer{
+			{Coords: []float64{-1}, Output: 9},
+			{Coords: []float64{1}, Output: 8},
+		},
+		Layers: []ABCNCoordinateHyperlayer{
+			{{Coords: []float64{0}, Output: 7, Weights: []ABCNWeight{
+				{Weight: 0.5, A: 0.1, B: 0.2, C: 0.3, N: 0.4},
+				{Weight: -0.25, A: -0.1, B: 0.05, C: 0.2, N: 0.3},
+			}}},
+			{{Coords: []float64{1}, Output: 6, Weights: []ABCNWeight{
+				{Weight: 0.75, A: 0.2, B: 0.1, C: -0.1, N: 0.5},
+			}}},
+		},
+	}
+
+	outputs, updated, err := CalculateHoldOutputABCN(substrateLayers, [][]float64{{0.4}, {-0.2}}, LinkFormL2LFeedforward)
+	if err != nil {
+		t.Fatalf("calculate abcn hold output: %v", err)
+	}
+	hiddenOut := math.Tanh(0.4*0.5 + -0.2*-0.25)
+	wantOutput := math.Tanh(hiddenOut * 0.75)
+	if len(outputs) != 1 || math.Abs(outputs[0]-wantOutput) > 1e-12 {
+		t.Fatalf("unexpected abcn hold outputs: got=%v want=%v", outputs, []float64{wantOutput})
+	}
+	if updated.InputLayer[0].Output != 9 || updated.InputLayer[1].Output != 8 {
+		t.Fatalf("expected original input layer to be retained, got=%v", updated.InputLayer)
+	}
+	if math.Abs(updated.Layers[0][0].Output-hiddenOut) > 1e-12 {
+		t.Fatalf("unexpected abcn hidden output: got=%v want=%v", updated.Layers[0][0].Output, hiddenOut)
+	}
+	if math.Abs(updated.Layers[1][0].Output-wantOutput) > 1e-12 {
+		t.Fatalf("unexpected abcn output neurode output: got=%v want=%v", updated.Layers[1][0].Output, wantOutput)
+	}
+	wantHiddenWeight := ABCNWeightUpdate(0.4, hiddenOut, substrateLayers.Layers[0][0].Weights[0])
+	wantOutputWeight := ABCNWeightUpdate(hiddenOut, wantOutput, substrateLayers.Layers[1][0].Weights[0])
+	if updated.Layers[0][0].Weights[0] != wantHiddenWeight {
+		t.Fatalf("unexpected abcn hidden weight: got=%+v want=%+v", updated.Layers[0][0].Weights[0], wantHiddenWeight)
+	}
+	if updated.Layers[1][0].Weights[0] != wantOutputWeight {
+		t.Fatalf("unexpected abcn output weight: got=%+v want=%+v", updated.Layers[1][0].Weights[0], wantOutputWeight)
+	}
+
+	substrateLayers.InputLayer[0].Coords[0] = 99
+	substrateLayers.Layers[0][0].Weights[0].Weight = 99
+	if updated.InputLayer[0].Coords[0] != -1 || math.Abs(updated.Layers[0][0].Weights[0].Weight-wantHiddenWeight.Weight) > 1e-12 {
+		t.Fatalf("expected abcn updated substrate to be copied, got=%+v", updated)
+	}
+}
+
+func TestCalculateResetOutputABCNUsesSameTypedLifecycle(t *testing.T) {
+	substrateLayers := ABCNSubstrate{
+		InputLayer: CoordinateHyperlayer{{Coords: []float64{-1}, Output: 0}},
+		Layers: []ABCNCoordinateHyperlayer{
+			{{Coords: []float64{1}, Output: 0, Weights: []ABCNWeight{{Weight: -0.5, A: 0.1, B: 0.2, C: 0.3, N: 0.4}}}},
+		},
+	}
+
+	outputs, updated, err := CalculateResetOutputABCN(substrateLayers, [][]float64{{0.8}}, LinkFormL2LFeedforward)
+	if err != nil {
+		t.Fatalf("calculate abcn reset output: %v", err)
+	}
+	wantOutput := math.Tanh(0.8 * -0.5)
+	if len(outputs) != 1 || math.Abs(outputs[0]-wantOutput) > 1e-12 {
+		t.Fatalf("unexpected abcn reset outputs: got=%v want=%v", outputs, []float64{wantOutput})
+	}
+	if len(updated.Layers) != 1 || math.Abs(updated.Layers[0][0].Output-wantOutput) > 1e-12 {
+		t.Fatalf("unexpected abcn reset updated substrate: %+v", updated)
+	}
+}
+
+func TestCalculateABCNOutputLifecycleValidatesInputs(t *testing.T) {
+	if _, _, err := CalculateHoldOutputABCN(ABCNSubstrate{}, [][]float64{{1}}, LinkFormL2LFeedforward); !errors.Is(err, ErrInvalidSubstrateCoordinates) {
+		t.Fatalf("expected ErrInvalidSubstrateCoordinates for missing input layer, got %v", err)
+	}
+	if _, _, err := CalculateHoldOutputABCN(ABCNSubstrate{InputLayer: CoordinateHyperlayer{{Coords: []float64{0}}}}, [][]float64{{1}}, LinkFormL2LFeedforward); !errors.Is(err, ErrInvalidSubstrateCoordinates) {
+		t.Fatalf("expected ErrInvalidSubstrateCoordinates for missing abcn layers, got %v", err)
+	}
+	if _, _, err := CalculateHoldOutputABCN(ABCNSubstrate{
+		InputLayer: CoordinateHyperlayer{{Coords: []float64{0}}},
+		Layers:     []ABCNCoordinateHyperlayer{{{Coords: []float64{1}, Weights: []ABCNWeight{{Weight: 0.1}}}}},
+	}, nil, LinkFormL2LFeedforward); !errors.Is(err, ErrInvalidSubstrateCoordinates) {
+		t.Fatalf("expected ErrInvalidSubstrateCoordinates for input mismatch, got %v", err)
+	}
+	if _, _, err := CalculateHoldOutputABCN(ABCNSubstrate{
+		InputLayer: CoordinateHyperlayer{{Coords: []float64{0}}},
+		Layers:     []ABCNCoordinateHyperlayer{{{Coords: []float64{1}, Weights: []ABCNWeight{{Weight: 0.1}}}}},
+	}, [][]float64{{1}}, "planeself_recurrent"); !errors.Is(err, ErrUnsupportedSubstrateLink) {
+		t.Fatalf("expected ErrUnsupportedSubstrateLink, got %v", err)
+	}
+}
+
 func TestPopulateProcessHyperlayersStaticL2L(t *testing.T) {
 	substrateLayers := []CoordinateHyperlayer{
 		{{Coords: []float64{-1}, Output: 0.5}, {Coords: []float64{1}, Output: -0.25}},

@@ -38,6 +38,13 @@ type ABCNNeurodeCoordinate struct {
 // neurodes.
 type ABCNCoordinateHyperlayer []ABCNNeurodeCoordinate
 
+// ABCNSubstrate carries the scalar input layer and ABCN process/output layers
+// used by typed plastic reset/hold lifecycle helpers.
+type ABCNSubstrate struct {
+	InputLayer CoordinateHyperlayer
+	Layers     []ABCNCoordinateHyperlayer
+}
+
 // Coordinates returns copied neurode coordinates in layer traversal order.
 func (h CoordinateHyperlayer) Coordinates() [][]float64 {
 	coords := make([][]float64, 0, len(h))
@@ -414,6 +421,20 @@ func CalculateResetOutput(substrate []CoordinateHyperlayer, inputValues [][]floa
 	return calculateTypedOutputLifecycle(substrate, inputValues, linkForm)
 }
 
+// CalculateHoldOutputABCN mirrors calculate_HoldOutput when Plasticity is abcn.
+// The input layer is retained as stored while process/output layers receive the
+// updated output and ABCN weight state.
+func CalculateHoldOutputABCN(substrate ABCNSubstrate, inputValues [][]float64, linkForm string) ([]float64, ABCNSubstrate, error) {
+	return calculateABCNOutputLifecycle(substrate, inputValues, linkForm)
+}
+
+// CalculateResetOutputABCN mirrors calculate_ResetOutput when Plasticity is
+// abcn. CPP/CEP-driven weight repopulation is handled by runtime paths; this
+// helper preserves the typed ABCN layer state shape and output flow.
+func CalculateResetOutputABCN(substrate ABCNSubstrate, inputValues [][]float64, linkForm string) ([]float64, ABCNSubstrate, error) {
+	return calculateABCNOutputLifecycle(substrate, inputValues, linkForm)
+}
+
 // PopulateProcessHyperlayersStatic mirrors populate_PHyperlayers/get_weights
 // for the static non-plastic path using typed CPP/CEP components.
 func PopulateProcessHyperlayersStatic(ctx context.Context, substrate []CoordinateHyperlayer, linkForm string, cpp CoordinateCPP, ceps []CEP, params map[string]float64) ([]CoordinateHyperlayer, error) {
@@ -487,6 +508,30 @@ func calculateTypedOutputLifecycle(substrate []CoordinateHyperlayer, inputValues
 	updatedSubstrate := make([]CoordinateHyperlayer, 0, len(substrate))
 	updatedSubstrate = append(updatedSubstrate, cloneCoordinateHyperlayer(substrate[0]))
 	updatedSubstrate = append(updatedSubstrate, updatedLayers...)
+	return outputs, updatedSubstrate, nil
+}
+
+func calculateABCNOutputLifecycle(substrate ABCNSubstrate, inputValues [][]float64, linkForm string) ([]float64, ABCNSubstrate, error) {
+	if len(substrate.InputLayer) == 0 {
+		return nil, ABCNSubstrate{}, fmt.Errorf("%w: missing input hyperlayer", ErrInvalidSubstrateCoordinates)
+	}
+	if len(substrate.Layers) == 0 {
+		return nil, ABCNSubstrate{}, fmt.Errorf("%w: missing abcn process/output hyperlayers", ErrInvalidSubstrateCoordinates)
+	}
+
+	populatedInput, err := PopulateInputHyperlayer(substrate.InputLayer, FlattenInputValues(inputValues...))
+	if err != nil {
+		return nil, ABCNSubstrate{}, err
+	}
+	outputs, updatedLayers, err := CalculateOutputABCNForLinkForm(linkForm, populatedInput, substrate.Layers)
+	if err != nil {
+		return nil, ABCNSubstrate{}, err
+	}
+
+	updatedSubstrate := ABCNSubstrate{
+		InputLayer: cloneCoordinateHyperlayer(substrate.InputLayer),
+		Layers:     cloneABCNCoordinateHyperlayers(updatedLayers),
+	}
 	return outputs, updatedSubstrate, nil
 }
 
@@ -1329,6 +1374,30 @@ func cloneNeurodeCoordinate(neurode NeurodeCoordinate) NeurodeCoordinate {
 		Coords:  append([]float64(nil), neurode.Coords...),
 		Output:  neurode.Output,
 		Weights: append([]float64(nil), neurode.Weights...),
+	}
+}
+
+func cloneABCNCoordinateHyperlayers(layers []ABCNCoordinateHyperlayer) []ABCNCoordinateHyperlayer {
+	out := make([]ABCNCoordinateHyperlayer, 0, len(layers))
+	for _, layer := range layers {
+		out = append(out, cloneABCNCoordinateHyperlayer(layer))
+	}
+	return out
+}
+
+func cloneABCNCoordinateHyperlayer(layer ABCNCoordinateHyperlayer) ABCNCoordinateHyperlayer {
+	out := make(ABCNCoordinateHyperlayer, 0, len(layer))
+	for _, neurode := range layer {
+		out = append(out, cloneABCNNeurodeCoordinate(neurode))
+	}
+	return out
+}
+
+func cloneABCNNeurodeCoordinate(neurode ABCNNeurodeCoordinate) ABCNNeurodeCoordinate {
+	return ABCNNeurodeCoordinate{
+		Coords:  append([]float64(nil), neurode.Coords...),
+		Output:  neurode.Output,
+		Weights: append([]ABCNWeight(nil), neurode.Weights...),
 	}
 }
 
