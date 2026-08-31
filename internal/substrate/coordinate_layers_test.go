@@ -46,6 +46,21 @@ func (iowDeltaCPP) ComputeCoordinatesIOW(_ context.Context, _ []float64, _ []flo
 	return []float64{iow[0] + iow[1]}, nil
 }
 
+type abcnSignalCPP struct{}
+
+func (abcnSignalCPP) ComputeCoordinatesIOW(_ context.Context, presynaptic []float64, postsynaptic []float64, iow []float64, _ map[string]float64) ([]float64, error) {
+	if len(iow) != 3 {
+		return nil, ErrInvalidSubstrateCoordinates
+	}
+	return []float64{
+		presynaptic[0] + postsynaptic[0],
+		iow[0],
+		iow[1],
+		iow[2],
+		0.5,
+	}, nil
+}
+
 func abcnTestWeight(weight float64) ABCNWeight {
 	return ABCNWeight{Weight: weight}
 }
@@ -934,6 +949,41 @@ func TestCalculateOutputLifecycleABCNSelectsTypedABCNState(t *testing.T) {
 	}
 }
 
+func TestCalculateOutputLifecycleABCNResetPopulatesThroughCPPCEP(t *testing.T) {
+	abcnSubstrate := ABCNSubstrate{
+		InputLayer: CoordinateHyperlayer{{Coords: []float64{-1}, Output: 0.2}},
+		Layers: []ABCNCoordinateHyperlayer{
+			{{Coords: []float64{1}, Output: 0.3, Weights: []ABCNWeight{{Weight: 0.4, A: 9, B: 8, C: 7, N: 6}}}},
+		},
+	}
+
+	result, err := CalculateOutputLifecycle(OutputLifecycleRequest{
+		StateMode:    SubstrateStateReset,
+		Plasticity:   SubstratePlasticityABCN,
+		LinkForm:     LinkFormL2LFeedforward,
+		InputValues:  [][]float64{{0.8}},
+		ABCN:         abcnSubstrate,
+		IterativeCPP: abcnSignalCPP{},
+		CEPs:         []CEP{rawSignalCEP{}},
+		Context:      context.Background(),
+	})
+	if err != nil {
+		t.Fatalf("calculate output lifecycle abcn reset: %v", err)
+	}
+	populatedWeight := ABCNWeight{Weight: 0, A: 0.2, B: 0.3, C: 0.4, N: 0.5}
+	wantOutput := math.Tanh(0.8 * populatedWeight.Weight)
+	wantWeight := ABCNWeightUpdate(0.8, wantOutput, populatedWeight)
+	if result.StateMode != SubstrateStateHold {
+		t.Fatalf("unexpected next state: got=%q want=%q", result.StateMode, SubstrateStateHold)
+	}
+	if len(result.Outputs) != 1 || math.Abs(result.Outputs[0]-wantOutput) > 1e-12 {
+		t.Fatalf("unexpected abcn reset lifecycle outputs: got=%v want=%v", result.Outputs, []float64{wantOutput})
+	}
+	if result.ABCNSubstrate.Layers[0][0].Weights[0] != wantWeight {
+		t.Fatalf("unexpected populated abcn lifecycle weight: got=%+v want=%+v", result.ABCNSubstrate.Layers[0][0].Weights[0], wantWeight)
+	}
+}
+
 func TestCalculateOutputLifecycleValidatesStateAndPlasticity(t *testing.T) {
 	if _, err := CalculateOutputLifecycle(OutputLifecycleRequest{StateMode: "unknown"}); !errors.Is(err, ErrInvalidSubstrateCoordinates) {
 		t.Fatalf("expected ErrInvalidSubstrateCoordinates for unknown state, got %v", err)
@@ -952,6 +1002,86 @@ func TestCalculateOutputLifecycleValidatesStateAndPlasticity(t *testing.T) {
 		Plasticity: SubstratePlasticityABCN,
 	}); !errors.Is(err, ErrInvalidSubstrateCoordinates) {
 		t.Fatalf("expected ErrInvalidSubstrateCoordinates for abcn iterative state, got %v", err)
+	}
+}
+
+func TestPopulateProcessHyperlayersABCNL2LUsesIOWAndSignalCoefficients(t *testing.T) {
+	abcnSubstrate := ABCNSubstrate{
+		InputLayer: CoordinateHyperlayer{{Coords: []float64{-1}, Output: 0.2}},
+		Layers: []ABCNCoordinateHyperlayer{
+			{{Coords: []float64{1}, Output: 0.3, Weights: []ABCNWeight{{Weight: 0.4, A: 9, B: 8, C: 7, N: 6}}}},
+		},
+	}
+
+	got, err := PopulateProcessHyperlayersABCN(context.Background(), abcnSubstrate, LinkFormL2LFeedforward, abcnSignalCPP{}, []CEP{rawSignalCEP{}}, nil)
+	if err != nil {
+		t.Fatalf("populate abcn process hyperlayers: %v", err)
+	}
+	want := ABCNWeight{Weight: 0, A: 0.2, B: 0.3, C: 0.4, N: 0.5}
+	if got.Layers[0][0].Weights[0] != want {
+		t.Fatalf("unexpected populated abcn weight: got=%+v want=%+v", got.Layers[0][0].Weights[0], want)
+	}
+
+	abcnSubstrate.InputLayer[0].Coords[0] = 99
+	abcnSubstrate.Layers[0][0].Weights[0].Weight = 99
+	if got.InputLayer[0].Coords[0] != -1 || got.Layers[0][0].Weights[0] != want {
+		t.Fatalf("expected populated abcn substrate to be copied, got=%+v", got)
+	}
+}
+
+func TestPopulateProcessHyperlayersABCNDefaultsCoefficientsFromParameters(t *testing.T) {
+	abcnSubstrate := ABCNSubstrate{
+		InputLayer: CoordinateHyperlayer{{Coords: []float64{-1}, Output: 0.2}},
+		Layers: []ABCNCoordinateHyperlayer{
+			{{Coords: []float64{1}, Output: 0.3, Weights: []ABCNWeight{{Weight: 0.4, A: 9, B: 8, C: 7, N: 6}}}},
+		},
+	}
+
+	got, err := PopulateProcessHyperlayersABCN(context.Background(), abcnSubstrate, LinkFormL2LFeedforward, iowDeltaCPP{}, []CEP{rawSignalCEP{}}, map[string]float64{
+		"abcn_a": 0.1,
+		"abcn_b": 0.2,
+		"abcn_c": 0.3,
+		"abcn_n": 0.4,
+	})
+	if err != nil {
+		t.Fatalf("populate abcn process hyperlayers with parameter coefficients: %v", err)
+	}
+	want := ABCNWeight{Weight: 0.5, A: 0.1, B: 0.2, C: 0.3, N: 0.4}
+	if got.Layers[0][0].Weights[0] != want {
+		t.Fatalf("unexpected parameter-populated abcn weight: got=%+v want=%+v", got.Layers[0][0].Weights[0], want)
+	}
+}
+
+func TestPopulateProcessHyperlayersABCNValidatesInputs(t *testing.T) {
+	valid := ABCNSubstrate{
+		InputLayer: CoordinateHyperlayer{{Coords: []float64{0}, Output: 1}},
+		Layers:     []ABCNCoordinateHyperlayer{{{Coords: []float64{1}, Weights: []ABCNWeight{{Weight: 0.1}}}}},
+	}
+	tests := []struct {
+		name      string
+		substrate ABCNSubstrate
+		linkForm  string
+		cpp       CoordinateIOWCPP
+		ceps      []CEP
+	}{
+		{name: "missing input", substrate: ABCNSubstrate{Layers: valid.Layers}, linkForm: LinkFormL2LFeedforward, cpp: iowDeltaCPP{}, ceps: []CEP{rawSignalCEP{}}},
+		{name: "missing layers", substrate: ABCNSubstrate{InputLayer: valid.InputLayer}, linkForm: LinkFormL2LFeedforward, cpp: iowDeltaCPP{}, ceps: []CEP{rawSignalCEP{}}},
+		{name: "missing cpp", substrate: valid, linkForm: LinkFormL2LFeedforward, ceps: []CEP{rawSignalCEP{}}},
+		{name: "missing cep", substrate: valid, linkForm: LinkFormL2LFeedforward, cpp: iowDeltaCPP{}},
+		{name: "unsupported", substrate: valid, linkForm: "planeself_recurrent", cpp: iowDeltaCPP{}, ceps: []CEP{rawSignalCEP{}}},
+		{name: "weight mismatch", substrate: ABCNSubstrate{
+			InputLayer: valid.InputLayer,
+			Layers:     []ABCNCoordinateHyperlayer{{{Coords: []float64{1}, Weights: []ABCNWeight{{}, {}}}}},
+		}, linkForm: LinkFormL2LFeedforward, cpp: iowDeltaCPP{}, ceps: []CEP{rawSignalCEP{}}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := PopulateProcessHyperlayersABCN(context.Background(), tt.substrate, tt.linkForm, tt.cpp, tt.ceps, nil)
+			if !errors.Is(err, ErrInvalidSubstrateCoordinates) && !errors.Is(err, ErrUnsupportedSubstrateLink) {
+				t.Fatalf("expected substrate validation error, got %v", err)
+			}
+		})
 	}
 }
 

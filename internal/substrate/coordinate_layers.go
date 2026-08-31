@@ -555,6 +555,48 @@ func PopulateProcessHyperlayersIterative(ctx context.Context, substrate []Coordi
 	}
 }
 
+// PopulateProcessHyperlayersABCN mirrors the non-none plastic
+// populate_PHyperlayers/get_weights path for ABCN weight tuples.
+func PopulateProcessHyperlayersABCN(ctx context.Context, substrate ABCNSubstrate, linkForm string, cpp CoordinateIOWCPP, ceps []CEP, params map[string]float64) (ABCNSubstrate, error) {
+	if len(substrate.InputLayer) == 0 {
+		return ABCNSubstrate{}, fmt.Errorf("%w: missing input hyperlayer", ErrInvalidSubstrateCoordinates)
+	}
+	if len(substrate.Layers) == 0 {
+		return ABCNSubstrate{}, fmt.Errorf("%w: missing abcn process/output hyperlayers", ErrInvalidSubstrateCoordinates)
+	}
+	if cpp == nil {
+		return ABCNSubstrate{}, fmt.Errorf("%w: missing coordinate iow cpp", ErrInvalidSubstrateCoordinates)
+	}
+	if len(ceps) == 0 {
+		return ABCNSubstrate{}, fmt.Errorf("%w: missing cep chain", ErrInvalidSubstrateCoordinates)
+	}
+
+	var (
+		updatedLayers []ABCNCoordinateHyperlayer
+		err           error
+	)
+	switch linkForm {
+	case LinkFormL2LFeedforward:
+		updatedLayers, err = populateABCNL2L(ctx, substrate.InputLayer, substrate.Layers, cpp, ceps, params)
+	case LinkFormFullyInterconnected:
+		updatedLayers, err = populateABCNFullyInterconnected(ctx, substrate, cpp, ceps, params)
+	case LinkFormJordanRecurrent:
+		source := flattenCoordinateNeurodes(substrate.InputLayer, abcnLayerToScalar(substrate.Layers[len(substrate.Layers)-1]))
+		updatedLayers, err = populateABCNL2L(ctx, source, substrate.Layers, cpp, ceps, params)
+	case LinkFormNeuronSelfRecurrent:
+		updatedLayers, err = populateABCNNeuronSelfRecurrent(ctx, substrate.InputLayer, substrate.Layers, cpp, ceps, params)
+	default:
+		return ABCNSubstrate{}, fmt.Errorf("%w: %q", ErrUnsupportedSubstrateLink, linkForm)
+	}
+	if err != nil {
+		return ABCNSubstrate{}, err
+	}
+	return ABCNSubstrate{
+		InputLayer: cloneCoordinateHyperlayer(substrate.InputLayer),
+		Layers:     cloneABCNCoordinateHyperlayers(updatedLayers),
+	}, nil
+}
+
 func calculateTypedOutputLifecycle(substrate []CoordinateHyperlayer, inputValues [][]float64, linkForm string) ([]float64, []CoordinateHyperlayer, error) {
 	if len(substrate) < 2 {
 		return nil, nil, fmt.Errorf("%w: substrate must include input and process/output layers", ErrInvalidSubstrateCoordinates)
@@ -607,7 +649,18 @@ func calculateOutputLifecycleABCN(req OutputLifecycleRequest, stateMode string) 
 	)
 	switch stateMode {
 	case SubstrateStateReset:
-		outputs, updated, err = CalculateResetOutputABCN(req.ABCN, req.InputValues, req.LinkForm)
+		resetSubstrate := req.ABCN
+		if req.IterativeCPP != nil && len(req.CEPs) > 0 {
+			ctx := req.Context
+			if ctx == nil {
+				ctx = context.Background()
+			}
+			resetSubstrate, err = PopulateProcessHyperlayersABCN(ctx, req.ABCN, req.LinkForm, req.IterativeCPP, req.CEPs, req.Parameters)
+			if err != nil {
+				return OutputLifecycleResult{}, err
+			}
+		}
+		outputs, updated, err = CalculateResetOutputABCN(resetSubstrate, req.InputValues, req.LinkForm)
 	case SubstrateStateHold:
 		outputs, updated, err = CalculateHoldOutputABCN(req.ABCN, req.InputValues, req.LinkForm)
 	case SubstrateStateIterative:
@@ -957,6 +1010,151 @@ func iterativeCoordinateWeight(ctx context.Context, input NeurodeCoordinate, neu
 		delta = weight
 	}
 	return weight, nil
+}
+
+func populateABCNL2L(ctx context.Context, previous CoordinateHyperlayer, layers []ABCNCoordinateHyperlayer, cpp CoordinateIOWCPP, ceps []CEP, params map[string]float64) ([]ABCNCoordinateHyperlayer, error) {
+	if len(layers) == 0 {
+		return nil, fmt.Errorf("%w: missing abcn process/output hyperlayers", ErrInvalidSubstrateCoordinates)
+	}
+
+	source := cloneCoordinateHyperlayer(previous)
+	updated := make([]ABCNCoordinateHyperlayer, 0, len(layers))
+	for layerIdx, layer := range layers {
+		current, err := populateABCNLayer(ctx, source, layer, cpp, ceps, params)
+		if err != nil {
+			return nil, fmt.Errorf("layer %d: %w", layerIdx, err)
+		}
+		updated = append(updated, current)
+		source = abcnLayerToScalar(current)
+	}
+	return updated, nil
+}
+
+func populateABCNFullyInterconnected(ctx context.Context, substrate ABCNSubstrate, cpp CoordinateIOWCPP, ceps []CEP, params map[string]float64) ([]ABCNCoordinateHyperlayer, error) {
+	originalScalars := abcnLayersToScalar(substrate.Layers)
+	source := flattenCoordinateNeurodes(append([]CoordinateHyperlayer{substrate.InputLayer}, originalScalars...)...)
+	updated := make([]ABCNCoordinateHyperlayer, 0, len(substrate.Layers))
+	updatedScalars := make([]CoordinateHyperlayer, 0, len(substrate.Layers))
+	for layerIdx, layer := range substrate.Layers {
+		current, err := populateABCNLayer(ctx, source, layer, cpp, ceps, params)
+		if err != nil {
+			return nil, fmt.Errorf("layer %d: %w", layerIdx, err)
+		}
+		updated = append(updated, current)
+		currentScalar := abcnLayerToScalar(current)
+		updatedScalars = append(updatedScalars, currentScalar)
+		source = replaceFlattenedLayer(source, len(substrate.InputLayer), originalScalars, updatedScalars, layerIdx)
+	}
+	return updated, nil
+}
+
+func populateABCNNeuronSelfRecurrent(ctx context.Context, previous CoordinateHyperlayer, layers []ABCNCoordinateHyperlayer, cpp CoordinateIOWCPP, ceps []CEP, params map[string]float64) ([]ABCNCoordinateHyperlayer, error) {
+	if len(layers) == 0 {
+		return nil, fmt.Errorf("%w: missing abcn process/output hyperlayers", ErrInvalidSubstrateCoordinates)
+	}
+
+	source := cloneCoordinateHyperlayer(previous)
+	updated := make([]ABCNCoordinateHyperlayer, 0, len(layers))
+	for layerIdx, layer := range layers {
+		current := make(ABCNCoordinateHyperlayer, 0, len(layer))
+		for neurodeIdx, neurode := range layer {
+			neurodeSource := make(CoordinateHyperlayer, 0, len(source)+1)
+			neurodeSource = append(neurodeSource, NeurodeCoordinate{
+				Coords: append([]float64(nil), neurode.Coords...),
+				Output: neurode.Output,
+			})
+			neurodeSource = append(neurodeSource, cloneCoordinateHyperlayer(source)...)
+			populated, err := populateABCNNeurode(ctx, neurodeSource, neurode, cpp, ceps, params)
+			if err != nil {
+				return nil, fmt.Errorf("layer %d neurode %d: %w", layerIdx, neurodeIdx, err)
+			}
+			current = append(current, populated)
+		}
+		updated = append(updated, current)
+		source = abcnLayerToScalar(current)
+	}
+	return updated, nil
+}
+
+func populateABCNLayer(ctx context.Context, source CoordinateHyperlayer, layer ABCNCoordinateHyperlayer, cpp CoordinateIOWCPP, ceps []CEP, params map[string]float64) (ABCNCoordinateHyperlayer, error) {
+	if len(source) == 0 {
+		return nil, fmt.Errorf("%w: missing source hyperlayer", ErrInvalidSubstrateCoordinates)
+	}
+	if len(layer) == 0 {
+		return nil, fmt.Errorf("%w: missing abcn target hyperlayer", ErrInvalidSubstrateCoordinates)
+	}
+
+	current := make(ABCNCoordinateHyperlayer, 0, len(layer))
+	for neurodeIdx, neurode := range layer {
+		populated, err := populateABCNNeurode(ctx, source, neurode, cpp, ceps, params)
+		if err != nil {
+			return nil, fmt.Errorf("neurode %d: %w", neurodeIdx, err)
+		}
+		current = append(current, populated)
+	}
+	return current, nil
+}
+
+func populateABCNNeurode(ctx context.Context, source CoordinateHyperlayer, neurode ABCNNeurodeCoordinate, cpp CoordinateIOWCPP, ceps []CEP, params map[string]float64) (ABCNNeurodeCoordinate, error) {
+	if len(source) != len(neurode.Weights) {
+		return ABCNNeurodeCoordinate{}, fmt.Errorf("%w: source neurode count %d does not match previous abcn weight count %d", ErrInvalidSubstrateCoordinates, len(source), len(neurode.Weights))
+	}
+
+	weights := make([]ABCNWeight, 0, len(source))
+	for sourceIdx, input := range source {
+		if err := ctx.Err(); err != nil {
+			return ABCNNeurodeCoordinate{}, err
+		}
+		previousWeight := neurode.Weights[sourceIdx]
+		weight, err := abcnCoordinateWeight(ctx, input, neurode, previousWeight, cpp, ceps, params)
+		if err != nil {
+			return ABCNNeurodeCoordinate{}, fmt.Errorf("source %d: %w", sourceIdx, err)
+		}
+		weights = append(weights, weight)
+	}
+
+	populated := cloneABCNNeurodeCoordinate(neurode)
+	populated.Weights = weights
+	return populated, nil
+}
+
+func abcnCoordinateWeight(ctx context.Context, input NeurodeCoordinate, neurode ABCNNeurodeCoordinate, previousWeight ABCNWeight, cpp CoordinateIOWCPP, ceps []CEP, params map[string]float64) (ABCNWeight, error) {
+	iow := []float64{input.Output, neurode.Output, previousWeight.Weight}
+	signal, err := cpp.ComputeCoordinatesIOW(ctx, input.Coords, neurode.Coords, iow, cloneFloatParams(params))
+	if err != nil {
+		return ABCNWeight{}, err
+	}
+	if len(signal) != 1 && len(signal) != 5 {
+		return ABCNWeight{}, fmt.Errorf("%w: coordinate abcn cpp returned signal width %d", ErrInvalidSubstrateCoordinates, len(signal))
+	}
+
+	weight := previousWeight.Weight
+	delta := signal[0]
+	for _, cep := range ceps {
+		if cep == nil {
+			return ABCNWeight{}, fmt.Errorf("%w: nil cep in chain", ErrInvalidSubstrateCoordinates)
+		}
+		weight, err = cep.Apply(ctx, weight, delta, cloneFloatParams(params))
+		if err != nil {
+			return ABCNWeight{}, err
+		}
+		delta = weight
+	}
+
+	updated := previousWeight
+	updated.Weight = weight
+	if len(signal) == 5 {
+		updated.A = signal[1]
+		updated.B = signal[2]
+		updated.C = signal[3]
+		updated.N = signal[4]
+	} else if a, b, c, n, ok := readABCNParameters(params); ok {
+		updated.A = a
+		updated.B = b
+		updated.C = c
+		updated.N = n
+	}
+	return updated, nil
 }
 
 // CalculateOutputFullyInterconnected mirrors calculate_output_fi for the
