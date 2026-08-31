@@ -2114,3 +2114,41 @@ func TestBuildReplaySubstrateUsesTypedIterativeLayerRuntime(t *testing.T) {
 		t.Fatalf("expected repeated iterative population to update weights, first=%v second=%v", firstWeights, secondWeights)
 	}
 }
+
+func TestBuildReplaySubstrateSupportsTypedActiveLinkForms(t *testing.T) {
+	tests := []struct {
+		name       string
+		linkForm   string
+		dimensions []int
+	}{
+		{name: "fully interconnected", linkForm: internalsubstrate.LinkFormFullyInterconnected, dimensions: []int{2, 2, 3}},
+		{name: "jordan recurrent", linkForm: internalsubstrate.LinkFormJordanRecurrent, dimensions: []int{0, 2, 2}},
+		{name: "neuron self recurrent", linkForm: internalsubstrate.LinkFormNeuronSelfRecurrent, dimensions: []int{0, 2, 2}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			rt, err := buildReplaySubstrate(model.Genome{
+				ID: "typed-link-form-replay",
+				Substrate: &model.SubstrateConfig{
+					Dimensions:  tt.dimensions,
+					CEPName:     internalsubstrate.WeightExpressionCEPName,
+					Plasticity:  internalsubstrate.SubstratePlasticityNone,
+					LinkForm:    tt.linkForm,
+					WeightCount: 1,
+				},
+			}, []string{"o1", "o2"})
+			if err != nil {
+				t.Fatalf("build replay substrate: %v", err)
+			}
+			if _, ok := rt.(*internalsubstrate.LayerRuntime); !ok {
+				t.Fatalf("expected typed layer runtime, got %T", rt)
+			}
+			if got, err := rt.Step(context.Background(), []float64{1, 1}); err != nil || len(got) != 1 {
+				t.Fatalf("step typed link-form runtime: got=%v err=%v", got, err)
+			}
+			if len(rt.Weights()) == 0 {
+				t.Fatalf("expected populated weight surface")
+			}
+		})
+	}
+}

@@ -1948,6 +1948,59 @@ func TestPopulationMonitorBuildSubstrateUsesTypedIterativeLayerRuntime(t *testin
 	}
 }
 
+func TestPopulationMonitorBuildSubstrateSupportsTypedActiveLinkForms(t *testing.T) {
+	monitor, err := NewPopulationMonitor(MonitorConfig{
+		Scape:           oneDimScape{},
+		Mutation:        PerturbWeightAt{Index: 0, Delta: 0},
+		PopulationSize:  1,
+		EliteCount:      1,
+		Generations:     1,
+		Workers:         1,
+		Seed:            1,
+		InputNeuronIDs:  []string{"i"},
+		OutputNeuronIDs: []string{"o1", "o2"},
+	})
+	if err != nil {
+		t.Fatalf("new monitor: %v", err)
+	}
+
+	tests := []struct {
+		name       string
+		linkForm   string
+		dimensions []int
+	}{
+		{name: "fully interconnected", linkForm: substrate.LinkFormFullyInterconnected, dimensions: []int{2, 2, 3}},
+		{name: "jordan recurrent", linkForm: substrate.LinkFormJordanRecurrent, dimensions: []int{0, 2, 2}},
+		{name: "neuron self recurrent", linkForm: substrate.LinkFormNeuronSelfRecurrent, dimensions: []int{0, 2, 2}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			rt, err := monitor.buildSubstrate(model.Genome{
+				ID: "typed-link-form-monitor",
+				Substrate: &model.SubstrateConfig{
+					Dimensions:  tt.dimensions,
+					CEPName:     substrate.WeightExpressionCEPName,
+					Plasticity:  substrate.SubstratePlasticityNone,
+					LinkForm:    tt.linkForm,
+					WeightCount: 1,
+				},
+			})
+			if err != nil {
+				t.Fatalf("build substrate: %v", err)
+			}
+			if _, ok := rt.(*substrate.LayerRuntime); !ok {
+				t.Fatalf("expected typed layer runtime, got %T", rt)
+			}
+			if got, err := rt.Step(context.Background(), []float64{1, 1}); err != nil || len(got) != 1 {
+				t.Fatalf("step typed link-form runtime: got=%v err=%v", got, err)
+			}
+			if len(rt.Weights()) == 0 {
+				t.Fatalf("expected populated weight surface")
+			}
+		})
+	}
+}
+
 func TestPopulationMonitorBuildSubstrateDerivesCEPFaninFromGenomeLinks(t *testing.T) {
 	cppName := "pm_vector_cpp_cep_fanin"
 	if err := substrate.RegisterCPP(cppName, func() substrate.CPP {
