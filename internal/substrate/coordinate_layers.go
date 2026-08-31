@@ -1,6 +1,7 @@
 package substrate
 
 import (
+	"context"
 	"fmt"
 	"math"
 )
@@ -228,6 +229,34 @@ func CalculateResetOutput(substrate []CoordinateHyperlayer, inputValues [][]floa
 	return calculateTypedOutputLifecycle(substrate, inputValues, linkForm)
 }
 
+// PopulateProcessHyperlayersStatic mirrors populate_PHyperlayers/get_weights
+// for the static non-plastic path using typed CPP/CEP components.
+func PopulateProcessHyperlayersStatic(ctx context.Context, substrate []CoordinateHyperlayer, linkForm string, cpp CoordinateCPP, ceps []CEP, params map[string]float64) ([]CoordinateHyperlayer, error) {
+	if len(substrate) < 2 {
+		return nil, fmt.Errorf("%w: substrate must include input and process/output layers", ErrInvalidSubstrateCoordinates)
+	}
+	if cpp == nil {
+		return nil, fmt.Errorf("%w: missing coordinate cpp", ErrInvalidSubstrateCoordinates)
+	}
+	if len(ceps) == 0 {
+		return nil, fmt.Errorf("%w: missing cep chain", ErrInvalidSubstrateCoordinates)
+	}
+
+	switch linkForm {
+	case LinkFormL2LFeedforward:
+		return populateStaticL2L(ctx, substrate[0], substrate[1:], cpp, ceps, params)
+	case LinkFormFullyInterconnected:
+		return populateStaticFullyInterconnected(ctx, substrate, cpp, ceps, params)
+	case LinkFormJordanRecurrent:
+		source := flattenCoordinateNeurodes(substrate[0], substrate[len(substrate)-1])
+		return populateStaticL2L(ctx, source, substrate[1:], cpp, ceps, params)
+	case LinkFormNeuronSelfRecurrent:
+		return populateStaticNeuronSelfRecurrent(ctx, substrate[0], substrate[1:], cpp, ceps, params)
+	default:
+		return nil, fmt.Errorf("%w: %q", ErrUnsupportedSubstrateLink, linkForm)
+	}
+}
+
 func calculateTypedOutputLifecycle(substrate []CoordinateHyperlayer, inputValues [][]float64, linkForm string) ([]float64, []CoordinateHyperlayer, error) {
 	if len(substrate) < 2 {
 		return nil, nil, fmt.Errorf("%w: substrate must include input and process/output layers", ErrInvalidSubstrateCoordinates)
@@ -246,6 +275,125 @@ func calculateTypedOutputLifecycle(substrate []CoordinateHyperlayer, inputValues
 	updatedSubstrate = append(updatedSubstrate, cloneCoordinateHyperlayer(substrate[0]))
 	updatedSubstrate = append(updatedSubstrate, updatedLayers...)
 	return outputs, updatedSubstrate, nil
+}
+
+func populateStaticL2L(ctx context.Context, previous CoordinateHyperlayer, layers []CoordinateHyperlayer, cpp CoordinateCPP, ceps []CEP, params map[string]float64) ([]CoordinateHyperlayer, error) {
+	if len(layers) == 0 {
+		return nil, fmt.Errorf("%w: missing process/output hyperlayers", ErrInvalidSubstrateCoordinates)
+	}
+
+	source := cloneCoordinateHyperlayer(previous)
+	updated := make([]CoordinateHyperlayer, 0, len(layers))
+	for layerIdx, layer := range layers {
+		current, err := populateStaticLayer(ctx, source, layer, cpp, ceps, params)
+		if err != nil {
+			return nil, fmt.Errorf("layer %d: %w", layerIdx, err)
+		}
+		updated = append(updated, current)
+		source = current
+	}
+	return updated, nil
+}
+
+func populateStaticFullyInterconnected(ctx context.Context, substrate []CoordinateHyperlayer, cpp CoordinateCPP, ceps []CEP, params map[string]float64) ([]CoordinateHyperlayer, error) {
+	source := flattenCoordinateNeurodes(substrate...)
+	layers := substrate[1:]
+	updated := make([]CoordinateHyperlayer, 0, len(layers))
+	for layerIdx, layer := range layers {
+		current, err := populateStaticLayer(ctx, source, layer, cpp, ceps, params)
+		if err != nil {
+			return nil, fmt.Errorf("layer %d: %w", layerIdx, err)
+		}
+		updated = append(updated, current)
+		source = replaceFlattenedLayer(source, len(substrate[0]), layers, updated, layerIdx)
+	}
+	return updated, nil
+}
+
+func populateStaticNeuronSelfRecurrent(ctx context.Context, previous CoordinateHyperlayer, layers []CoordinateHyperlayer, cpp CoordinateCPP, ceps []CEP, params map[string]float64) ([]CoordinateHyperlayer, error) {
+	if len(layers) == 0 {
+		return nil, fmt.Errorf("%w: missing process/output hyperlayers", ErrInvalidSubstrateCoordinates)
+	}
+
+	source := cloneCoordinateHyperlayer(previous)
+	updated := make([]CoordinateHyperlayer, 0, len(layers))
+	for layerIdx, layer := range layers {
+		current := make(CoordinateHyperlayer, 0, len(layer))
+		for neurodeIdx, neurode := range layer {
+			neurodeSource := make(CoordinateHyperlayer, 0, len(source)+1)
+			neurodeSource = append(neurodeSource, cloneNeurodeCoordinate(neurode))
+			neurodeSource = append(neurodeSource, cloneCoordinateHyperlayer(source)...)
+			populated, err := populateStaticNeurode(ctx, neurodeSource, neurode, cpp, ceps, params)
+			if err != nil {
+				return nil, fmt.Errorf("layer %d neurode %d: %w", layerIdx, neurodeIdx, err)
+			}
+			current = append(current, populated)
+		}
+		updated = append(updated, current)
+		source = current
+	}
+	return updated, nil
+}
+
+func populateStaticLayer(ctx context.Context, source CoordinateHyperlayer, layer CoordinateHyperlayer, cpp CoordinateCPP, ceps []CEP, params map[string]float64) (CoordinateHyperlayer, error) {
+	if len(source) == 0 {
+		return nil, fmt.Errorf("%w: missing source hyperlayer", ErrInvalidSubstrateCoordinates)
+	}
+	if len(layer) == 0 {
+		return nil, fmt.Errorf("%w: missing target hyperlayer", ErrInvalidSubstrateCoordinates)
+	}
+
+	current := make(CoordinateHyperlayer, 0, len(layer))
+	for neurodeIdx, neurode := range layer {
+		populated, err := populateStaticNeurode(ctx, source, neurode, cpp, ceps, params)
+		if err != nil {
+			return nil, fmt.Errorf("neurode %d: %w", neurodeIdx, err)
+		}
+		current = append(current, populated)
+	}
+	return current, nil
+}
+
+func populateStaticNeurode(ctx context.Context, source CoordinateHyperlayer, neurode NeurodeCoordinate, cpp CoordinateCPP, ceps []CEP, params map[string]float64) (NeurodeCoordinate, error) {
+	weights := make([]float64, 0, len(source))
+	for sourceIdx, input := range source {
+		if err := ctx.Err(); err != nil {
+			return NeurodeCoordinate{}, err
+		}
+		weight, err := staticCoordinateWeight(ctx, input.Coords, neurode.Coords, cpp, ceps, params)
+		if err != nil {
+			return NeurodeCoordinate{}, fmt.Errorf("source %d: %w", sourceIdx, err)
+		}
+		weights = append(weights, weight)
+	}
+
+	populated := cloneNeurodeCoordinate(neurode)
+	populated.Weights = weights
+	return populated, nil
+}
+
+func staticCoordinateWeight(ctx context.Context, presynaptic []float64, postsynaptic []float64, cpp CoordinateCPP, ceps []CEP, params map[string]float64) (float64, error) {
+	signal, err := cpp.ComputeCoordinates(ctx, presynaptic, postsynaptic, cloneFloatParams(params))
+	if err != nil {
+		return 0, err
+	}
+	if len(signal) == 0 {
+		return 0, fmt.Errorf("%w: coordinate cpp returned empty signal", ErrInvalidSubstrateCoordinates)
+	}
+
+	weight := 0.0
+	delta := signal[0]
+	for _, cep := range ceps {
+		if cep == nil {
+			return 0, fmt.Errorf("%w: nil cep in chain", ErrInvalidSubstrateCoordinates)
+		}
+		weight, err = cep.Apply(ctx, weight, delta, cloneFloatParams(params))
+		if err != nil {
+			return 0, err
+		}
+		delta = weight
+	}
+	return weight, nil
 }
 
 // CalculateOutputFullyInterconnected mirrors calculate_output_fi for the
@@ -833,13 +981,17 @@ func attachWeightsToLayer(layer CoordinateHyperlayer, weights []float64) Coordin
 func cloneCoordinateHyperlayer(layer CoordinateHyperlayer) CoordinateHyperlayer {
 	out := make(CoordinateHyperlayer, 0, len(layer))
 	for _, neurode := range layer {
-		out = append(out, NeurodeCoordinate{
-			Coords:  append([]float64(nil), neurode.Coords...),
-			Output:  neurode.Output,
-			Weights: append([]float64(nil), neurode.Weights...),
-		})
+		out = append(out, cloneNeurodeCoordinate(neurode))
 	}
 	return out
+}
+
+func cloneNeurodeCoordinate(neurode NeurodeCoordinate) NeurodeCoordinate {
+	return NeurodeCoordinate{
+		Coords:  append([]float64(nil), neurode.Coords...),
+		Output:  neurode.Output,
+		Weights: append([]float64(nil), neurode.Weights...),
+	}
 }
 
 func flattenCoordinateNeurodes(layers ...CoordinateHyperlayer) CoordinateHyperlayer {
@@ -874,4 +1026,15 @@ func outputValues(layers []CoordinateHyperlayer) []float64 {
 		outputs = append(outputs, neurode.Output)
 	}
 	return outputs
+}
+
+func cloneFloatParams(params map[string]float64) map[string]float64 {
+	if params == nil {
+		return nil
+	}
+	out := make(map[string]float64, len(params))
+	for k, v := range params {
+		out[k] = v
+	}
+	return out
 }

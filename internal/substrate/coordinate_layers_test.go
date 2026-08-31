@@ -1,11 +1,33 @@
 package substrate
 
 import (
+	"context"
 	"errors"
 	"math"
 	"reflect"
 	"testing"
 )
+
+type coordinateSumCPP struct{}
+
+func (coordinateSumCPP) ComputeCoordinates(_ context.Context, presynaptic []float64, postsynaptic []float64, _ map[string]float64) ([]float64, error) {
+	sum := 0.0
+	for _, value := range presynaptic {
+		sum += value
+	}
+	for _, value := range postsynaptic {
+		sum += value
+	}
+	return []float64{sum}, nil
+}
+
+type rawSignalCEP struct{}
+
+func (rawSignalCEP) Name() string { return "raw_signal" }
+
+func (rawSignalCEP) Apply(_ context.Context, _ float64, delta float64, _ map[string]float64) (float64, error) {
+	return delta, nil
+}
 
 func TestCoordinateHyperlayerCoordinatesCopiesInOrder(t *testing.T) {
 	layer := CoordinateHyperlayer{
@@ -477,6 +499,123 @@ func TestCalculateTypedOutputLifecycleValidatesInputs(t *testing.T) {
 		{{Coords: []float64{1}, Weights: []float64{0.1}}},
 	}, [][]float64{{1}}, "planeself_recurrent"); !errors.Is(err, ErrUnsupportedSubstrateLink) {
 		t.Fatalf("expected ErrUnsupportedSubstrateLink, got %v", err)
+	}
+}
+
+func TestPopulateProcessHyperlayersStaticL2L(t *testing.T) {
+	substrateLayers := []CoordinateHyperlayer{
+		{{Coords: []float64{-1}, Output: 0.5}, {Coords: []float64{1}, Output: -0.25}},
+		{{Coords: []float64{0}, Output: 0.1, Weights: []float64{99}}},
+		{{Coords: []float64{2}, Output: 0.2}},
+	}
+
+	got, err := PopulateProcessHyperlayersStatic(context.Background(), substrateLayers, LinkFormL2LFeedforward, coordinateSumCPP{}, []CEP{rawSignalCEP{}}, nil)
+	if err != nil {
+		t.Fatalf("populate process hyperlayers static: %v", err)
+	}
+	if len(got) != 2 {
+		t.Fatalf("unexpected populated layer count: got=%d want=2", len(got))
+	}
+	if !reflect.DeepEqual(got[0][0].Weights, []float64{-1, 1}) {
+		t.Fatalf("unexpected l2l hidden weights: %v", got[0][0].Weights)
+	}
+	if !reflect.DeepEqual(got[1][0].Weights, []float64{2}) {
+		t.Fatalf("unexpected l2l output weights: %v", got[1][0].Weights)
+	}
+	if got[0][0].Output != 0.1 {
+		t.Fatalf("expected l2l output state to be preserved, got=%v", got[0][0].Output)
+	}
+
+	substrateLayers[0][0].Coords[0] = 99
+	if got[0][0].Coords[0] != 0 {
+		t.Fatalf("expected populated l2l layers to be copied, got=%v", got[0][0].Coords)
+	}
+}
+
+func TestPopulateProcessHyperlayersStaticFullyInterconnected(t *testing.T) {
+	substrateLayers := []CoordinateHyperlayer{
+		{{Coords: []float64{-1}}},
+		{{Coords: []float64{0}, Output: 0.1}},
+		{{Coords: []float64{1}, Output: 0.2}},
+	}
+
+	got, err := PopulateProcessHyperlayersStatic(context.Background(), substrateLayers, LinkFormFullyInterconnected, coordinateSumCPP{}, []CEP{rawSignalCEP{}}, nil)
+	if err != nil {
+		t.Fatalf("populate process hyperlayers static: %v", err)
+	}
+	if !reflect.DeepEqual(got[0][0].Weights, []float64{-1, 0, 1}) {
+		t.Fatalf("unexpected fully-interconnected hidden weights: %v", got[0][0].Weights)
+	}
+	if !reflect.DeepEqual(got[1][0].Weights, []float64{0, 1, 2}) {
+		t.Fatalf("unexpected fully-interconnected output weights: %v", got[1][0].Weights)
+	}
+}
+
+func TestPopulateProcessHyperlayersStaticJordanRecurrent(t *testing.T) {
+	substrateLayers := []CoordinateHyperlayer{
+		{{Coords: []float64{-1}}, {Coords: []float64{1}}},
+		{{Coords: []float64{0}}},
+		{{Coords: []float64{2}, Output: 0.4}},
+	}
+
+	got, err := PopulateProcessHyperlayersStatic(context.Background(), substrateLayers, LinkFormJordanRecurrent, coordinateSumCPP{}, []CEP{rawSignalCEP{}}, nil)
+	if err != nil {
+		t.Fatalf("populate process hyperlayers static: %v", err)
+	}
+	if !reflect.DeepEqual(got[0][0].Weights, []float64{-1, 1, 2}) {
+		t.Fatalf("unexpected jordan hidden weights: %v", got[0][0].Weights)
+	}
+	if !reflect.DeepEqual(got[1][0].Weights, []float64{2}) {
+		t.Fatalf("unexpected jordan output weights: %v", got[1][0].Weights)
+	}
+}
+
+func TestPopulateProcessHyperlayersStaticNeuronSelfRecurrent(t *testing.T) {
+	substrateLayers := []CoordinateHyperlayer{
+		{{Coords: []float64{-1}}},
+		{{Coords: []float64{0}, Output: 0.3}},
+		{{Coords: []float64{2}, Output: 0.4}},
+	}
+
+	got, err := PopulateProcessHyperlayersStatic(context.Background(), substrateLayers, LinkFormNeuronSelfRecurrent, coordinateSumCPP{}, []CEP{rawSignalCEP{}}, nil)
+	if err != nil {
+		t.Fatalf("populate process hyperlayers static: %v", err)
+	}
+	if !reflect.DeepEqual(got[0][0].Weights, []float64{0, -1}) {
+		t.Fatalf("unexpected neuron-self hidden weights: %v", got[0][0].Weights)
+	}
+	if !reflect.DeepEqual(got[1][0].Weights, []float64{4, 2}) {
+		t.Fatalf("unexpected neuron-self output weights: %v", got[1][0].Weights)
+	}
+}
+
+func TestPopulateProcessHyperlayersStaticValidatesInputs(t *testing.T) {
+	substrateLayers := []CoordinateHyperlayer{
+		{{Coords: []float64{-1}}},
+		{{Coords: []float64{1}}},
+	}
+	tests := []struct {
+		name     string
+		layers   []CoordinateHyperlayer
+		linkForm string
+		cpp      CoordinateCPP
+		ceps     []CEP
+		want     error
+	}{
+		{name: "missing substrate", layers: nil, linkForm: LinkFormL2LFeedforward, cpp: coordinateSumCPP{}, ceps: []CEP{rawSignalCEP{}}, want: ErrInvalidSubstrateCoordinates},
+		{name: "missing cpp", layers: substrateLayers, linkForm: LinkFormL2LFeedforward, ceps: []CEP{rawSignalCEP{}}, want: ErrInvalidSubstrateCoordinates},
+		{name: "missing cep", layers: substrateLayers, linkForm: LinkFormL2LFeedforward, cpp: coordinateSumCPP{}, want: ErrInvalidSubstrateCoordinates},
+		{name: "unsupported link", layers: substrateLayers, linkForm: "planeself_recurrent", cpp: coordinateSumCPP{}, ceps: []CEP{rawSignalCEP{}}, want: ErrUnsupportedSubstrateLink},
+		{name: "empty target", layers: []CoordinateHyperlayer{{{Coords: []float64{0}}}, nil}, linkForm: LinkFormL2LFeedforward, cpp: coordinateSumCPP{}, ceps: []CEP{rawSignalCEP{}}, want: ErrInvalidSubstrateCoordinates},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := PopulateProcessHyperlayersStatic(context.Background(), tt.layers, tt.linkForm, tt.cpp, tt.ceps, nil)
+			if !errors.Is(err, tt.want) {
+				t.Fatalf("expected %v, got %v", tt.want, err)
+			}
+		})
 	}
 }
 
