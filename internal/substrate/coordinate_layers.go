@@ -257,6 +257,34 @@ func PopulateProcessHyperlayersStatic(ctx context.Context, substrate []Coordinat
 	}
 }
 
+// PopulateProcessHyperlayersIterative mirrors the iterative get_weights path by
+// sending [input output previous_weight] with each coordinate pair.
+func PopulateProcessHyperlayersIterative(ctx context.Context, substrate []CoordinateHyperlayer, linkForm string, cpp CoordinateIOWCPP, ceps []CEP, params map[string]float64) ([]CoordinateHyperlayer, error) {
+	if len(substrate) < 2 {
+		return nil, fmt.Errorf("%w: substrate must include input and process/output layers", ErrInvalidSubstrateCoordinates)
+	}
+	if cpp == nil {
+		return nil, fmt.Errorf("%w: missing coordinate iow cpp", ErrInvalidSubstrateCoordinates)
+	}
+	if len(ceps) == 0 {
+		return nil, fmt.Errorf("%w: missing cep chain", ErrInvalidSubstrateCoordinates)
+	}
+
+	switch linkForm {
+	case LinkFormL2LFeedforward:
+		return populateIterativeL2L(ctx, substrate[0], substrate[1:], cpp, ceps, params)
+	case LinkFormFullyInterconnected:
+		return populateIterativeFullyInterconnected(ctx, substrate, cpp, ceps, params)
+	case LinkFormJordanRecurrent:
+		source := flattenCoordinateNeurodes(substrate[0], substrate[len(substrate)-1])
+		return populateIterativeL2L(ctx, source, substrate[1:], cpp, ceps, params)
+	case LinkFormNeuronSelfRecurrent:
+		return populateIterativeNeuronSelfRecurrent(ctx, substrate[0], substrate[1:], cpp, ceps, params)
+	default:
+		return nil, fmt.Errorf("%w: %q", ErrUnsupportedSubstrateLink, linkForm)
+	}
+}
+
 func calculateTypedOutputLifecycle(substrate []CoordinateHyperlayer, inputValues [][]float64, linkForm string) ([]float64, []CoordinateHyperlayer, error) {
 	if len(substrate) < 2 {
 		return nil, nil, fmt.Errorf("%w: substrate must include input and process/output layers", ErrInvalidSubstrateCoordinates)
@@ -382,6 +410,131 @@ func staticCoordinateWeight(ctx context.Context, presynaptic []float64, postsyna
 	}
 
 	weight := 0.0
+	delta := signal[0]
+	for _, cep := range ceps {
+		if cep == nil {
+			return 0, fmt.Errorf("%w: nil cep in chain", ErrInvalidSubstrateCoordinates)
+		}
+		weight, err = cep.Apply(ctx, weight, delta, cloneFloatParams(params))
+		if err != nil {
+			return 0, err
+		}
+		delta = weight
+	}
+	return weight, nil
+}
+
+func populateIterativeL2L(ctx context.Context, previous CoordinateHyperlayer, layers []CoordinateHyperlayer, cpp CoordinateIOWCPP, ceps []CEP, params map[string]float64) ([]CoordinateHyperlayer, error) {
+	if len(layers) == 0 {
+		return nil, fmt.Errorf("%w: missing process/output hyperlayers", ErrInvalidSubstrateCoordinates)
+	}
+
+	source := cloneCoordinateHyperlayer(previous)
+	updated := make([]CoordinateHyperlayer, 0, len(layers))
+	for layerIdx, layer := range layers {
+		current, err := populateIterativeLayer(ctx, source, layer, cpp, ceps, params)
+		if err != nil {
+			return nil, fmt.Errorf("layer %d: %w", layerIdx, err)
+		}
+		updated = append(updated, current)
+		source = current
+	}
+	return updated, nil
+}
+
+func populateIterativeFullyInterconnected(ctx context.Context, substrate []CoordinateHyperlayer, cpp CoordinateIOWCPP, ceps []CEP, params map[string]float64) ([]CoordinateHyperlayer, error) {
+	source := flattenCoordinateNeurodes(substrate...)
+	layers := substrate[1:]
+	updated := make([]CoordinateHyperlayer, 0, len(layers))
+	for layerIdx, layer := range layers {
+		current, err := populateIterativeLayer(ctx, source, layer, cpp, ceps, params)
+		if err != nil {
+			return nil, fmt.Errorf("layer %d: %w", layerIdx, err)
+		}
+		updated = append(updated, current)
+		source = replaceFlattenedLayer(source, len(substrate[0]), layers, updated, layerIdx)
+	}
+	return updated, nil
+}
+
+func populateIterativeNeuronSelfRecurrent(ctx context.Context, previous CoordinateHyperlayer, layers []CoordinateHyperlayer, cpp CoordinateIOWCPP, ceps []CEP, params map[string]float64) ([]CoordinateHyperlayer, error) {
+	if len(layers) == 0 {
+		return nil, fmt.Errorf("%w: missing process/output hyperlayers", ErrInvalidSubstrateCoordinates)
+	}
+
+	source := cloneCoordinateHyperlayer(previous)
+	updated := make([]CoordinateHyperlayer, 0, len(layers))
+	for layerIdx, layer := range layers {
+		current := make(CoordinateHyperlayer, 0, len(layer))
+		for neurodeIdx, neurode := range layer {
+			neurodeSource := make(CoordinateHyperlayer, 0, len(source)+1)
+			neurodeSource = append(neurodeSource, cloneNeurodeCoordinate(neurode))
+			neurodeSource = append(neurodeSource, cloneCoordinateHyperlayer(source)...)
+			populated, err := populateIterativeNeurode(ctx, neurodeSource, neurode, cpp, ceps, params)
+			if err != nil {
+				return nil, fmt.Errorf("layer %d neurode %d: %w", layerIdx, neurodeIdx, err)
+			}
+			current = append(current, populated)
+		}
+		updated = append(updated, current)
+		source = current
+	}
+	return updated, nil
+}
+
+func populateIterativeLayer(ctx context.Context, source CoordinateHyperlayer, layer CoordinateHyperlayer, cpp CoordinateIOWCPP, ceps []CEP, params map[string]float64) (CoordinateHyperlayer, error) {
+	if len(source) == 0 {
+		return nil, fmt.Errorf("%w: missing source hyperlayer", ErrInvalidSubstrateCoordinates)
+	}
+	if len(layer) == 0 {
+		return nil, fmt.Errorf("%w: missing target hyperlayer", ErrInvalidSubstrateCoordinates)
+	}
+
+	current := make(CoordinateHyperlayer, 0, len(layer))
+	for neurodeIdx, neurode := range layer {
+		populated, err := populateIterativeNeurode(ctx, source, neurode, cpp, ceps, params)
+		if err != nil {
+			return nil, fmt.Errorf("neurode %d: %w", neurodeIdx, err)
+		}
+		current = append(current, populated)
+	}
+	return current, nil
+}
+
+func populateIterativeNeurode(ctx context.Context, source CoordinateHyperlayer, neurode NeurodeCoordinate, cpp CoordinateIOWCPP, ceps []CEP, params map[string]float64) (NeurodeCoordinate, error) {
+	if len(source) != len(neurode.Weights) {
+		return NeurodeCoordinate{}, fmt.Errorf("%w: source neurode count %d does not match previous weight count %d", ErrInvalidSubstrateCoordinates, len(source), len(neurode.Weights))
+	}
+
+	weights := make([]float64, 0, len(source))
+	for sourceIdx, input := range source {
+		if err := ctx.Err(); err != nil {
+			return NeurodeCoordinate{}, err
+		}
+		previousWeight := neurode.Weights[sourceIdx]
+		weight, err := iterativeCoordinateWeight(ctx, input, neurode, previousWeight, cpp, ceps, params)
+		if err != nil {
+			return NeurodeCoordinate{}, fmt.Errorf("source %d: %w", sourceIdx, err)
+		}
+		weights = append(weights, weight)
+	}
+
+	populated := cloneNeurodeCoordinate(neurode)
+	populated.Weights = weights
+	return populated, nil
+}
+
+func iterativeCoordinateWeight(ctx context.Context, input NeurodeCoordinate, neurode NeurodeCoordinate, previousWeight float64, cpp CoordinateIOWCPP, ceps []CEP, params map[string]float64) (float64, error) {
+	iow := []float64{input.Output, neurode.Output, previousWeight}
+	signal, err := cpp.ComputeCoordinatesIOW(ctx, input.Coords, neurode.Coords, iow, cloneFloatParams(params))
+	if err != nil {
+		return 0, err
+	}
+	if len(signal) == 0 {
+		return 0, fmt.Errorf("%w: coordinate iow cpp returned empty signal", ErrInvalidSubstrateCoordinates)
+	}
+
+	weight := previousWeight
 	delta := signal[0]
 	for _, cep := range ceps {
 		if cep == nil {

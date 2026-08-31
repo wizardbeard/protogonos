@@ -29,6 +29,23 @@ func (rawSignalCEP) Apply(_ context.Context, _ float64, delta float64, _ map[str
 	return delta, nil
 }
 
+type rawAddCEP struct{}
+
+func (rawAddCEP) Name() string { return "raw_add" }
+
+func (rawAddCEP) Apply(_ context.Context, current float64, delta float64, _ map[string]float64) (float64, error) {
+	return current + delta, nil
+}
+
+type iowDeltaCPP struct{}
+
+func (iowDeltaCPP) ComputeCoordinatesIOW(_ context.Context, _ []float64, _ []float64, iow []float64, _ map[string]float64) ([]float64, error) {
+	if len(iow) != 3 {
+		return nil, ErrInvalidSubstrateCoordinates
+	}
+	return []float64{iow[0] + iow[1]}, nil
+}
+
 func TestCoordinateHyperlayerCoordinatesCopiesInOrder(t *testing.T) {
 	layer := CoordinateHyperlayer{
 		{Coords: []float64{0, 1}, Output: 0.5, Weights: []float64{1}},
@@ -612,6 +629,129 @@ func TestPopulateProcessHyperlayersStaticValidatesInputs(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			_, err := PopulateProcessHyperlayersStatic(context.Background(), tt.layers, tt.linkForm, tt.cpp, tt.ceps, nil)
+			if !errors.Is(err, tt.want) {
+				t.Fatalf("expected %v, got %v", tt.want, err)
+			}
+		})
+	}
+}
+
+func TestPopulateProcessHyperlayersIterativeL2LUsesIOWAndPreviousWeights(t *testing.T) {
+	substrateLayers := []CoordinateHyperlayer{
+		{{Coords: []float64{-1}, Output: 0.5}, {Coords: []float64{1}, Output: -0.25}},
+		{{Coords: []float64{0}, Output: 0.1, Weights: []float64{0.2, -0.3}}},
+		{{Coords: []float64{2}, Output: 0.2, Weights: []float64{0.4}}},
+	}
+
+	got, err := PopulateProcessHyperlayersIterative(context.Background(), substrateLayers, LinkFormL2LFeedforward, iowDeltaCPP{}, []CEP{rawAddCEP{}}, nil)
+	if err != nil {
+		t.Fatalf("populate process hyperlayers iterative: %v", err)
+	}
+	wantHidden := []float64{0.2 + 0.5 + 0.1, -0.3 + -0.25 + 0.1}
+	for i := range wantHidden {
+		if math.Abs(got[0][0].Weights[i]-wantHidden[i]) > 1e-12 {
+			t.Fatalf("unexpected iterative hidden weight[%d]: got=%v want=%v", i, got[0][0].Weights[i], wantHidden[i])
+		}
+	}
+	hiddenOut := got[0][0].Output
+	wantOutput := 0.4 + hiddenOut + 0.2
+	if math.Abs(got[1][0].Weights[0]-wantOutput) > 1e-12 {
+		t.Fatalf("unexpected iterative output weight: got=%v want=%v", got[1][0].Weights[0], wantOutput)
+	}
+}
+
+func TestPopulateProcessHyperlayersIterativeFullyInterconnected(t *testing.T) {
+	substrateLayers := []CoordinateHyperlayer{
+		{{Coords: []float64{-1}, Output: 0.5}},
+		{{Coords: []float64{0}, Output: 0.1, Weights: []float64{0.2, 0.3, 0.4}}},
+		{{Coords: []float64{1}, Output: -0.2, Weights: []float64{-0.3, -0.4, -0.5}}},
+	}
+
+	got, err := PopulateProcessHyperlayersIterative(context.Background(), substrateLayers, LinkFormFullyInterconnected, iowDeltaCPP{}, []CEP{rawAddCEP{}}, nil)
+	if err != nil {
+		t.Fatalf("populate process hyperlayers iterative: %v", err)
+	}
+	wantHidden := []float64{0.2 + 0.5 + 0.1, 0.3 + 0.1 + 0.1, 0.4 + -0.2 + 0.1}
+	for i := range wantHidden {
+		if math.Abs(got[0][0].Weights[i]-wantHidden[i]) > 1e-12 {
+			t.Fatalf("unexpected iterative fi hidden weight[%d]: got=%v want=%v", i, got[0][0].Weights[i], wantHidden[i])
+		}
+	}
+	wantOutput := []float64{-0.3 + 0.5 - 0.2, -0.4 + 0.1 - 0.2, -0.5 - 0.2 - 0.2}
+	for i := range wantOutput {
+		if math.Abs(got[1][0].Weights[i]-wantOutput[i]) > 1e-12 {
+			t.Fatalf("unexpected iterative fi output weight[%d]: got=%v want=%v", i, got[1][0].Weights[i], wantOutput[i])
+		}
+	}
+}
+
+func TestPopulateProcessHyperlayersIterativeJordanRecurrent(t *testing.T) {
+	substrateLayers := []CoordinateHyperlayer{
+		{{Coords: []float64{-1}, Output: 0.5}, {Coords: []float64{1}, Output: -0.25}},
+		{{Coords: []float64{0}, Output: 0.1, Weights: []float64{0.2, -0.3, 0.4}}},
+		{{Coords: []float64{2}, Output: 0.2, Weights: []float64{0.6}}},
+	}
+
+	got, err := PopulateProcessHyperlayersIterative(context.Background(), substrateLayers, LinkFormJordanRecurrent, iowDeltaCPP{}, []CEP{rawAddCEP{}}, nil)
+	if err != nil {
+		t.Fatalf("populate process hyperlayers iterative: %v", err)
+	}
+	wantHidden := []float64{0.2 + 0.5 + 0.1, -0.3 + -0.25 + 0.1, 0.4 + 0.2 + 0.1}
+	for i := range wantHidden {
+		if math.Abs(got[0][0].Weights[i]-wantHidden[i]) > 1e-12 {
+			t.Fatalf("unexpected iterative jordan hidden weight[%d]: got=%v want=%v", i, got[0][0].Weights[i], wantHidden[i])
+		}
+	}
+}
+
+func TestPopulateProcessHyperlayersIterativeNeuronSelfRecurrent(t *testing.T) {
+	substrateLayers := []CoordinateHyperlayer{
+		{{Coords: []float64{-1}, Output: 0.5}},
+		{{Coords: []float64{0}, Output: 0.1, Weights: []float64{0.2, -0.3}}},
+		{{Coords: []float64{2}, Output: 0.2, Weights: []float64{0.4, 0.6}}},
+	}
+
+	got, err := PopulateProcessHyperlayersIterative(context.Background(), substrateLayers, LinkFormNeuronSelfRecurrent, iowDeltaCPP{}, []CEP{rawAddCEP{}}, nil)
+	if err != nil {
+		t.Fatalf("populate process hyperlayers iterative: %v", err)
+	}
+	wantHidden := []float64{0.2 + 0.1 + 0.1, -0.3 + 0.5 + 0.1}
+	for i := range wantHidden {
+		if math.Abs(got[0][0].Weights[i]-wantHidden[i]) > 1e-12 {
+			t.Fatalf("unexpected iterative nsr hidden weight[%d]: got=%v want=%v", i, got[0][0].Weights[i], wantHidden[i])
+		}
+	}
+	wantOutput := []float64{0.4 + 0.2 + 0.2, 0.6 + 0.1 + 0.2}
+	for i := range wantOutput {
+		if math.Abs(got[1][0].Weights[i]-wantOutput[i]) > 1e-12 {
+			t.Fatalf("unexpected iterative nsr output weight[%d]: got=%v want=%v", i, got[1][0].Weights[i], wantOutput[i])
+		}
+	}
+}
+
+func TestPopulateProcessHyperlayersIterativeValidatesInputs(t *testing.T) {
+	substrateLayers := []CoordinateHyperlayer{
+		{{Coords: []float64{-1}, Output: 0.5}},
+		{{Coords: []float64{1}, Output: 0.1, Weights: []float64{0.2}}},
+	}
+	tests := []struct {
+		name     string
+		layers   []CoordinateHyperlayer
+		linkForm string
+		cpp      CoordinateIOWCPP
+		ceps     []CEP
+		want     error
+	}{
+		{name: "missing substrate", layers: nil, linkForm: LinkFormL2LFeedforward, cpp: iowDeltaCPP{}, ceps: []CEP{rawAddCEP{}}, want: ErrInvalidSubstrateCoordinates},
+		{name: "missing cpp", layers: substrateLayers, linkForm: LinkFormL2LFeedforward, ceps: []CEP{rawAddCEP{}}, want: ErrInvalidSubstrateCoordinates},
+		{name: "missing cep", layers: substrateLayers, linkForm: LinkFormL2LFeedforward, cpp: iowDeltaCPP{}, want: ErrInvalidSubstrateCoordinates},
+		{name: "unsupported link", layers: substrateLayers, linkForm: "planeself_recurrent", cpp: iowDeltaCPP{}, ceps: []CEP{rawAddCEP{}}, want: ErrUnsupportedSubstrateLink},
+		{name: "weight count mismatch", layers: []CoordinateHyperlayer{{{Coords: []float64{-1}, Output: 0.5}}, {{Coords: []float64{1}, Output: 0.1, Weights: []float64{0.2, 0.3}}}}, linkForm: LinkFormL2LFeedforward, cpp: iowDeltaCPP{}, ceps: []CEP{rawAddCEP{}}, want: ErrInvalidSubstrateCoordinates},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := PopulateProcessHyperlayersIterative(context.Background(), tt.layers, tt.linkForm, tt.cpp, tt.ceps, nil)
 			if !errors.Is(err, tt.want) {
 				t.Fatalf("expected %v, got %v", tt.want, err)
 			}
