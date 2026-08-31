@@ -113,6 +113,74 @@ func TestBuildCoordinatePairsForLinkFormRejectsUnsupportedLinkForm(t *testing.T)
 	}
 }
 
+func TestSimpleRuntimeStepCoordinateLinkFormBuildsAndAppliesBatch(t *testing.T) {
+	resetRegistriesForTests()
+	t.Cleanup(resetRegistriesForTests)
+
+	if err := RegisterCPP("sum_coordinate_builder_cpp", func() CPP {
+		return sumCoordinateBuilderCPP{}
+	}); err != nil {
+		t.Fatalf("register coordinate cpp: %v", err)
+	}
+
+	rt, err := NewSimpleRuntime(Spec{
+		CPPName:      "sum_coordinate_builder_cpp",
+		CEPName:      WeightExpressionCEPName,
+		CEPFaninPIDs: []string{"cpp1", "cpp2"},
+	}, 4)
+	if err != nil {
+		t.Fatalf("new runtime: %v", err)
+	}
+
+	weights, err := rt.StepCoordinateLinkForm(context.Background(), CoordinatePairBuildRequest{
+		LinkForm:            LinkFormL2LFeedforward,
+		PreviousLayerCoords: [][]float64{{0.25}, {0.5}},
+		CurrentLayerCoords:  [][]float64{{1}, {2}},
+	})
+	if err != nil {
+		t.Fatalf("step coordinate link form: %v", err)
+	}
+
+	want := []float64{1.25, 1.5, 2.25, 2.5}
+	if len(weights) != len(want) {
+		t.Fatalf("unexpected weight count: got=%d want=%d", len(weights), len(want))
+	}
+	for i := range want {
+		if math.Abs(weights[i]-want[i]) > 1e-9 {
+			t.Fatalf("unexpected weight[%d]: got=%v want=%v all=%v", i, weights[i], want[i], weights)
+		}
+	}
+}
+
+func TestSimpleRuntimeStepCoordinateLinkFormPreservesWeightsOnBuildError(t *testing.T) {
+	resetRegistriesForTests()
+	t.Cleanup(resetRegistriesForTests)
+
+	rt, err := NewSimpleRuntime(Spec{
+		CPPName: DefaultCPPName,
+		CEPName: DefaultCEPName,
+	}, 2)
+	if err != nil {
+		t.Fatalf("new runtime: %v", err)
+	}
+
+	if _, err := rt.Step(context.Background(), []float64{1}); err != nil {
+		t.Fatalf("seed runtime weights: %v", err)
+	}
+	before := rt.Weights()
+
+	_, err = rt.StepCoordinateLinkForm(context.Background(), CoordinatePairBuildRequest{
+		LinkForm:           "planeself_recurrent",
+		CurrentLayerCoords: [][]float64{{1}},
+	})
+	if !errors.Is(err, ErrUnsupportedSubstrateLink) {
+		t.Fatalf("expected ErrUnsupportedSubstrateLink, got %v", err)
+	}
+	if got := rt.Weights(); !reflect.DeepEqual(got, before) {
+		t.Fatalf("expected build error to preserve weights, got=%v want=%v", got, before)
+	}
+}
+
 func TestBuildL2LFeedforwardCoordinatePairsOrdersCurrentThenPreviousLayer(t *testing.T) {
 	pairs, err := BuildL2LFeedforwardCoordinatePairs(
 		[][]float64{{0}, {1}},

@@ -207,6 +207,14 @@ func (r *SimpleRuntime) StepCoordinateBatch(ctx context.Context, pairs []Coordin
 	return r.Weights(), nil
 }
 
+func (r *SimpleRuntime) StepCoordinateLinkForm(ctx context.Context, req CoordinatePairBuildRequest) ([]float64, error) {
+	pairs, err := BuildCoordinatePairsForLinkForm(req)
+	if err != nil {
+		return nil, err
+	}
+	return r.StepCoordinateBatch(ctx, pairs)
+}
+
 func (r *SimpleRuntime) applyCoordinatePairToWeight(ctx context.Context, weightIdx int, pair CoordinatePair, nextWeights []float64, nextWeightCEPParams [][]map[string]float64) error {
 	if weightIdx < 0 || weightIdx >= len(nextWeights) {
 		return fmt.Errorf("%w: %d", ErrInvalidSubstrateWeightIndex, weightIdx)
