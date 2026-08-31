@@ -812,6 +812,149 @@ func TestCalculateABCNOutputLifecycleValidatesInputs(t *testing.T) {
 	}
 }
 
+func TestCalculateOutputLifecycleResetNonePopulatesThenHolds(t *testing.T) {
+	substrateLayers := []CoordinateHyperlayer{
+		{{Coords: []float64{-1}, Output: 0}, {Coords: []float64{1}, Output: 0}},
+		{{Coords: []float64{0}, Output: 0, Weights: []float64{99}}},
+	}
+
+	result, err := CalculateOutputLifecycle(OutputLifecycleRequest{
+		StateMode:   SubstrateStateReset,
+		Plasticity:  SubstratePlasticityNone,
+		LinkForm:    LinkFormL2LFeedforward,
+		InputValues: [][]float64{{0.5}, {0.25}},
+		Substrate:   substrateLayers,
+		StaticCPP:   coordinateSumCPP{},
+		CEPs:        []CEP{rawSignalCEP{}},
+		Context:     context.Background(),
+	})
+	if err != nil {
+		t.Fatalf("calculate output lifecycle reset none: %v", err)
+	}
+	wantOutput := math.Tanh(0.5*-1 + 0.25*1)
+	if result.StateMode != SubstrateStateHold {
+		t.Fatalf("unexpected next state: got=%q want=%q", result.StateMode, SubstrateStateHold)
+	}
+	if len(result.Outputs) != 1 || math.Abs(result.Outputs[0]-wantOutput) > 1e-12 {
+		t.Fatalf("unexpected lifecycle outputs: got=%v want=%v", result.Outputs, []float64{wantOutput})
+	}
+	if !reflect.DeepEqual(result.Substrate[1][0].Weights, []float64{-1, 1}) {
+		t.Fatalf("expected reset to repopulate static weights, got=%v", result.Substrate[1][0].Weights)
+	}
+}
+
+func TestCalculateOutputLifecycleHoldNoneReusesWeights(t *testing.T) {
+	substrateLayers := []CoordinateHyperlayer{
+		{{Coords: []float64{-1}, Output: 0}},
+		{{Coords: []float64{1}, Output: 0, Weights: []float64{-0.5}}},
+	}
+
+	result, err := CalculateOutputLifecycle(OutputLifecycleRequest{
+		StateMode:   SubstrateStateHold,
+		Plasticity:  SubstratePlasticityNone,
+		LinkForm:    LinkFormL2LFeedforward,
+		InputValues: [][]float64{{0.8}},
+		Substrate:   substrateLayers,
+	})
+	if err != nil {
+		t.Fatalf("calculate output lifecycle hold none: %v", err)
+	}
+	wantOutput := math.Tanh(0.8 * -0.5)
+	if result.StateMode != SubstrateStateHold {
+		t.Fatalf("unexpected next state: got=%q want=%q", result.StateMode, SubstrateStateHold)
+	}
+	if len(result.Outputs) != 1 || math.Abs(result.Outputs[0]-wantOutput) > 1e-12 {
+		t.Fatalf("unexpected lifecycle hold outputs: got=%v want=%v", result.Outputs, []float64{wantOutput})
+	}
+	if result.Substrate[1][0].Weights[0] != -0.5 {
+		t.Fatalf("expected hold to reuse weights, got=%v", result.Substrate[1][0].Weights)
+	}
+}
+
+func TestCalculateOutputLifecycleIterativeStaysIterative(t *testing.T) {
+	substrateLayers := []CoordinateHyperlayer{
+		{{Coords: []float64{-1}, Output: 0.2}},
+		{{Coords: []float64{1}, Output: 0.3, Weights: []float64{0.4}}},
+	}
+
+	result, err := CalculateOutputLifecycle(OutputLifecycleRequest{
+		StateMode:    SubstrateStateIterative,
+		Plasticity:   SubstratePlasticityIterative,
+		LinkForm:     LinkFormL2LFeedforward,
+		InputValues:  [][]float64{{0.8}},
+		Substrate:    substrateLayers,
+		IterativeCPP: iowDeltaCPP{},
+		CEPs:         []CEP{rawSignalCEP{}},
+		Context:      context.Background(),
+	})
+	if err != nil {
+		t.Fatalf("calculate output lifecycle iterative: %v", err)
+	}
+	wantWeight := 0.2 + 0.3
+	wantOutput := math.Tanh(0.8 * wantWeight)
+	if result.StateMode != SubstrateStateIterative {
+		t.Fatalf("unexpected next state: got=%q want=%q", result.StateMode, SubstrateStateIterative)
+	}
+	if len(result.Outputs) != 1 || math.Abs(result.Outputs[0]-wantOutput) > 1e-12 {
+		t.Fatalf("unexpected iterative lifecycle outputs: got=%v want=%v", result.Outputs, []float64{wantOutput})
+	}
+	if math.Abs(result.Substrate[1][0].Weights[0]-wantWeight) > 1e-12 {
+		t.Fatalf("expected iterative weight update, got=%v want=%v", result.Substrate[1][0].Weights[0], wantWeight)
+	}
+}
+
+func TestCalculateOutputLifecycleABCNSelectsTypedABCNState(t *testing.T) {
+	abcnSubstrate := ABCNSubstrate{
+		InputLayer: CoordinateHyperlayer{{Coords: []float64{-1}, Output: 0}},
+		Layers: []ABCNCoordinateHyperlayer{
+			{{Coords: []float64{1}, Output: 0, Weights: []ABCNWeight{{Weight: 0.5, A: 0.1, B: 0.2, C: 0.3, N: 0.4}}}},
+		},
+	}
+
+	result, err := CalculateOutputLifecycle(OutputLifecycleRequest{
+		StateMode:   SubstrateStateReset,
+		Plasticity:  SubstratePlasticityABCN,
+		LinkForm:    LinkFormL2LFeedforward,
+		InputValues: [][]float64{{0.6}},
+		ABCN:        abcnSubstrate,
+	})
+	if err != nil {
+		t.Fatalf("calculate output lifecycle abcn: %v", err)
+	}
+	wantOutput := math.Tanh(0.6 * 0.5)
+	if result.StateMode != SubstrateStateHold {
+		t.Fatalf("unexpected next state: got=%q want=%q", result.StateMode, SubstrateStateHold)
+	}
+	if len(result.Outputs) != 1 || math.Abs(result.Outputs[0]-wantOutput) > 1e-12 {
+		t.Fatalf("unexpected abcn lifecycle outputs: got=%v want=%v", result.Outputs, []float64{wantOutput})
+	}
+	wantWeight := ABCNWeightUpdate(0.6, wantOutput, abcnSubstrate.Layers[0][0].Weights[0])
+	if result.ABCNSubstrate.Layers[0][0].Weights[0] != wantWeight {
+		t.Fatalf("unexpected abcn lifecycle weight: got=%+v want=%+v", result.ABCNSubstrate.Layers[0][0].Weights[0], wantWeight)
+	}
+}
+
+func TestCalculateOutputLifecycleValidatesStateAndPlasticity(t *testing.T) {
+	if _, err := CalculateOutputLifecycle(OutputLifecycleRequest{StateMode: "unknown"}); !errors.Is(err, ErrInvalidSubstrateCoordinates) {
+		t.Fatalf("expected ErrInvalidSubstrateCoordinates for unknown state, got %v", err)
+	}
+	if _, err := CalculateOutputLifecycle(OutputLifecycleRequest{Plasticity: "hebbian"}); !errors.Is(err, ErrInvalidSubstrateCoordinates) {
+		t.Fatalf("expected ErrInvalidSubstrateCoordinates for unknown plasticity, got %v", err)
+	}
+	if _, err := CalculateOutputLifecycle(OutputLifecycleRequest{
+		StateMode:  SubstrateStateHold,
+		Plasticity: SubstratePlasticityIterative,
+	}); !errors.Is(err, ErrInvalidSubstrateCoordinates) {
+		t.Fatalf("expected ErrInvalidSubstrateCoordinates for iterative hold state, got %v", err)
+	}
+	if _, err := CalculateOutputLifecycle(OutputLifecycleRequest{
+		StateMode:  SubstrateStateIterative,
+		Plasticity: SubstratePlasticityABCN,
+	}); !errors.Is(err, ErrInvalidSubstrateCoordinates) {
+		t.Fatalf("expected ErrInvalidSubstrateCoordinates for abcn iterative state, got %v", err)
+	}
+}
+
 func TestPopulateProcessHyperlayersStaticL2L(t *testing.T) {
 	substrateLayers := []CoordinateHyperlayer{
 		{{Coords: []float64{-1}, Output: 0.5}, {Coords: []float64{1}, Output: -0.25}},

@@ -45,6 +45,44 @@ type ABCNSubstrate struct {
 	Layers     []ABCNCoordinateHyperlayer
 }
 
+// Substrate output state and plasticity modes mirror the reference substrate
+// reason/2 branches while keeping Go callsites explicit.
+const (
+	SubstrateStateReset     = "reset"
+	SubstrateStateHold      = "hold"
+	SubstrateStateIterative = "iterative"
+
+	SubstratePlasticityNone      = "none"
+	SubstratePlasticityIterative = "iterative"
+	SubstratePlasticityABCN      = "abcn"
+)
+
+// OutputLifecycleRequest selects the typed substrate output branch for one
+// sensor batch. Static CPP/CEP population is used for reset+none, iterative
+// CPP/CEP population for iterative plasticity, and ABCNSubstrate for abcn.
+type OutputLifecycleRequest struct {
+	StateMode    string
+	Plasticity   string
+	LinkForm     string
+	InputValues  [][]float64
+	Substrate    []CoordinateHyperlayer
+	ABCN         ABCNSubstrate
+	StaticCPP    CoordinateCPP
+	IterativeCPP CoordinateIOWCPP
+	CEPs         []CEP
+	Parameters   map[string]float64
+	Context      context.Context
+}
+
+// OutputLifecycleResult carries the output vector, next substrate state mode,
+// and whichever typed substrate representation was selected by Plasticity.
+type OutputLifecycleResult struct {
+	Outputs       []float64
+	StateMode     string
+	Substrate     []CoordinateHyperlayer
+	ABCNSubstrate ABCNSubstrate
+}
+
 // Coordinates returns copied neurode coordinates in layer traversal order.
 func (h CoordinateHyperlayer) Coordinates() [][]float64 {
 	coords := make([][]float64, 0, len(h))
@@ -435,6 +473,32 @@ func CalculateResetOutputABCN(substrate ABCNSubstrate, inputValues [][]float64, 
 	return calculateABCNOutputLifecycle(substrate, inputValues, linkForm)
 }
 
+// CalculateOutputLifecycle mirrors the reference substrate reason/2 dispatch:
+// reset repopulates non-ABCN weights before output, iterative keeps repopulating
+// iterative weights, and hold reuses current weights while advancing outputs.
+func CalculateOutputLifecycle(req OutputLifecycleRequest) (OutputLifecycleResult, error) {
+	stateMode := normalizeSubstrateStateMode(req.StateMode)
+	if stateMode == "" {
+		return OutputLifecycleResult{}, fmt.Errorf("%w: unsupported substrate state mode %q", ErrInvalidSubstrateCoordinates, req.StateMode)
+	}
+
+	plasticity := normalizeSubstratePlasticity(req.Plasticity)
+	if plasticity == "" {
+		return OutputLifecycleResult{}, fmt.Errorf("%w: unsupported substrate plasticity %q", ErrInvalidSubstrateCoordinates, req.Plasticity)
+	}
+
+	switch plasticity {
+	case SubstratePlasticityABCN:
+		return calculateOutputLifecycleABCN(req, stateMode)
+	case SubstratePlasticityIterative:
+		return calculateOutputLifecycleIterative(req, stateMode)
+	case SubstratePlasticityNone:
+		return calculateOutputLifecycleStatic(req, stateMode)
+	default:
+		return OutputLifecycleResult{}, fmt.Errorf("%w: unsupported substrate plasticity %q", ErrInvalidSubstrateCoordinates, req.Plasticity)
+	}
+}
+
 // PopulateProcessHyperlayersStatic mirrors populate_PHyperlayers/get_weights
 // for the static non-plastic path using typed CPP/CEP components.
 func PopulateProcessHyperlayersStatic(ctx context.Context, substrate []CoordinateHyperlayer, linkForm string, cpp CoordinateCPP, ceps []CEP, params map[string]float64) ([]CoordinateHyperlayer, error) {
@@ -533,6 +597,122 @@ func calculateABCNOutputLifecycle(substrate ABCNSubstrate, inputValues [][]float
 		Layers:     cloneABCNCoordinateHyperlayers(updatedLayers),
 	}
 	return outputs, updatedSubstrate, nil
+}
+
+func calculateOutputLifecycleABCN(req OutputLifecycleRequest, stateMode string) (OutputLifecycleResult, error) {
+	var (
+		outputs []float64
+		updated ABCNSubstrate
+		err     error
+	)
+	switch stateMode {
+	case SubstrateStateReset:
+		outputs, updated, err = CalculateResetOutputABCN(req.ABCN, req.InputValues, req.LinkForm)
+	case SubstrateStateHold:
+		outputs, updated, err = CalculateHoldOutputABCN(req.ABCN, req.InputValues, req.LinkForm)
+	case SubstrateStateIterative:
+		return OutputLifecycleResult{}, fmt.Errorf("%w: abcn plasticity does not use iterative substrate state", ErrInvalidSubstrateCoordinates)
+	default:
+		return OutputLifecycleResult{}, fmt.Errorf("%w: unsupported substrate state mode %q", ErrInvalidSubstrateCoordinates, stateMode)
+	}
+	if err != nil {
+		return OutputLifecycleResult{}, err
+	}
+	return OutputLifecycleResult{
+		Outputs:       outputs,
+		StateMode:     SubstrateStateHold,
+		ABCNSubstrate: updated,
+	}, nil
+}
+
+func calculateOutputLifecycleIterative(req OutputLifecycleRequest, stateMode string) (OutputLifecycleResult, error) {
+	switch stateMode {
+	case SubstrateStateReset, SubstrateStateIterative:
+	case SubstrateStateHold:
+		return OutputLifecycleResult{}, fmt.Errorf("%w: iterative plasticity does not use hold substrate state", ErrInvalidSubstrateCoordinates)
+	default:
+		return OutputLifecycleResult{}, fmt.Errorf("%w: unsupported substrate state mode %q", ErrInvalidSubstrateCoordinates, stateMode)
+	}
+
+	ctx := req.Context
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	updatedLayers, err := PopulateProcessHyperlayersIterative(ctx, req.Substrate, req.LinkForm, req.IterativeCPP, req.CEPs, req.Parameters)
+	if err != nil {
+		return OutputLifecycleResult{}, err
+	}
+	populated := append([]CoordinateHyperlayer{cloneCoordinateHyperlayer(req.Substrate[0])}, updatedLayers...)
+	outputs, updated, err := CalculateResetOutput(populated, req.InputValues, req.LinkForm)
+	if err != nil {
+		return OutputLifecycleResult{}, err
+	}
+	return OutputLifecycleResult{
+		Outputs:   outputs,
+		StateMode: SubstrateStateIterative,
+		Substrate: updated,
+	}, nil
+}
+
+func calculateOutputLifecycleStatic(req OutputLifecycleRequest, stateMode string) (OutputLifecycleResult, error) {
+	var (
+		outputs []float64
+		updated []CoordinateHyperlayer
+		err     error
+	)
+	switch stateMode {
+	case SubstrateStateReset:
+		ctx := req.Context
+		if ctx == nil {
+			ctx = context.Background()
+		}
+		updatedLayers, populateErr := PopulateProcessHyperlayersStatic(ctx, req.Substrate, req.LinkForm, req.StaticCPP, req.CEPs, req.Parameters)
+		if populateErr != nil {
+			return OutputLifecycleResult{}, populateErr
+		}
+		populated := append([]CoordinateHyperlayer{cloneCoordinateHyperlayer(req.Substrate[0])}, updatedLayers...)
+		outputs, updated, err = CalculateResetOutput(populated, req.InputValues, req.LinkForm)
+	case SubstrateStateHold:
+		outputs, updated, err = CalculateHoldOutput(req.Substrate, req.InputValues, req.LinkForm)
+	case SubstrateStateIterative:
+		return OutputLifecycleResult{}, fmt.Errorf("%w: non-plastic substrate does not use iterative state", ErrInvalidSubstrateCoordinates)
+	default:
+		return OutputLifecycleResult{}, fmt.Errorf("%w: unsupported substrate state mode %q", ErrInvalidSubstrateCoordinates, stateMode)
+	}
+	if err != nil {
+		return OutputLifecycleResult{}, err
+	}
+	return OutputLifecycleResult{
+		Outputs:   outputs,
+		StateMode: SubstrateStateHold,
+		Substrate: updated,
+	}, nil
+}
+
+func normalizeSubstrateStateMode(mode string) string {
+	switch mode {
+	case "", SubstrateStateReset:
+		return SubstrateStateReset
+	case SubstrateStateHold:
+		return SubstrateStateHold
+	case SubstrateStateIterative:
+		return SubstrateStateIterative
+	default:
+		return ""
+	}
+}
+
+func normalizeSubstratePlasticity(plasticity string) string {
+	switch plasticity {
+	case "", SubstratePlasticityNone:
+		return SubstratePlasticityNone
+	case SubstratePlasticityIterative:
+		return SubstratePlasticityIterative
+	case SubstratePlasticityABCN:
+		return SubstratePlasticityABCN
+	default:
+		return ""
+	}
 }
 
 func populateStaticL2L(ctx context.Context, previous CoordinateHyperlayer, layers []CoordinateHyperlayer, cpp CoordinateCPP, ceps []CEP, params map[string]float64) ([]CoordinateHyperlayer, error) {
