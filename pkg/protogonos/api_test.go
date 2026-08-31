@@ -2052,3 +2052,35 @@ func TestBuildReplaySubstrateUsesTypedLayerRuntime(t *testing.T) {
 		t.Fatalf("expected typed layer runtime to populate through default components, got weights=%v", weights)
 	}
 }
+
+func TestBuildReplaySubstrateUsesTypedABCNLayerRuntime(t *testing.T) {
+	rt, err := buildReplaySubstrate(model.Genome{
+		ID: "typed-abcn-substrate-replay",
+		Substrate: &model.SubstrateConfig{
+			Dimensions:  []int{0, 2, 2},
+			CEPName:     internalsubstrate.WeightExpressionCEPName,
+			Plasticity:  internalsubstrate.SubstratePlasticityABCN,
+			LinkForm:    internalsubstrate.LinkFormL2LFeedforward,
+			WeightCount: 1,
+			Parameters: map[string]float64{
+				"abcn_a": 0.1,
+				"abcn_b": 0.2,
+				"abcn_c": 0.3,
+				"abcn_n": 0.4,
+			},
+		},
+	}, []string{"o1", "o2"})
+	if err != nil {
+		t.Fatalf("build replay substrate: %v", err)
+	}
+	if _, ok := rt.(*internalsubstrate.LayerRuntime); !ok {
+		t.Fatalf("expected typed layer runtime, got %T", rt)
+	}
+	if got, err := rt.Step(context.Background(), []float64{1, 1}); err != nil || len(got) != 1 {
+		t.Fatalf("step typed abcn layer runtime: got=%v err=%v", got, err)
+	}
+	weights := rt.Weights()
+	if len(weights) != 2 || weights[0] == 0 || weights[1] == 0 {
+		t.Fatalf("expected typed abcn runtime to populate through configured components, got weights=%v", weights)
+	}
+}
