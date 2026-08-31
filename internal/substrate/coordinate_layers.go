@@ -62,14 +62,17 @@ const (
 	CoordinateFormatUndefined = "undefined"
 	CoordinateFormatNoGeo     = "no_geo"
 	CoordinateFormatSymmetric = "symmetric"
+	CoordinateFormatCoorded   = "coorded"
 )
 
 // IOCoordinateSpec describes the base substrate IO formats used by
 // compose_ISubstrate and compose_OSubstrate.
 type IOCoordinateSpec struct {
 	Format      string
+	Dim         int
 	VL          int
 	Resolutions []int
+	Neurodes    CoordinateHyperlayer
 }
 
 // BuildCoordinatePairsForLinkFormLayers builds coordinate pairs from typed
@@ -248,11 +251,44 @@ func composeBaseIOParts(specs []IOCoordinateSpec, weights []float64) ([]Coordina
 				})
 			}
 			parts = append(parts, layer)
+		case CoordinateFormatCoorded:
+			layer, err := composeCoordedIOPart(spec, weights)
+			if err != nil {
+				return nil, err
+			}
+			parts = append(parts, layer)
 		default:
 			return nil, fmt.Errorf("%w: unsupported io coordinate format %q", ErrInvalidSubstrateCoordinates, spec.Format)
 		}
 	}
 	return parts, nil
+}
+
+func composeCoordedIOPart(spec IOCoordinateSpec, weights []float64) (CoordinateHyperlayer, error) {
+	if spec.Dim <= 0 {
+		return nil, fmt.Errorf("%w: coorded dim must be > 0: %d", ErrInvalidSubstrateCoordinates, spec.Dim)
+	}
+	if len(spec.Neurodes) == 0 {
+		return nil, fmt.Errorf("%w: missing coorded neurodes", ErrInvalidSubstrateCoordinates)
+	}
+
+	layer := make(CoordinateHyperlayer, 0, len(spec.Neurodes))
+	for i, neurode := range spec.Neurodes {
+		if len(neurode.Coords) != spec.Dim {
+			return nil, fmt.Errorf("%w: coorded neurode %d coordinate dimension %d does not match dim %d", ErrInvalidSubstrateCoordinates, i, len(neurode.Coords), spec.Dim)
+		}
+
+		copiedWeights := append([]float64(nil), neurode.Weights...)
+		if weights != nil {
+			copiedWeights = append([]float64(nil), weights...)
+		}
+		layer = append(layer, NeurodeCoordinate{
+			Coords:  append([]float64(nil), neurode.Coords...),
+			Output:  neurode.Output,
+			Weights: copiedWeights,
+		})
+	}
+	return layer, nil
 }
 
 func flattenCoordinateHyperlayerParts(parts []CoordinateHyperlayer) CoordinateHyperlayer {

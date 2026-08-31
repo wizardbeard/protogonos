@@ -574,6 +574,69 @@ func TestComposeOutputSubstrateSupportsSymmetric(t *testing.T) {
 	}
 }
 
+func TestComposeInputSubstrateSupportsCoorded(t *testing.T) {
+	input := CoordinateHyperlayer{
+		{Coords: []float64{-0.5, 0.25}, Output: 1.5},
+		{Coords: []float64{0.75, -0.25}, Output: -0.5, Weights: []float64{0.9}},
+	}
+	layer, err := ComposeInputSubstrate([]IOCoordinateSpec{
+		{Format: CoordinateFormatCoorded, Dim: 2, Neurodes: input},
+	})
+	if err != nil {
+		t.Fatalf("compose input substrate: %v", err)
+	}
+
+	wantCoords := [][]float64{{-0.5, 0.25}, {0.75, -0.25}}
+	if got := layer.Coordinates(); !reflect.DeepEqual(got, wantCoords) {
+		t.Fatalf("unexpected coorded input coords: got=%v want=%v", got, wantCoords)
+	}
+	if layer[0].Output != 1.5 || layer[1].Output != -0.5 {
+		t.Fatalf("unexpected coorded input outputs: %v, %v", layer[0].Output, layer[1].Output)
+	}
+	if layer[0].Weights != nil || !reflect.DeepEqual(layer[1].Weights, []float64{0.9}) {
+		t.Fatalf("unexpected coorded input weights: %v", layer)
+	}
+
+	input[0].Coords[0] = 99
+	input[1].Weights[0] = 99
+	if layer[0].Coords[0] != -0.5 || layer[1].Weights[0] != 0.9 {
+		t.Fatalf("expected coorded input neurodes to be copied, got=%v", layer)
+	}
+}
+
+func TestComposeOutputSubstrateSupportsCoorded(t *testing.T) {
+	input := CoordinateHyperlayer{
+		{Coords: []float64{-1, 0}, Output: 0.25, Weights: []float64{99}},
+		{Coords: []float64{1, 0}, Output: 0.75},
+	}
+	weights := []float64{0.1, 0.2}
+	layer, err := ComposeOutputSubstrate([]IOCoordinateSpec{
+		{Format: CoordinateFormatCoorded, Dim: 2, Neurodes: input},
+	}, weights)
+	if err != nil {
+		t.Fatalf("compose output substrate: %v", err)
+	}
+
+	wantCoords := [][]float64{{-1, 0}, {1, 0}}
+	if got := layer.Coordinates(); !reflect.DeepEqual(got, wantCoords) {
+		t.Fatalf("unexpected coorded output coords: got=%v want=%v", got, wantCoords)
+	}
+	if layer[0].Output != 0.25 || layer[1].Output != 0.75 {
+		t.Fatalf("unexpected coorded output outputs: %v, %v", layer[0].Output, layer[1].Output)
+	}
+	for i, neurode := range layer {
+		if !reflect.DeepEqual(neurode.Weights, []float64{0.1, 0.2}) {
+			t.Fatalf("unexpected coorded output weights at neurode %d: %v", i, neurode.Weights)
+		}
+	}
+
+	input[0].Coords[0] = 99
+	weights[0] = 99
+	if layer[0].Coords[0] != -1 || layer[0].Weights[0] != 0.1 {
+		t.Fatalf("expected coorded output neurodes and weights to be copied, got=%v", layer)
+	}
+}
+
 func TestComposeBaseIOSubstrateValidatesSpecs(t *testing.T) {
 	tests := []struct {
 		name string
@@ -591,6 +654,15 @@ func TestComposeBaseIOSubstrateValidatesSpecs(t *testing.T) {
 		{name: "invalid symmetric input resolutions", fn: func() (CoordinateHyperlayer, error) {
 			return ComposeInputSubstrate([]IOCoordinateSpec{{Format: CoordinateFormatSymmetric, Resolutions: []int{2, 0}}})
 		}},
+		{name: "invalid coorded input dim", fn: func() (CoordinateHyperlayer, error) {
+			return ComposeInputSubstrate([]IOCoordinateSpec{{Format: CoordinateFormatCoorded, Neurodes: CoordinateHyperlayer{{Coords: []float64{0}}}}})
+		}},
+		{name: "missing coorded input neurodes", fn: func() (CoordinateHyperlayer, error) {
+			return ComposeInputSubstrate([]IOCoordinateSpec{{Format: CoordinateFormatCoorded, Dim: 1}})
+		}},
+		{name: "mismatched coorded input neurode dim", fn: func() (CoordinateHyperlayer, error) {
+			return ComposeInputSubstrate([]IOCoordinateSpec{{Format: CoordinateFormatCoorded, Dim: 2, Neurodes: CoordinateHyperlayer{{Coords: []float64{0}}}}})
+		}},
 		{name: "unsupported input format", fn: func() (CoordinateHyperlayer, error) {
 			return ComposeInputSubstrate([]IOCoordinateSpec{{Format: "asymmetric", VL: 2}})
 		}},
@@ -606,8 +678,17 @@ func TestComposeBaseIOSubstrateValidatesSpecs(t *testing.T) {
 		{name: "invalid symmetric output resolutions", fn: func() (CoordinateHyperlayer, error) {
 			return ComposeOutputSubstrate([]IOCoordinateSpec{{Format: CoordinateFormatSymmetric, Resolutions: []int{0}}}, []float64{0})
 		}},
+		{name: "invalid coorded output dim", fn: func() (CoordinateHyperlayer, error) {
+			return ComposeOutputSubstrate([]IOCoordinateSpec{{Format: CoordinateFormatCoorded, Neurodes: CoordinateHyperlayer{{Coords: []float64{0}}}}}, []float64{0})
+		}},
+		{name: "missing coorded output neurodes", fn: func() (CoordinateHyperlayer, error) {
+			return ComposeOutputSubstrate([]IOCoordinateSpec{{Format: CoordinateFormatCoorded, Dim: 1}}, []float64{0})
+		}},
+		{name: "mismatched coorded output neurode dim", fn: func() (CoordinateHyperlayer, error) {
+			return ComposeOutputSubstrate([]IOCoordinateSpec{{Format: CoordinateFormatCoorded, Dim: 2, Neurodes: CoordinateHyperlayer{{Coords: []float64{0}}}}}, []float64{0})
+		}},
 		{name: "unsupported output format", fn: func() (CoordinateHyperlayer, error) {
-			return ComposeOutputSubstrate([]IOCoordinateSpec{{Format: "coorded", VL: 2}}, []float64{0})
+			return ComposeOutputSubstrate([]IOCoordinateSpec{{Format: "asymmetric", VL: 2}}, []float64{0})
 		}},
 	}
 
