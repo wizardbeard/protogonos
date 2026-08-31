@@ -323,6 +323,88 @@ func TestCalculateOutputStdValidatesInputs(t *testing.T) {
 	}
 }
 
+func TestCalculateOutputFullyInterconnectedUsesFlattenedSubstrateSource(t *testing.T) {
+	input := CoordinateHyperlayer{{Coords: []float64{-1}, Output: 0.5}}
+	hidden := CoordinateHyperlayer{{Coords: []float64{0}, Output: 0.1, Weights: []float64{1, 2, 3}}}
+	output := CoordinateHyperlayer{{Coords: []float64{1}, Output: -0.2, Weights: []float64{0.4, 0.5, -0.25}}}
+
+	outputs, updated, err := CalculateOutputFullyInterconnected(input, []CoordinateHyperlayer{hidden, output})
+	if err != nil {
+		t.Fatalf("calculate fully-interconnected output: %v", err)
+	}
+	hiddenOut := math.Tanh(0.5*1 + 0.1*2 + -0.2*3)
+	wantOutput := math.Tanh(0.5*0.4 + hiddenOut*0.5 + -0.2*-0.25)
+	if len(outputs) != 1 || math.Abs(outputs[0]-wantOutput) > 1e-12 {
+		t.Fatalf("unexpected fully-interconnected outputs: got=%v want=%v", outputs, []float64{wantOutput})
+	}
+	if math.Abs(updated[0][0].Output-hiddenOut) > 1e-12 {
+		t.Fatalf("unexpected fully-interconnected hidden output: got=%v want=%v", updated[0][0].Output, hiddenOut)
+	}
+}
+
+func TestCalculateOutputJordanRecurrentUsesPreviousOutputForFirstLayer(t *testing.T) {
+	input := CoordinateHyperlayer{
+		{Coords: []float64{-1}, Output: 0.5},
+		{Coords: []float64{1}, Output: -0.25},
+	}
+	hidden := CoordinateHyperlayer{{Coords: []float64{0}, Output: 0, Weights: []float64{0.2, 0.3, 0.5}}}
+	output := CoordinateHyperlayer{{Coords: []float64{1}, Output: 0.4, Weights: []float64{-0.7}}}
+
+	outputs, updated, err := CalculateOutputJordanRecurrent(input, []CoordinateHyperlayer{hidden, output})
+	if err != nil {
+		t.Fatalf("calculate jordan output: %v", err)
+	}
+	hiddenOut := math.Tanh(0.5*0.2 + -0.25*0.3 + 0.4*0.5)
+	wantOutput := math.Tanh(hiddenOut * -0.7)
+	if !reflect.DeepEqual(outputs, []float64{wantOutput}) {
+		t.Fatalf("unexpected jordan outputs: got=%v want=%v", outputs, []float64{wantOutput})
+	}
+	if math.Abs(updated[0][0].Output-hiddenOut) > 1e-12 {
+		t.Fatalf("unexpected jordan hidden output: got=%v want=%v", updated[0][0].Output, hiddenOut)
+	}
+}
+
+func TestCalculateOutputNeuronSelfRecurrentPrependsPreviousNeurodeState(t *testing.T) {
+	input := CoordinateHyperlayer{{Coords: []float64{-1}, Output: 0.5}}
+	hidden := CoordinateHyperlayer{{Coords: []float64{0}, Output: 0.3, Weights: []float64{0.4, 0.8}}}
+	output := CoordinateHyperlayer{{Coords: []float64{1}, Output: 0.2, Weights: []float64{-0.5, 0.6}}}
+
+	outputs, updated, err := CalculateOutputNeuronSelfRecurrent(input, []CoordinateHyperlayer{hidden, output})
+	if err != nil {
+		t.Fatalf("calculate neuron-self recurrent output: %v", err)
+	}
+	hiddenOut := math.Tanh(0.3*0.4 + 0.5*0.8)
+	wantOutput := math.Tanh(0.2*-0.5 + hiddenOut*0.6)
+	if !reflect.DeepEqual(outputs, []float64{wantOutput}) {
+		t.Fatalf("unexpected neuron-self recurrent outputs: got=%v want=%v", outputs, []float64{wantOutput})
+	}
+	if math.Abs(updated[0][0].Output-hiddenOut) > 1e-12 {
+		t.Fatalf("unexpected neuron-self recurrent hidden output: got=%v want=%v", updated[0][0].Output, hiddenOut)
+	}
+}
+
+func TestCalculateOutputForLinkFormDispatchesActiveForms(t *testing.T) {
+	input := CoordinateHyperlayer{{Coords: []float64{-1}, Output: 1}}
+
+	if _, _, err := CalculateOutputForLinkForm(LinkFormL2LFeedforward, input, []CoordinateHyperlayer{{{Coords: []float64{1}, Weights: []float64{0.5}}}}); err != nil {
+		t.Fatalf("calculate output for %s: %v", LinkFormL2LFeedforward, err)
+	}
+	if _, _, err := CalculateOutputForLinkForm(LinkFormFullyInterconnected, input, []CoordinateHyperlayer{{{Coords: []float64{1}, Weights: []float64{0.5, 0.1}}}}); err != nil {
+		t.Fatalf("calculate output for %s: %v", LinkFormFullyInterconnected, err)
+	}
+	if _, _, err := CalculateOutputForLinkForm(LinkFormJordanRecurrent, input, []CoordinateHyperlayer{{{Coords: []float64{1}, Weights: []float64{0.5, 0.1}}}}); err != nil {
+		t.Fatalf("calculate output for %s: %v", LinkFormJordanRecurrent, err)
+	}
+
+	nsrLayers := []CoordinateHyperlayer{{{Coords: []float64{1}, Weights: []float64{0.1, 0.5}}}}
+	if _, _, err := CalculateOutputForLinkForm(LinkFormNeuronSelfRecurrent, input, nsrLayers); err != nil {
+		t.Fatalf("calculate output for %s: %v", LinkFormNeuronSelfRecurrent, err)
+	}
+	if _, _, err := CalculateOutputForLinkForm("planeself_recurrent", input, []CoordinateHyperlayer{{{Coords: []float64{1}, Weights: []float64{0.5}}}}); !errors.Is(err, ErrUnsupportedSubstrateLink) {
+		t.Fatalf("expected ErrUnsupportedSubstrateLink, got %v", err)
+	}
+}
+
 func TestBuildCoordListMatchesReferenceOrder(t *testing.T) {
 	tests := []struct {
 		name    string

@@ -198,6 +198,104 @@ func CalculateOutputStd(input CoordinateHyperlayer, layers []CoordinateHyperlaye
 	return outputs, updated, nil
 }
 
+// CalculateOutputForLinkForm dispatches the non-plastic typed-layer output
+// calculation for the active substrate link forms.
+func CalculateOutputForLinkForm(linkForm string, input CoordinateHyperlayer, layers []CoordinateHyperlayer) ([]float64, []CoordinateHyperlayer, error) {
+	switch linkForm {
+	case LinkFormL2LFeedforward:
+		return CalculateOutputStd(input, layers)
+	case LinkFormFullyInterconnected:
+		return CalculateOutputFullyInterconnected(input, layers)
+	case LinkFormJordanRecurrent:
+		return CalculateOutputJordanRecurrent(input, layers)
+	case LinkFormNeuronSelfRecurrent:
+		return CalculateOutputNeuronSelfRecurrent(input, layers)
+	default:
+		return nil, nil, fmt.Errorf("%w: %q", ErrUnsupportedSubstrateLink, linkForm)
+	}
+}
+
+// CalculateOutputFullyInterconnected mirrors calculate_output_fi for the
+// non-plastic typed path by using the flattened substrate as each layer source.
+func CalculateOutputFullyInterconnected(input CoordinateHyperlayer, layers []CoordinateHyperlayer) ([]float64, []CoordinateHyperlayer, error) {
+	if len(layers) == 0 {
+		return nil, nil, fmt.Errorf("%w: missing process/output hyperlayers", ErrInvalidSubstrateCoordinates)
+	}
+
+	source := flattenCoordinateNeurodes(append([]CoordinateHyperlayer{input}, layers...)...)
+	updated := make([]CoordinateHyperlayer, 0, len(layers))
+	for layerIdx, layer := range layers {
+		current := make(CoordinateHyperlayer, 0, len(layer))
+		for neurodeIdx, neurode := range layer {
+			calculated, err := CalculateNeurodeOutputStd(source, neurode)
+			if err != nil {
+				return nil, nil, fmt.Errorf("layer %d neurode %d: %w", layerIdx, neurodeIdx, err)
+			}
+			current = append(current, calculated)
+		}
+		updated = append(updated, current)
+		source = replaceFlattenedLayer(source, len(input), layers, updated, layerIdx)
+	}
+	return outputValues(updated), updated, nil
+}
+
+// CalculateOutputJordanRecurrent mirrors the non-plastic jordan_recurrent path:
+// the first process layer receives input plus the previous output layer, then
+// later layers use standard layer-to-layer propagation.
+func CalculateOutputJordanRecurrent(input CoordinateHyperlayer, layers []CoordinateHyperlayer) ([]float64, []CoordinateHyperlayer, error) {
+	if len(layers) == 0 {
+		return nil, nil, fmt.Errorf("%w: missing process/output hyperlayers", ErrInvalidSubstrateCoordinates)
+	}
+
+	previous := flattenCoordinateNeurodes(input, layers[len(layers)-1])
+	updated := make([]CoordinateHyperlayer, 0, len(layers))
+	for layerIdx, layer := range layers {
+		current := make(CoordinateHyperlayer, 0, len(layer))
+		for neurodeIdx, neurode := range layer {
+			calculated, err := CalculateNeurodeOutputStd(previous, neurode)
+			if err != nil {
+				return nil, nil, fmt.Errorf("layer %d neurode %d: %w", layerIdx, neurodeIdx, err)
+			}
+			current = append(current, calculated)
+		}
+		updated = append(updated, current)
+		previous = current
+	}
+	return outputValues(updated), updated, nil
+}
+
+// CalculateOutputNeuronSelfRecurrent mirrors calculate_output_nsr for the
+// non-plastic typed path by prepending each neurode's previous state to the
+// previous layer source before calculating that neurode.
+func CalculateOutputNeuronSelfRecurrent(input CoordinateHyperlayer, layers []CoordinateHyperlayer) ([]float64, []CoordinateHyperlayer, error) {
+	if len(layers) == 0 {
+		return nil, nil, fmt.Errorf("%w: missing process/output hyperlayers", ErrInvalidSubstrateCoordinates)
+	}
+
+	previous := cloneCoordinateHyperlayer(input)
+	updated := make([]CoordinateHyperlayer, 0, len(layers))
+	for layerIdx, layer := range layers {
+		current := make(CoordinateHyperlayer, 0, len(layer))
+		for neurodeIdx, neurode := range layer {
+			source := make(CoordinateHyperlayer, 0, len(previous)+1)
+			source = append(source, NeurodeCoordinate{
+				Coords:  append([]float64(nil), neurode.Coords...),
+				Output:  neurode.Output,
+				Weights: append([]float64(nil), neurode.Weights...),
+			})
+			source = append(source, cloneCoordinateHyperlayer(previous)...)
+			calculated, err := CalculateNeurodeOutputStd(source, neurode)
+			if err != nil {
+				return nil, nil, fmt.Errorf("layer %d neurode %d: %w", layerIdx, neurodeIdx, err)
+			}
+			current = append(current, calculated)
+		}
+		updated = append(updated, current)
+		previous = current
+	}
+	return outputValues(updated), updated, nil
+}
+
 // BuildCoordList mirrors substrate.erl build_CoordList/1. Density 1 maps to a
 // centered coordinate, otherwise coordinates span [-1, 1] in reference order.
 func BuildCoordList(density int) ([]float64, error) {
@@ -709,4 +807,38 @@ func cloneCoordinateHyperlayer(layer CoordinateHyperlayer) CoordinateHyperlayer 
 		})
 	}
 	return out
+}
+
+func flattenCoordinateNeurodes(layers ...CoordinateHyperlayer) CoordinateHyperlayer {
+	total := 0
+	for _, layer := range layers {
+		total += len(layer)
+	}
+	out := make(CoordinateHyperlayer, 0, total)
+	for _, layer := range layers {
+		out = append(out, cloneCoordinateHyperlayer(layer)...)
+	}
+	return out
+}
+
+func replaceFlattenedLayer(source CoordinateHyperlayer, inputCount int, originalLayers []CoordinateHyperlayer, updatedLayers []CoordinateHyperlayer, layerIdx int) CoordinateHyperlayer {
+	out := cloneCoordinateHyperlayer(source)
+	offset := inputCount
+	for i := 0; i < layerIdx; i++ {
+		offset += len(originalLayers[i])
+	}
+	copy(out[offset:offset+len(updatedLayers[layerIdx])], cloneCoordinateHyperlayer(updatedLayers[layerIdx]))
+	return out
+}
+
+func outputValues(layers []CoordinateHyperlayer) []float64 {
+	if len(layers) == 0 {
+		return nil
+	}
+	outputLayer := layers[len(layers)-1]
+	outputs := make([]float64, 0, len(outputLayer))
+	for _, neurode := range outputLayer {
+		outputs = append(outputs, neurode.Output)
+	}
+	return outputs
 }
