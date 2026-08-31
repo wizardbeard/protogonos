@@ -112,6 +112,100 @@ func TestBuildL2LFeedforwardCoordinatePairsPopulatesCoordinateBatch(t *testing.T
 	}
 }
 
+func TestBuildFullyInterconnectedCoordinatePairsOrdersCurrentThenFlatSubstrate(t *testing.T) {
+	pairs, err := BuildFullyInterconnectedCoordinatePairs(
+		[][]float64{{0}, {1}, {90}},
+		[][]float64{{10}, {20}},
+	)
+	if err != nil {
+		t.Fatalf("build coordinate pairs: %v", err)
+	}
+
+	want := []CoordinatePair{
+		{PresynapticCoords: []float64{0}, PostsynapticCoords: []float64{10}},
+		{PresynapticCoords: []float64{1}, PostsynapticCoords: []float64{10}},
+		{PresynapticCoords: []float64{90}, PostsynapticCoords: []float64{10}},
+		{PresynapticCoords: []float64{0}, PostsynapticCoords: []float64{20}},
+		{PresynapticCoords: []float64{1}, PostsynapticCoords: []float64{20}},
+		{PresynapticCoords: []float64{90}, PostsynapticCoords: []float64{20}},
+	}
+	if !reflect.DeepEqual(pairs, want) {
+		t.Fatalf("unexpected fully interconnected coordinate order: got=%v want=%v", pairs, want)
+	}
+}
+
+func TestBuildFullyInterconnectedCoordinatePairsCopiesCoordinates(t *testing.T) {
+	flat := [][]float64{{0.25}}
+	current := [][]float64{{1.5}}
+
+	pairs, err := BuildFullyInterconnectedCoordinatePairs(flat, current)
+	if err != nil {
+		t.Fatalf("build coordinate pairs: %v", err)
+	}
+
+	flat[0][0] = 99
+	current[0][0] = 88
+
+	if got := pairs[0].PresynapticCoords[0]; got != 0.25 {
+		t.Fatalf("flat presynaptic coordinate was not copied: got=%v", got)
+	}
+	if got := pairs[0].PostsynapticCoords[0]; got != 1.5 {
+		t.Fatalf("current postsynaptic coordinate was not copied: got=%v", got)
+	}
+}
+
+func TestBuildFullyInterconnectedCoordinatePairsValidatesInput(t *testing.T) {
+	if _, err := BuildFullyInterconnectedCoordinatePairs(nil, [][]float64{{1}}); !errors.Is(err, ErrInvalidSubstrateCoordinates) {
+		t.Fatalf("expected ErrInvalidSubstrateCoordinates for missing flat substrate coordinates, got %v", err)
+	}
+	if _, err := BuildFullyInterconnectedCoordinatePairs([][]float64{{1}}, nil); !errors.Is(err, ErrInvalidSubstrateCoordinates) {
+		t.Fatalf("expected ErrInvalidSubstrateCoordinates for missing current-layer coordinates, got %v", err)
+	}
+}
+
+func TestBuildFullyInterconnectedCoordinatePairsPopulatesCoordinateBatch(t *testing.T) {
+	resetRegistriesForTests()
+	t.Cleanup(resetRegistriesForTests)
+
+	if err := RegisterCPP("sum_coordinate_builder_cpp", func() CPP {
+		return sumCoordinateBuilderCPP{}
+	}); err != nil {
+		t.Fatalf("register coordinate cpp: %v", err)
+	}
+
+	pairs, err := BuildFullyInterconnectedCoordinatePairs(
+		[][]float64{{0.25}, {0.75}},
+		[][]float64{{1}, {2}},
+	)
+	if err != nil {
+		t.Fatalf("build coordinate pairs: %v", err)
+	}
+
+	rt, err := NewSimpleRuntime(Spec{
+		CPPName:      "sum_coordinate_builder_cpp",
+		CEPName:      WeightExpressionCEPName,
+		CEPFaninPIDs: []string{"cpp1", "cpp2"},
+	}, len(pairs))
+	if err != nil {
+		t.Fatalf("new runtime: %v", err)
+	}
+
+	weights, err := rt.StepCoordinateBatch(context.Background(), pairs)
+	if err != nil {
+		t.Fatalf("step coordinate batch: %v", err)
+	}
+
+	want := []float64{1.25, 1.75, 2.25, 2.75}
+	if len(weights) != len(want) {
+		t.Fatalf("unexpected weight count: got=%d want=%d", len(weights), len(want))
+	}
+	for i := range want {
+		if math.Abs(weights[i]-want[i]) > 1e-9 {
+			t.Fatalf("unexpected weight[%d]: got=%v want=%v all=%v", i, weights[i], want[i], weights)
+		}
+	}
+}
+
 func TestBuildNeuronSelfRecurrentCoordinatePairsOrdersSelfThenPreviousLayer(t *testing.T) {
 	pairs, err := BuildNeuronSelfRecurrentCoordinatePairs(
 		[][]float64{{0}, {1}},

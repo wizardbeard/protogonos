@@ -30,6 +30,19 @@ func BuildL2LFeedforwardCoordinatePairs(presynapticCoords [][]float64, postsynap
 	return pairs, nil
 }
 
+// BuildFullyInterconnectedCoordinatePairs returns coordinate pairs for
+// substrate.erl's fully_interconnected population path. The source list should
+// be the flattened substrate coordinate list in reference traversal order.
+func BuildFullyInterconnectedCoordinatePairs(flatSubstrateCoords [][]float64, currentLayerCoords [][]float64) ([]CoordinatePair, error) {
+	if len(flatSubstrateCoords) == 0 {
+		return nil, fmt.Errorf("%w: missing flat substrate coordinates", ErrInvalidSubstrateCoordinates)
+	}
+	if len(currentLayerCoords) == 0 {
+		return nil, fmt.Errorf("%w: missing current-layer coordinates", ErrInvalidSubstrateCoordinates)
+	}
+	return BuildL2LFeedforwardCoordinatePairs(flatSubstrateCoords, currentLayerCoords)
+}
+
 // BuildNeuronSelfRecurrentCoordinatePairs returns coordinate pairs for
 // substrate.erl's neuronself_recurrent population path. Each postsynaptic
 // neurode receives its self-connection first, then all previous-layer inputs.
