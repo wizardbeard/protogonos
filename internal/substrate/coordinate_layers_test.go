@@ -457,6 +457,98 @@ func TestBuildSubstrateLayersCopiesInputsOutputsAndWeights(t *testing.T) {
 	}
 }
 
+func TestComposeInputSubstrateSupportsUndefinedAndNoGeo(t *testing.T) {
+	layer, err := ComposeInputSubstrate([]IOCoordinateSpec{
+		{Format: CoordinateFormatUndefined, VL: 2},
+		{Format: CoordinateFormatNoGeo, VL: 3},
+	})
+	if err != nil {
+		t.Fatalf("compose input substrate: %v", err)
+	}
+
+	want := [][]float64{{-1}, {0}, {1}, {-1}, {1}}
+	if got := layer.Coordinates(); !reflect.DeepEqual(got, want) {
+		t.Fatalf("unexpected input substrate coords: got=%v want=%v", got, want)
+	}
+	for i, neurode := range layer {
+		if neurode.Output != 0 {
+			t.Fatalf("expected zero input output at neurode %d, got=%v", i, neurode.Output)
+		}
+		if neurode.Weights != nil {
+			t.Fatalf("expected nil input weights at neurode %d, got=%v", i, neurode.Weights)
+		}
+	}
+}
+
+func TestComposeInputSubstrateDefaultsEmptyFormatToUndefined(t *testing.T) {
+	layer, err := ComposeInputSubstrate([]IOCoordinateSpec{{VL: 1}})
+	if err != nil {
+		t.Fatalf("compose input substrate: %v", err)
+	}
+
+	if got := layer.Coordinates(); !reflect.DeepEqual(got, [][]float64{{0}}) {
+		t.Fatalf("unexpected default-format input coords: got=%v", got)
+	}
+}
+
+func TestComposeOutputSubstrateAttachesWeights(t *testing.T) {
+	weights := []float64{0.1, 0.2}
+	layer, err := ComposeOutputSubstrate([]IOCoordinateSpec{
+		{Format: CoordinateFormatNoGeo, VL: 2},
+	}, weights)
+	if err != nil {
+		t.Fatalf("compose output substrate: %v", err)
+	}
+
+	if got := layer.Coordinates(); !reflect.DeepEqual(got, [][]float64{{-1}, {1}}) {
+		t.Fatalf("unexpected output substrate coords: got=%v", got)
+	}
+	for i, neurode := range layer {
+		if !reflect.DeepEqual(neurode.Weights, []float64{0.1, 0.2}) {
+			t.Fatalf("unexpected output weights at neurode %d: %v", i, neurode.Weights)
+		}
+	}
+
+	weights[0] = 99
+	if layer[0].Weights[0] != 0.1 {
+		t.Fatalf("expected output weights to be copied, got=%v", layer[0].Weights)
+	}
+}
+
+func TestComposeBaseIOSubstrateValidatesSpecs(t *testing.T) {
+	tests := []struct {
+		name string
+		fn   func() (CoordinateHyperlayer, error)
+	}{
+		{name: "missing input specs", fn: func() (CoordinateHyperlayer, error) {
+			return ComposeInputSubstrate(nil)
+		}},
+		{name: "invalid input vl", fn: func() (CoordinateHyperlayer, error) {
+			return ComposeInputSubstrate([]IOCoordinateSpec{{Format: CoordinateFormatNoGeo, VL: 0}})
+		}},
+		{name: "unsupported input format", fn: func() (CoordinateHyperlayer, error) {
+			return ComposeInputSubstrate([]IOCoordinateSpec{{Format: "symmetric", VL: 2}})
+		}},
+		{name: "missing output specs", fn: func() (CoordinateHyperlayer, error) {
+			return ComposeOutputSubstrate(nil, []float64{0})
+		}},
+		{name: "invalid output vl", fn: func() (CoordinateHyperlayer, error) {
+			return ComposeOutputSubstrate([]IOCoordinateSpec{{Format: CoordinateFormatNoGeo, VL: -1}}, []float64{0})
+		}},
+		{name: "unsupported output format", fn: func() (CoordinateHyperlayer, error) {
+			return ComposeOutputSubstrate([]IOCoordinateSpec{{Format: "coorded", VL: 2}}, []float64{0})
+		}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if _, err := tt.fn(); !errors.Is(err, ErrInvalidSubstrateCoordinates) {
+				t.Fatalf("expected ErrInvalidSubstrateCoordinates, got %v", err)
+			}
+		})
+	}
+}
+
 func coordsAlmostEqual(got [][]float64, want [][]float64) bool {
 	if len(got) != len(want) {
 		return false

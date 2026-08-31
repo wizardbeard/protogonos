@@ -58,6 +58,18 @@ type SubstrateLayerBuildRequest struct {
 	LinkForm    string
 }
 
+const (
+	CoordinateFormatUndefined = "undefined"
+	CoordinateFormatNoGeo     = "no_geo"
+)
+
+// IOCoordinateSpec describes the base substrate IO formats used by
+// compose_ISubstrate and compose_OSubstrate.
+type IOCoordinateSpec struct {
+	Format string
+	VL     int
+}
+
 // BuildCoordinatePairsForLinkFormLayers builds coordinate pairs from typed
 // hyperlayers, then delegates to the raw coordinate dispatcher.
 func BuildCoordinatePairsForLinkFormLayers(req CoordinateLayerPairBuildRequest) ([]CoordinatePair, error) {
@@ -165,6 +177,73 @@ func ExtrudeCoordinateHyperlayer(newDimensionCoord float64, layer CoordinateHype
 			Output:  neurode.Output,
 			Weights: append([]float64(nil), neurode.Weights...),
 		})
+	}
+	return out
+}
+
+// ComposeInputSubstrate builds the base input hyperlayer for undefined/no_geo
+// IO specs before depth extrusion is applied.
+func ComposeInputSubstrate(specs []IOCoordinateSpec) (CoordinateHyperlayer, error) {
+	parts, err := composeBaseIOParts(specs, nil)
+	if err != nil {
+		return nil, err
+	}
+	return flattenCoordinateHyperlayerParts(parts), nil
+}
+
+// ComposeOutputSubstrate builds the base output hyperlayer for undefined/no_geo
+// IO specs and attaches the supplied weight vector to every output neurode.
+func ComposeOutputSubstrate(specs []IOCoordinateSpec, weights []float64) (CoordinateHyperlayer, error) {
+	parts, err := composeBaseIOParts(specs, weights)
+	if err != nil {
+		return nil, err
+	}
+	return flattenCoordinateHyperlayerParts(parts), nil
+}
+
+func composeBaseIOParts(specs []IOCoordinateSpec, weights []float64) ([]CoordinateHyperlayer, error) {
+	if len(specs) == 0 {
+		return nil, fmt.Errorf("%w: missing io specs", ErrInvalidSubstrateCoordinates)
+	}
+	parts := make([]CoordinateHyperlayer, 0, len(specs))
+	for _, spec := range specs {
+		format := spec.Format
+		if format == "" {
+			format = CoordinateFormatUndefined
+		}
+		switch format {
+		case CoordinateFormatUndefined, CoordinateFormatNoGeo:
+			if spec.VL <= 0 {
+				return nil, fmt.Errorf("%w: vl must be > 0: %d", ErrInvalidSubstrateCoordinates, spec.VL)
+			}
+			coords, err := CreateCoordLists([]int{spec.VL})
+			if err != nil {
+				return nil, err
+			}
+			layer := make(CoordinateHyperlayer, 0, len(coords))
+			for _, coord := range coords {
+				layer = append(layer, NeurodeCoordinate{
+					Coords:  append([]float64(nil), coord...),
+					Output:  0,
+					Weights: append([]float64(nil), weights...),
+				})
+			}
+			parts = append(parts, layer)
+		default:
+			return nil, fmt.Errorf("%w: unsupported io coordinate format %q", ErrInvalidSubstrateCoordinates, spec.Format)
+		}
+	}
+	return parts, nil
+}
+
+func flattenCoordinateHyperlayerParts(parts []CoordinateHyperlayer) CoordinateHyperlayer {
+	total := 0
+	for _, part := range parts {
+		total += len(part)
+	}
+	out := make(CoordinateHyperlayer, 0, total)
+	for i := len(parts) - 1; i >= 0; i-- {
+		out = append(out, cloneCoordinateHyperlayer(parts[i])...)
 	}
 	return out
 }
