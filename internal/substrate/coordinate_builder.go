@@ -29,3 +29,46 @@ func BuildL2LFeedforwardCoordinatePairs(presynapticCoords [][]float64, postsynap
 	}
 	return pairs, nil
 }
+
+// BuildNeuronSelfRecurrentCoordinatePairs returns coordinate pairs for
+// substrate.erl's neuronself_recurrent population path. Each postsynaptic
+// neurode receives its self-connection first, then all previous-layer inputs.
+func BuildNeuronSelfRecurrentCoordinatePairs(previousLayerCoords [][]float64, currentLayerCoords [][]float64) ([]CoordinatePair, error) {
+	if len(previousLayerCoords) == 0 {
+		return nil, fmt.Errorf("%w: missing previous-layer coordinates", ErrInvalidSubstrateCoordinates)
+	}
+	if len(currentLayerCoords) == 0 {
+		return nil, fmt.Errorf("%w: missing current-layer coordinates", ErrInvalidSubstrateCoordinates)
+	}
+
+	pairs := make([]CoordinatePair, 0, len(currentLayerCoords)*(len(previousLayerCoords)+1))
+	for _, current := range currentLayerCoords {
+		pairs = append(pairs, CoordinatePair{
+			PresynapticCoords:  append([]float64(nil), current...),
+			PostsynapticCoords: append([]float64(nil), current...),
+		})
+		for _, previous := range previousLayerCoords {
+			pairs = append(pairs, CoordinatePair{
+				PresynapticCoords:  append([]float64(nil), previous...),
+				PostsynapticCoords: append([]float64(nil), current...),
+			})
+		}
+	}
+	return pairs, nil
+}
+
+// BuildJordanRecurrentCoordinatePairs returns coordinate pairs for
+// substrate.erl's jordan_recurrent population path. The source list is the
+// input hyperlayer followed by the output hyperlayer.
+func BuildJordanRecurrentCoordinatePairs(inputLayerCoords [][]float64, outputLayerCoords [][]float64, currentLayerCoords [][]float64) ([]CoordinatePair, error) {
+	if len(inputLayerCoords) == 0 {
+		return nil, fmt.Errorf("%w: missing input-layer coordinates", ErrInvalidSubstrateCoordinates)
+	}
+	if len(outputLayerCoords) == 0 {
+		return nil, fmt.Errorf("%w: missing output-layer coordinates", ErrInvalidSubstrateCoordinates)
+	}
+	sourceCoords := make([][]float64, 0, len(inputLayerCoords)+len(outputLayerCoords))
+	sourceCoords = append(sourceCoords, inputLayerCoords...)
+	sourceCoords = append(sourceCoords, outputLayerCoords...)
+	return BuildL2LFeedforwardCoordinatePairs(sourceCoords, currentLayerCoords)
+}
