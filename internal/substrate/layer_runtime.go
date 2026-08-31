@@ -41,6 +41,17 @@ type LayerRuntime struct {
 	terminated       bool
 }
 
+// LayerRuntimeSnapshot is a read-only copy of typed substrate runtime state.
+type LayerRuntimeSnapshot struct {
+	Plasticity string
+	LinkForm   string
+	StateMode  string
+	Terminated bool
+	Substrate  []CoordinateHyperlayer
+	ABCN       ABCNSubstrate
+	Weights    []float64
+}
+
 type layerRuntimeSnapshot struct {
 	stateMode string
 	substrate []CoordinateHyperlayer
@@ -129,10 +140,24 @@ func (r *LayerRuntime) Weights() []float64 {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
-	if r.plasticity == SubstratePlasticityABCN {
-		return flattenABCNWeights(r.abcn)
+	return r.weightsLocked()
+}
+
+// Snapshot returns a deep copy of the typed runtime state for diagnostics and
+// artifact export paths.
+func (r *LayerRuntime) Snapshot() LayerRuntimeSnapshot {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	return LayerRuntimeSnapshot{
+		Plasticity: r.plasticity,
+		LinkForm:   r.linkForm,
+		StateMode:  r.stateMode,
+		Terminated: r.terminated,
+		Substrate:  cloneCoordinateHyperlayers(r.substrate),
+		ABCN:       cloneABCNSubstrate(r.abcn),
+		Weights:    r.weightsLocked(),
 	}
-	return flattenCoordinateWeights(r.substrate)
 }
 
 // Backup saves the current runtime state for a later Restore.
@@ -179,6 +204,13 @@ func (r *LayerRuntime) Terminate() {
 	defer r.mu.Unlock()
 
 	r.terminated = true
+}
+
+func (r *LayerRuntime) weightsLocked() []float64 {
+	if r.plasticity == SubstratePlasticityABCN {
+		return flattenABCNWeights(r.abcn)
+	}
+	return flattenCoordinateWeights(r.substrate)
 }
 
 func cloneCoordinateHyperlayers(layers []CoordinateHyperlayer) []CoordinateHyperlayer {

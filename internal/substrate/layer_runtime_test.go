@@ -177,6 +177,88 @@ func TestLayerRuntimeBackupRestoreResetAndTerminate(t *testing.T) {
 	}
 }
 
+func TestLayerRuntimeSnapshotReportsScalarStateAndCopiesLayers(t *testing.T) {
+	rt, err := NewLayerRuntime(LayerRuntimeSpec{
+		Plasticity: SubstratePlasticityNone,
+		LinkForm:   LinkFormL2LFeedforward,
+		Substrate: []CoordinateHyperlayer{
+			{{Coords: []float64{0}}},
+			{{Coords: []float64{1}, Weights: []float64{2}}},
+		},
+		StaticCPP: coordinateSumCPP{},
+		CEPs:      []CEP{rawSignalCEP{}},
+	})
+	if err != nil {
+		t.Fatalf("new layer runtime: %v", err)
+	}
+
+	initial := rt.Snapshot()
+	if initial.Plasticity != SubstratePlasticityNone || initial.LinkForm != LinkFormL2LFeedforward || initial.StateMode != SubstrateStateReset {
+		t.Fatalf("unexpected initial snapshot modes: %+v", initial)
+	}
+	if initial.Terminated {
+		t.Fatalf("expected active runtime")
+	}
+	if len(initial.Substrate) != 2 || len(initial.ABCN.Layers) != 0 || !reflect.DeepEqual(initial.Weights, []float64{2}) {
+		t.Fatalf("unexpected initial snapshot state: %+v", initial)
+	}
+
+	initial.Substrate[1][0].Weights[0] = 99
+	initial.Weights[0] = 88
+	if !reflect.DeepEqual(rt.Weights(), []float64{2}) {
+		t.Fatalf("expected snapshot copy, got runtime weights=%v", rt.Weights())
+	}
+
+	if _, err := rt.Step(context.Background(), []float64{0.5}); err != nil {
+		t.Fatalf("step: %v", err)
+	}
+	updated := rt.Snapshot()
+	if updated.StateMode != SubstrateStateHold {
+		t.Fatalf("expected hold state after non-plastic reset, got %+v", updated)
+	}
+	if len(updated.Substrate) != 2 || len(updated.Substrate[1][0].Weights) != 1 {
+		t.Fatalf("unexpected updated scalar layer shape: %+v", updated.Substrate)
+	}
+
+	rt.Terminate()
+	if !rt.Snapshot().Terminated {
+		t.Fatalf("expected terminated snapshot state")
+	}
+}
+
+func TestLayerRuntimeSnapshotReportsABCNCoefficientsAndCopiesState(t *testing.T) {
+	rt, err := NewLayerRuntime(LayerRuntimeSpec{
+		Plasticity: SubstratePlasticityABCN,
+		LinkForm:   LinkFormL2LFeedforward,
+		ABCN: ABCNSubstrate{
+			InputLayer: CoordinateHyperlayer{{Coords: []float64{0}}},
+			Layers: []ABCNCoordinateHyperlayer{
+				{{Coords: []float64{1}, Weights: []ABCNWeight{{Weight: 0.5, A: 0.1, B: 0.2, C: 0.3, N: 0.4}}}},
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("new layer runtime: %v", err)
+	}
+
+	snapshot := rt.Snapshot()
+	got := snapshot.ABCN.Layers[0][0].Weights[0]
+	want := ABCNWeight{Weight: 0.5, A: 0.1, B: 0.2, C: 0.3, N: 0.4}
+	if got != want {
+		t.Fatalf("unexpected abcn coefficients: got=%+v want=%+v", got, want)
+	}
+	if !reflect.DeepEqual(snapshot.Weights, []float64{0.5}) {
+		t.Fatalf("unexpected abcn snapshot weights: %v", snapshot.Weights)
+	}
+
+	snapshot.ABCN.Layers[0][0].Weights[0].A = 99
+	snapshot.Weights[0] = 88
+	next := rt.Snapshot()
+	if next.ABCN.Layers[0][0].Weights[0] != want || !reflect.DeepEqual(next.Weights, []float64{0.5}) {
+		t.Fatalf("expected abcn snapshot copy, got %+v", next)
+	}
+}
+
 func TestLayerRuntimeConstructorCopiesInputs(t *testing.T) {
 	layers := []CoordinateHyperlayer{
 		{{Coords: []float64{0}}},

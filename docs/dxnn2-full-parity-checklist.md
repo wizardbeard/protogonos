@@ -112,6 +112,7 @@ Status keys:
 - Added monitor/replay ABCN `LayerRuntime` integration coverage for explicit `plasticity=abcn`, component CEP selection, and coefficient parameters so the typed runtime path is tested for plastic substrate execution.
 - Added monitor/replay iterative `LayerRuntime` integration coverage for explicit `plasticity=iterative`, including repeated-step repopulation through the typed coordinate+IOW path.
 - Added monitor/replay typed `LayerRuntime` integration coverage for `fully_interconnected`, `jordan_recurrent`, and `neuronself_recurrent` link forms.
+- Added `LayerRuntime.Snapshot` diagnostics/export surface exposing state mode, link form, plasticity, termination state, scalar layers, ABCN layer coefficients, and flattened weights via deep copies.
 - Expanded substrate CEP fan-in parity by adding ordered multi-signal protocol forwarding in runtime (`VectorCPP` + `Spec.CEPFaninPIDs`), enabling command-surface updates from vector control signals (including `set_abcn` coefficient vectors) with explicit fan-in width validation.
 - Expanded substrate CEP topology parity by deriving runtime `CEPFaninPIDs` from genome `NeuronActuatorLinks` targeting substrate CEP endpoints (`genotype.SubstrateCEPFaninPIDs`) in both monitor evaluation and replay runtime builders.
 - Expanded substrate CEP fan-in fallback parity by resolving runtime `CEPFaninPIDs` from explicit CEP endpoint links when present and otherwise falling back to ordered output-neuron IDs (`ResolveSubstrateCEPFaninPIDs`) in monitor/replay substrate runtime builders.
