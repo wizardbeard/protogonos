@@ -191,6 +191,47 @@ func TestCountIONeurodesValidatesSpecs(t *testing.T) {
 	}
 }
 
+func TestFlattenInputValuesPreservesBatchOrder(t *testing.T) {
+	got := FlattenInputValues([]float64{1, 2}, nil, []float64{3})
+	want := []float64{1, 2, 3}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("unexpected flattened input: got=%v want=%v", got, want)
+	}
+}
+
+func TestPopulateInputHyperlayerAssignsInputOutputsInOrder(t *testing.T) {
+	layer := CoordinateHyperlayer{
+		{Coords: []float64{-1, 0}, Output: 9, Weights: []float64{0.1}},
+		{Coords: []float64{1, 0}, Output: 8},
+	}
+	got, err := PopulateInputHyperlayer(layer, FlattenInputValues([]float64{0.25}, []float64{-0.75}))
+	if err != nil {
+		t.Fatalf("populate input hyperlayer: %v", err)
+	}
+
+	if coords := got.Coordinates(); !reflect.DeepEqual(coords, [][]float64{{-1, 0}, {1, 0}}) {
+		t.Fatalf("unexpected populated input coords: got=%v", coords)
+	}
+	if got[0].Output != 0.25 || got[1].Output != -0.75 {
+		t.Fatalf("unexpected populated input outputs: %v, %v", got[0].Output, got[1].Output)
+	}
+	if !reflect.DeepEqual(got[0].Weights, []float64{0.1}) || got[1].Weights != nil {
+		t.Fatalf("unexpected populated input weights: %v", got)
+	}
+
+	layer[0].Coords[0] = 99
+	layer[0].Weights[0] = 99
+	if got[0].Coords[0] != -1 || got[0].Weights[0] != 0.1 {
+		t.Fatalf("expected populated input layer to be copied, got=%v", got)
+	}
+}
+
+func TestPopulateInputHyperlayerValidatesInputLength(t *testing.T) {
+	if _, err := PopulateInputHyperlayer(CoordinateHyperlayer{{Coords: []float64{0}}}, nil); !errors.Is(err, ErrInvalidSubstrateCoordinates) {
+		t.Fatalf("expected ErrInvalidSubstrateCoordinates, got %v", err)
+	}
+}
+
 func TestBuildCoordListMatchesReferenceOrder(t *testing.T) {
 	tests := []struct {
 		name    string

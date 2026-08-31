@@ -115,6 +115,38 @@ func CountIONeurodes(specs []IOCoordinateSpec) (int, error) {
 	return total, nil
 }
 
+// FlattenInputValues mirrors lists:flatten(Input) for already typed input
+// batches before input-hyperlayer population.
+func FlattenInputValues(input ...[]float64) []float64 {
+	total := 0
+	for _, values := range input {
+		total += len(values)
+	}
+	out := make([]float64, 0, total)
+	for _, values := range input {
+		out = append(out, values...)
+	}
+	return out
+}
+
+// PopulateInputHyperlayer mirrors substrate.erl populate_InputHyperlayer/3 by
+// replacing each input neurode output with the next flattened input value.
+func PopulateInputHyperlayer(layer CoordinateHyperlayer, input []float64) (CoordinateHyperlayer, error) {
+	if len(layer) != len(input) {
+		return nil, fmt.Errorf("%w: input length %d does not match input hyperlayer length %d", ErrInvalidSubstrateCoordinates, len(input), len(layer))
+	}
+
+	out := make(CoordinateHyperlayer, 0, len(layer))
+	for i, neurode := range layer {
+		out = append(out, NeurodeCoordinate{
+			Coords:  append([]float64(nil), neurode.Coords...),
+			Output:  input[i],
+			Weights: append([]float64(nil), neurode.Weights...),
+		})
+	}
+	return out, nil
+}
+
 // BuildCoordList mirrors substrate.erl build_CoordList/1. Density 1 maps to a
 // centered coordinate, otherwise coordinates span [-1, 1] in reference order.
 func BuildCoordList(density int) ([]float64, error) {
