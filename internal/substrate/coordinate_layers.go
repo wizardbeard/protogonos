@@ -58,6 +58,15 @@ type SubstrateLayerBuildRequest struct {
 	LinkForm    string
 }
 
+// CreateSubstrateRequest carries IO specs, density vector, and link form for
+// reference-style substrate layer construction.
+type CreateSubstrateRequest struct {
+	InputSpecs  []IOCoordinateSpec
+	Densities   []int
+	OutputSpecs []IOCoordinateSpec
+	LinkForm    string
+}
+
 const (
 	CoordinateFormatUndefined = "undefined"
 	CoordinateFormatNoGeo     = "no_geo"
@@ -403,6 +412,29 @@ func flattenCoordinateHyperlayerParts(parts []CoordinateHyperlayer) CoordinateHy
 		out = append(out, cloneCoordinateHyperlayer(parts[i])...)
 	}
 	return out
+}
+
+// CreateSubstrate mirrors substrate.erl create_substrate/4 for the covered IO
+// formats and active link forms.
+func CreateSubstrate(req CreateSubstrateRequest) ([]CoordinateHyperlayer, error) {
+	if len(req.Densities) == 0 {
+		return nil, fmt.Errorf("%w: missing densities", ErrInvalidSubstrateCoordinates)
+	}
+	substrateDimension := len(req.Densities)
+	inputLayer, err := ComposeInputSubstrateForDimension(req.InputSpecs, substrateDimension)
+	if err != nil {
+		return nil, err
+	}
+	outputLayer, err := ComposeOutputSubstrateForDimension(req.OutputSpecs, substrateDimension, nil)
+	if err != nil {
+		return nil, err
+	}
+	return BuildSubstrateLayers(SubstrateLayerBuildRequest{
+		InputLayer:  inputLayer,
+		Densities:   req.Densities,
+		OutputLayer: outputLayer,
+		LinkForm:    req.LinkForm,
+	})
 }
 
 // BuildSubstrateLayers mirrors the density/link-form layer shape of

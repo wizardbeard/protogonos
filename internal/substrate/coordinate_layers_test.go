@@ -275,6 +275,89 @@ func TestExtrudeCoordinateHyperlayerPrependsDimensionAndCopiesState(t *testing.T
 	}
 }
 
+func TestCreateSubstrateBuildsDimensionedDepthZeroLayers(t *testing.T) {
+	layers, err := CreateSubstrate(CreateSubstrateRequest{
+		InputSpecs: []IOCoordinateSpec{
+			{Format: CoordinateFormatNoGeo, VL: 2},
+		},
+		Densities: []int{0, 2, 2},
+		OutputSpecs: []IOCoordinateSpec{
+			{Format: CoordinateFormatNoGeo, VL: 1},
+		},
+		LinkForm: LinkFormL2LFeedforward,
+	})
+	if err != nil {
+		t.Fatalf("create substrate: %v", err)
+	}
+	if len(layers) != 2 {
+		t.Fatalf("unexpected layer count: got=%d want=2", len(layers))
+	}
+	if got := layers[0].Coordinates(); !reflect.DeepEqual(got, [][]float64{{-1, 0, -1}, {-1, 0, 1}}) {
+		t.Fatalf("unexpected create-substrate input coords: got=%v", got)
+	}
+	if got := layers[1].Coordinates(); !reflect.DeepEqual(got, [][]float64{{1, 0, 0}}) {
+		t.Fatalf("unexpected create-substrate output coords: got=%v", got)
+	}
+	if got := layers[1][0].Weights; !reflect.DeepEqual(got, []float64{0, 0}) {
+		t.Fatalf("unexpected create-substrate output weights: got=%v", got)
+	}
+}
+
+func TestCreateSubstrateBuildsRecurrentLayersWithDimensionedIO(t *testing.T) {
+	layers, err := CreateSubstrate(CreateSubstrateRequest{
+		InputSpecs: []IOCoordinateSpec{
+			{Format: CoordinateFormatNoGeo, VL: 2},
+		},
+		Densities: []int{2, 2, 2},
+		OutputSpecs: []IOCoordinateSpec{
+			{Format: CoordinateFormatCoorded, Dim: 1, Neurodes: CoordinateHyperlayer{{Coords: []float64{0.5}, Output: 0.75}}},
+		},
+		LinkForm: LinkFormJordanRecurrent,
+	})
+	if err != nil {
+		t.Fatalf("create substrate: %v", err)
+	}
+	if len(layers) != 3 {
+		t.Fatalf("unexpected layer count: got=%d want=3", len(layers))
+	}
+	wantInput := [][]float64{{-1, 0, -1}, {-1, 0, 1}}
+	if got := layers[0].Coordinates(); !reflect.DeepEqual(got, wantInput) {
+		t.Fatalf("unexpected create-substrate recurrent input coords: got=%v want=%v", got, wantInput)
+	}
+	wantRecurrent := [][]float64{
+		{0, -1, -1},
+		{0, -1, 1},
+		{0, 1, -1},
+		{0, 1, 1},
+	}
+	if got := layers[1].Coordinates(); !reflect.DeepEqual(got, wantRecurrent) {
+		t.Fatalf("unexpected create-substrate recurrent coords: got=%v", got)
+	}
+	if got := layers[1][0].Weights; !reflect.DeepEqual(got, []float64{0, 0, 0}) {
+		t.Fatalf("unexpected create-substrate recurrent weights: got=%v", got)
+	}
+	if got := layers[2].Coordinates(); !reflect.DeepEqual(got, [][]float64{{1, 0, 0.5}}) {
+		t.Fatalf("unexpected create-substrate output coords: got=%v", got)
+	}
+	if layers[2][0].Output != 0.75 {
+		t.Fatalf("unexpected create-substrate output value: got=%v", layers[2][0].Output)
+	}
+	if got := layers[2][0].Weights; !reflect.DeepEqual(got, []float64{0, 0, 0, 0}) {
+		t.Fatalf("unexpected create-substrate output weights: got=%v", got)
+	}
+}
+
+func TestCreateSubstrateValidatesInputs(t *testing.T) {
+	_, err := CreateSubstrate(CreateSubstrateRequest{
+		InputSpecs:  []IOCoordinateSpec{{Format: CoordinateFormatNoGeo, VL: 1}},
+		OutputSpecs: []IOCoordinateSpec{{Format: CoordinateFormatNoGeo, VL: 1}},
+		LinkForm:    LinkFormL2LFeedforward,
+	})
+	if !errors.Is(err, ErrInvalidSubstrateCoordinates) {
+		t.Fatalf("expected ErrInvalidSubstrateCoordinates for missing densities, got %v", err)
+	}
+}
+
 func TestBuildSubstrateLayersDepthZeroAttachesInputWeightsToOutput(t *testing.T) {
 	input := CoordinateHyperlayer{{Coords: []float64{-1}}, {Coords: []float64{1}}}
 	output := CoordinateHyperlayer{{Coords: []float64{0.5}}}
