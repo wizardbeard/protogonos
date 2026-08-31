@@ -286,6 +286,104 @@ func CalculateOutputABCNStd(input CoordinateHyperlayer, layers []ABCNCoordinateH
 	return outputs, updated, nil
 }
 
+// CalculateOutputABCNForLinkForm dispatches ABCN plastic output calculation for
+// the active substrate link forms.
+func CalculateOutputABCNForLinkForm(linkForm string, input CoordinateHyperlayer, layers []ABCNCoordinateHyperlayer) ([]float64, []ABCNCoordinateHyperlayer, error) {
+	switch linkForm {
+	case LinkFormL2LFeedforward:
+		return CalculateOutputABCNStd(input, layers)
+	case LinkFormFullyInterconnected:
+		return CalculateOutputABCNFullyInterconnected(input, layers)
+	case LinkFormJordanRecurrent:
+		return CalculateOutputABCNJordanRecurrent(input, layers)
+	case LinkFormNeuronSelfRecurrent:
+		return CalculateOutputABCNNeuronSelfRecurrent(input, layers)
+	default:
+		return nil, nil, fmt.Errorf("%w: %q", ErrUnsupportedSubstrateLink, linkForm)
+	}
+}
+
+// CalculateOutputABCNFullyInterconnected mirrors calculate_output_fi when
+// Plasticity is abcn.
+func CalculateOutputABCNFullyInterconnected(input CoordinateHyperlayer, layers []ABCNCoordinateHyperlayer) ([]float64, []ABCNCoordinateHyperlayer, error) {
+	if len(layers) == 0 {
+		return nil, nil, fmt.Errorf("%w: missing abcn process/output hyperlayers", ErrInvalidSubstrateCoordinates)
+	}
+
+	originalScalars := abcnLayersToScalar(layers)
+	source := flattenCoordinateNeurodes(append([]CoordinateHyperlayer{input}, originalScalars...)...)
+	updated := make([]ABCNCoordinateHyperlayer, 0, len(layers))
+	updatedScalars := make([]CoordinateHyperlayer, 0, len(layers))
+	for layerIdx, layer := range layers {
+		current := make(ABCNCoordinateHyperlayer, 0, len(layer))
+		currentScalar := make(CoordinateHyperlayer, 0, len(layer))
+		for neurodeIdx, neurode := range layer {
+			calculated, err := CalculateNeurodeOutputABCN(source, neurode)
+			if err != nil {
+				return nil, nil, fmt.Errorf("layer %d neurode %d: %w", layerIdx, neurodeIdx, err)
+			}
+			current = append(current, calculated)
+			currentScalar = append(currentScalar, abcnNeurodeToScalar(calculated))
+		}
+		updated = append(updated, current)
+		updatedScalars = append(updatedScalars, currentScalar)
+		source = replaceFlattenedLayer(source, len(input), originalScalars, updatedScalars, layerIdx)
+	}
+	return outputABCNValues(updated), updated, nil
+}
+
+// CalculateOutputABCNJordanRecurrent mirrors the jordan_recurrent source
+// selection when Plasticity is abcn.
+func CalculateOutputABCNJordanRecurrent(input CoordinateHyperlayer, layers []ABCNCoordinateHyperlayer) ([]float64, []ABCNCoordinateHyperlayer, error) {
+	if len(layers) == 0 {
+		return nil, nil, fmt.Errorf("%w: missing abcn process/output hyperlayers", ErrInvalidSubstrateCoordinates)
+	}
+
+	previous := flattenCoordinateNeurodes(input, abcnLayerToScalar(layers[len(layers)-1]))
+	updated := make([]ABCNCoordinateHyperlayer, 0, len(layers))
+	for layerIdx, layer := range layers {
+		current, currentScalar, err := calculateABCNLayer(previous, layer, layerIdx)
+		if err != nil {
+			return nil, nil, err
+		}
+		updated = append(updated, current)
+		previous = currentScalar
+	}
+	return outputABCNValues(updated), updated, nil
+}
+
+// CalculateOutputABCNNeuronSelfRecurrent mirrors calculate_output_nsr when
+// Plasticity is abcn.
+func CalculateOutputABCNNeuronSelfRecurrent(input CoordinateHyperlayer, layers []ABCNCoordinateHyperlayer) ([]float64, []ABCNCoordinateHyperlayer, error) {
+	if len(layers) == 0 {
+		return nil, nil, fmt.Errorf("%w: missing abcn process/output hyperlayers", ErrInvalidSubstrateCoordinates)
+	}
+
+	previous := cloneCoordinateHyperlayer(input)
+	updated := make([]ABCNCoordinateHyperlayer, 0, len(layers))
+	for layerIdx, layer := range layers {
+		current := make(ABCNCoordinateHyperlayer, 0, len(layer))
+		currentScalar := make(CoordinateHyperlayer, 0, len(layer))
+		for neurodeIdx, neurode := range layer {
+			source := make(CoordinateHyperlayer, 0, len(previous)+1)
+			source = append(source, NeurodeCoordinate{
+				Coords: append([]float64(nil), neurode.Coords...),
+				Output: neurode.Output,
+			})
+			source = append(source, cloneCoordinateHyperlayer(previous)...)
+			calculated, err := CalculateNeurodeOutputABCN(source, neurode)
+			if err != nil {
+				return nil, nil, fmt.Errorf("layer %d neurode %d: %w", layerIdx, neurodeIdx, err)
+			}
+			current = append(current, calculated)
+			currentScalar = append(currentScalar, abcnNeurodeToScalar(calculated))
+		}
+		updated = append(updated, current)
+		previous = currentScalar
+	}
+	return outputABCNValues(updated), updated, nil
+}
+
 // CalculateOutputForLinkForm dispatches the non-plastic typed-layer output
 // calculation for the active substrate link forms.
 func CalculateOutputForLinkForm(linkForm string, input CoordinateHyperlayer, layers []CoordinateHyperlayer) ([]float64, []CoordinateHyperlayer, error) {
@@ -1257,6 +1355,55 @@ func replaceFlattenedLayer(source CoordinateHyperlayer, inputCount int, original
 }
 
 func outputValues(layers []CoordinateHyperlayer) []float64 {
+	if len(layers) == 0 {
+		return nil
+	}
+	outputLayer := layers[len(layers)-1]
+	outputs := make([]float64, 0, len(outputLayer))
+	for _, neurode := range outputLayer {
+		outputs = append(outputs, neurode.Output)
+	}
+	return outputs
+}
+
+func calculateABCNLayer(previous CoordinateHyperlayer, layer ABCNCoordinateHyperlayer, layerIdx int) (ABCNCoordinateHyperlayer, CoordinateHyperlayer, error) {
+	current := make(ABCNCoordinateHyperlayer, 0, len(layer))
+	currentScalar := make(CoordinateHyperlayer, 0, len(layer))
+	for neurodeIdx, neurode := range layer {
+		calculated, err := CalculateNeurodeOutputABCN(previous, neurode)
+		if err != nil {
+			return nil, nil, fmt.Errorf("layer %d neurode %d: %w", layerIdx, neurodeIdx, err)
+		}
+		current = append(current, calculated)
+		currentScalar = append(currentScalar, abcnNeurodeToScalar(calculated))
+	}
+	return current, currentScalar, nil
+}
+
+func abcnLayersToScalar(layers []ABCNCoordinateHyperlayer) []CoordinateHyperlayer {
+	out := make([]CoordinateHyperlayer, 0, len(layers))
+	for _, layer := range layers {
+		out = append(out, abcnLayerToScalar(layer))
+	}
+	return out
+}
+
+func abcnLayerToScalar(layer ABCNCoordinateHyperlayer) CoordinateHyperlayer {
+	out := make(CoordinateHyperlayer, 0, len(layer))
+	for _, neurode := range layer {
+		out = append(out, abcnNeurodeToScalar(neurode))
+	}
+	return out
+}
+
+func abcnNeurodeToScalar(neurode ABCNNeurodeCoordinate) NeurodeCoordinate {
+	return NeurodeCoordinate{
+		Coords: append([]float64(nil), neurode.Coords...),
+		Output: neurode.Output,
+	}
+}
+
+func outputABCNValues(layers []ABCNCoordinateHyperlayer) []float64 {
 	if len(layers) == 0 {
 		return nil
 	}

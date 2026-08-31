@@ -46,6 +46,10 @@ func (iowDeltaCPP) ComputeCoordinatesIOW(_ context.Context, _ []float64, _ []flo
 	return []float64{iow[0] + iow[1]}, nil
 }
 
+func abcnTestWeight(weight float64) ABCNWeight {
+	return ABCNWeight{Weight: weight}
+}
+
 func TestCoordinateHyperlayerCoordinatesCopiesInOrder(t *testing.T) {
 	layer := CoordinateHyperlayer{
 		{Coords: []float64{0, 1}, Output: 0.5, Weights: []float64{1}},
@@ -463,6 +467,98 @@ func TestCalculateOutputABCNStdValidatesInputs(t *testing.T) {
 	}
 	if _, _, err := CalculateOutputABCNStd(input, []ABCNCoordinateHyperlayer{{{Coords: []float64{1}, Weights: []ABCNWeight{{}, {}}}}}); !errors.Is(err, ErrInvalidSubstrateCoordinates) {
 		t.Fatalf("expected ErrInvalidSubstrateCoordinates for abcn weight mismatch, got %v", err)
+	}
+}
+
+func TestCalculateOutputABCNFullyInterconnectedUsesFlattenedSource(t *testing.T) {
+	input := CoordinateHyperlayer{{Coords: []float64{-1}, Output: 0.5}}
+	hidden := ABCNCoordinateHyperlayer{{Coords: []float64{0}, Output: 0.1, Weights: []ABCNWeight{
+		abcnTestWeight(1), abcnTestWeight(2), abcnTestWeight(3),
+	}}}
+	output := ABCNCoordinateHyperlayer{{Coords: []float64{1}, Output: -0.2, Weights: []ABCNWeight{
+		abcnTestWeight(0.4), abcnTestWeight(0.5), abcnTestWeight(-0.25),
+	}}}
+
+	outputs, updated, err := CalculateOutputABCNFullyInterconnected(input, []ABCNCoordinateHyperlayer{hidden, output})
+	if err != nil {
+		t.Fatalf("calculate abcn fully-interconnected output: %v", err)
+	}
+	hiddenOut := math.Tanh(0.5*1 + 0.1*2 + -0.2*3)
+	wantOutput := math.Tanh(0.5*0.4 + hiddenOut*0.5 + -0.2*-0.25)
+	if len(outputs) != 1 || math.Abs(outputs[0]-wantOutput) > 1e-12 {
+		t.Fatalf("unexpected abcn fully-interconnected outputs: got=%v want=%v", outputs, []float64{wantOutput})
+	}
+	if math.Abs(updated[0][0].Output-hiddenOut) > 1e-12 {
+		t.Fatalf("unexpected abcn fully-interconnected hidden output: got=%v want=%v", updated[0][0].Output, hiddenOut)
+	}
+}
+
+func TestCalculateOutputABCNJordanRecurrentUsesPreviousOutputForFirstLayer(t *testing.T) {
+	input := CoordinateHyperlayer{
+		{Coords: []float64{-1}, Output: 0.5},
+		{Coords: []float64{1}, Output: -0.25},
+	}
+	hidden := ABCNCoordinateHyperlayer{{Coords: []float64{0}, Output: 0, Weights: []ABCNWeight{
+		abcnTestWeight(0.2), abcnTestWeight(0.3), abcnTestWeight(0.5),
+	}}}
+	output := ABCNCoordinateHyperlayer{{Coords: []float64{1}, Output: 0.4, Weights: []ABCNWeight{
+		abcnTestWeight(-0.7),
+	}}}
+
+	outputs, updated, err := CalculateOutputABCNJordanRecurrent(input, []ABCNCoordinateHyperlayer{hidden, output})
+	if err != nil {
+		t.Fatalf("calculate abcn jordan output: %v", err)
+	}
+	hiddenOut := math.Tanh(0.5*0.2 + -0.25*0.3 + 0.4*0.5)
+	wantOutput := math.Tanh(hiddenOut * -0.7)
+	if len(outputs) != 1 || math.Abs(outputs[0]-wantOutput) > 1e-12 {
+		t.Fatalf("unexpected abcn jordan outputs: got=%v want=%v", outputs, []float64{wantOutput})
+	}
+	if math.Abs(updated[0][0].Output-hiddenOut) > 1e-12 {
+		t.Fatalf("unexpected abcn jordan hidden output: got=%v want=%v", updated[0][0].Output, hiddenOut)
+	}
+}
+
+func TestCalculateOutputABCNNeuronSelfRecurrentPrependsPreviousNeurodeState(t *testing.T) {
+	input := CoordinateHyperlayer{{Coords: []float64{-1}, Output: 0.5}}
+	hidden := ABCNCoordinateHyperlayer{{Coords: []float64{0}, Output: 0.3, Weights: []ABCNWeight{
+		abcnTestWeight(0.4), abcnTestWeight(0.8),
+	}}}
+	output := ABCNCoordinateHyperlayer{{Coords: []float64{1}, Output: 0.2, Weights: []ABCNWeight{
+		abcnTestWeight(-0.5), abcnTestWeight(0.6),
+	}}}
+
+	outputs, updated, err := CalculateOutputABCNNeuronSelfRecurrent(input, []ABCNCoordinateHyperlayer{hidden, output})
+	if err != nil {
+		t.Fatalf("calculate abcn neuron-self recurrent output: %v", err)
+	}
+	hiddenOut := math.Tanh(0.3*0.4 + 0.5*0.8)
+	wantOutput := math.Tanh(0.2*-0.5 + hiddenOut*0.6)
+	if len(outputs) != 1 || math.Abs(outputs[0]-wantOutput) > 1e-12 {
+		t.Fatalf("unexpected abcn neuron-self recurrent outputs: got=%v want=%v", outputs, []float64{wantOutput})
+	}
+	if math.Abs(updated[0][0].Output-hiddenOut) > 1e-12 {
+		t.Fatalf("unexpected abcn neuron-self recurrent hidden output: got=%v want=%v", updated[0][0].Output, hiddenOut)
+	}
+}
+
+func TestCalculateOutputABCNForLinkFormDispatchesActiveForms(t *testing.T) {
+	input := CoordinateHyperlayer{{Coords: []float64{-1}, Output: 1}}
+
+	if _, _, err := CalculateOutputABCNForLinkForm(LinkFormL2LFeedforward, input, []ABCNCoordinateHyperlayer{{{Coords: []float64{1}, Weights: []ABCNWeight{abcnTestWeight(0.5)}}}}); err != nil {
+		t.Fatalf("calculate abcn output for %s: %v", LinkFormL2LFeedforward, err)
+	}
+	if _, _, err := CalculateOutputABCNForLinkForm(LinkFormFullyInterconnected, input, []ABCNCoordinateHyperlayer{{{Coords: []float64{1}, Weights: []ABCNWeight{abcnTestWeight(0.5), abcnTestWeight(0.1)}}}}); err != nil {
+		t.Fatalf("calculate abcn output for %s: %v", LinkFormFullyInterconnected, err)
+	}
+	if _, _, err := CalculateOutputABCNForLinkForm(LinkFormJordanRecurrent, input, []ABCNCoordinateHyperlayer{{{Coords: []float64{1}, Weights: []ABCNWeight{abcnTestWeight(0.5), abcnTestWeight(0.1)}}}}); err != nil {
+		t.Fatalf("calculate abcn output for %s: %v", LinkFormJordanRecurrent, err)
+	}
+	if _, _, err := CalculateOutputABCNForLinkForm(LinkFormNeuronSelfRecurrent, input, []ABCNCoordinateHyperlayer{{{Coords: []float64{1}, Weights: []ABCNWeight{abcnTestWeight(0.1), abcnTestWeight(0.5)}}}}); err != nil {
+		t.Fatalf("calculate abcn output for %s: %v", LinkFormNeuronSelfRecurrent, err)
+	}
+	if _, _, err := CalculateOutputABCNForLinkForm("planeself_recurrent", input, []ABCNCoordinateHyperlayer{{{Coords: []float64{1}, Weights: []ABCNWeight{abcnTestWeight(0.5)}}}}); !errors.Is(err, ErrUnsupportedSubstrateLink) {
+		t.Fatalf("expected ErrUnsupportedSubstrateLink, got %v", err)
 	}
 }
 
