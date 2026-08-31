@@ -97,6 +97,24 @@ func BuildCoordinatePairsForLinkFormLayers(req CoordinateLayerPairBuildRequest) 
 	})
 }
 
+// CountIONeurodes mirrors substrate.erl tot_ONeurodes/2 for the covered IO
+// formats. The same cardinality rules apply to sensor and actuator specs.
+func CountIONeurodes(specs []IOCoordinateSpec) (int, error) {
+	if len(specs) == 0 {
+		return 0, fmt.Errorf("%w: missing io specs", ErrInvalidSubstrateCoordinates)
+	}
+
+	total := 0
+	for _, spec := range specs {
+		count, err := ioNeurodeCount(spec)
+		if err != nil {
+			return 0, err
+		}
+		total += count
+	}
+	return total, nil
+}
+
 // BuildCoordList mirrors substrate.erl build_CoordList/1. Density 1 maps to a
 // centered coordinate, otherwise coordinates span [-1, 1] in reference order.
 func BuildCoordList(density int) ([]float64, error) {
@@ -347,6 +365,37 @@ func composeCoordedIOPart(spec IOCoordinateSpec, weights []float64) (CoordinateH
 	return layer, nil
 }
 
+func ioNeurodeCount(spec IOCoordinateSpec) (int, error) {
+	format := spec.Format
+	if format == "" {
+		format = CoordinateFormatUndefined
+	}
+	switch format {
+	case CoordinateFormatUndefined, CoordinateFormatNoGeo:
+		if spec.VL <= 0 {
+			return 0, fmt.Errorf("%w: vl must be > 0: %d", ErrInvalidSubstrateCoordinates, spec.VL)
+		}
+		return spec.VL, nil
+	case CoordinateFormatSymmetric:
+		return multiplyDensities(spec.Resolutions)
+	case CoordinateFormatCoorded:
+		if spec.Dim <= 0 {
+			return 0, fmt.Errorf("%w: coorded dim must be > 0: %d", ErrInvalidSubstrateCoordinates, spec.Dim)
+		}
+		if len(spec.Neurodes) == 0 {
+			return 0, fmt.Errorf("%w: missing coorded neurodes", ErrInvalidSubstrateCoordinates)
+		}
+		for i, neurode := range spec.Neurodes {
+			if len(neurode.Coords) != spec.Dim {
+				return 0, fmt.Errorf("%w: coorded neurode %d coordinate dimension %d does not match dim %d", ErrInvalidSubstrateCoordinates, i, len(neurode.Coords), spec.Dim)
+			}
+		}
+		return len(spec.Neurodes), nil
+	default:
+		return 0, fmt.Errorf("%w: unsupported io coordinate format %q", ErrInvalidSubstrateCoordinates, spec.Format)
+	}
+}
+
 func maxIOCoordinateDim(specs []IOCoordinateSpec) (int, error) {
 	maxDim := 1
 	for _, spec := range specs {
@@ -428,6 +477,13 @@ func CreateSubstrate(req CreateSubstrateRequest) ([]CoordinateHyperlayer, error)
 	outputLayer, err := ComposeOutputSubstrateForDimension(req.OutputSpecs, substrateDimension, nil)
 	if err != nil {
 		return nil, err
+	}
+	outputCount, err := CountIONeurodes(req.OutputSpecs)
+	if err != nil {
+		return nil, err
+	}
+	if outputCount != len(outputLayer) {
+		return nil, fmt.Errorf("%w: output neurode count %d does not match composed layer count %d", ErrInvalidSubstrateCoordinates, outputCount, len(outputLayer))
 	}
 	return BuildSubstrateLayers(SubstrateLayerBuildRequest{
 		InputLayer:  inputLayer,

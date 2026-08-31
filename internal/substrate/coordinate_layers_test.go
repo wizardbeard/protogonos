@@ -140,6 +140,57 @@ func TestBuildCoordinatePairsForLinkFormLayersDispatchesNeuronSelfRecurrent(t *t
 	}
 }
 
+func TestCountIONeurodesMatchesCoveredReferenceFormats(t *testing.T) {
+	got, err := CountIONeurodes([]IOCoordinateSpec{
+		{Format: CoordinateFormatUndefined, VL: 2},
+		{Format: CoordinateFormatNoGeo, VL: 3},
+		{Format: CoordinateFormatSymmetric, Resolutions: []int{2, 3}},
+		{Format: CoordinateFormatCoorded, Dim: 2, Neurodes: CoordinateHyperlayer{
+			{Coords: []float64{-1, 1}},
+			{Coords: []float64{1, -1}},
+		}},
+	})
+	if err != nil {
+		t.Fatalf("count io neurodes: %v", err)
+	}
+	if got != 13 {
+		t.Fatalf("unexpected io neurode count: got=%d want=13", got)
+	}
+}
+
+func TestCountIONeurodesDefaultsEmptyFormatToUndefined(t *testing.T) {
+	got, err := CountIONeurodes([]IOCoordinateSpec{{VL: 4}})
+	if err != nil {
+		t.Fatalf("count io neurodes: %v", err)
+	}
+	if got != 4 {
+		t.Fatalf("unexpected default-format io neurode count: got=%d want=4", got)
+	}
+}
+
+func TestCountIONeurodesValidatesSpecs(t *testing.T) {
+	tests := []struct {
+		name  string
+		specs []IOCoordinateSpec
+	}{
+		{name: "missing", specs: nil},
+		{name: "invalid vl", specs: []IOCoordinateSpec{{Format: CoordinateFormatNoGeo, VL: 0}}},
+		{name: "invalid symmetric resolution", specs: []IOCoordinateSpec{{Format: CoordinateFormatSymmetric, Resolutions: []int{2, 0}}}},
+		{name: "invalid coorded dim", specs: []IOCoordinateSpec{{Format: CoordinateFormatCoorded, Neurodes: CoordinateHyperlayer{{Coords: []float64{0}}}}}},
+		{name: "missing coorded neurodes", specs: []IOCoordinateSpec{{Format: CoordinateFormatCoorded, Dim: 1}}},
+		{name: "mismatched coorded dim", specs: []IOCoordinateSpec{{Format: CoordinateFormatCoorded, Dim: 2, Neurodes: CoordinateHyperlayer{{Coords: []float64{0}}}}}},
+		{name: "unsupported", specs: []IOCoordinateSpec{{Format: "asymmetric", VL: 1}}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if _, err := CountIONeurodes(tt.specs); !errors.Is(err, ErrInvalidSubstrateCoordinates) {
+				t.Fatalf("expected ErrInvalidSubstrateCoordinates, got %v", err)
+			}
+		})
+	}
+}
+
 func TestBuildCoordListMatchesReferenceOrder(t *testing.T) {
 	tests := []struct {
 		name    string
