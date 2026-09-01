@@ -37,6 +37,83 @@ func flatlandGreedyForager(input []float64) []float64 {
 	return []float64{0}
 }
 
+func TestFlatlandPublicProcessCommandWrapper(t *testing.T) {
+	process := NewFlatlandPublicProcess()
+	ctx := context.Background()
+
+	if response := process.Call(ctx, FlatlandPublicTickMessage{}); response.Err == nil {
+		t.Fatal("expected tick before start to fail")
+	}
+	if response := process.Call(ctx, FlatlandPublicStartMessage{}); response.Err != nil || !response.OK {
+		t.Fatalf("start response=%+v", response)
+	}
+	t.Cleanup(func() {
+		_ = process.Call(context.Background(), FlatlandPublicStopMessage{Reason: "normal"}).Err
+	})
+
+	enter := process.Call(ctx, FlatlandPublicEnterMessage{Agent: FlatlandPublicAgent{
+		ID:   "agent-1",
+		Mode: "validation",
+	}})
+	if enter.Err != nil || !enter.OK {
+		t.Fatalf("enter response=%+v", enter)
+	}
+
+	sense := process.Call(ctx, FlatlandPublicSenseMessage{AgentID: "agent-1"})
+	if sense.Err != nil || !sense.OK {
+		t.Fatalf("sense response=%+v", sense)
+	}
+	if len(sense.Percept) != flatlandBaseFeatureWidth+flatlandScannerWidth {
+		t.Fatalf("unexpected percept width=%d response=%+v", len(sense.Percept), sense)
+	}
+	if surface, _ := sense.Trace["sensor_surface"].(string); surface != "step_input" {
+		t.Fatalf("expected step_input sense trace, got %+v", sense.Trace)
+	}
+
+	act := process.Call(ctx, FlatlandPublicActMessage{AgentID: "agent-1", Output: []float64{1}})
+	if act.Err != nil || !act.OK {
+		t.Fatalf("act response=%+v", act)
+	}
+	if act.Fitness <= 0 {
+		t.Fatalf("expected positive act fitness, got %+v", act)
+	}
+	if width, _ := act.Trace["last_control_width"].(int); width != 1 {
+		t.Fatalf("expected single-channel control trace, got %+v", act.Trace)
+	}
+
+	agents := process.Call(ctx, FlatlandPublicGetAllMessage{})
+	if agents.Err != nil || !agents.OK || len(agents.Agents) != 1 {
+		t.Fatalf("get_all response=%+v", agents)
+	}
+
+	update := process.Call(ctx, FlatlandPublicUpdateAgentsMessage{Agents: []FlatlandPublicAgent{
+		{ID: "agent-1"},
+		{ID: "agent-2", Mode: "benchmark"},
+	}})
+	if update.Err != nil || !update.OK {
+		t.Fatalf("update response=%+v", update)
+	}
+	tick := process.Call(ctx, FlatlandPublicTickMessage{})
+	if tick.Err != nil || !tick.OK {
+		t.Fatalf("tick response=%+v", tick)
+	}
+	if active, _ := tick.Trace["active_agents"].(int); active != 2 {
+		t.Fatalf("expected two active agents, trace=%+v", tick.Trace)
+	}
+
+	leave := process.Call(ctx, FlatlandPublicLeaveMessage{AgentID: "agent-1"})
+	if leave.Err != nil || !leave.OK {
+		t.Fatalf("leave response=%+v", leave)
+	}
+	if response := process.Call(ctx, FlatlandPublicSyncMessage{}); response.Err != nil || !response.OK {
+		t.Fatalf("sync response=%+v", response)
+	}
+	stop := process.Call(ctx, FlatlandPublicStopMessage{Reason: "shutdown"})
+	if stop.Err != nil || !stop.OK || stop.StopReason != "shutdown" {
+		t.Fatalf("stop response=%+v", stop)
+	}
+}
+
 func TestFlatlandScapePublicLifecycleAndTick(t *testing.T) {
 	scape := FlatlandScape{}
 	if _, err := scape.TickPublic(context.Background()); err == nil {

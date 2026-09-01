@@ -172,6 +172,53 @@ func (FlatlandScape) PublicAgents() ([]Trace, error) {
 	return out, nil
 }
 
+func (FlatlandScape) SensePublicAgent(ctx context.Context, agentID string) ([]float64, Trace, error) {
+	agentID = strings.TrimSpace(agentID)
+	if agentID == "" {
+		return nil, nil, fmt.Errorf("flatland public agent id is required")
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, nil, err
+	}
+
+	flatlandPublicWorld.mu.Lock()
+	defer flatlandPublicWorld.mu.Unlock()
+	if !flatlandPublicWorld.started {
+		return nil, nil, fmt.Errorf("flatland public world is not started")
+	}
+	state, exists := flatlandPublicWorld.agents[agentID]
+	if !exists {
+		return nil, nil, fmt.Errorf("flatland public agent not found: %s", agentID)
+	}
+	if state.terminated {
+		return nil, flatlandPublicAgentTrace(state), fmt.Errorf("flatland public agent terminated: %s", agentID)
+	}
+
+	state.episode.advanceRespawns()
+	sense := state.episode.sense()
+	trace := flatlandPublicAgentTrace(state)
+	trace["sensor_surface"] = "step_input"
+	trace["sensor_width"] = flatlandBaseFeatureWidth + flatlandScannerWidth
+	trace["scanner_density"] = flatlandScannerDensity
+	trace["scanner_density_effective"] = countActiveFlatlandScannerWeights(state.episode.scannerWeights)
+	trace["scanner_profile_active_bins"] = flatlandActiveScannerBins(state.episode.scannerWeights)
+	trace["last_food_distance"] = sense.distance
+	trace["last_prey_signal"] = sense.prey
+	trace["last_predator_signal"] = sense.predator
+	trace["last_poison_signal"] = sense.poison
+	trace["last_wall_signal"] = sense.wall
+	trace["last_food_proximity"] = sense.foodProximity
+	trace["last_prey_proximity"] = sense.preyProximity
+	trace["last_predator_proximity"] = sense.predatorProximity
+	trace["last_poison_proximity"] = sense.poisonProximity
+	trace["last_wall_proximity"] = sense.wallProximity
+	trace["last_resource_balance"] = sense.resourceBalance
+	trace["last_distance_scan_bins"] = flatlandScanSlice(sense.distanceScan)
+	trace["last_color_scan_bins"] = flatlandScanSlice(sense.colorScan)
+	trace["last_energy_scan_bins"] = flatlandScanSlice(sense.energyScan)
+	return flatlandStepInputVector(sense), trace, nil
+}
+
 func (FlatlandScape) UpdatePublicAgents(agents []FlatlandPublicAgent) error {
 	flatlandPublicWorld.mu.Lock()
 	defer flatlandPublicWorld.mu.Unlock()
@@ -254,6 +301,58 @@ func (FlatlandScape) LeavePublicAgent(agentID string) error {
 	}
 	delete(flatlandPublicWorld.agents, agentID)
 	return nil
+}
+
+func (FlatlandScape) ActPublicAgent(ctx context.Context, agentID string, output []float64) (Fitness, bool, Trace, error) {
+	agentID = strings.TrimSpace(agentID)
+	if agentID == "" {
+		return 0, false, nil, fmt.Errorf("flatland public agent id is required")
+	}
+	if err := ctx.Err(); err != nil {
+		return 0, false, nil, err
+	}
+	control, err := flatlandControlFromOutput(output)
+	if err != nil {
+		return 0, false, nil, err
+	}
+
+	flatlandPublicWorld.mu.Lock()
+	defer flatlandPublicWorld.mu.Unlock()
+	if !flatlandPublicWorld.started {
+		return 0, false, nil, fmt.Errorf("flatland public world is not started")
+	}
+	state, exists := flatlandPublicWorld.agents[agentID]
+	if !exists {
+		return 0, false, nil, fmt.Errorf("flatland public agent not found: %s", agentID)
+	}
+	if state.terminated {
+		trace := flatlandPublicAgentTrace(state)
+		trace["end"] = true
+		return 0, true, trace, nil
+	}
+
+	moveStep, hitFood, hitPoison, wallCollision, reason := state.episode.step(control.move)
+	if reason != "" {
+		state.terminated = true
+	}
+	trace := flatlandPublicAgentTrace(state)
+	trace["move_step"] = moveStep
+	trace["hit_food"] = hitFood
+	trace["hit_poison"] = hitPoison
+	trace["wall_collision"] = wallCollision
+	trace["terminal_reason"] = reason
+	trace["control_surface"] = "step_output"
+	trace["last_control_width"] = control.width
+	trace["end"] = state.terminated
+
+	fitness := clamp(
+		float64(state.episode.age)/float64(state.episode.maxAge)+
+			0.25*state.episode.normalizedEnergy()+
+			0.1*float64(state.episode.foodCollected-state.episode.poisonHits),
+		0,
+		1.4,
+	)
+	return Fitness(fitness), state.terminated, trace, nil
 }
 
 func (FlatlandScape) TickPublic(ctx context.Context) (Trace, error) {
