@@ -943,7 +943,11 @@ func buildReplayCortexFromSubstrateSnapshot(
 	if err != nil {
 		return nil, err
 	}
-	substrateRuntime, err := substrate.NewLayerRuntimeFromSnapshot(snapshot, substrate.LayerRuntimeSpec{})
+	spec, err := genotype.LayerRuntimeSpecForSnapshot(genome, snapshot)
+	if err != nil {
+		return nil, err
+	}
+	substrateRuntime, err := substrate.NewLayerRuntimeFromSnapshot(snapshot, spec)
 	if err != nil {
 		return nil, err
 	}
@@ -1631,7 +1635,11 @@ func substrateSnapshotRecord(ctx context.Context, item model.TopGenomeRecord, st
 	if stepInputs == nil {
 		return record, nil
 	}
-	replayed, err := substrate.NewLayerRuntimeFromSnapshot(*snapshot, substrate.LayerRuntimeSpec{})
+	spec, err := genotype.LayerRuntimeSpecForSnapshot(item.Genome, *snapshot)
+	if err != nil {
+		return SubstrateSnapshotRecord{}, err
+	}
+	replayed, err := substrate.NewLayerRuntimeFromSnapshot(*snapshot, spec)
 	if err != nil {
 		return SubstrateSnapshotRecord{}, err
 	}

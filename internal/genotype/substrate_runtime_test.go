@@ -118,6 +118,27 @@ func TestBuildSubstrateLayerRuntimeUsesIterativeConfig(t *testing.T) {
 	}
 }
 
+func TestLayerRuntimeSpecForSnapshotResolvesGenomeComponents(t *testing.T) {
+	genome := model.Genome{
+		ID: "typed-iterative-snapshot-runtime",
+		Substrate: &model.SubstrateConfig{
+			CPPName:    substrate.DefaultCPPName,
+			CEPName:    substrate.WeightExpressionCEPName,
+			Plasticity: substrate.SubstratePlasticityIterative,
+			LinkForm:   substrate.LinkFormL2LFeedforward,
+		},
+	}
+	spec, err := LayerRuntimeSpecForSnapshot(genome, substrate.LayerRuntimeSnapshot{
+		Plasticity: substrate.SubstratePlasticityIterative,
+	})
+	if err != nil {
+		t.Fatalf("snapshot runtime spec: %v", err)
+	}
+	if spec.IterativeCPP == nil || len(spec.CEPs) != 1 {
+		t.Fatalf("expected iterative CPP and CEP components, got %+v", spec)
+	}
+}
+
 func TestBuildSubstrateLayerRuntimeSupportsActiveLinkForms(t *testing.T) {
 	tests := []struct {
 		name       string

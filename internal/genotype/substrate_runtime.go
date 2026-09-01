@@ -16,6 +16,23 @@ type SubstrateLayerRuntimeBuildRequest struct {
 	OutputWidth int
 }
 
+func LayerRuntimeSpecForSnapshot(genome model.Genome, snapshot substrate.LayerRuntimeSnapshot) (substrate.LayerRuntimeSpec, error) {
+	cfg := genome.Substrate
+	if cfg == nil {
+		return substrate.LayerRuntimeSpec{}, nil
+	}
+	staticCPP, iterativeCPP, ceps, _, err := resolveLayerRuntimeComponents(cfg, snapshot.Plasticity)
+	if err != nil {
+		return substrate.LayerRuntimeSpec{}, err
+	}
+	return substrate.LayerRuntimeSpec{
+		StaticCPP:    staticCPP,
+		IterativeCPP: iterativeCPP,
+		CEPs:         ceps,
+		Parameters:   cfg.Parameters,
+	}, nil
+}
+
 // BuildSubstrateLayerRuntime builds a typed LayerRuntime when a genome carries
 // explicit substrate layer metadata. The bool return is false when callers
 // should keep using the legacy SimpleRuntime path.
