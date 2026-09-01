@@ -262,24 +262,28 @@ type TopGenomesRequest struct {
 }
 
 type SubstrateSnapshotsRequest struct {
-	RunID  string
-	Latest bool
-	Limit  int
-	Rank   int
+	RunID      string
+	Latest     bool
+	Limit      int
+	Rank       int
+	StepInputs []float64
 }
 
 type SubstrateSnapshotRecord struct {
-	Rank             int                            `json:"rank"`
-	Fitness          float64                        `json:"fitness"`
-	GenomeID         string                         `json:"genome_id"`
-	Plasticity       string                         `json:"plasticity"`
-	LinkForm         string                         `json:"link_form"`
-	StateMode        string                         `json:"state_mode"`
-	Terminated       bool                           `json:"terminated"`
-	WeightCount      int                            `json:"weight_count"`
-	ScalarLayerCount int                            `json:"scalar_layer_count"`
-	ABCNLayerCount   int                            `json:"abcn_layer_count"`
-	Snapshot         substrate.LayerRuntimeSnapshot `json:"snapshot"`
+	Rank             int                             `json:"rank"`
+	Fitness          float64                         `json:"fitness"`
+	GenomeID         string                          `json:"genome_id"`
+	Plasticity       string                          `json:"plasticity"`
+	LinkForm         string                          `json:"link_form"`
+	StateMode        string                          `json:"state_mode"`
+	Terminated       bool                            `json:"terminated"`
+	WeightCount      int                             `json:"weight_count"`
+	ScalarLayerCount int                             `json:"scalar_layer_count"`
+	ABCNLayerCount   int                             `json:"abcn_layer_count"`
+	Snapshot         substrate.LayerRuntimeSnapshot  `json:"snapshot"`
+	ReplayStepInputs []float64                       `json:"replay_step_inputs,omitempty"`
+	ReplayStepOutput []float64                       `json:"replay_step_output,omitempty"`
+	ReplayStepState  *substrate.LayerRuntimeSnapshot `json:"replay_step_state,omitempty"`
 }
 
 type MonitorControlRequest struct {
@@ -1543,7 +1547,11 @@ func (c *Client) SubstrateSnapshots(ctx context.Context, req SubstrateSnapshotsR
 		if item.SubstrateSnapshot == nil {
 			continue
 		}
-		out = append(out, substrateSnapshotRecord(item))
+		record, err := substrateSnapshotRecord(ctx, item, req.StepInputs)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, record)
 		if req.Limit > 0 && len(out) >= req.Limit {
 			break
 		}
@@ -1551,12 +1559,12 @@ func (c *Client) SubstrateSnapshots(ctx context.Context, req SubstrateSnapshotsR
 	return out, nil
 }
 
-func substrateSnapshotRecord(item model.TopGenomeRecord) SubstrateSnapshotRecord {
+func substrateSnapshotRecord(ctx context.Context, item model.TopGenomeRecord, stepInputs []float64) (SubstrateSnapshotRecord, error) {
 	snapshot := substrate.CloneLayerRuntimeSnapshot(item.SubstrateSnapshot)
 	if snapshot == nil {
 		snapshot = &substrate.LayerRuntimeSnapshot{}
 	}
-	return SubstrateSnapshotRecord{
+	record := SubstrateSnapshotRecord{
 		Rank:             item.Rank,
 		Fitness:          item.Fitness,
 		GenomeID:         item.Genome.ID,
@@ -1569,6 +1577,22 @@ func substrateSnapshotRecord(item model.TopGenomeRecord) SubstrateSnapshotRecord
 		ABCNLayerCount:   len(snapshot.ABCN.Layers),
 		Snapshot:         *snapshot,
 	}
+	if stepInputs == nil {
+		return record, nil
+	}
+	replayed, err := substrate.NewLayerRuntimeFromSnapshot(*snapshot, substrate.LayerRuntimeSpec{})
+	if err != nil {
+		return SubstrateSnapshotRecord{}, err
+	}
+	outputs, err := replayed.Step(ctx, stepInputs)
+	if err != nil {
+		return SubstrateSnapshotRecord{}, err
+	}
+	state := replayed.Snapshot()
+	record.ReplayStepInputs = append([]float64(nil), stepInputs...)
+	record.ReplayStepOutput = append([]float64(nil), outputs...)
+	record.ReplayStepState = &state
+	return record, nil
 }
 
 func (c *Client) EpitopesReplay(ctx context.Context, req EpitopesReplayRequest) (EpitopesReplaySummary, error) {

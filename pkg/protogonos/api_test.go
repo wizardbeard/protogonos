@@ -222,6 +222,24 @@ func TestClientSubstrateSnapshotsFiltersStoredTopGenomes(t *testing.T) {
 	if len(rankSnapshots) != 0 {
 		t.Fatalf("expected no snapshot for rank without substrate state, got %+v", rankSnapshots)
 	}
+
+	replayed, err := client.SubstrateSnapshots(context.Background(), SubstrateSnapshotsRequest{
+		RunID:      "run-snapshots",
+		Rank:       1,
+		StepInputs: []float64{0.25},
+	})
+	if err != nil {
+		t.Fatalf("replay substrate snapshots: %v", err)
+	}
+	if len(replayed) != 1 {
+		t.Fatalf("unexpected replayed snapshot count: %d", len(replayed))
+	}
+	if len(replayed[0].ReplayStepOutput) != 1 || replayed[0].ReplayStepState == nil {
+		t.Fatalf("expected replay output and state, got %+v", replayed[0])
+	}
+	if len(replayed[0].ReplayStepInputs) != 1 || replayed[0].ReplayStepInputs[0] != 0.25 {
+		t.Fatalf("expected replay inputs to be copied, got %+v", replayed[0].ReplayStepInputs)
+	}
 }
 
 func TestClientRunRejectsUnknownSelectionAndPostprocessor(t *testing.T) {

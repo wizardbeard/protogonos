@@ -1080,12 +1080,30 @@ func TestSubstrateSnapshotCommandSQLiteReadsPersistedTopGenomeSnapshots(t *testi
 		t.Fatalf("unexpected substrate snapshot output: %s", out)
 	}
 
+	stepOut, err := captureStdout(func() error {
+		return run(context.Background(), []string{
+			"substrate-snapshot",
+			"--store", "sqlite",
+			"--db-path", dbPath,
+			"--run-id", "run-snapshots",
+			"--rank", "1",
+			"--step", "0.25",
+		})
+	})
+	if err != nil {
+		t.Fatalf("substrate snapshot step command: %v", err)
+	}
+	if !strings.Contains(stepOut, "replay_step_output=") {
+		t.Fatalf("expected replay output in substrate snapshot command: %s", stepOut)
+	}
+
 	jsonOut, err := captureStdout(func() error {
 		return run(context.Background(), []string{
 			"substrate-snapshot",
 			"--store", "sqlite",
 			"--db-path", dbPath,
 			"--run-id", "run-snapshots",
+			"--step", "0.25",
 			"--json",
 		})
 	})
@@ -1098,6 +1116,9 @@ func TestSubstrateSnapshotCommandSQLiteReadsPersistedTopGenomeSnapshots(t *testi
 	}
 	if len(parsed) != 1 || parsed[0]["genome_id"] != "g1" {
 		t.Fatalf("unexpected substrate snapshot json output: %+v", parsed)
+	}
+	if _, ok := parsed[0]["replay_step_output"]; !ok {
+		t.Fatalf("expected replay step output in substrate snapshot json: %+v", parsed[0])
 	}
 }
 

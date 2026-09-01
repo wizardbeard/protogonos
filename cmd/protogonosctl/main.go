@@ -10,6 +10,8 @@ import (
 	"math/rand"
 	"os"
 	"path/filepath"
+	"strconv"
+	"strings"
 	"time"
 
 	"protogonos/internal/evo"
@@ -845,6 +847,7 @@ func runSubstrateSnapshot(ctx context.Context, args []string) error {
 	latest := fs.Bool("latest", false, "show substrate snapshots for the most recent run from run index")
 	limit := fs.Int("limit", 5, "max substrate snapshots to print (<=0 for all)")
 	rank := fs.Int("rank", 0, "specific top-genome rank to inspect (<=0 for all)")
+	step := fs.String("step", "", "comma-separated replay-step inputs, for example 0.25,1.0")
 	jsonOut := fs.Bool("json", false, "emit substrate snapshots as JSON")
 	storeKind := fs.String("store", storage.DefaultStoreKind(), "store backend: memory|sqlite")
 	dbPath := fs.String("db-path", "protogonos.db", "sqlite database path")
@@ -856,6 +859,10 @@ func runSubstrateSnapshot(ctx context.Context, args []string) error {
 	}
 	if *runID == "" && !*latest {
 		return errors.New("substrate-snapshot requires --run-id or --latest")
+	}
+	stepInputs, err := parseFloatListFlag(*step)
+	if err != nil {
+		return err
 	}
 
 	client, err := protoapi.New(protoapi.Options{
@@ -872,10 +879,11 @@ func runSubstrateSnapshot(ctx context.Context, args []string) error {
 	}()
 
 	snapshots, err := client.SubstrateSnapshots(ctx, protoapi.SubstrateSnapshotsRequest{
-		RunID:  *runID,
-		Latest: *latest,
-		Limit:  *limit,
-		Rank:   *rank,
+		RunID:      *runID,
+		Latest:     *latest,
+		Limit:      *limit,
+		Rank:       *rank,
+		StepInputs: stepInputs,
 	})
 	if err != nil {
 		return err
@@ -891,7 +899,7 @@ func runSubstrateSnapshot(ctx context.Context, args []string) error {
 	}
 
 	for _, item := range snapshots {
-		fmt.Printf("rank=%d fitness=%.6f genome_id=%s plasticity=%s link_form=%s state_mode=%s terminated=%t weights=%d scalar_layers=%d abcn_layers=%d\n",
+		line := fmt.Sprintf("rank=%d fitness=%.6f genome_id=%s plasticity=%s link_form=%s state_mode=%s terminated=%t weights=%d scalar_layers=%d abcn_layers=%d",
 			item.Rank,
 			item.Fitness,
 			item.GenomeID,
@@ -903,8 +911,33 @@ func runSubstrateSnapshot(ctx context.Context, args []string) error {
 			item.ScalarLayerCount,
 			item.ABCNLayerCount,
 		)
+		if stepInputs != nil {
+			line += fmt.Sprintf(" replay_step_output=%v", item.ReplayStepOutput)
+		}
+		fmt.Println(line)
 	}
 	return nil
+}
+
+func parseFloatListFlag(raw string) ([]float64, error) {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return nil, nil
+	}
+	parts := strings.Split(raw, ",")
+	values := make([]float64, 0, len(parts))
+	for i, part := range parts {
+		part = strings.TrimSpace(part)
+		if part == "" {
+			return nil, fmt.Errorf("empty float value at position %d", i+1)
+		}
+		value, err := strconv.ParseFloat(part, 64)
+		if err != nil {
+			return nil, fmt.Errorf("parse float value %q at position %d: %w", part, i+1, err)
+		}
+		values = append(values, value)
+	}
+	return values, nil
 }
 
 func runSpecies(ctx context.Context, args []string) error {
