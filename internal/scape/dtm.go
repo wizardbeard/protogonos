@@ -12,6 +12,28 @@ import (
 // DTMScape mirrors the delayed T-maze benchmark behavior from scape.erl.
 type DTMScape struct{}
 
+type DTMSimulator struct {
+	cfg     dtmModeConfig
+	episode dtmEpisode
+	halted  bool
+}
+
+type DTMSimulatorState struct {
+	Mode         string
+	PositionX    int
+	PositionY    int
+	Direction    int
+	TotalRuns    int
+	RunIndex     int
+	StepIndex    int
+	SwitchEvent  int
+	Switched     bool
+	FitnessAcc   float64
+	RunProgress  float64
+	StepProgress float64
+	Halted       bool
+}
+
 func (DTMScape) Name() string {
 	return "dtm"
 }
@@ -38,6 +60,108 @@ func (DTMScape) EvaluateMode(ctx context.Context, agent Agent, mode string) (Fit
 		return 0, nil, fmt.Errorf("agent %s does not implement step runner", agent.ID())
 	}
 	return evaluateDTMWithStep(ctx, runner, cfg)
+}
+
+func NewDTMSimulator(mode string) (*DTMSimulator, error) {
+	cfg, err := dtmConfigForMode(mode)
+	if err != nil {
+		return nil, err
+	}
+	return &DTMSimulator{
+		cfg:     cfg,
+		episode: newDTMEpisode("dtm-simulator", cfg),
+	}, nil
+}
+
+func (s *DTMSimulator) Sense(ctx context.Context, parameter string) ([]float64, error) {
+	if s == nil {
+		return nil, fmt.Errorf("dtm simulator is nil")
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	if s.halted {
+		return nil, fmt.Errorf("dtm simulator halted")
+	}
+	s.applySwitchEvent()
+
+	baseSense, err := s.episode.sense()
+	if err != nil {
+		return nil, err
+	}
+	switch strings.TrimSpace(strings.ToLower(parameter)) {
+	case "", "all":
+		return append([]float64(nil), baseSense...), nil
+	case "range_sense":
+		return append([]float64(nil), baseSense[:3]...), nil
+	case "reward":
+		return []float64{baseSense[3]}, nil
+	default:
+		return nil, fmt.Errorf("unsupported dtm sense parameter: %s", parameter)
+	}
+}
+
+func (s *DTMSimulator) Move(ctx context.Context, output []float64) (Fitness, bool, error) {
+	if s == nil {
+		return 0, false, fmt.Errorf("dtm simulator is nil")
+	}
+	if err := ctx.Err(); err != nil {
+		return 0, false, err
+	}
+	if s.halted {
+		return 0, true, nil
+	}
+	s.applySwitchEvent()
+
+	move := 0.0
+	if len(output) > 0 {
+		move = output[0]
+	}
+	_, _, _, _, _, err := s.episode.applyMove(move)
+	if err != nil {
+		return 0, false, err
+	}
+	if s.episode.runIndex >= s.episode.totalRuns {
+		s.halted = true
+		return Fitness(s.episode.fitnessAcc), true, nil
+	}
+	return 0, false, nil
+}
+
+func (s *DTMSimulator) Reset() {
+	if s == nil {
+		return
+	}
+	s.episode = newDTMEpisode("dtm-simulator", s.cfg)
+	s.halted = false
+}
+
+func (s *DTMSimulator) State() DTMSimulatorState {
+	if s == nil {
+		return DTMSimulatorState{}
+	}
+	return DTMSimulatorState{
+		Mode:         s.cfg.mode,
+		PositionX:    s.episode.position.x,
+		PositionY:    s.episode.position.y,
+		Direction:    s.episode.direction,
+		TotalRuns:    s.episode.totalRuns,
+		RunIndex:     s.episode.runIndex,
+		StepIndex:    s.episode.stepIndex,
+		SwitchEvent:  s.episode.switchEvent,
+		Switched:     s.episode.switched,
+		FitnessAcc:   s.episode.fitnessAcc,
+		RunProgress:  dtmRunProgress(s.episode.runIndex, s.episode.totalRuns),
+		StepProgress: dtmStepProgress(s.episode.stepIndex),
+		Halted:       s.halted,
+	}
+}
+
+func (s *DTMSimulator) applySwitchEvent() {
+	if s.episode.switchEvent >= 0 && s.episode.runIndex == s.episode.switchEvent && !s.episode.switched {
+		s.episode.swapRewardSectors()
+		s.episode.switched = true
+	}
 }
 
 type dtmCoord struct {

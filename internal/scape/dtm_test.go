@@ -499,3 +499,117 @@ func TestDTMScapeSingleRunDoesNotTriggerRewardSwitch(t *testing.T) {
 		t.Fatalf("expected single completed run to report last_run_index=0, got %+v", trace)
 	}
 }
+
+func TestDTMSimulatorSenseMoveStateAndReset(t *testing.T) {
+	sim, err := NewDTMSimulator("gt")
+	if err != nil {
+		t.Fatalf("new dtm simulator: %v", err)
+	}
+
+	all, err := sim.Sense(context.Background(), "all")
+	if err != nil {
+		t.Fatalf("sense all: %v", err)
+	}
+	if len(all) != 4 {
+		t.Fatalf("expected all sense width 4, got %d", len(all))
+	}
+	ranges, err := sim.Sense(context.Background(), "range_sense")
+	if err != nil {
+		t.Fatalf("sense range_sense: %v", err)
+	}
+	if len(ranges) != 3 {
+		t.Fatalf("expected range_sense width 3, got %d", len(ranges))
+	}
+	reward, err := sim.Sense(context.Background(), "reward")
+	if err != nil {
+		t.Fatalf("sense reward: %v", err)
+	}
+	if len(reward) != 1 || reward[0] != 0 {
+		t.Fatalf("expected start reward [0], got %+v", reward)
+	}
+
+	fitness, end, err := sim.Move(context.Background(), []float64{0})
+	if err != nil {
+		t.Fatalf("move forward: %v", err)
+	}
+	if end || fitness != 0 {
+		t.Fatalf("expected non-terminal zero-fitness move, got fitness=%f end=%t", fitness, end)
+	}
+	state := sim.State()
+	if state.PositionX != 0 || state.PositionY != 1 || state.Direction != 90 || state.StepIndex != 1 {
+		t.Fatalf("unexpected state after forward move: %+v", state)
+	}
+
+	sim.Reset()
+	state = sim.State()
+	if state.PositionX != 0 || state.PositionY != 0 || state.Direction != 90 || state.RunIndex != 0 || state.StepIndex != 0 || state.Halted {
+		t.Fatalf("unexpected state after reset: %+v", state)
+	}
+}
+
+func TestDTMSimulatorTerminalRunAccounting(t *testing.T) {
+	sim, err := NewDTMSimulator("gt")
+	if err != nil {
+		t.Fatalf("new dtm simulator: %v", err)
+	}
+	sim.episode.position = dtmCoord{x: 1, y: 1}
+	sim.episode.runIndex = sim.episode.totalRuns - 1
+	sim.episode.fitnessAcc = 50
+
+	fitness, end, err := sim.Move(context.Background(), []float64{0})
+	if err != nil {
+		t.Fatalf("terminal move: %v", err)
+	}
+	if !end {
+		t.Fatalf("expected terminal move to end")
+	}
+	if fitness != 51 {
+		t.Fatalf("expected terminal fitness 51, got %f", fitness)
+	}
+	state := sim.State()
+	if !state.Halted || state.RunIndex != state.TotalRuns || state.StepIndex != 0 {
+		t.Fatalf("unexpected terminal state: %+v", state)
+	}
+	if _, err := sim.Sense(context.Background(), "all"); err == nil {
+		t.Fatalf("expected halted simulator sense to fail")
+	}
+}
+
+func TestDTMSimulatorSwitchEventState(t *testing.T) {
+	sim, err := NewDTMSimulator("gt")
+	if err != nil {
+		t.Fatalf("new dtm simulator: %v", err)
+	}
+	sim.episode.runIndex = sim.episode.switchEvent
+	if sim.State().Switched {
+		t.Fatalf("expected simulator to start unswitched")
+	}
+
+	_, err = sim.Sense(context.Background(), "all")
+	if err != nil {
+		t.Fatalf("sense at switch event: %v", err)
+	}
+	if !sim.State().Switched {
+		t.Fatalf("expected simulator sense to record switched state")
+	}
+	sim.episode.position = dtmCoord{x: 0, y: 0}
+	sim.episode.direction = 90
+
+	_, end, err := sim.Move(context.Background(), []float64{0})
+	if err != nil {
+		t.Fatalf("move at switch event: %v", err)
+	}
+	if end {
+		t.Fatalf("expected switch-event move to remain non-terminal")
+	}
+	state := sim.State()
+	if !state.Switched {
+		t.Fatalf("expected simulator to record switched state: %+v", state)
+	}
+	if sim.episode.sectors[dtmCoord{x: 1, y: 1}].reward != 0.2 {
+		t.Fatalf("expected right reward sector to be swapped")
+	}
+	if sim.episode.sectors[dtmCoord{x: -1, y: 1}].reward != 1 {
+		t.Fatalf("expected left reward sector to be swapped")
+	}
+}
