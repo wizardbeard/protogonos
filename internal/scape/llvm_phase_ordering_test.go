@@ -545,3 +545,118 @@ func TestLLVMPhaseOrderingScapeContextWorkflowOverride(t *testing.T) {
 		t.Fatalf("expected default workflow name, got %+v", defaultTrace)
 	}
 }
+
+func TestLLVMPhaseOrderingSimulatorSenseOptimizeAndReset(t *testing.T) {
+	sim, err := NewLLVMPhaseOrderingSimulator(context.Background(), "gt")
+	if err != nil {
+		t.Fatalf("new llvm simulator: %v", err)
+	}
+
+	all, err := sim.Sense(context.Background(), "all")
+	if err != nil {
+		t.Fatalf("sense all: %v", err)
+	}
+	if len(all) != llvmPerceptWidth {
+		t.Fatalf("expected all sense width %d, got %d", llvmPerceptWidth, len(all))
+	}
+	core, err := sim.Sense(context.Background(), "core")
+	if err != nil {
+		t.Fatalf("sense core: %v", err)
+	}
+	if len(core) != 2 {
+		t.Fatalf("expected core sense width 2, got %d", len(core))
+	}
+	extended, err := sim.Sense(context.Background(), "extended")
+	if err != nil {
+		t.Fatalf("sense extended: %v", err)
+	}
+	if len(extended) != 5 {
+		t.Fatalf("expected extended sense width 5, got %d", len(extended))
+	}
+
+	fitness, end, err := sim.Optimize(context.Background(), []float64{1})
+	if err != nil {
+		t.Fatalf("optimize scalar: %v", err)
+	}
+	if end || fitness != 0 {
+		t.Fatalf("expected non-terminal zero-fitness optimize step, got fitness=%f end=%t", fitness, end)
+	}
+	state := sim.State()
+	if state.PhasesUsed != 1 || state.ScalarDecisions != 1 || len(state.SelectedOptimizations) != 1 {
+		t.Fatalf("unexpected state after scalar optimize: %+v", state)
+	}
+	if state.Complexity >= 1.25 {
+		t.Fatalf("expected scalar optimize to reduce complexity, got %+v", state)
+	}
+
+	sim.Reset()
+	state = sim.State()
+	if state.PhasesUsed != 0 || state.ScalarDecisions != 0 || state.VectorDecisions != 0 || state.Halted || len(state.SelectedOptimizations) != 0 {
+		t.Fatalf("unexpected state after reset: %+v", state)
+	}
+}
+
+func TestLLVMPhaseOrderingSimulatorVectorDoneTerminates(t *testing.T) {
+	sim, err := NewLLVMPhaseOrderingSimulator(context.Background(), "gt")
+	if err != nil {
+		t.Fatalf("new llvm simulator: %v", err)
+	}
+	out := make([]float64, len(defaultLLVMOptimizations))
+	out[0] = 1
+
+	fitness, end, err := sim.Optimize(context.Background(), out)
+	if err != nil {
+		t.Fatalf("optimize done vector: %v", err)
+	}
+	if !end {
+		t.Fatalf("expected done vector to terminate")
+	}
+	if fitness <= 0 {
+		t.Fatalf("expected positive terminal fitness, got %f", fitness)
+	}
+	state := sim.State()
+	if !state.Done || !state.Halted || state.TerminationReason != "done_action" {
+		t.Fatalf("unexpected done terminal state: %+v", state)
+	}
+	if state.VectorDecisions != 1 || state.SelectedOptimizations[0] != "done" {
+		t.Fatalf("expected done vector decision history, got %+v", state)
+	}
+	if _, err := sim.Sense(context.Background(), "all"); err == nil {
+		t.Fatalf("expected halted simulator sense to fail")
+	}
+}
+
+func TestLLVMPhaseOrderingSimulatorContextWorkflow(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "llvm_sim_workflow.json")
+	data := `{
+  "name": "llvm.sim.ctx.v1",
+  "optimizations": ["done", "instcombine", "licm"],
+  "modes": {
+    "gt": {
+      "program": "sim-prog",
+      "max_phases": 6,
+      "initial_complexity": 1.2,
+      "target_complexity": 0.5,
+      "base_runtime": 0.8
+    }
+  }
+}`
+	if err := os.WriteFile(path, []byte(data), 0o644); err != nil {
+		t.Fatalf("write workflow json: %v", err)
+	}
+	ctx, err := WithDataSources(context.Background(), DataSources{
+		LLVM: LLVMDataSource{WorkflowJSONPath: path},
+	})
+	if err != nil {
+		t.Fatalf("with data sources: %v", err)
+	}
+
+	sim, err := NewLLVMPhaseOrderingSimulator(ctx, "gt")
+	if err != nil {
+		t.Fatalf("new scoped llvm simulator: %v", err)
+	}
+	state := sim.State()
+	if state.WorkflowName != "llvm.sim.ctx.v1" || state.Program != "sim-prog" || state.MaxPhases != 6 || state.OptimizationSurface != 3 {
+		t.Fatalf("unexpected scoped workflow state: %+v", state)
+	}
+}

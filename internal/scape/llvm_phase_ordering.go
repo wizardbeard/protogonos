@@ -18,6 +18,54 @@ import (
 // phase-ordering workflow, preserving a phase-indexed optimize loop.
 type LLVMPhaseOrderingScape struct{}
 
+type LLVMPhaseOrderingSimulator struct {
+	cfg                 llvmPhaseOrderingConfig
+	complexity          float64
+	bestComplexity      float64
+	runtimeBaseline     float64
+	lastAlignment       float64
+	phasesUsed          int
+	optimizationHistory []string
+	uniqueOpts          map[string]struct{}
+	alignmentAcc        float64
+	alignmentSignalAcc  float64
+	diversityAcc        float64
+	runtimeGainAcc      float64
+	scalarDecisions     int
+	vectorDecisions     int
+	done                bool
+	halted              bool
+	terminationReason   string
+}
+
+type LLVMPhaseOrderingSimulatorState struct {
+	Mode                  string
+	Program               string
+	WorkflowName          string
+	PhaseIndex            int
+	PhasesUsed            int
+	MaxPhases             int
+	Complexity            float64
+	BestComplexity        float64
+	TargetComplexity      float64
+	RuntimeBaseline       float64
+	RuntimeEstimate       float64
+	RuntimeGain           float64
+	PassNorm              float64
+	LastAlignment         float64
+	Diversity             float64
+	SelectedOptimizations []string
+	UniqueOptimizations   int
+	ScalarDecisions       int
+	VectorDecisions       int
+	Fitness               float64
+	Done                  bool
+	Halted                bool
+	TerminationReason     string
+	OptimizationSurface   int
+	PerceptWidth          int
+}
+
 type llvmModeProfile struct {
 	Program           string  `json:"program"`
 	MaxPhases         int     `json:"max_phases"`
@@ -90,6 +138,222 @@ func (LLVMPhaseOrderingScape) EvaluateMode(ctx context.Context, agent Agent, mod
 		return 0, nil, fmt.Errorf("agent %s does not implement step runner", agent.ID())
 	}
 	return evaluateLLVMPhaseOrderingWithStep(ctx, runner, cfg)
+}
+
+func NewLLVMPhaseOrderingSimulator(ctx context.Context, mode string) (*LLVMPhaseOrderingSimulator, error) {
+	workflow := currentLLVMWorkflow(ctx)
+	cfg, err := llvmPhaseOrderingConfigForMode(mode, workflow)
+	if err != nil {
+		return nil, err
+	}
+	sim := &LLVMPhaseOrderingSimulator{cfg: cfg}
+	sim.Reset()
+	return sim, nil
+}
+
+func (s *LLVMPhaseOrderingSimulator) Sense(ctx context.Context, parameter string) ([]float64, error) {
+	if s == nil {
+		return nil, fmt.Errorf("llvm-phase-ordering simulator is nil")
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	if s.halted {
+		return nil, fmt.Errorf("llvm-phase-ordering simulator halted")
+	}
+	percept := s.percept()
+	switch strings.TrimSpace(strings.ToLower(parameter)) {
+	case "", "all":
+		return append([]float64(nil), percept...), nil
+	case "core":
+		return append([]float64(nil), percept[:2]...), nil
+	case "extended":
+		return append([]float64(nil), percept[:5]...), nil
+	default:
+		return nil, fmt.Errorf("unsupported llvm-phase-ordering sense parameter: %s", parameter)
+	}
+}
+
+func (s *LLVMPhaseOrderingSimulator) Optimize(ctx context.Context, output []float64) (Fitness, bool, error) {
+	if s == nil {
+		return 0, false, fmt.Errorf("llvm-phase-ordering simulator is nil")
+	}
+	if err := ctx.Err(); err != nil {
+		return 0, false, err
+	}
+	if s.halted {
+		return Fitness(s.fitness()), true, nil
+	}
+	if s.complexity <= s.cfg.targetComplexity {
+		s.done = true
+		s.halted = true
+		s.terminationReason = "target_complexity"
+		return Fitness(s.fitness()), true, nil
+	}
+	if s.phasesUsed >= s.cfg.maxPhases {
+		s.done = false
+		s.halted = true
+		s.terminationReason = "max_phases"
+		return Fitness(s.fitness()), true, nil
+	}
+	if len(output) == 0 {
+		return 0, false, fmt.Errorf("llvm-phase-ordering requires at least one output")
+	}
+
+	passNorm := s.passNorm()
+	diversity := s.diversity()
+	runtimeGain := s.runtimeGain(false)
+	decision := decodeLLVMDecision(output, passNorm, s.cfg.optimizations)
+	if decision.mode == "scalar" {
+		s.scalarDecisions++
+	} else {
+		s.vectorDecisions++
+	}
+	s.alignmentAcc += decision.alignment
+	s.alignmentSignalAcc += s.lastAlignment
+	s.diversityAcc += diversity
+	s.runtimeGainAcc += runtimeGain
+	s.phasesUsed++
+	s.lastAlignment = decision.alignment
+	s.optimizationHistory = append(s.optimizationHistory, decision.optimization)
+	s.uniqueOpts[decision.optimization] = struct{}{}
+
+	if decision.done {
+		s.done = true
+		s.halted = true
+		s.terminationReason = "done_action"
+		return Fitness(s.fitness()), true, nil
+	}
+
+	gain := llvmOptimizationGain(s.cfg, decision, s.phasesUsed, s.complexity, s.optimizationHistory)
+	s.complexity = clampLLVM(s.complexity-gain, 0.03, 2.5)
+	if s.complexity < s.bestComplexity {
+		s.bestComplexity = s.complexity
+	}
+	if s.complexity <= s.cfg.targetComplexity {
+		s.done = true
+		s.halted = true
+		s.terminationReason = "target_complexity"
+		return Fitness(s.fitness()), true, nil
+	}
+	if s.phasesUsed >= s.cfg.maxPhases {
+		s.done = false
+		s.halted = true
+		s.terminationReason = "max_phases"
+		return Fitness(s.fitness()), true, nil
+	}
+	return 0, false, nil
+}
+
+func (s *LLVMPhaseOrderingSimulator) Reset() {
+	if s == nil {
+		return
+	}
+	s.complexity = s.cfg.initialComplexity
+	s.bestComplexity = s.cfg.initialComplexity
+	s.runtimeBaseline = s.cfg.baseRuntime * (0.7 + 1.1*s.cfg.initialComplexity)
+	s.lastAlignment = 0
+	s.phasesUsed = 0
+	s.optimizationHistory = make([]string, 0, s.cfg.maxPhases)
+	s.uniqueOpts = make(map[string]struct{}, s.cfg.maxPhases)
+	s.alignmentAcc = 0
+	s.alignmentSignalAcc = 0
+	s.diversityAcc = 0
+	s.runtimeGainAcc = 0
+	s.scalarDecisions = 0
+	s.vectorDecisions = 0
+	s.done = false
+	s.halted = false
+	s.terminationReason = "max_phases"
+}
+
+func (s *LLVMPhaseOrderingSimulator) State() LLVMPhaseOrderingSimulatorState {
+	if s == nil {
+		return LLVMPhaseOrderingSimulatorState{}
+	}
+	return LLVMPhaseOrderingSimulatorState{
+		Mode:                  s.cfg.mode,
+		Program:               s.cfg.program,
+		WorkflowName:          s.cfg.workflowName,
+		PhaseIndex:            s.phaseIndex(),
+		PhasesUsed:            s.phasesUsed,
+		MaxPhases:             s.cfg.maxPhases,
+		Complexity:            s.complexity,
+		BestComplexity:        s.bestComplexity,
+		TargetComplexity:      s.cfg.targetComplexity,
+		RuntimeBaseline:       s.runtimeBaseline,
+		RuntimeEstimate:       s.runtimeEstimate(s.done),
+		RuntimeGain:           s.runtimeGain(s.done),
+		PassNorm:              s.passNorm(),
+		LastAlignment:         s.lastAlignment,
+		Diversity:             s.diversity(),
+		SelectedOptimizations: append([]string(nil), s.optimizationHistory...),
+		UniqueOptimizations:   len(s.uniqueOpts),
+		ScalarDecisions:       s.scalarDecisions,
+		VectorDecisions:       s.vectorDecisions,
+		Fitness:               s.fitness(),
+		Done:                  s.done,
+		Halted:                s.halted,
+		TerminationReason:     s.terminationReason,
+		OptimizationSurface:   len(s.cfg.optimizations),
+		PerceptWidth:          llvmPerceptWidth,
+	}
+}
+
+func (s *LLVMPhaseOrderingSimulator) percept() []float64 {
+	return llvmPerceptVector(
+		s.cfg.program,
+		s.phaseIndex(),
+		s.cfg.maxPhases,
+		s.complexity,
+		s.passNorm(),
+		s.lastAlignment,
+		s.diversity(),
+		s.runtimeGain(false),
+		s.optimizationHistory,
+	)
+}
+
+func (s *LLVMPhaseOrderingSimulator) phaseIndex() int {
+	if s.cfg.maxPhases <= 0 {
+		return 0
+	}
+	return clampIntLLVM(s.phasesUsed+1, 1, s.cfg.maxPhases)
+}
+
+func (s *LLVMPhaseOrderingSimulator) passNorm() float64 {
+	if s.cfg.maxPhases <= 1 {
+		return 0
+	}
+	return float64(s.phaseIndex()-1) / float64(s.cfg.maxPhases-1)
+}
+
+func (s *LLVMPhaseOrderingSimulator) diversity() float64 {
+	return float64(len(s.uniqueOpts)) / float64(maxIntLLVM(1, len(s.optimizationHistory)))
+}
+
+func (s *LLVMPhaseOrderingSimulator) runtimeEstimate(done bool) float64 {
+	return llvmRuntimeEstimate(s.cfg, s.complexity, s.phasesUsed, s.diversity(), done)
+}
+
+func (s *LLVMPhaseOrderingSimulator) runtimeGain(done bool) float64 {
+	if s.runtimeBaseline <= 0 {
+		return 0
+	}
+	return (s.runtimeBaseline - s.runtimeEstimate(done)) / s.runtimeBaseline
+}
+
+func (s *LLVMPhaseOrderingSimulator) fitness() float64 {
+	alignmentAvg := 0.0
+	if s.phasesUsed > 0 {
+		alignmentAvg = s.alignmentAcc / float64(s.phasesUsed)
+	}
+	runtimeScore := 1.0 / (1.0 + s.runtimeEstimate(s.done))
+	fitness := 0.56*runtimeScore + 0.24*alignmentAvg + 0.20*s.diversity()
+	if !s.done && s.phasesUsed >= s.cfg.maxPhases {
+		fitness -= 0.03
+	}
+	return clampLLVM(fitness, 0, 1.5)
 }
 
 func evaluateLLVMPhaseOrderingWithStep(ctx context.Context, runner StepAgent, cfg llvmPhaseOrderingConfig) (Fitness, Trace, error) {
