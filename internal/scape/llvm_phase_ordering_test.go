@@ -660,3 +660,65 @@ func TestLLVMPhaseOrderingSimulatorContextWorkflow(t *testing.T) {
 		t.Fatalf("unexpected scoped workflow state: %+v", state)
 	}
 }
+
+func TestLLVMPhaseOrderingProcessCommandWrapper(t *testing.T) {
+	process := NewLLVMPhaseOrderingProcess()
+	ctx := context.Background()
+
+	if response := process.Call(ctx, LLVMPhaseOrderingSenseMessage{Parameter: "core"}); response.Err == nil {
+		t.Fatal("expected sense before start to fail")
+	}
+	start := process.Call(ctx, LLVMPhaseOrderingStartMessage{Mode: "validation"})
+	if start.Err != nil || !start.OK {
+		t.Fatalf("start response=%+v", start)
+	}
+	if start.State.Mode != "validation" {
+		t.Fatalf("expected validation state after start, got %+v", start.State)
+	}
+
+	sense := process.Call(ctx, LLVMPhaseOrderingSenseMessage{Parameter: "core"})
+	if sense.Err != nil || !sense.OK {
+		t.Fatalf("sense response=%+v", sense)
+	}
+	if len(sense.Percept) != 2 {
+		t.Fatalf("expected core percept width 2, got response=%+v", sense)
+	}
+
+	optimize := process.Call(ctx, LLVMPhaseOrderingOptimizeMessage{Output: []float64{1}})
+	if optimize.Err != nil || !optimize.OK {
+		t.Fatalf("optimize response=%+v", optimize)
+	}
+	if optimize.End || optimize.Fitness != 0 {
+		t.Fatalf("expected non-terminal optimize response, got %+v", optimize)
+	}
+	if optimize.State.PhasesUsed != 1 || optimize.State.ScalarDecisions != 1 {
+		t.Fatalf("unexpected optimize state=%+v", optimize.State)
+	}
+
+	state := process.Call(ctx, LLVMPhaseOrderingStateMessage{})
+	if state.Err != nil || !state.OK {
+		t.Fatalf("state response=%+v", state)
+	}
+	if state.State.PhasesUsed != 1 {
+		t.Fatalf("expected process state to preserve phase count, got %+v", state.State)
+	}
+
+	stop := process.Call(ctx, LLVMPhaseOrderingStopMessage{Reason: "normal"})
+	if stop.Err != nil || !stop.OK || !stop.End {
+		t.Fatalf("stop response=%+v", stop)
+	}
+	if stop.StopReason != "normal" || !stop.State.Halted || stop.State.TerminationReason != "normal" {
+		t.Fatalf("unexpected stop state=%+v", stop)
+	}
+	if response := process.Call(ctx, LLVMPhaseOrderingSenseMessage{Parameter: "core"}); response.Err == nil {
+		t.Fatal("expected sense after stop to fail")
+	}
+
+	restart := process.Call(ctx, LLVMPhaseOrderingRestartMessage{})
+	if restart.Err != nil || !restart.OK {
+		t.Fatalf("restart response=%+v", restart)
+	}
+	if restart.State.Halted || restart.State.PhasesUsed != 0 || restart.State.Mode != "validation" {
+		t.Fatalf("unexpected restart state=%+v", restart.State)
+	}
+}
