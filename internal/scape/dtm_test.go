@@ -613,3 +613,62 @@ func TestDTMSimulatorSwitchEventState(t *testing.T) {
 		t.Fatalf("expected left reward sector to be swapped")
 	}
 }
+
+func TestDTMProcessCommandWrapper(t *testing.T) {
+	process := NewDTMProcess()
+	ctx := context.Background()
+
+	if response := process.Call(ctx, DTMSenseMessage{Parameter: "all"}); response.Err == nil {
+		t.Fatal("expected sense before start to fail")
+	}
+	start := process.Call(ctx, DTMStartMessage{Mode: "validation"})
+	if start.Err != nil || !start.OK {
+		t.Fatalf("start response=%+v", start)
+	}
+	if start.State.Mode != "validation" || start.State.Halted {
+		t.Fatalf("unexpected start state=%+v", start.State)
+	}
+
+	sense := process.Call(ctx, DTMSenseMessage{Parameter: "range_sense"})
+	if sense.Err != nil || !sense.OK {
+		t.Fatalf("sense response=%+v", sense)
+	}
+	if len(sense.Percept) != 3 {
+		t.Fatalf("expected range_sense width 3, got response=%+v", sense)
+	}
+
+	move := process.Call(ctx, DTMMoveMessage{Output: []float64{0}})
+	if move.Err != nil || !move.OK {
+		t.Fatalf("move response=%+v", move)
+	}
+	if move.End || move.Fitness != 0 {
+		t.Fatalf("expected non-terminal move response, got %+v", move)
+	}
+	if move.State.PositionX != 0 || move.State.PositionY != 1 || move.State.StepIndex != 1 {
+		t.Fatalf("unexpected move state=%+v", move.State)
+	}
+
+	state := process.Call(ctx, DTMStateMessage{})
+	if state.Err != nil || !state.OK || state.State.StepIndex != 1 {
+		t.Fatalf("state response=%+v", state)
+	}
+
+	stop := process.Call(ctx, DTMStopMessage{Reason: "normal"})
+	if stop.Err != nil || !stop.OK || !stop.End {
+		t.Fatalf("stop response=%+v", stop)
+	}
+	if stop.StopReason != "normal" || !stop.State.Halted {
+		t.Fatalf("unexpected stop response=%+v", stop)
+	}
+	if response := process.Call(ctx, DTMSenseMessage{Parameter: "all"}); response.Err == nil {
+		t.Fatal("expected sense after stop to fail")
+	}
+
+	restart := process.Call(ctx, DTMRestartMessage{})
+	if restart.Err != nil || !restart.OK {
+		t.Fatalf("restart response=%+v", restart)
+	}
+	if restart.State.Halted || restart.State.RunIndex != 0 || restart.State.StepIndex != 0 || restart.State.Mode != "validation" {
+		t.Fatalf("unexpected restart response=%+v", restart)
+	}
+}
