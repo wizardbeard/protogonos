@@ -470,6 +470,73 @@ func TestFXSimulatorSenseTradeInternalsAndRestart(t *testing.T) {
 	}
 }
 
+func TestFXProcessCommandWrapper(t *testing.T) {
+	process := NewFXProcess()
+	ctx := context.Background()
+
+	if response := process.Call(ctx, FXSenseMessage{}); response.Err == nil {
+		t.Fatal("expected sense before start to fail")
+	}
+	start := process.Call(ctx, FXStartMessage{Mode: "test"})
+	if start.Err != nil || !start.OK {
+		t.Fatalf("start response=%+v", start)
+	}
+	if start.State.Mode != "test" || start.State.Halted {
+		t.Fatalf("unexpected start state=%+v", start.State)
+	}
+
+	sense := process.Call(ctx, FXSenseMessage{})
+	if sense.Err != nil || !sense.OK {
+		t.Fatalf("sense response=%+v", sense)
+	}
+	if len(sense.Percept) != fxPerceptWidth {
+		t.Fatalf("expected percept width %d, got response=%+v", fxPerceptWidth, sense)
+	}
+
+	trade := process.Call(ctx, FXTradeMessage{Action: 1})
+	if trade.Err != nil || !trade.OK {
+		t.Fatalf("trade response=%+v", trade)
+	}
+	if trade.End || trade.Fitness != 0 {
+		t.Fatalf("expected non-terminal trade response, got %+v", trade)
+	}
+	if trade.State.Position != 1 || trade.State.OrdersOpened != 1 {
+		t.Fatalf("expected opened long position, got %+v", trade.State)
+	}
+
+	internals := process.Call(ctx, FXInternalsMessage{})
+	if internals.Err != nil || !internals.OK {
+		t.Fatalf("internals response=%+v", internals)
+	}
+	if len(internals.Internals) != 3 || internals.Internals[0] != 1 {
+		t.Fatalf("unexpected internals response=%+v", internals)
+	}
+
+	state := process.Call(ctx, FXStateMessage{})
+	if state.Err != nil || !state.OK || state.State.OrdersOpened != 1 {
+		t.Fatalf("state response=%+v", state)
+	}
+
+	stop := process.Call(ctx, FXStopMessage{Reason: "normal"})
+	if stop.Err != nil || !stop.OK || !stop.End {
+		t.Fatalf("stop response=%+v", stop)
+	}
+	if stop.StopReason != "normal" || !stop.State.Halted {
+		t.Fatalf("unexpected stop response=%+v", stop)
+	}
+	if response := process.Call(ctx, FXSenseMessage{}); response.Err == nil {
+		t.Fatal("expected sense after stop to fail")
+	}
+
+	restart := process.Call(ctx, FXRestartMessage{})
+	if restart.Err != nil || !restart.OK {
+		t.Fatalf("restart response=%+v", restart)
+	}
+	if restart.State.Halted || restart.State.CurrentStep != restart.State.StartStep || restart.State.OrdersOpened != 0 {
+		t.Fatalf("unexpected restart response=%+v", restart)
+	}
+}
+
 func TestFXScapeLoadSeriesCSV(t *testing.T) {
 	ResetFXSeriesSource()
 	t.Cleanup(ResetFXSeriesSource)
