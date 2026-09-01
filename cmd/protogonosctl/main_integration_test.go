@@ -1033,7 +1033,18 @@ func TestTopCommandSQLiteReadsPersistedTopGenomes(t *testing.T) {
 }
 
 func TestSubstrateSnapshotCommandSQLiteReadsPersistedTopGenomeSnapshots(t *testing.T) {
+	origWD, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("getwd: %v", err)
+	}
 	workdir := t.TempDir()
+	if err := os.Chdir(workdir); err != nil {
+		t.Fatalf("chdir tempdir: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = os.Chdir(origWD)
+	})
+
 	dbPath := filepath.Join(workdir, "protogonos.db")
 	store, err := storage.NewStore("sqlite", dbPath)
 	if err != nil {
@@ -1049,7 +1060,18 @@ func TestSubstrateSnapshotCommandSQLiteReadsPersistedTopGenomeSnapshots(t *testi
 		{
 			Rank:    1,
 			Fitness: 0.9,
-			Genome:  model.Genome{ID: "g1"},
+			Genome: model.Genome{
+				ID: "g1",
+				Neurons: []model.Neuron{
+					{ID: "i1", Activation: "identity"},
+					{ID: "i2", Activation: "identity"},
+					{ID: "o", Activation: "identity"},
+				},
+				Synapses: []model.Synapse{
+					{From: "i1", To: "o", Weight: 1, Enabled: true},
+					{From: "i2", To: "o", Weight: -1, Enabled: true},
+				},
+			},
 			SubstrateSnapshot: &substrate.LayerRuntimeSnapshot{
 				Plasticity: substrate.SubstratePlasticityNone,
 				LinkForm:   substrate.LinkFormL2LFeedforward,
@@ -1063,6 +1085,15 @@ func TestSubstrateSnapshotCommandSQLiteReadsPersistedTopGenomeSnapshots(t *testi
 		},
 	}); err != nil {
 		t.Fatalf("save top genomes: %v", err)
+	}
+	if err := stats.WriteRunConfig(benchmarksDir, "run-snapshots", stats.RunConfig{
+		RunID:          "run-snapshots",
+		Scape:          "xor",
+		PopulationSize: 1,
+		Generations:    1,
+		Seed:           1,
+	}); err != nil {
+		t.Fatalf("write run config: %v", err)
 	}
 
 	out, err := captureStdout(func() error {
@@ -1119,6 +1150,42 @@ func TestSubstrateSnapshotCommandSQLiteReadsPersistedTopGenomeSnapshots(t *testi
 	}
 	if _, ok := parsed[0]["replay_step_output"]; !ok {
 		t.Fatalf("expected replay step output in substrate snapshot json: %+v", parsed[0])
+	}
+
+	replayOut, err := captureStdout(func() error {
+		return run(context.Background(), []string{
+			"substrate-replay",
+			"--store", "sqlite",
+			"--db-path", dbPath,
+			"--run-id", "run-snapshots",
+			"--rank", "1",
+		})
+	})
+	if err != nil {
+		t.Fatalf("substrate replay command: %v", err)
+	}
+	if !strings.Contains(replayOut, "replay_fitness=") || !strings.Contains(replayOut, "fitness_delta=") {
+		t.Fatalf("unexpected substrate replay output: %s", replayOut)
+	}
+
+	replayJSON, err := captureStdout(func() error {
+		return run(context.Background(), []string{
+			"substrate-replay",
+			"--store", "sqlite",
+			"--db-path", dbPath,
+			"--run-id", "run-snapshots",
+			"--json",
+		})
+	})
+	if err != nil {
+		t.Fatalf("substrate replay json command: %v", err)
+	}
+	var replayParsed map[string]any
+	if err := json.Unmarshal([]byte(replayJSON), &replayParsed); err != nil {
+		t.Fatalf("decode substrate replay json output: %v\n%s", err, replayJSON)
+	}
+	if replayParsed["evaluated"].(float64) != 1 {
+		t.Fatalf("unexpected substrate replay json output: %+v", replayParsed)
 	}
 }
 

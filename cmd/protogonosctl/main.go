@@ -76,6 +76,8 @@ func run(ctx context.Context, args []string) error {
 		return runTop(ctx, args[1:])
 	case "substrate-snapshot":
 		return runSubstrateSnapshot(ctx, args[1:])
+	case "substrate-replay":
+		return runSubstrateReplay(ctx, args[1:])
 	case "scape-summary":
 		return runScapeSummary(ctx, args[1:])
 	case "epitopes-test":
@@ -938,6 +940,72 @@ func parseFloatListFlag(raw string) ([]float64, error) {
 		values = append(values, value)
 	}
 	return values, nil
+}
+
+func runSubstrateReplay(ctx context.Context, args []string) error {
+	fs := flag.NewFlagSet("substrate-replay", flag.ContinueOnError)
+	runID := fs.String("run-id", "", "run id")
+	latest := fs.Bool("latest", false, "replay substrate snapshots for the most recent run from run index")
+	limit := fs.Int("limit", 5, "max substrate snapshot episodes to replay (<=0 for all)")
+	rank := fs.Int("rank", 0, "specific top-genome rank to replay (<=0 for all)")
+	mode := fs.String("mode", "", "replay mode: gt|validation|test|benchmark")
+	jsonOut := fs.Bool("json", false, "emit replay summary as JSON")
+	storeKind := fs.String("store", storage.DefaultStoreKind(), "store backend: memory|sqlite")
+	dbPath := fs.String("db-path", "protogonos.db", "sqlite database path")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	if *runID != "" && *latest {
+		return errors.New("use either --run-id or --latest, not both")
+	}
+	if *runID == "" && !*latest {
+		return errors.New("substrate-replay requires --run-id or --latest")
+	}
+
+	client, err := protoapi.New(protoapi.Options{
+		StoreKind:     *storeKind,
+		DBPath:        *dbPath,
+		BenchmarksDir: benchmarksDir,
+		ExportsDir:    exportsDir,
+	})
+	if err != nil {
+		return err
+	}
+	defer func() {
+		_ = client.Close()
+	}()
+
+	summary, err := client.SubstrateEpisodeReplay(ctx, protoapi.SubstrateEpisodeReplayRequest{
+		RunID:  *runID,
+		Latest: *latest,
+		Limit:  *limit,
+		Rank:   *rank,
+		Mode:   *mode,
+	})
+	if err != nil {
+		return err
+	}
+	if *jsonOut {
+		enc := json.NewEncoder(os.Stdout)
+		enc.SetIndent("", "  ")
+		return enc.Encode(summary)
+	}
+	if summary.Evaluated == 0 {
+		fmt.Println("no substrate replay results")
+		return nil
+	}
+	for _, item := range summary.Items {
+		fmt.Printf("rank=%d genome_id=%s stored_fitness=%.6f replay_fitness=%.6f fitness_delta=%.6f final_state=%s final_weights=%d\n",
+			item.Rank,
+			item.GenomeID,
+			item.StoredFitness,
+			item.ReplayFitness,
+			item.FitnessDelta,
+			item.FinalSnapshot.StateMode,
+			len(item.FinalSnapshot.Weights),
+		)
+	}
+	return nil
 }
 
 func runSpecies(ctx context.Context, args []string) error {

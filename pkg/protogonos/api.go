@@ -286,6 +286,32 @@ type SubstrateSnapshotRecord struct {
 	ReplayStepState  *substrate.LayerRuntimeSnapshot `json:"replay_step_state,omitempty"`
 }
 
+type SubstrateEpisodeReplayRequest struct {
+	RunID  string
+	Latest bool
+	Limit  int
+	Rank   int
+	Mode   string
+}
+
+type SubstrateEpisodeReplayItem struct {
+	Rank          int                            `json:"rank"`
+	GenomeID      string                         `json:"genome_id"`
+	StoredFitness float64                        `json:"stored_fitness"`
+	ReplayFitness float64                        `json:"replay_fitness"`
+	FitnessDelta  float64                        `json:"fitness_delta"`
+	Trace         scape.Trace                    `json:"trace,omitempty"`
+	FinalSnapshot substrate.LayerRuntimeSnapshot `json:"final_snapshot"`
+}
+
+type SubstrateEpisodeReplaySummary struct {
+	RunID     string                       `json:"run_id"`
+	Scape     string                       `json:"scape"`
+	Mode      string                       `json:"mode"`
+	Evaluated int                          `json:"evaluated"`
+	Items     []SubstrateEpisodeReplayItem `json:"items"`
+}
+
 type MonitorControlRequest struct {
 	RunID string
 }
@@ -893,6 +919,31 @@ func buildReplayCortex(scapeName string, genome model.Genome, inputNeuronIDs, ou
 		return nil, err
 	}
 	substrateRuntime, err := buildReplaySubstrate(genome, outputNeuronIDs)
+	if err != nil {
+		return nil, err
+	}
+	return agent.NewCortex(
+		genome.ID,
+		genome,
+		sensors,
+		actuators,
+		inputNeuronIDs,
+		outputNeuronIDs,
+		substrateRuntime,
+	)
+}
+
+func buildReplayCortexFromSubstrateSnapshot(
+	scapeName string,
+	genome model.Genome,
+	inputNeuronIDs, outputNeuronIDs []string,
+	snapshot substrate.LayerRuntimeSnapshot,
+) (*agent.Cortex, error) {
+	sensors, actuators, err := buildReplayIO(scapeName, genome)
+	if err != nil {
+		return nil, err
+	}
+	substrateRuntime, err := substrate.NewLayerRuntimeFromSnapshot(snapshot, substrate.LayerRuntimeSpec{})
 	if err != nil {
 		return nil, err
 	}
@@ -1593,6 +1644,143 @@ func substrateSnapshotRecord(ctx context.Context, item model.TopGenomeRecord, st
 	record.ReplayStepOutput = append([]float64(nil), outputs...)
 	record.ReplayStepState = &state
 	return record, nil
+}
+
+func (c *Client) SubstrateEpisodeReplay(ctx context.Context, req SubstrateEpisodeReplayRequest) (SubstrateEpisodeReplaySummary, error) {
+	if req.Rank < 0 {
+		return SubstrateEpisodeReplaySummary{}, errors.New("rank must be >= 0")
+	}
+	if req.Limit < 0 {
+		return SubstrateEpisodeReplaySummary{}, errors.New("limit must be >= 0")
+	}
+	runID, err := c.resolveRunID(req.RunID, req.Latest)
+	if err != nil {
+		return SubstrateEpisodeReplaySummary{}, err
+	}
+
+	runCfg, ok, err := readRunConfigWithProfileHints(c.benchmarksDir, runID)
+	if err != nil {
+		return SubstrateEpisodeReplaySummary{}, err
+	}
+	if !ok {
+		return SubstrateEpisodeReplaySummary{}, fmt.Errorf("run config not found for run id: %s", runID)
+	}
+	mode, err := normalizeSubstrateReplayMode(req.Mode, runCfg.OpMode)
+	if err != nil {
+		return SubstrateEpisodeReplaySummary{}, err
+	}
+
+	p, err := c.ensurePolis(ctx)
+	if err != nil {
+		return SubstrateEpisodeReplaySummary{}, err
+	}
+	if err := registerDefaultScapes(p); err != nil {
+		return SubstrateEpisodeReplaySummary{}, err
+	}
+	targetScape, ok := p.GetScape(runCfg.Scape)
+	if !ok {
+		return SubstrateEpisodeReplaySummary{}, fmt.Errorf("scape is not registered: %s", runCfg.Scape)
+	}
+
+	replayReq := runRequestFromArtifactsConfig(runCfg)
+	replayCtx, err := applyScapeDataSources(ctx, replayReq)
+	if err != nil {
+		return SubstrateEpisodeReplaySummary{}, err
+	}
+	inputNeuronIDs, outputNeuronIDs, err := defaultSeedIONeuronsForScape(replayReq)
+	if err != nil {
+		return SubstrateEpisodeReplaySummary{}, err
+	}
+	top, err := c.TopGenomes(ctx, TopGenomesRequest{RunID: runID})
+	if err != nil {
+		return SubstrateEpisodeReplaySummary{}, err
+	}
+
+	items := make([]SubstrateEpisodeReplayItem, 0, len(top))
+	for _, item := range top {
+		if req.Rank > 0 && item.Rank != req.Rank {
+			continue
+		}
+		if item.SubstrateSnapshot == nil {
+			continue
+		}
+		cortex, err := buildReplayCortexFromSubstrateSnapshot(runCfg.Scape, item.Genome, inputNeuronIDs, outputNeuronIDs, *item.SubstrateSnapshot)
+		if err != nil {
+			return SubstrateEpisodeReplaySummary{}, fmt.Errorf("build substrate replay cortex for genome %s: %w", item.Genome.ID, err)
+		}
+		fitness, trace, err := evaluateReplayScape(replayCtx, targetScape, cortex, mode)
+		if err != nil {
+			return SubstrateEpisodeReplaySummary{}, fmt.Errorf("evaluate substrate replay genome %s: %w", item.Genome.ID, err)
+		}
+		finalSnapshot, ok := cortex.SubstrateLayerSnapshot()
+		if !ok {
+			return SubstrateEpisodeReplaySummary{}, fmt.Errorf("substrate replay genome %s did not retain layer runtime", item.Genome.ID)
+		}
+		replayFitness := float64(fitness)
+		items = append(items, SubstrateEpisodeReplayItem{
+			Rank:          item.Rank,
+			GenomeID:      item.Genome.ID,
+			StoredFitness: item.Fitness,
+			ReplayFitness: replayFitness,
+			FitnessDelta:  replayFitness - item.Fitness,
+			Trace:         trace,
+			FinalSnapshot: *finalSnapshot,
+		})
+		if req.Limit > 0 && len(items) >= req.Limit {
+			break
+		}
+	}
+
+	return SubstrateEpisodeReplaySummary{
+		RunID:     runID,
+		Scape:     runCfg.Scape,
+		Mode:      mode,
+		Evaluated: len(items),
+		Items:     items,
+	}, nil
+}
+
+func (c *Client) resolveRunID(runID string, latest bool) (string, error) {
+	if runID != "" && latest {
+		return "", errors.New("use either run id or latest")
+	}
+	if latest {
+		entries, err := stats.ListRunIndex(c.benchmarksDir)
+		if err != nil {
+			return "", err
+		}
+		if len(entries) == 0 {
+			return "", errors.New("no runs available")
+		}
+		runID = entries[0].RunID
+	}
+	if strings.TrimSpace(runID) == "" {
+		return "", errors.New("run id or latest is required")
+	}
+	return runID, nil
+}
+
+func normalizeSubstrateReplayMode(raw, fallback string) (string, error) {
+	mode := strings.ToLower(strings.TrimSpace(raw))
+	if mode == "" {
+		mode = strings.ToLower(strings.TrimSpace(fallback))
+	}
+	if mode == "" {
+		mode = evo.OpModeGT
+	}
+	switch mode {
+	case evo.OpModeGT, evo.OpModeValidation, evo.OpModeTest, "benchmark":
+		return mode, nil
+	default:
+		return "", fmt.Errorf("unsupported substrate replay mode: %s", raw)
+	}
+}
+
+func evaluateReplayScape(ctx context.Context, targetScape scape.Scape, cortex *agent.Cortex, mode string) (scape.Fitness, scape.Trace, error) {
+	if modeAware, ok := targetScape.(scape.ModeAwareScape); ok {
+		return modeAware.EvaluateMode(ctx, cortex, mode)
+	}
+	return targetScape.Evaluate(ctx, cortex)
 }
 
 func (c *Client) EpitopesReplay(ctx context.Context, req EpitopesReplayRequest) (EpitopesReplaySummary, error) {

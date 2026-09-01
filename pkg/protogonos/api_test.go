@@ -242,6 +242,86 @@ func TestClientSubstrateSnapshotsFiltersStoredTopGenomes(t *testing.T) {
 	}
 }
 
+func TestClientSubstrateEpisodeReplayUsesPersistedSnapshot(t *testing.T) {
+	base := t.TempDir()
+	benchmarksDir := filepath.Join(base, "benchmarks")
+	client, err := New(Options{StoreKind: "memory", BenchmarksDir: benchmarksDir, ExportsDir: filepath.Join(base, "exports")})
+	if err != nil {
+		t.Fatalf("new client: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = client.Close()
+	})
+	if err := client.Init(context.Background()); err != nil {
+		t.Fatalf("init client: %v", err)
+	}
+	if err := stats.WriteRunConfig(benchmarksDir, "run-substrate-replay", stats.RunConfig{
+		RunID:          "run-substrate-replay",
+		Scape:          "xor",
+		OpMode:         "gt",
+		PopulationSize: 1,
+		Generations:    1,
+		Seed:           1,
+	}); err != nil {
+		t.Fatalf("write run config: %v", err)
+	}
+	if err := client.store.SaveTopGenomes(context.Background(), "run-substrate-replay", []model.TopGenomeRecord{
+		{
+			Rank:    1,
+			Fitness: 0.25,
+			Genome: model.Genome{
+				ID: "xor-substrate-champion",
+				Neurons: []model.Neuron{
+					{ID: "i1", Activation: "identity"},
+					{ID: "i2", Activation: "identity"},
+					{ID: "o", Activation: "identity"},
+				},
+				Synapses: []model.Synapse{
+					{From: "i1", To: "o", Weight: 1.0, Enabled: true},
+					{From: "i2", To: "o", Weight: -1.0, Enabled: true},
+				},
+			},
+			SubstrateSnapshot: &internalsubstrate.LayerRuntimeSnapshot{
+				Plasticity: internalsubstrate.SubstratePlasticityNone,
+				LinkForm:   internalsubstrate.LinkFormL2LFeedforward,
+				StateMode:  internalsubstrate.SubstrateStateHold,
+				Substrate: []internalsubstrate.CoordinateHyperlayer{
+					{{Coords: []float64{0}}},
+					{{Coords: []float64{1}, Weights: []float64{1}}},
+				},
+				Weights: []float64{1},
+			},
+		},
+	}); err != nil {
+		t.Fatalf("save top genomes: %v", err)
+	}
+
+	summary, err := client.SubstrateEpisodeReplay(context.Background(), SubstrateEpisodeReplayRequest{
+		RunID: "run-substrate-replay",
+		Rank:  1,
+		Mode:  "gt",
+	})
+	if err != nil {
+		t.Fatalf("substrate episode replay: %v", err)
+	}
+	if summary.RunID != "run-substrate-replay" || summary.Scape != "xor" || summary.Mode != "gt" || summary.Evaluated != 1 {
+		t.Fatalf("unexpected replay summary: %+v", summary)
+	}
+	item := summary.Items[0]
+	if item.GenomeID != "xor-substrate-champion" || item.StoredFitness != 0.25 {
+		t.Fatalf("unexpected replay item identity: %+v", item)
+	}
+	if item.ReplayFitness == 0 || item.FitnessDelta == 0 {
+		t.Fatalf("expected replay fitness comparison, got %+v", item)
+	}
+	if item.Trace == nil {
+		t.Fatalf("expected replay trace")
+	}
+	if len(item.FinalSnapshot.Weights) != 1 || item.FinalSnapshot.StateMode != internalsubstrate.SubstrateStateHold {
+		t.Fatalf("unexpected final substrate snapshot: %+v", item.FinalSnapshot)
+	}
+}
+
 func TestClientRunRejectsUnknownSelectionAndPostprocessor(t *testing.T) {
 	client, err := New(Options{StoreKind: "memory", BenchmarksDir: t.TempDir(), ExportsDir: t.TempDir()})
 	if err != nil {
