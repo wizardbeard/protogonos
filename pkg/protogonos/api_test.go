@@ -398,6 +398,98 @@ func TestClientSubstrateEpisodeReplayUsesGenomeComponentsForIterativeSnapshot(t 
 	}
 }
 
+func TestClientSubstrateEpisodeReplayUsesGenomeComponentsForABCNIterativeSnapshot(t *testing.T) {
+	base := t.TempDir()
+	benchmarksDir := filepath.Join(base, "benchmarks")
+	client, err := New(Options{StoreKind: "memory", BenchmarksDir: benchmarksDir, ExportsDir: filepath.Join(base, "exports")})
+	if err != nil {
+		t.Fatalf("new client: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = client.Close()
+	})
+	if err := client.Init(context.Background()); err != nil {
+		t.Fatalf("init client: %v", err)
+	}
+	if err := stats.WriteRunConfig(benchmarksDir, "run-substrate-abcn-replay", stats.RunConfig{
+		RunID:          "run-substrate-abcn-replay",
+		Scape:          "xor",
+		OpMode:         "gt",
+		PopulationSize: 1,
+		Generations:    1,
+		Seed:           1,
+	}); err != nil {
+		t.Fatalf("write run config: %v", err)
+	}
+	if err := client.store.SaveTopGenomes(context.Background(), "run-substrate-abcn-replay", []model.TopGenomeRecord{
+		{
+			Rank:    1,
+			Fitness: 0.25,
+			Genome: model.Genome{
+				ID: "xor-substrate-abcn-champion",
+				Neurons: []model.Neuron{
+					{ID: "i1", Activation: "identity"},
+					{ID: "i2", Activation: "identity"},
+					{ID: "o", Activation: "identity"},
+				},
+				Synapses: []model.Synapse{
+					{From: "i1", To: "o", Weight: 1.0, Enabled: true},
+					{From: "i2", To: "o", Weight: -1.0, Enabled: true},
+				},
+				Substrate: &model.SubstrateConfig{
+					CPPName:    internalsubstrate.DefaultCPPName,
+					CEPName:    internalsubstrate.WeightExpressionCEPName,
+					Plasticity: internalsubstrate.SubstratePlasticityABCN,
+					LinkForm:   internalsubstrate.LinkFormL2LFeedforward,
+					Parameters: map[string]float64{
+						"abcn_a": 0.1,
+						"abcn_b": 0.2,
+						"abcn_c": 0.3,
+						"abcn_n": 0.4,
+					},
+				},
+			},
+			SubstrateSnapshot: &internalsubstrate.LayerRuntimeSnapshot{
+				Plasticity: internalsubstrate.SubstratePlasticityABCN,
+				LinkForm:   internalsubstrate.LinkFormL2LFeedforward,
+				StateMode:  internalsubstrate.SubstrateStateIterative,
+				ABCN: internalsubstrate.ABCNSubstrate{
+					InputLayer: internalsubstrate.CoordinateHyperlayer{{Coords: []float64{0}, Output: 0.1}},
+					Layers: []internalsubstrate.ABCNCoordinateHyperlayer{
+						{{Coords: []float64{1}, Output: 0.2, Weights: []internalsubstrate.ABCNWeight{{Weight: 0.3, A: 0.1, B: 0.2, C: 0.3, N: 0.4}}}},
+					},
+				},
+				Weights: []float64{0.3},
+			},
+		},
+	}); err != nil {
+		t.Fatalf("save top genomes: %v", err)
+	}
+
+	summary, err := client.SubstrateEpisodeReplay(context.Background(), SubstrateEpisodeReplayRequest{
+		RunID: "run-substrate-abcn-replay",
+		Rank:  1,
+		Mode:  "gt",
+	})
+	if err != nil {
+		t.Fatalf("substrate episode replay: %v", err)
+	}
+	if summary.Evaluated != 1 {
+		t.Fatalf("unexpected replay summary: %+v", summary)
+	}
+	final := summary.Items[0].FinalSnapshot
+	if final.Plasticity != internalsubstrate.SubstratePlasticityABCN || final.StateMode != internalsubstrate.SubstrateStateIterative {
+		t.Fatalf("expected abcn iterative final snapshot, got %+v", final)
+	}
+	if len(final.ABCN.Layers) != 1 || len(final.ABCN.Layers[0]) != 1 || len(final.ABCN.Layers[0][0].Weights) != 1 {
+		t.Fatalf("unexpected abcn final layer shape: %+v", final.ABCN)
+	}
+	gotWeight := final.ABCN.Layers[0][0].Weights[0]
+	if gotWeight.A == 0 || gotWeight.B == 0 || gotWeight.C == 0 || gotWeight.N == 0 {
+		t.Fatalf("expected abcn replay coefficients, got %+v", gotWeight)
+	}
+}
+
 func TestClientRunRejectsUnknownSelectionAndPostprocessor(t *testing.T) {
 	client, err := New(Options{StoreKind: "memory", BenchmarksDir: t.TempDir(), ExportsDir: t.TempDir()})
 	if err != nil {

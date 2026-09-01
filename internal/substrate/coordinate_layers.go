@@ -493,8 +493,8 @@ func CalculateResetOutputABCN(substrate ABCNSubstrate, inputValues [][]float64, 
 }
 
 // CalculateOutputLifecycle mirrors the reference substrate reason/2 dispatch:
-// reset repopulates non-ABCN weights before output, iterative keeps repopulating
-// iterative weights, and hold reuses current weights while advancing outputs.
+// reset repopulates weights before output, iterative keeps repopulating weights,
+// and hold reuses current weights while advancing outputs.
 func CalculateOutputLifecycle(req OutputLifecycleRequest) (OutputLifecycleResult, error) {
 	stateMode := normalizeSubstrateStateMode(req.StateMode)
 	if stateMode == "" {
@@ -683,16 +683,28 @@ func calculateOutputLifecycleABCN(req OutputLifecycleRequest, stateMode string) 
 	case SubstrateStateHold:
 		outputs, updated, err = CalculateHoldOutputABCN(req.ABCN, req.InputValues, req.LinkForm)
 	case SubstrateStateIterative:
-		return OutputLifecycleResult{}, fmt.Errorf("%w: abcn plasticity does not use iterative substrate state", ErrInvalidSubstrateCoordinates)
+		ctx := req.Context
+		if ctx == nil {
+			ctx = context.Background()
+		}
+		iterativeSubstrate, populateErr := PopulateProcessHyperlayersABCN(ctx, req.ABCN, req.LinkForm, req.IterativeCPP, req.CEPs, req.Parameters)
+		if populateErr != nil {
+			return OutputLifecycleResult{}, populateErr
+		}
+		outputs, updated, err = CalculateResetOutputABCN(iterativeSubstrate, req.InputValues, req.LinkForm)
 	default:
 		return OutputLifecycleResult{}, fmt.Errorf("%w: unsupported substrate state mode %q", ErrInvalidSubstrateCoordinates, stateMode)
 	}
 	if err != nil {
 		return OutputLifecycleResult{}, err
 	}
+	nextStateMode := SubstrateStateHold
+	if stateMode == SubstrateStateIterative {
+		nextStateMode = SubstrateStateIterative
+	}
 	return OutputLifecycleResult{
 		Outputs:       outputs,
-		StateMode:     SubstrateStateHold,
+		StateMode:     nextStateMode,
 		ABCNSubstrate: updated,
 	}, nil
 }

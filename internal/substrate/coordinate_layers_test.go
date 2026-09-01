@@ -984,6 +984,41 @@ func TestCalculateOutputLifecycleABCNResetPopulatesThroughCPPCEP(t *testing.T) {
 	}
 }
 
+func TestCalculateOutputLifecycleABCNIterativePopulatesThroughCPPCEP(t *testing.T) {
+	abcnSubstrate := ABCNSubstrate{
+		InputLayer: CoordinateHyperlayer{{Coords: []float64{-1}, Output: 0.2}},
+		Layers: []ABCNCoordinateHyperlayer{
+			{{Coords: []float64{1}, Output: 0.3, Weights: []ABCNWeight{{Weight: 0.4, A: 9, B: 8, C: 7, N: 6}}}},
+		},
+	}
+
+	result, err := CalculateOutputLifecycle(OutputLifecycleRequest{
+		StateMode:    SubstrateStateIterative,
+		Plasticity:   SubstratePlasticityABCN,
+		LinkForm:     LinkFormL2LFeedforward,
+		InputValues:  [][]float64{{0.8}},
+		ABCN:         abcnSubstrate,
+		IterativeCPP: abcnSignalCPP{},
+		CEPs:         []CEP{rawSignalCEP{}},
+		Context:      context.Background(),
+	})
+	if err != nil {
+		t.Fatalf("calculate output lifecycle abcn iterative: %v", err)
+	}
+	populatedWeight := ABCNWeight{Weight: 0, A: 0.2, B: 0.3, C: 0.4, N: 0.5}
+	wantOutput := math.Tanh(0.8 * populatedWeight.Weight)
+	wantWeight := ABCNWeightUpdate(0.8, wantOutput, populatedWeight)
+	if result.StateMode != SubstrateStateIterative {
+		t.Fatalf("unexpected next state: got=%q want=%q", result.StateMode, SubstrateStateIterative)
+	}
+	if len(result.Outputs) != 1 || math.Abs(result.Outputs[0]-wantOutput) > 1e-12 {
+		t.Fatalf("unexpected abcn iterative lifecycle outputs: got=%v want=%v", result.Outputs, []float64{wantOutput})
+	}
+	if result.ABCNSubstrate.Layers[0][0].Weights[0] != wantWeight {
+		t.Fatalf("unexpected populated abcn lifecycle weight: got=%+v want=%+v", result.ABCNSubstrate.Layers[0][0].Weights[0], wantWeight)
+	}
+}
+
 func TestCalculateOutputLifecycleValidatesStateAndPlasticity(t *testing.T) {
 	if _, err := CalculateOutputLifecycle(OutputLifecycleRequest{StateMode: "unknown"}); !errors.Is(err, ErrInvalidSubstrateCoordinates) {
 		t.Fatalf("expected ErrInvalidSubstrateCoordinates for unknown state, got %v", err)
@@ -996,12 +1031,6 @@ func TestCalculateOutputLifecycleValidatesStateAndPlasticity(t *testing.T) {
 		Plasticity: SubstratePlasticityIterative,
 	}); !errors.Is(err, ErrInvalidSubstrateCoordinates) {
 		t.Fatalf("expected ErrInvalidSubstrateCoordinates for iterative hold state, got %v", err)
-	}
-	if _, err := CalculateOutputLifecycle(OutputLifecycleRequest{
-		StateMode:  SubstrateStateIterative,
-		Plasticity: SubstratePlasticityABCN,
-	}); !errors.Is(err, ErrInvalidSubstrateCoordinates) {
-		t.Fatalf("expected ErrInvalidSubstrateCoordinates for abcn iterative state, got %v", err)
 	}
 }
 

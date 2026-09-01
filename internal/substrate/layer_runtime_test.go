@@ -303,6 +303,59 @@ func TestLayerRuntimeFromSnapshotReplaysABCNHoldState(t *testing.T) {
 	}
 }
 
+func TestLayerRuntimeFromSnapshotReplaysABCNNonHoldStatesWithComponents(t *testing.T) {
+	tests := []struct {
+		name          string
+		stateMode     string
+		nextStateMode string
+	}{
+		{name: "reset", stateMode: SubstrateStateReset, nextStateMode: SubstrateStateHold},
+		{name: "iterative", stateMode: SubstrateStateIterative, nextStateMode: SubstrateStateIterative},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			snapshot := LayerRuntimeSnapshot{
+				Plasticity: SubstratePlasticityABCN,
+				LinkForm:   LinkFormL2LFeedforward,
+				StateMode:  tt.stateMode,
+				ABCN: ABCNSubstrate{
+					InputLayer: CoordinateHyperlayer{{Coords: []float64{0}, Output: 0.2}},
+					Layers: []ABCNCoordinateHyperlayer{
+						{{Coords: []float64{1}, Output: 0.3, Weights: []ABCNWeight{{Weight: 0.4, A: 0.1, B: 0.2, C: 0.3, N: 0.4}}}},
+					},
+				},
+				Weights: []float64{0.4},
+			}
+			replayed, err := NewLayerRuntimeFromSnapshot(snapshot, LayerRuntimeSpec{
+				IterativeCPP: abcnSignalCPP{},
+				CEPs:         []CEP{rawSignalCEP{}},
+			})
+			if err != nil {
+				t.Fatalf("replay runtime from snapshot: %v", err)
+			}
+
+			got, err := replayed.Step(context.Background(), []float64{0.8})
+			if err != nil {
+				t.Fatalf("step replayed runtime: %v", err)
+			}
+			if len(got) != 1 {
+				t.Fatalf("expected one replay output, got=%v", got)
+			}
+			next := replayed.Snapshot()
+			if next.StateMode != tt.nextStateMode {
+				t.Fatalf("unexpected next state: got=%q want=%q snapshot=%+v", next.StateMode, tt.nextStateMode, next)
+			}
+			updated := next.ABCN.Layers[0][0].Weights[0]
+			if updated.A == 0 || updated.B == 0 || updated.C == 0 || updated.N == 0 {
+				t.Fatalf("expected replayed abcn coefficients from component path, got=%+v", updated)
+			}
+			if updated.Weight == snapshot.ABCN.Layers[0][0].Weights[0].Weight {
+				t.Fatalf("expected abcn replay to update weight, got=%+v", updated)
+			}
+		})
+	}
+}
+
 func TestLayerRuntimeFromSnapshotPreservesTerminatedState(t *testing.T) {
 	replayed, err := NewLayerRuntimeFromSnapshot(LayerRuntimeSnapshot{
 		Plasticity: SubstratePlasticityNone,

@@ -139,6 +139,36 @@ func TestLayerRuntimeSpecForSnapshotResolvesGenomeComponents(t *testing.T) {
 	}
 }
 
+func TestLayerRuntimeSpecForSnapshotResolvesABCNGenomeComponents(t *testing.T) {
+	genome := model.Genome{
+		ID: "typed-abcn-snapshot-runtime",
+		Substrate: &model.SubstrateConfig{
+			CPPName:    substrate.DefaultCPPName,
+			CEPName:    substrate.WeightExpressionCEPName,
+			Plasticity: substrate.SubstratePlasticityABCN,
+			LinkForm:   substrate.LinkFormL2LFeedforward,
+			Parameters: map[string]float64{
+				"abcn_a": 0.1,
+				"abcn_b": 0.2,
+				"abcn_c": 0.3,
+				"abcn_n": 0.4,
+			},
+		},
+	}
+	spec, err := LayerRuntimeSpecForSnapshot(genome, substrate.LayerRuntimeSnapshot{
+		Plasticity: substrate.SubstratePlasticityABCN,
+	})
+	if err != nil {
+		t.Fatalf("snapshot runtime spec: %v", err)
+	}
+	if spec.IterativeCPP == nil || len(spec.CEPs) != 1 {
+		t.Fatalf("expected abcn CPP and CEP components, got %+v", spec)
+	}
+	if spec.Parameters["abcn_a"] != 0.1 || spec.Parameters["abcn_n"] != 0.4 {
+		t.Fatalf("expected abcn parameters to be forwarded, got %+v", spec.Parameters)
+	}
+}
+
 func TestBuildSubstrateLayerRuntimeSupportsActiveLinkForms(t *testing.T) {
 	tests := []struct {
 		name       string
