@@ -627,6 +627,9 @@ func TestSimpleRuntimeUsesCPPActorBackedCompute(t *testing.T) {
 	if rt.cppActor.process.ID() != "cpp_endpoint_1" {
 		t.Fatalf("expected cpp process id from CPPIDs, got=%q", rt.cppActor.process.ID())
 	}
+	if !rt.cppActor.initialized || rt.cppActor.process.cxPID != runtimeCortexProcessID || rt.cppActor.process.substratePID != runtimeSubstrateProcessID {
+		t.Fatalf("expected runtime cpp actor to be payload-initialized, process=%+v initialized=%v", rt.cppActor.process, rt.cppActor.initialized)
+	}
 
 	w, err := rt.Step(context.Background(), []float64{1})
 	if err != nil {

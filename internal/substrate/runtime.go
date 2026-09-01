@@ -66,10 +66,6 @@ func NewSimpleRuntime(spec Spec, weightCount int) (*SimpleRuntime, error) {
 		return nil, err
 	}
 	cppProcessID := firstNonEmptyString(spec.CPPIDs)
-	cppProcess, err := NewCPPProcess(cppProcessID, runtimeSubstrateProcessID, runtimeExoSelfProcessID, cpp, spec.Parameters)
-	if err != nil {
-		return nil, err
-	}
 	ceps, err := resolveCEPChain(spec)
 	if err != nil {
 		return nil, err
@@ -89,13 +85,17 @@ func NewSimpleRuntime(spec Spec, weightCount int) (*SimpleRuntime, error) {
 	if err != nil {
 		return nil, err
 	}
+	cppActor, err := buildRuntimeCPPActor(cppProcessID, cpp, params, nil)
+	if err != nil {
+		return nil, err
+	}
 	weightCEPParams := make([][]map[string]float64, weightCount)
 	for i := range weightCEPParams {
 		weightCEPParams[i] = cloneCEPWeightParamRow(cepActorInits)
 	}
 	return &SimpleRuntime{
 		cpp:                 cpp,
-		cppActor:            NewCPPActor(cppProcess),
+		cppActor:            cppActor,
 		cppProcessID:        cppProcessID,
 		ceps:                ceps,
 		cepActors:           processState.cepActors,
@@ -1438,15 +1438,31 @@ func (r *SimpleRuntime) rebuildProcessState() error {
 }
 
 func (r *SimpleRuntime) rebuildCPPProcessState() error {
-	process, err := NewCPPProcess(r.cppProcessID, runtimeSubstrateProcessID, runtimeExoSelfProcessID, r.cpp, r.params)
+	actor, err := buildRuntimeCPPActor(r.cppProcessID, r.cpp, r.params, nil)
 	if err != nil {
 		return err
 	}
 	if r.cppActor != nil {
 		_ = r.cppActor.TerminateFrom(runtimeExoSelfProcessID)
 	}
-	r.cppActor = NewCPPActor(process)
+	r.cppActor = actor
 	return nil
+}
+
+func buildRuntimeCPPActor(cppProcessID string, cpp CPP, params map[string]float64, fanoutPIDs []string) (*CPPActor, error) {
+	actor := NewCPPActorWithOwner(runtimeExoSelfProcessID)
+	if err := actor.InitFrom(context.Background(), CPPInitMessage{
+		FromPID:      runtimeExoSelfProcessID,
+		ID:           cppProcessID,
+		CxPID:        runtimeCortexProcessID,
+		SubstratePID: runtimeSubstrateProcessID,
+		CPP:          cpp,
+		Parameters:   params,
+		FanoutPIDs:   fanoutPIDs,
+	}); err != nil {
+		return nil, err
+	}
+	return actor, nil
 }
 
 func (r *SimpleRuntime) terminateProcessState() {

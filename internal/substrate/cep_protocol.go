@@ -444,6 +444,23 @@ func (a *CEPActor) handleActorMessage(message CEPMessage) (CEPCommand, bool, err
 	}
 }
 
+func (a *CEPActor) CPPFanoutPID() string {
+	if a == nil || a.process == nil {
+		return ""
+	}
+	return a.process.ID()
+}
+
+func (a *CEPActor) ForwardFromCPP(fromPID string, input []float64) error {
+	if a == nil {
+		return ErrMissingCEPActor
+	}
+	return a.Post(CEPForwardMessage{
+		FromPID: strings.TrimSpace(fromPID),
+		Input:   append([]float64(nil), input...),
+	})
+}
+
 func (a *CEPActor) Post(message CEPMessage) error {
 	if message == nil {
 		return ErrInvalidCEPMessage

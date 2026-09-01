@@ -39,6 +39,22 @@ func (coordinateRuntimeCPP) ComputeCoordinatesIOW(_ context.Context, presynaptic
 	}, nil
 }
 
+type cppFanoutRecorder struct {
+	pid     string
+	fromPID string
+	input   []float64
+}
+
+func (r *cppFanoutRecorder) CPPFanoutPID() string {
+	return r.pid
+}
+
+func (r *cppFanoutRecorder) ForwardFromCPP(fromPID string, input []float64) error {
+	r.fromPID = fromPID
+	r.input = append([]float64(nil), input...)
+	return nil
+}
+
 func TestCPPProcessComputeMessage(t *testing.T) {
 	process, err := NewCPPProcess("cpp_test", "substrate_test", "exoself_test", SetWeightCPP{}, map[string]float64{"scale": 99})
 	if err != nil {
@@ -124,6 +140,152 @@ func TestCPPProcessRejectsUnexpectedSubstrateSender(t *testing.T) {
 		Input:   []float64{1},
 	}); !errors.Is(err, ErrUnexpectedCPPComputePID) {
 		t.Fatalf("expected ErrUnexpectedCPPComputePID, got %v", err)
+	}
+}
+
+func TestCPPActorInitHandshakeSupportsStatePayload(t *testing.T) {
+	actor := NewCPPActorWithOwner("exoself_test")
+	t.Cleanup(func() {
+		_ = actor.TerminateFrom("exoself_test")
+	})
+
+	if _, err := actor.ComputeFrom(context.Background(), "substrate_test", []float64{1}); !errors.Is(err, ErrCPPActorUninitialized) {
+		t.Fatalf("expected ErrCPPActorUninitialized before init, got %v", err)
+	}
+	if err := actor.InitFrom(context.Background(), CPPInitMessage{
+		FromPID:      "exoself_test",
+		ID:           "cpp_test",
+		CxPID:        "cortex_test",
+		SubstratePID: "substrate_test",
+		CPPName:      DefaultCPPName,
+		VL:           2,
+		Parameters:   map[string]float64{"scale": 99},
+		FanoutPIDs:   []string{"cep_test"},
+	}); err != nil {
+		t.Fatalf("init cpp actor from payload: %v", err)
+	}
+	if actor.process == nil || actor.process.ID() != "cpp_test" || actor.process.cxPID != "cortex_test" || actor.process.vl != 2 {
+		t.Fatalf("unexpected initialized cpp process: %+v", actor.process)
+	}
+	if !reflect.DeepEqual(actor.process.fanoutPIDs, []string{"cep_test"}) {
+		t.Fatalf("unexpected fanout pids: %v", actor.process.fanoutPIDs)
+	}
+}
+
+func TestCPPActorInitHandshakeValidatesOwner(t *testing.T) {
+	actor := NewCPPActorWithOwner("exoself_test")
+
+	err := actor.InitFrom(context.Background(), CPPInitMessage{
+		FromPID:      "other_exoself",
+		ID:           "cpp_test",
+		SubstratePID: "substrate_test",
+		CPPName:      DefaultCPPName,
+	})
+	if !errors.Is(err, ErrUnexpectedCPPInitPID) {
+		t.Fatalf("expected ErrUnexpectedCPPInitPID, got %v", err)
+	}
+	if err := actor.InitFrom(context.Background(), CPPInitMessage{
+		FromPID:      "exoself_test",
+		ID:           "cpp_test",
+		SubstratePID: "substrate_test",
+		CPPName:      DefaultCPPName,
+	}); err != nil {
+		t.Fatalf("init cpp actor after rejected owner: %v", err)
+	}
+	if err := actor.TerminateFrom("exoself_test"); err != nil {
+		t.Fatalf("terminate initialized actor: %v", err)
+	}
+}
+
+func TestCPPActorFanoutDeliversSensoryVectorToTarget(t *testing.T) {
+	process, err := NewCPPProcessWithFanout(
+		"cpp_test",
+		"cortex_test",
+		"substrate_test",
+		"exoself_test",
+		coordinateRuntimeCPP{},
+		2,
+		map[string]float64{"scale": 2},
+		[]string{"cep_test"},
+	)
+	if err != nil {
+		t.Fatalf("new cpp process with fanout: %v", err)
+	}
+	actor := NewCPPActor(process)
+	t.Cleanup(func() {
+		_ = actor.TerminateFrom("exoself_test")
+	})
+	target := &cppFanoutRecorder{pid: "cep_test"}
+	actor.RegisterFanoutTarget(target)
+
+	output, err := actor.ComputeCoordinatesFrom(
+		context.Background(),
+		"substrate_test",
+		[]float64{0.25, 0.75},
+		[]float64{0.5, 0.25},
+	)
+	if err != nil {
+		t.Fatalf("compute coordinates with fanout: %v", err)
+	}
+	want := []float64{1.5, 1.0}
+	if !reflect.DeepEqual(output, want) {
+		t.Fatalf("unexpected coordinate output: got=%v want=%v", output, want)
+	}
+	if target.fromPID != "cpp_test" || !reflect.DeepEqual(target.input, want) {
+		t.Fatalf("unexpected fanout delivery: from=%q input=%v", target.fromPID, target.input)
+	}
+}
+
+func TestCPPActorFanoutDeliversToCEPActor(t *testing.T) {
+	cepProcess, err := NewCEPProcessWithOwner("cep_test", "exoself_test", DefaultCEPName, nil, []string{"cpp_test"})
+	if err != nil {
+		t.Fatalf("new cep process: %v", err)
+	}
+	cepActor := NewCEPActor(cepProcess)
+	t.Cleanup(func() {
+		_ = cepActor.TerminateFrom("exoself_test")
+	})
+	cppProcess, err := NewCPPProcessWithFanout("cpp_test", "cortex_test", "substrate_test", "exoself_test", SetWeightCPP{}, 1, nil, []string{"cep_test"})
+	if err != nil {
+		t.Fatalf("new cpp process: %v", err)
+	}
+	cppActor := NewCPPActor(cppProcess)
+	t.Cleanup(func() {
+		_ = cppActor.TerminateFrom("exoself_test")
+	})
+	cppActor.RegisterFanoutTarget(cepActor)
+
+	if _, err := cppActor.ComputeFrom(context.Background(), "substrate_test", []float64{1}); err != nil {
+		t.Fatalf("compute with cep fanout: %v", err)
+	}
+	syncID, err := cepActor.PostSync()
+	if err != nil {
+		t.Fatalf("post cep sync: %v", err)
+	}
+	if err := cepActor.AwaitSync(syncID); err != nil {
+		t.Fatalf("await cep sync: %v", err)
+	}
+	command, err := cepActor.NextCommand()
+	if err != nil {
+		t.Fatalf("expected cep command from cpp fanout: %v", err)
+	}
+	if command.FromPID != "cep_test" || command.Command != SetIterativeCEPName || len(command.Signal) != 1 || command.Signal[0] != 1 {
+		t.Fatalf("unexpected cep command from cpp fanout: %+v", command)
+	}
+}
+
+func TestCPPActorFanoutRequiresConfiguredTarget(t *testing.T) {
+	process, err := NewCPPProcessWithFanout("cpp_test", "cortex_test", "substrate_test", "exoself_test", SetWeightCPP{}, 1, nil, []string{"missing_cep"})
+	if err != nil {
+		t.Fatalf("new cpp process: %v", err)
+	}
+	actor := NewCPPActor(process)
+	t.Cleanup(func() {
+		_ = actor.TerminateFrom("exoself_test")
+	})
+
+	if _, err := actor.ComputeFrom(context.Background(), "substrate_test", []float64{1}); !errors.Is(err, ErrMissingCPPFanoutTarget) {
+		t.Fatalf("expected ErrMissingCPPFanoutTarget, got %v", err)
 	}
 }
 
