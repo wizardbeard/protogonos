@@ -226,6 +226,103 @@ func TestLayerRuntimeSnapshotReportsScalarStateAndCopiesLayers(t *testing.T) {
 	}
 }
 
+func TestLayerRuntimeFromSnapshotReplaysScalarHoldState(t *testing.T) {
+	original, err := NewLayerRuntime(LayerRuntimeSpec{
+		Plasticity: SubstratePlasticityNone,
+		LinkForm:   LinkFormL2LFeedforward,
+		Substrate: []CoordinateHyperlayer{
+			{{Coords: []float64{0}}},
+			{{Coords: []float64{1}, Weights: []float64{99}}},
+		},
+		StaticCPP: coordinateSumCPP{},
+		CEPs:      []CEP{rawSignalCEP{}},
+	})
+	if err != nil {
+		t.Fatalf("new original runtime: %v", err)
+	}
+	if _, err := original.Step(context.Background(), []float64{0.5}); err != nil {
+		t.Fatalf("prime original runtime: %v", err)
+	}
+	snapshot := original.Snapshot()
+
+	replayed, err := NewLayerRuntimeFromSnapshot(snapshot, LayerRuntimeSpec{})
+	if err != nil {
+		t.Fatalf("replay runtime from snapshot: %v", err)
+	}
+	inputs := []float64{0.25}
+	want, err := original.Step(context.Background(), inputs)
+	if err != nil {
+		t.Fatalf("continue original runtime: %v", err)
+	}
+	got, err := replayed.Step(context.Background(), inputs)
+	if err != nil {
+		t.Fatalf("step replayed runtime: %v", err)
+	}
+	if !nearlyEqualSlice(got, want, 1e-12) {
+		t.Fatalf("replayed scalar output mismatch: got=%v want=%v", got, want)
+	}
+	if !reflect.DeepEqual(replayed.Weights(), snapshot.Weights) {
+		t.Fatalf("expected replayed weights to match snapshot weights, got=%v want=%v", replayed.Weights(), snapshot.Weights)
+	}
+}
+
+func TestLayerRuntimeFromSnapshotReplaysABCNHoldState(t *testing.T) {
+	snapshot := LayerRuntimeSnapshot{
+		Plasticity: SubstratePlasticityABCN,
+		LinkForm:   LinkFormL2LFeedforward,
+		StateMode:  SubstrateStateHold,
+		ABCN: ABCNSubstrate{
+			InputLayer: CoordinateHyperlayer{{Coords: []float64{0}}},
+			Layers: []ABCNCoordinateHyperlayer{
+				{{Coords: []float64{1}, Weights: []ABCNWeight{{Weight: 0.5, A: 0.1, B: 0.2, C: 0.3, N: 0.4}}}},
+			},
+		},
+		Weights: []float64{0.5},
+	}
+	replayed, err := NewLayerRuntimeFromSnapshot(snapshot, LayerRuntimeSpec{})
+	if err != nil {
+		t.Fatalf("replay runtime from snapshot: %v", err)
+	}
+
+	got, err := replayed.Step(context.Background(), []float64{0.25})
+	if err != nil {
+		t.Fatalf("step replayed runtime: %v", err)
+	}
+	want := []float64{math.Tanh(0.25 * 0.5)}
+	if !nearlyEqualSlice(got, want, 1e-12) {
+		t.Fatalf("replayed abcn output mismatch: got=%v want=%v", got, want)
+	}
+	next := replayed.Snapshot()
+	gotWeight := next.ABCN.Layers[0][0].Weights[0]
+	wantWeight := snapshot.ABCN.Layers[0][0].Weights[0]
+	if gotWeight.A != wantWeight.A || gotWeight.B != wantWeight.B || gotWeight.C != wantWeight.C || gotWeight.N != wantWeight.N {
+		t.Fatalf("expected abcn coefficients to survive replay, got=%+v", next.ABCN.Layers[0][0].Weights[0])
+	}
+	if gotWeight.Weight == wantWeight.Weight {
+		t.Fatalf("expected abcn weight value to update during replay, got=%+v", gotWeight)
+	}
+}
+
+func TestLayerRuntimeFromSnapshotPreservesTerminatedState(t *testing.T) {
+	replayed, err := NewLayerRuntimeFromSnapshot(LayerRuntimeSnapshot{
+		Plasticity: SubstratePlasticityNone,
+		LinkForm:   LinkFormL2LFeedforward,
+		StateMode:  SubstrateStateHold,
+		Terminated: true,
+		Substrate: []CoordinateHyperlayer{
+			{{Coords: []float64{0}}},
+			{{Coords: []float64{1}, Weights: []float64{0.5}}},
+		},
+		Weights: []float64{0.5},
+	}, LayerRuntimeSpec{})
+	if err != nil {
+		t.Fatalf("replay runtime from terminated snapshot: %v", err)
+	}
+	if _, err := replayed.Step(context.Background(), []float64{0.25}); !errors.Is(err, ErrSubstrateRuntimeTerminated) {
+		t.Fatalf("expected terminated replay runtime error, got %v", err)
+	}
+}
+
 func TestLayerRuntimeSnapshotReportsABCNCoefficientsAndCopiesState(t *testing.T) {
 	rt, err := NewLayerRuntime(LayerRuntimeSpec{
 		Plasticity: SubstratePlasticityABCN,

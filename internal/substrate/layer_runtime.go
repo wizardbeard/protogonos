@@ -100,6 +100,23 @@ func NewLayerRuntime(spec LayerRuntimeSpec) (*LayerRuntime, error) {
 	}, nil
 }
 
+func NewLayerRuntimeFromSnapshot(snapshot LayerRuntimeSnapshot, spec LayerRuntimeSpec) (*LayerRuntime, error) {
+	spec.Plasticity = snapshot.Plasticity
+	spec.LinkForm = snapshot.LinkForm
+	spec.StateMode = snapshot.StateMode
+	spec.Substrate = cloneCoordinateHyperlayers(snapshot.Substrate)
+	spec.ABCN = cloneABCNSubstrate(snapshot.ABCN)
+
+	rt, err := NewLayerRuntime(spec)
+	if err != nil {
+		return nil, err
+	}
+	if snapshot.Terminated {
+		rt.Terminate()
+	}
+	return rt, nil
+}
+
 // Step advances the substrate state and returns the current output layer values.
 func (r *LayerRuntime) Step(ctx context.Context, inputs []float64) ([]float64, error) {
 	r.mu.Lock()

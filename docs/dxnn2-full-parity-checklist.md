@@ -118,6 +118,7 @@ Status keys:
 - Added stored top-genome substrate snapshots so `storage.Store`, `Client.TopGenomes`, and `protogonosctl top` expose evaluated `LayerRuntime` state outside artifact JSON files.
 - Added top-genome artifact compatibility validation so legacy records without substrate snapshots still import, while new snapshot-bearing records are checked for supported modes and weight-shape consistency.
 - Added substrate snapshot inspection via `Client.SubstrateSnapshots` and `protogonosctl substrate-snapshot`, exposing top-genome layer state summaries plus JSON access to full persisted snapshots.
+- Added substrate snapshot replay reconstruction via `NewLayerRuntimeFromSnapshot`, including scalar/ABCN hold-state continuation checks and terminated-state preservation.
 - Expanded substrate CEP fan-in parity by adding ordered multi-signal protocol forwarding in runtime (`VectorCPP` + `Spec.CEPFaninPIDs`), enabling command-surface updates from vector control signals (including `set_abcn` coefficient vectors) with explicit fan-in width validation.
 - Expanded substrate CEP topology parity by deriving runtime `CEPFaninPIDs` from genome `NeuronActuatorLinks` targeting substrate CEP endpoints (`genotype.SubstrateCEPFaninPIDs`) in both monitor evaluation and replay runtime builders.
 - Expanded substrate CEP fan-in fallback parity by resolving runtime `CEPFaninPIDs` from explicit CEP endpoint links when present and otherwise falling back to ordered output-neuron IDs (`ResolveSubstrateCEPFaninPIDs`) in monitor/replay substrate runtime builders.
