@@ -17,6 +17,28 @@ import (
 
 type GTSAScape struct{}
 
+type GTSASimulator struct {
+	cfg    gtsaModeConfig
+	table  gtsaTable
+	state  *gtsaWindowState
+	halted bool
+}
+
+type GTSASimulatorState struct {
+	Mode          string
+	TableName     string
+	IndexStart    int
+	IndexCurrent  int
+	IndexEnd      int
+	WindowLength  int
+	WindowRows    int
+	Window        []float64
+	Halted        bool
+	LastProgress  float64
+	FeatureWidth  int
+	TableRowCount int
+}
+
 var (
 	gtsaTableSourceMu sync.RWMutex
 	gtsaTableSource   = defaultGTSATable()
@@ -48,6 +70,110 @@ func (GTSAScape) EvaluateMode(ctx context.Context, agent Agent, mode string) (Fi
 		return 0, nil, fmt.Errorf("agent %s does not implement step runner", agent.ID())
 	}
 	return evaluateGTSAWithStep(ctx, runner, cfg)
+}
+
+func NewGTSASimulator(ctx context.Context, mode string) (*GTSASimulator, error) {
+	cfg, err := gtsaConfigForMode(mode)
+	if err != nil {
+		return nil, err
+	}
+	table := currentGTSATable(ctx)
+	state, err := newGTSAWindowState(cfg, table)
+	if err != nil {
+		return nil, err
+	}
+	return &GTSASimulator{
+		cfg:   cfg,
+		table: table,
+		state: state,
+	}, nil
+}
+
+func (s *GTSASimulator) Sense(ctx context.Context) ([]float64, error) {
+	percept, err := s.sensePercept(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return append([]float64(nil), percept.vector...), nil
+}
+
+func (s *GTSASimulator) SensePercept(ctx context.Context) (current, delta, windowMean, progress float64, vector []float64, err error) {
+	percept, err := s.sensePercept(ctx)
+	if err != nil {
+		return 0, 0, 0, 0, nil, err
+	}
+	return percept.current, percept.delta, percept.windowMean, percept.progress, append([]float64(nil), percept.vector...), nil
+}
+
+func (s *GTSASimulator) PredictValue(ctx context.Context, prediction float64) (Fitness, bool, error) {
+	if s == nil || s.state == nil {
+		return 0, false, fmt.Errorf("gtsa simulator is nil")
+	}
+	if err := ctx.Err(); err != nil {
+		return 0, false, err
+	}
+	if s.halted {
+		return 0, true, nil
+	}
+	expected, done, err := s.state.applyPrediction()
+	if err != nil {
+		return 0, false, err
+	}
+	if done {
+		s.halted = true
+		return 0, true, nil
+	}
+	fitness := Fitness(1.0 / (math.Abs(expected-prediction) + 0.0001))
+	return fitness, false, nil
+}
+
+func (s *GTSASimulator) Restart(ctx context.Context) error {
+	if s == nil {
+		return fmt.Errorf("gtsa simulator is nil")
+	}
+	state, err := newGTSAWindowState(s.cfg, s.table)
+	if err != nil {
+		return err
+	}
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	s.state = state
+	s.halted = false
+	return nil
+}
+
+func (s *GTSASimulator) State() GTSASimulatorState {
+	if s == nil || s.state == nil {
+		return GTSASimulatorState{}
+	}
+	return GTSASimulatorState{
+		Mode:          s.cfg.mode,
+		TableName:     s.state.info.name,
+		IndexStart:    s.state.indexStart,
+		IndexCurrent:  s.state.indexCurrent,
+		IndexEnd:      s.state.indexEnd,
+		WindowLength:  s.state.windowLength,
+		WindowRows:    s.state.totRows,
+		Window:        append([]float64(nil), s.state.window...),
+		Halted:        s.halted,
+		LastProgress:  gtsaProgress(s.state.indexStart, s.state.indexCurrent, s.state.indexEnd),
+		FeatureWidth:  s.state.windowLength,
+		TableRowCount: maxGTSA(0, len(s.table.values)-1),
+	}
+}
+
+func (s *GTSASimulator) sensePercept(ctx context.Context) (gtsaPercept, error) {
+	if s == nil || s.state == nil {
+		return gtsaPercept{}, fmt.Errorf("gtsa simulator is nil")
+	}
+	if err := ctx.Err(); err != nil {
+		return gtsaPercept{}, err
+	}
+	if s.halted {
+		return gtsaPercept{}, fmt.Errorf("gtsa simulator halted")
+	}
+	return s.state.getPercept()
 }
 
 func evaluateGTSAWithStep(ctx context.Context, runner StepAgent, cfg gtsaModeConfig) (Fitness, Trace, error) {

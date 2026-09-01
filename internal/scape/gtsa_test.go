@@ -429,6 +429,91 @@ func TestGTSAScapeZeroScoreTraceUsesFinalProgress(t *testing.T) {
 	}
 }
 
+func TestGTSASimulatorSensePredictStateAndRestart(t *testing.T) {
+	ctx := context.WithValue(context.Background(), gtsaDataSourceContextKey{}, gtsaTable{
+		info: gtsaInfo{
+			name:   "unit",
+			ivl:    1,
+			ovl:    1,
+			trnEnd: 5,
+			valEnd: 5,
+			tstEnd: 5,
+		},
+		values: []float64{0, 10, 12, 15, 14, 20},
+	})
+
+	sim, err := NewGTSASimulator(ctx, "gt")
+	if err != nil {
+		t.Fatalf("new gtsa simulator: %v", err)
+	}
+	initial := sim.State()
+	if initial.Mode != "gt" || initial.TableName != "unit" || initial.IndexCurrent != 1 || initial.Halted {
+		t.Fatalf("unexpected initial simulator state: %+v", initial)
+	}
+
+	current, delta, mean, progress, window, err := sim.SensePercept(context.Background())
+	if err != nil {
+		t.Fatalf("sense percept: %v", err)
+	}
+	if current != 10 || delta != 0 || mean != 10 || progress != 0 {
+		t.Fatalf("unexpected first percept current=%f delta=%f mean=%f progress=%f", current, delta, mean, progress)
+	}
+	if len(window) != initial.FeatureWidth || window[0] != 10 {
+		t.Fatalf("unexpected first window: %v state=%+v", window, initial)
+	}
+
+	fitness, end, err := sim.PredictValue(context.Background(), 12)
+	if err != nil {
+		t.Fatalf("predict exact value: %v", err)
+	}
+	if end {
+		t.Fatalf("exact prediction should not terminate")
+	}
+	if math.Abs(float64(fitness)-10000) > 1e-9 {
+		t.Fatalf("expected reciprocal absolute-error fitness for exact prediction, got %f", fitness)
+	}
+	afterPredict := sim.State()
+	if afterPredict.IndexCurrent != 2 || afterPredict.LastProgress <= 0 {
+		t.Fatalf("expected prediction to advance state, got %+v", afterPredict)
+	}
+
+	window, err = sim.Sense(context.Background())
+	if err != nil {
+		t.Fatalf("second sense: %v", err)
+	}
+	if len(window) != initial.FeatureWidth || window[0] != 12 || window[1] != 10 {
+		t.Fatalf("expected rolling window to prepend current value, got %v", window)
+	}
+
+	for {
+		_, end, err = sim.PredictValue(context.Background(), 0)
+		if err != nil {
+			t.Fatalf("predict until terminal: %v", err)
+		}
+		if end {
+			break
+		}
+		if _, err := sim.Sense(context.Background()); err != nil {
+			t.Fatalf("sense until terminal: %v", err)
+		}
+	}
+	finalState := sim.State()
+	if !finalState.Halted {
+		t.Fatalf("expected halted terminal state, got %+v", finalState)
+	}
+	if _, err := sim.Sense(context.Background()); err == nil {
+		t.Fatal("expected halted simulator sense error")
+	}
+
+	if err := sim.Restart(context.Background()); err != nil {
+		t.Fatalf("restart simulator: %v", err)
+	}
+	restarted := sim.State()
+	if restarted.Halted || restarted.IndexCurrent != restarted.IndexStart || len(restarted.Window) != 0 {
+		t.Fatalf("unexpected restarted simulator state: %+v", restarted)
+	}
+}
+
 func TestGTSAScapeLoadTableCSV(t *testing.T) {
 	ResetGTSATableSource()
 	t.Cleanup(ResetGTSATableSource)
