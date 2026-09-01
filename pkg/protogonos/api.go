@@ -261,6 +261,27 @@ type TopGenomesRequest struct {
 	Limit  int
 }
 
+type SubstrateSnapshotsRequest struct {
+	RunID  string
+	Latest bool
+	Limit  int
+	Rank   int
+}
+
+type SubstrateSnapshotRecord struct {
+	Rank             int                            `json:"rank"`
+	Fitness          float64                        `json:"fitness"`
+	GenomeID         string                         `json:"genome_id"`
+	Plasticity       string                         `json:"plasticity"`
+	LinkForm         string                         `json:"link_form"`
+	StateMode        string                         `json:"state_mode"`
+	Terminated       bool                           `json:"terminated"`
+	WeightCount      int                            `json:"weight_count"`
+	ScalarLayerCount int                            `json:"scalar_layer_count"`
+	ABCNLayerCount   int                            `json:"abcn_layer_count"`
+	Snapshot         substrate.LayerRuntimeSnapshot `json:"snapshot"`
+}
+
 type MonitorControlRequest struct {
 	RunID string
 }
@@ -1495,6 +1516,59 @@ func (c *Client) TopGenomes(ctx context.Context, req TopGenomesRequest) ([]model
 	out := make([]model.TopGenomeRecord, len(top))
 	copy(out, top)
 	return out, nil
+}
+
+func (c *Client) SubstrateSnapshots(ctx context.Context, req SubstrateSnapshotsRequest) ([]SubstrateSnapshotRecord, error) {
+	if req.Rank < 0 {
+		return nil, errors.New("rank must be >= 0")
+	}
+	if req.Limit < 0 {
+		return nil, errors.New("limit must be >= 0")
+	}
+
+	top, err := c.TopGenomes(ctx, TopGenomesRequest{
+		RunID:  req.RunID,
+		Latest: req.Latest,
+		Limit:  0,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	out := make([]SubstrateSnapshotRecord, 0, len(top))
+	for _, item := range top {
+		if req.Rank > 0 && item.Rank != req.Rank {
+			continue
+		}
+		if item.SubstrateSnapshot == nil {
+			continue
+		}
+		out = append(out, substrateSnapshotRecord(item))
+		if req.Limit > 0 && len(out) >= req.Limit {
+			break
+		}
+	}
+	return out, nil
+}
+
+func substrateSnapshotRecord(item model.TopGenomeRecord) SubstrateSnapshotRecord {
+	snapshot := substrate.CloneLayerRuntimeSnapshot(item.SubstrateSnapshot)
+	if snapshot == nil {
+		snapshot = &substrate.LayerRuntimeSnapshot{}
+	}
+	return SubstrateSnapshotRecord{
+		Rank:             item.Rank,
+		Fitness:          item.Fitness,
+		GenomeID:         item.Genome.ID,
+		Plasticity:       snapshot.Plasticity,
+		LinkForm:         snapshot.LinkForm,
+		StateMode:        snapshot.StateMode,
+		Terminated:       snapshot.Terminated,
+		WeightCount:      len(snapshot.Weights),
+		ScalarLayerCount: len(snapshot.Substrate),
+		ABCNLayerCount:   len(snapshot.ABCN.Layers),
+		Snapshot:         *snapshot,
+	}
 }
 
 func (c *Client) EpitopesReplay(ctx context.Context, req EpitopesReplayRequest) (EpitopesReplaySummary, error) {

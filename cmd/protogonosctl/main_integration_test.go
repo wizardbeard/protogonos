@@ -12,8 +12,10 @@ import (
 	"strings"
 	"testing"
 
+	"protogonos/internal/model"
 	"protogonos/internal/stats"
 	"protogonos/internal/storage"
+	"protogonos/internal/substrate"
 )
 
 func TestRunCommandSQLiteCreatesArtifacts(t *testing.T) {
@@ -1027,6 +1029,75 @@ func TestTopCommandSQLiteReadsPersistedTopGenomes(t *testing.T) {
 	}
 	if _, ok := topJSON[0]["rank"]; !ok {
 		t.Fatalf("expected rank in top json output: %v", topJSON[0])
+	}
+}
+
+func TestSubstrateSnapshotCommandSQLiteReadsPersistedTopGenomeSnapshots(t *testing.T) {
+	workdir := t.TempDir()
+	dbPath := filepath.Join(workdir, "protogonos.db")
+	store, err := storage.NewStore("sqlite", dbPath)
+	if err != nil {
+		t.Fatalf("new store: %v", err)
+	}
+	defer func() {
+		_ = storage.CloseIfSupported(store)
+	}()
+	if err := store.Init(context.Background()); err != nil {
+		t.Fatalf("init store: %v", err)
+	}
+	if err := store.SaveTopGenomes(context.Background(), "run-snapshots", []model.TopGenomeRecord{
+		{
+			Rank:    1,
+			Fitness: 0.9,
+			Genome:  model.Genome{ID: "g1"},
+			SubstrateSnapshot: &substrate.LayerRuntimeSnapshot{
+				Plasticity: substrate.SubstratePlasticityNone,
+				LinkForm:   substrate.LinkFormL2LFeedforward,
+				StateMode:  substrate.SubstrateStateHold,
+				Substrate: []substrate.CoordinateHyperlayer{
+					{{Coords: []float64{0}}},
+					{{Coords: []float64{1}, Weights: []float64{0.25}}},
+				},
+				Weights: []float64{0.25},
+			},
+		},
+	}); err != nil {
+		t.Fatalf("save top genomes: %v", err)
+	}
+
+	out, err := captureStdout(func() error {
+		return run(context.Background(), []string{
+			"substrate-snapshot",
+			"--store", "sqlite",
+			"--db-path", dbPath,
+			"--run-id", "run-snapshots",
+		})
+	})
+	if err != nil {
+		t.Fatalf("substrate snapshot command: %v", err)
+	}
+	if !strings.Contains(out, "rank=1") || !strings.Contains(out, "genome_id=g1") || !strings.Contains(out, "weights=1") {
+		t.Fatalf("unexpected substrate snapshot output: %s", out)
+	}
+
+	jsonOut, err := captureStdout(func() error {
+		return run(context.Background(), []string{
+			"substrate-snapshot",
+			"--store", "sqlite",
+			"--db-path", dbPath,
+			"--run-id", "run-snapshots",
+			"--json",
+		})
+	})
+	if err != nil {
+		t.Fatalf("substrate snapshot json command: %v", err)
+	}
+	var parsed []map[string]any
+	if err := json.Unmarshal([]byte(jsonOut), &parsed); err != nil {
+		t.Fatalf("decode substrate snapshot json output: %v\n%s", err, jsonOut)
+	}
+	if len(parsed) != 1 || parsed[0]["genome_id"] != "g1" {
+		t.Fatalf("unexpected substrate snapshot json output: %+v", parsed)
 	}
 }
 

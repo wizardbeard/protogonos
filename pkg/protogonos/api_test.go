@@ -170,6 +170,60 @@ func TestClientRunRunsAndExport(t *testing.T) {
 	}
 }
 
+func TestClientSubstrateSnapshotsFiltersStoredTopGenomes(t *testing.T) {
+	client, err := New(Options{StoreKind: "memory", BenchmarksDir: t.TempDir(), ExportsDir: t.TempDir()})
+	if err != nil {
+		t.Fatalf("new client: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = client.Close()
+	})
+	if err := client.Init(context.Background()); err != nil {
+		t.Fatalf("init client: %v", err)
+	}
+	if err := client.store.SaveTopGenomes(context.Background(), "run-snapshots", []model.TopGenomeRecord{
+		{
+			Rank:    1,
+			Fitness: 0.9,
+			Genome:  model.Genome{ID: "g1"},
+			SubstrateSnapshot: &internalsubstrate.LayerRuntimeSnapshot{
+				Plasticity: internalsubstrate.SubstratePlasticityABCN,
+				LinkForm:   internalsubstrate.LinkFormL2LFeedforward,
+				StateMode:  internalsubstrate.SubstrateStateHold,
+				ABCN: internalsubstrate.ABCNSubstrate{
+					InputLayer: internalsubstrate.CoordinateHyperlayer{{Coords: []float64{0}}},
+					Layers: []internalsubstrate.ABCNCoordinateHyperlayer{
+						{{Coords: []float64{1}, Weights: []internalsubstrate.ABCNWeight{{Weight: 0.5, A: 0.1, B: 0.2, C: 0.3, N: 0.4}}}},
+					},
+				},
+				Weights: []float64{0.5},
+			},
+		},
+		{Rank: 2, Fitness: 0.8, Genome: model.Genome{ID: "g2"}},
+	}); err != nil {
+		t.Fatalf("save top genomes: %v", err)
+	}
+
+	snapshots, err := client.SubstrateSnapshots(context.Background(), SubstrateSnapshotsRequest{RunID: "run-snapshots"})
+	if err != nil {
+		t.Fatalf("substrate snapshots: %v", err)
+	}
+	if len(snapshots) != 1 {
+		t.Fatalf("unexpected snapshot count: %d", len(snapshots))
+	}
+	if snapshots[0].Rank != 1 || snapshots[0].GenomeID != "g1" || snapshots[0].ABCNLayerCount != 1 || snapshots[0].WeightCount != 1 {
+		t.Fatalf("unexpected snapshot summary: %+v", snapshots[0])
+	}
+
+	rankSnapshots, err := client.SubstrateSnapshots(context.Background(), SubstrateSnapshotsRequest{RunID: "run-snapshots", Rank: 2})
+	if err != nil {
+		t.Fatalf("rank substrate snapshots: %v", err)
+	}
+	if len(rankSnapshots) != 0 {
+		t.Fatalf("expected no snapshot for rank without substrate state, got %+v", rankSnapshots)
+	}
+}
+
 func TestClientRunRejectsUnknownSelectionAndPostprocessor(t *testing.T) {
 	client, err := New(Options{StoreKind: "memory", BenchmarksDir: t.TempDir(), ExportsDir: t.TempDir()})
 	if err != nil {

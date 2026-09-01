@@ -72,6 +72,8 @@ func run(ctx context.Context, args []string) error {
 		return runPopulation(ctx, args[1:])
 	case "top":
 		return runTop(ctx, args[1:])
+	case "substrate-snapshot":
+		return runSubstrateSnapshot(ctx, args[1:])
 	case "scape-summary":
 		return runScapeSummary(ctx, args[1:])
 	case "epitopes-test":
@@ -832,6 +834,74 @@ func runTop(ctx context.Context, args []string) error {
 			len(item.Genome.Neurons),
 			len(item.Genome.Synapses),
 			hasSubstrateSnapshot,
+		)
+	}
+	return nil
+}
+
+func runSubstrateSnapshot(ctx context.Context, args []string) error {
+	fs := flag.NewFlagSet("substrate-snapshot", flag.ContinueOnError)
+	runID := fs.String("run-id", "", "run id")
+	latest := fs.Bool("latest", false, "show substrate snapshots for the most recent run from run index")
+	limit := fs.Int("limit", 5, "max substrate snapshots to print (<=0 for all)")
+	rank := fs.Int("rank", 0, "specific top-genome rank to inspect (<=0 for all)")
+	jsonOut := fs.Bool("json", false, "emit substrate snapshots as JSON")
+	storeKind := fs.String("store", storage.DefaultStoreKind(), "store backend: memory|sqlite")
+	dbPath := fs.String("db-path", "protogonos.db", "sqlite database path")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	if *runID != "" && *latest {
+		return errors.New("use either --run-id or --latest, not both")
+	}
+	if *runID == "" && !*latest {
+		return errors.New("substrate-snapshot requires --run-id or --latest")
+	}
+
+	client, err := protoapi.New(protoapi.Options{
+		StoreKind:     *storeKind,
+		DBPath:        *dbPath,
+		BenchmarksDir: benchmarksDir,
+		ExportsDir:    exportsDir,
+	})
+	if err != nil {
+		return err
+	}
+	defer func() {
+		_ = client.Close()
+	}()
+
+	snapshots, err := client.SubstrateSnapshots(ctx, protoapi.SubstrateSnapshotsRequest{
+		RunID:  *runID,
+		Latest: *latest,
+		Limit:  *limit,
+		Rank:   *rank,
+	})
+	if err != nil {
+		return err
+	}
+	if len(snapshots) == 0 {
+		fmt.Println("no substrate snapshots")
+		return nil
+	}
+	if *jsonOut {
+		enc := json.NewEncoder(os.Stdout)
+		enc.SetIndent("", "  ")
+		return enc.Encode(snapshots)
+	}
+
+	for _, item := range snapshots {
+		fmt.Printf("rank=%d fitness=%.6f genome_id=%s plasticity=%s link_form=%s state_mode=%s terminated=%t weights=%d scalar_layers=%d abcn_layers=%d\n",
+			item.Rank,
+			item.Fitness,
+			item.GenomeID,
+			item.Plasticity,
+			item.LinkForm,
+			item.StateMode,
+			item.Terminated,
+			item.WeightCount,
+			item.ScalarLayerCount,
+			item.ABCNLayerCount,
 		)
 	}
 	return nil

@@ -139,6 +139,7 @@ Status legend:
 - 2026-08-31: added post-evaluation typed substrate snapshot capture from monitor cortex instances, allowing top-genome artifacts to persist evaluated `LayerRuntime` state while retaining initial replay snapshots for older scored-genome paths.
 - 2026-08-31: added evaluated substrate snapshot persistence to stored top-genome records, including memory/SQLite codec round-trips and `protogonosctl top` visibility through JSON and text output.
 - 2026-08-31: added top-genome artifact import compatibility checks that allow legacy records without `substrate_snapshot` and validate new snapshot modes plus scalar/ABCN weight-shape consistency when layer detail is present.
+- 2026-08-31: added substrate snapshot inspection surfaces (`Client.SubstrateSnapshots`, `protogonosctl substrate-snapshot`) with rank/limit filtering, text summaries, and full JSON snapshot output from persisted top-genome records.
 - 2026-02-28: expanded substrate CEP bootstrap parity by switching runtime actor initialization to payload-style `CEPInitMessage` state handoff (`ID`/`CEPName`/`Parameters`/`FaninPIDs`) instead of direct process-pointer injection.
 - 2026-02-28: expanded substrate CEP actor-only runtime parity by removing direct runtime dependence on bootstrap `CEPProcess` handles after actor initialization so step/terminate flow remains mailbox-actor based.
 - 2026-02-28: expanded substrate CEP bootstrap/runtime cohesion by deriving runtime actor bootstrap directly from CEP-chain init payloads and removing preconstructed runtime CEP-process bootstrap state.
