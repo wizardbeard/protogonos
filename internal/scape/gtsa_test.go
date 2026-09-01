@@ -514,6 +514,83 @@ func TestGTSASimulatorSensePredictStateAndRestart(t *testing.T) {
 	}
 }
 
+func TestGTSAProcessCommandWrapper(t *testing.T) {
+	ctx := context.WithValue(context.Background(), gtsaDataSourceContextKey{}, gtsaTable{
+		info: gtsaInfo{
+			name:   "unit-process",
+			ivl:    1,
+			ovl:    1,
+			trnEnd: 5,
+			valEnd: 5,
+			tstEnd: 5,
+		},
+		values: []float64{0, 10, 12, 15, 14, 20},
+	})
+	process := NewGTSAProcess()
+
+	if response := process.Call(ctx, GTSASenseMessage{}); response.Err == nil {
+		t.Fatal("expected sense before start to fail")
+	}
+	start := process.Call(ctx, GTSAStartMessage{Mode: "gt"})
+	if start.Err != nil || !start.OK {
+		t.Fatalf("start response=%+v", start)
+	}
+	if start.State.Mode != "gt" || start.State.TableName != "unit-process" {
+		t.Fatalf("unexpected start state=%+v", start.State)
+	}
+
+	sense := process.Call(ctx, GTSASenseMessage{})
+	if sense.Err != nil || !sense.OK {
+		t.Fatalf("sense response=%+v", sense)
+	}
+	if len(sense.Percept) != start.State.FeatureWidth || sense.Percept[0] != 10 {
+		t.Fatalf("unexpected sense response=%+v", sense)
+	}
+
+	percept := process.Call(ctx, GTSASensePerceptMessage{})
+	if percept.Err != nil || !percept.OK {
+		t.Fatalf("sense percept response=%+v", percept)
+	}
+	if percept.Current != 10 || percept.Delta != 0 || percept.WindowMean != 10 || percept.Progress != 0 {
+		t.Fatalf("unexpected percept response=%+v", percept)
+	}
+
+	predict := process.Call(ctx, GTSAPredictValueMessage{Prediction: 12})
+	if predict.Err != nil || !predict.OK {
+		t.Fatalf("predict response=%+v", predict)
+	}
+	if predict.End || math.Abs(float64(predict.Fitness)-10000) > 1e-9 {
+		t.Fatalf("unexpected predict response=%+v", predict)
+	}
+	if predict.State.IndexCurrent != 2 {
+		t.Fatalf("expected predict to advance state, got %+v", predict.State)
+	}
+
+	state := process.Call(ctx, GTSAStateMessage{})
+	if state.Err != nil || !state.OK || state.State.IndexCurrent != 2 {
+		t.Fatalf("state response=%+v", state)
+	}
+
+	stop := process.Call(ctx, GTSAStopMessage{Reason: "normal"})
+	if stop.Err != nil || !stop.OK || !stop.End {
+		t.Fatalf("stop response=%+v", stop)
+	}
+	if stop.StopReason != "normal" || !stop.State.Halted {
+		t.Fatalf("unexpected stop response=%+v", stop)
+	}
+	if response := process.Call(ctx, GTSASenseMessage{}); response.Err == nil {
+		t.Fatal("expected sense after stop to fail")
+	}
+
+	restart := process.Call(ctx, GTSARestartMessage{})
+	if restart.Err != nil || !restart.OK {
+		t.Fatalf("restart response=%+v", restart)
+	}
+	if restart.State.Halted || restart.State.IndexCurrent != restart.State.IndexStart || len(restart.State.Window) != 0 {
+		t.Fatalf("unexpected restart response=%+v", restart)
+	}
+}
+
 func TestGTSAScapeLoadTableCSV(t *testing.T) {
 	ResetGTSATableSource()
 	t.Cleanup(ResetGTSATableSource)
