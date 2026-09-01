@@ -46,6 +46,77 @@ func TestPole2BalancingScapeEvaluatesStepPolicies(t *testing.T) {
 	}
 }
 
+func TestPole2SimulatorSensePushStateAndReset(t *testing.T) {
+	sim, err := NewPole2Simulator("validation")
+	if err != nil {
+		t.Fatalf("new pole2 simulator: %v", err)
+	}
+	initial := sim.State()
+	if initial.Mode != "validation" || initial.StepsSurvived != 0 || initial.Halted {
+		t.Fatalf("unexpected initial simulator state: %+v", initial)
+	}
+
+	sense3, err := sim.Sense(context.Background(), "3")
+	if err != nil {
+		t.Fatalf("sense 3: %v", err)
+	}
+	if len(sense3) != 3 {
+		t.Fatalf("expected 3-channel sense vector, got %v", sense3)
+	}
+	angle1, err := sim.Sense(context.Background(), "pangle1")
+	if err != nil {
+		t.Fatalf("sense pangle1: %v", err)
+	}
+	if len(angle1) != 1 || math.Abs(angle1[0]-sense3[1]) > 1e-12 {
+		t.Fatalf("expected pangle1 to match second 3-surface channel, angle1=%v sense3=%v", angle1, sense3)
+	}
+
+	fitness, end, err := sim.Push(context.Background(), []float64{0.25, -1, -1})
+	if err != nil {
+		t.Fatalf("push vector control: %v", err)
+	}
+	if end || fitness <= 0 {
+		t.Fatalf("expected non-terminal positive push fitness, fitness=%f end=%v", fitness, end)
+	}
+	afterPush := sim.State()
+	if afterPush.StepsSurvived != 1 || afterPush.FitnessAcc <= 0 || afterPush.LastStepFitness <= 0 {
+		t.Fatalf("expected advanced simulator state, got %+v", afterPush)
+	}
+	if afterPush.VectorControlSteps != 1 || afterPush.DampingOffSteps != 1 || afterPush.SinglePoleSteps != 1 {
+		t.Fatalf("expected vector-control counters, got %+v", afterPush)
+	}
+	if afterPush.RunProgress <= 0 || afterPush.StepProgress <= 0 {
+		t.Fatalf("expected positive progress after push, got %+v", afterPush)
+	}
+
+	if _, err := sim.Sense(context.Background(), "bad"); err == nil {
+		t.Fatal("expected unsupported sense parameter error")
+	}
+
+	for !sim.State().Halted {
+		_, end, err = sim.Push(context.Background(), []float64{1})
+		if err != nil {
+			t.Fatalf("push until terminal: %v", err)
+		}
+		if end {
+			break
+		}
+	}
+	terminal := sim.State()
+	if !terminal.Halted || terminal.TerminationReason == "" {
+		t.Fatalf("expected terminal simulator state, got %+v", terminal)
+	}
+	if _, err := sim.Sense(context.Background(), "6"); err == nil {
+		t.Fatal("expected halted simulator sense error")
+	}
+
+	sim.Reset()
+	restarted := sim.State()
+	if restarted.Halted || restarted.StepsSurvived != 0 || restarted.FitnessAcc != 0 || restarted.VectorControlSteps != 0 {
+		t.Fatalf("unexpected reset simulator state: %+v", restarted)
+	}
+}
+
 func TestPole2BalancingScapeEvaluateWithIOComponents(t *testing.T) {
 	genome := model.Genome{
 		SensorIDs: []string{

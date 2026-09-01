@@ -12,6 +12,43 @@ import (
 // Pole2BalancingScape mirrors the reference pole2 double-pole control task.
 type Pole2BalancingScape struct{}
 
+type Pole2Simulator struct {
+	cfg                pole2ModeConfig
+	state              pole2State
+	stepsSurvived      int
+	fitnessAcc         float64
+	lastStepFitness    float64
+	vectorControlSteps int
+	dampingOffSteps    int
+	singlePoleSteps    int
+	halted             bool
+	terminationReason  string
+	goalReached        bool
+}
+
+type Pole2SimulatorState struct {
+	Mode               string
+	CartPosition       float64
+	CartVelocity       float64
+	Angle1             float64
+	Velocity1          float64
+	Angle2             float64
+	Velocity2          float64
+	StepsSurvived      int
+	MaxSteps           int
+	GoalSteps          int
+	FitnessAcc         float64
+	LastStepFitness    float64
+	RunProgress        float64
+	StepProgress       float64
+	Halted             bool
+	TerminationReason  string
+	GoalReached        bool
+	VectorControlSteps int
+	DampingOffSteps    int
+	SinglePoleSteps    int
+}
+
 func (Pole2BalancingScape) Name() string {
 	return "pole2-balancing"
 }
@@ -38,6 +75,137 @@ func (Pole2BalancingScape) EvaluateMode(ctx context.Context, agent Agent, mode s
 		return 0, nil, fmt.Errorf("agent %s does not implement step runner", agent.ID())
 	}
 	return evaluatePole2BalancingWithStep(ctx, runner, cfg)
+}
+
+func NewPole2Simulator(mode string) (*Pole2Simulator, error) {
+	cfg, err := pole2ConfigForMode(mode)
+	if err != nil {
+		return nil, err
+	}
+	return &Pole2Simulator{
+		cfg:               cfg,
+		state:             initialPole2State(cfg),
+		terminationReason: "",
+	}, nil
+}
+
+func (s *Pole2Simulator) Sense(ctx context.Context, parameter string) ([]float64, error) {
+	if s == nil {
+		return nil, fmt.Errorf("pole2 simulator is nil")
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	if s.halted {
+		return nil, fmt.Errorf("pole2 simulator halted")
+	}
+	observation := pole2Observation(s.state, s.cfg.angleLimit)
+	switch strings.TrimSpace(strings.ToLower(parameter)) {
+	case "cpos", "cart_position":
+		return []float64{observation[0]}, nil
+	case "cvel", "cart_velocity":
+		return []float64{observation[1]}, nil
+	case "pangle1", "p1_angle", "angle1":
+		return []float64{observation[2]}, nil
+	case "pvel1", "p1_vel", "velocity1":
+		return []float64{observation[3]}, nil
+	case "pangle2", "p2_angle", "angle2":
+		return []float64{observation[4]}, nil
+	case "pvel2", "p2_vel", "velocity2":
+		return []float64{observation[5]}, nil
+	case "2":
+		return []float64{observation[0], observation[2]}, nil
+	case "3":
+		return []float64{observation[0], observation[2], observation[4]}, nil
+	case "4":
+		return []float64{observation[0], observation[1], observation[2], observation[3]}, nil
+	case "", "6":
+		return append([]float64(nil), observation...), nil
+	default:
+		return nil, fmt.Errorf("unsupported pole2 sense parameter: %s", parameter)
+	}
+}
+
+func (s *Pole2Simulator) Push(ctx context.Context, output []float64) (Fitness, bool, error) {
+	if s == nil {
+		return 0, false, fmt.Errorf("pole2 simulator is nil")
+	}
+	if err := ctx.Err(); err != nil {
+		return 0, false, err
+	}
+	if s.halted {
+		return 0, true, nil
+	}
+	control := decodePole2Control(output, s.cfg)
+	force := clampPole2(control.force, -1, 1)
+	if control.vector {
+		s.vectorControlSteps++
+	}
+	if !control.damping {
+		s.dampingOffSteps++
+	}
+	if !control.doublePole {
+		s.singlePoleSteps++
+	}
+
+	s.state = simulateDoublePole(force*10, s.state, 2)
+	s.stepsSurvived++
+	stepFitness := pole2StepFitness(s.stepsSurvived, s.state, control.damping)
+	s.fitnessAcc += stepFitness
+	s.lastStepFitness = stepFitness
+
+	terminated, reason, goalReached := pole2Termination(s.state, s.cfg, s.stepsSurvived, control.doublePole)
+	if terminated {
+		s.halted = true
+		s.terminationReason = reason
+		s.goalReached = goalReached
+		return 0, true, nil
+	}
+	return Fitness(stepFitness), false, nil
+}
+
+func (s *Pole2Simulator) Reset() {
+	if s == nil {
+		return
+	}
+	s.state = initialPole2State(s.cfg)
+	s.stepsSurvived = 0
+	s.fitnessAcc = 0
+	s.lastStepFitness = 0
+	s.vectorControlSteps = 0
+	s.dampingOffSteps = 0
+	s.singlePoleSteps = 0
+	s.halted = false
+	s.terminationReason = ""
+	s.goalReached = false
+}
+
+func (s *Pole2Simulator) State() Pole2SimulatorState {
+	if s == nil {
+		return Pole2SimulatorState{}
+	}
+	return Pole2SimulatorState{
+		Mode:               s.cfg.mode,
+		CartPosition:       s.state.cartPosition,
+		CartVelocity:       s.state.cartVelocity,
+		Angle1:             s.state.angle1,
+		Velocity1:          s.state.velocity1,
+		Angle2:             s.state.angle2,
+		Velocity2:          s.state.velocity2,
+		StepsSurvived:      s.stepsSurvived,
+		MaxSteps:           s.cfg.maxSteps,
+		GoalSteps:          s.cfg.goalSteps,
+		FitnessAcc:         s.fitnessAcc,
+		LastStepFitness:    s.lastStepFitness,
+		RunProgress:        pole2RunProgress(s.stepsSurvived, s.cfg.goalSteps),
+		StepProgress:       pole2StepProgress(s.stepsSurvived, s.cfg.maxSteps),
+		Halted:             s.halted,
+		TerminationReason:  s.terminationReason,
+		GoalReached:        s.goalReached,
+		VectorControlSteps: s.vectorControlSteps,
+		DampingOffSteps:    s.dampingOffSteps,
+		SinglePoleSteps:    s.singlePoleSteps,
+	}
 }
 
 type pole2State struct {
