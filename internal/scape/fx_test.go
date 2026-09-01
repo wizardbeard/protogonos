@@ -397,6 +397,79 @@ func TestFXScapeStepPerceptIncludesMarketInternals(t *testing.T) {
 	}
 }
 
+func TestFXSimulatorSenseTradeInternalsAndRestart(t *testing.T) {
+	sim, err := NewFXSimulator(context.Background(), "test")
+	if err != nil {
+		t.Fatalf("new fx simulator: %v", err)
+	}
+
+	initial := sim.State()
+	if initial.Mode != "test" || initial.CurrentStep != initial.StartStep || initial.Halted {
+		t.Fatalf("unexpected initial simulator state: %+v", initial)
+	}
+
+	percept, err := sim.Sense(context.Background())
+	if err != nil {
+		t.Fatalf("sense: %v", err)
+	}
+	if len(percept) != fxPerceptWidth {
+		t.Fatalf("expected percept width %d, got %d", fxPerceptWidth, len(percept))
+	}
+
+	fitness, end, err := sim.Trade(context.Background(), 1)
+	if err != nil {
+		t.Fatalf("trade open: %v", err)
+	}
+	if end || fitness != 0 {
+		t.Fatalf("expected non-terminal trade response, fitness=%f end=%v", fitness, end)
+	}
+	afterOpen := sim.State()
+	if afterOpen.CurrentStep != initial.CurrentStep+1 {
+		t.Fatalf("expected trade to advance one step, before=%+v after=%+v", initial, afterOpen)
+	}
+	if afterOpen.Position != 1 || afterOpen.OrdersOpened != 1 {
+		t.Fatalf("expected opened long position, got %+v", afterOpen)
+	}
+
+	internals, err := sim.Internals(context.Background())
+	if err != nil {
+		t.Fatalf("internals: %v", err)
+	}
+	if len(internals) != 3 || internals[0] != 1 || internals[1] <= 0 {
+		t.Fatalf("unexpected internals after open: %v", internals)
+	}
+
+	for {
+		_, err := sim.Sense(context.Background())
+		if err != nil {
+			t.Fatalf("sense during run: %v", err)
+		}
+		fitness, end, err = sim.Trade(context.Background(), 0)
+		if err != nil {
+			t.Fatalf("trade close/hold: %v", err)
+		}
+		if end {
+			break
+		}
+	}
+	finalState := sim.State()
+	if !finalState.Halted {
+		t.Fatalf("expected terminal state, got %+v", finalState)
+	}
+	if fitness <= 0 {
+		t.Fatalf("expected terminal total-profit fitness, got %f", fitness)
+	}
+	if finalState.Position != 0 || finalState.OrdersClosed <= 0 {
+		t.Fatalf("expected closed final position, got %+v", finalState)
+	}
+
+	sim.Restart()
+	restarted := sim.State()
+	if restarted.Halted || restarted.CurrentStep != restarted.StartStep || restarted.OrdersOpened != 0 || restarted.Position != 0 {
+		t.Fatalf("unexpected restarted state: %+v", restarted)
+	}
+}
+
 func TestFXScapeLoadSeriesCSV(t *testing.T) {
 	ResetFXSeriesSource()
 	t.Cleanup(ResetFXSeriesSource)

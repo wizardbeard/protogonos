@@ -22,6 +22,40 @@ type fxSeries struct {
 	values []float64
 }
 
+type FXSimulator struct {
+	cfg          fxModeConfig
+	series       fxSeries
+	account      fxAccount
+	step         int
+	lastAction   float64
+	lastQuote    float64
+	ordersOpened int
+	ordersClosed int
+	halted       bool
+}
+
+type FXSimulatorState struct {
+	Mode                 string
+	SeriesName           string
+	SeriesPoints         int
+	StartStep            int
+	CurrentStep          int
+	EndStep              int
+	Halted               bool
+	Balance              float64
+	NetAssetValue        float64
+	RealizedPL           float64
+	UnrealizedPL         float64
+	Position             float64
+	Entry                float64
+	Units                float64
+	PercentageChange     float64
+	PrevPercentageChange float64
+	Profit               float64
+	OrdersOpened         int
+	OrdersClosed         int
+}
+
 var (
 	fxSeriesSourceMu sync.RWMutex
 	fxSeriesSource   = defaultFXSeries()
@@ -53,6 +87,171 @@ func (FXScape) EvaluateMode(ctx context.Context, agent Agent, mode string) (Fitn
 		return 0, nil, fmt.Errorf("agent %s does not implement step runner", agent.ID())
 	}
 	return evaluateFXWithStep(ctx, runner, cfg)
+}
+
+func NewFXSimulator(ctx context.Context, mode string) (*FXSimulator, error) {
+	cfg, err := fxConfigForMode(mode)
+	if err != nil {
+		return nil, err
+	}
+	series := currentFXSeries(ctx)
+	sim := &FXSimulator{
+		cfg:       cfg,
+		series:    series,
+		account:   newFXAccount(),
+		step:      cfg.startStep,
+		lastQuote: fxPrice(series, cfg.startStep),
+	}
+	updateFXMarkToMarket(&sim.account, sim.lastQuote)
+	return sim, nil
+}
+
+func (s *FXSimulator) Sense(ctx context.Context) ([]float64, error) {
+	if s == nil {
+		return nil, fmt.Errorf("fx simulator is nil")
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	if s.halted {
+		return nil, fmt.Errorf("fx simulator halted")
+	}
+	quote := fxPrice(s.series, s.step)
+	prevQuote := fxPrice(s.series, maxIntFX(0, s.step-1))
+	updateFXMarkToMarket(&s.account, quote)
+
+	momentum1 := 0.0
+	if prevQuote != 0 {
+		momentum1 = (quote - prevQuote) / prevQuote
+	}
+	backQuote := prevQuote
+	if s.step >= 4 {
+		backQuote = fxPrice(s.series, s.step-4)
+	}
+	momentum4 := 0.0
+	if backQuote != 0 {
+		momentum4 = (quote - backQuote) / backQuote
+	}
+	volatility := math.Abs(momentum1 - momentum4)
+	return fxPerceptVector(quote, fxSignal(s.series, s.step), momentum1, momentum4, volatility, s.account, s.lastAction), nil
+}
+
+func (s *FXSimulator) Internals(ctx context.Context) ([]float64, error) {
+	if s == nil {
+		return nil, fmt.Errorf("fx simulator is nil")
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	if s.account.order == nil {
+		return []float64{0, 0, 0}, nil
+	}
+	return []float64{
+		s.account.order.position,
+		s.account.order.entry,
+		s.account.prevPercentageChange,
+	}, nil
+}
+
+func (s *FXSimulator) Trade(ctx context.Context, rawAction float64) (fitness Fitness, end bool, err error) {
+	if s == nil {
+		return 0, false, fmt.Errorf("fx simulator is nil")
+	}
+	if err := ctx.Err(); err != nil {
+		return 0, false, err
+	}
+	if s.halted {
+		return 0, true, nil
+	}
+
+	quote := fxPrice(s.series, s.step)
+	action := fxTradeAction(rawAction)
+	opened, closed := applyFXTradeAction(&s.account, quote, action)
+	s.ordersOpened += opened
+	s.ordersClosed += closed
+	s.lastAction = action
+	s.lastQuote = quote
+	updateFXMarkToMarket(&s.account, quote)
+
+	if s.account.netAssetValue <= fxMarginCallFloor {
+		if s.account.order != nil {
+			if closeFXOrder(&s.account, quote) {
+				s.ordersClosed++
+			}
+		}
+		s.halted = true
+		return 0, true, nil
+	}
+
+	if s.step+1 >= s.cfg.startStep+s.cfg.steps || s.step+1 >= len(s.series.values) {
+		if s.account.order != nil {
+			if closeFXOrder(&s.account, quote) {
+				s.ordersClosed++
+			}
+		}
+		s.halted = true
+		return Fitness(s.account.netAssetValue), true, nil
+	}
+
+	s.step++
+	nextQuote := fxPrice(s.series, s.step)
+	updateFXMarkToMarket(&s.account, nextQuote)
+	return 0, false, nil
+}
+
+func (s *FXSimulator) Restart() {
+	if s == nil {
+		return
+	}
+	s.account = newFXAccount()
+	s.step = s.cfg.startStep
+	s.lastAction = 0
+	s.lastQuote = fxPrice(s.series, s.cfg.startStep)
+	s.ordersOpened = 0
+	s.ordersClosed = 0
+	s.halted = false
+	updateFXMarkToMarket(&s.account, s.lastQuote)
+}
+
+func (s *FXSimulator) State() FXSimulatorState {
+	if s == nil {
+		return FXSimulatorState{}
+	}
+	position := 0.0
+	entry := 0.0
+	units := 0.0
+	percentageChange := 0.0
+	prevPercentageChange := 0.0
+	profit := 0.0
+	if s.account.order != nil {
+		position = s.account.order.position
+		entry = s.account.order.entry
+		units = s.account.order.units
+		percentageChange = s.account.order.percentageChange / 100
+		prevPercentageChange = s.account.prevPercentageChange
+		profit = s.account.order.profit
+	}
+	return FXSimulatorState{
+		Mode:                 s.cfg.mode,
+		SeriesName:           s.series.name,
+		SeriesPoints:         len(s.series.values),
+		StartStep:            s.cfg.startStep,
+		CurrentStep:          s.step,
+		EndStep:              s.cfg.startStep + s.cfg.steps - 1,
+		Halted:               s.halted,
+		Balance:              s.account.balance,
+		NetAssetValue:        s.account.netAssetValue,
+		RealizedPL:           s.account.realizedPL,
+		UnrealizedPL:         s.account.unrealizedPL,
+		Position:             position,
+		Entry:                entry,
+		Units:                units,
+		PercentageChange:     percentageChange,
+		PrevPercentageChange: prevPercentageChange,
+		Profit:               profit,
+		OrdersOpened:         s.ordersOpened,
+		OrdersClosed:         s.ordersClosed,
+	}
 }
 
 func evaluateFXWithStep(ctx context.Context, runner StepAgent, cfg fxModeConfig) (Fitness, Trace, error) {
