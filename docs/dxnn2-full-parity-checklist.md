@@ -181,6 +181,7 @@ Status keys:
 - Expanded LLVM workflow process parity with a typed `LLVMPhaseOrderingProcess` command wrapper for start/stop/restart/sense/optimize/state flows over the direct simulator session.
 - Expanded pole2 `scape.erl` protocol parity with `NewPole2Simulator`, exposing reference-style `sense`, `push`, reset, and state inspection over the existing double-pole physics and step-fitness logic.
 - Expanded pole2 `scape.erl` process parity with a typed `Pole2Process` command wrapper for start/stop/restart/sense/push/state flows over the direct simulator session.
+- Expanded `xor_sim` protocol parity with `NewXORSimulator` and a typed `XORProcess` command wrapper for start/stop/restart/sense/predict/state flows, including terminal reciprocal-SSE fitness and reference-style post-terminal reset.
 - Aligned flatland TickAgent scanner-surface flexibility by allowing partial but mask-aligned distance/color/energy scanner bins and surfacing active scanner density (`scanner_density_active`) in traces.
 - Aligned flatland control-surface decoding for wider actuator vectors by grouping even/odd wheel channels and preserving the emitted control width (`last_control_width`).
 - Added flatland public-world list update/read APIs (`UpdatePublicAgents`/`PublicAgents`) with deterministic replacement semantics and per-agent mode traces, to cover reference-style `multi_agent/update_agents` and `get_all/avatars` server calls.

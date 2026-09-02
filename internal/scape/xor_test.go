@@ -198,3 +198,107 @@ func TestXORScapeEvaluateModeAnnotatesMode(t *testing.T) {
 		}
 	}
 }
+
+func TestXORSimulatorSensePredictAndReset(t *testing.T) {
+	sim, err := NewXORSimulator("gt")
+	if err != nil {
+		t.Fatalf("new xor simulator: %v", err)
+	}
+	state := sim.State()
+	if state.Mode != "gt" || state.Cases != 4 || state.CaseIndex != 0 {
+		t.Fatalf("unexpected initial simulator state: %+v", state)
+	}
+
+	expected := []float64{0, 1, 1, 0}
+	for i, want := range expected {
+		percept, err := sim.Sense(context.Background())
+		if err != nil {
+			t.Fatalf("sense %d: %v", i, err)
+		}
+		if len(percept) != 2 {
+			t.Fatalf("expected xor percept width 2, got %v", percept)
+		}
+		fitness, end, err := sim.Predict(context.Background(), []float64{want})
+		if err != nil {
+			t.Fatalf("predict %d: %v", i, err)
+		}
+		if i < len(expected)-1 {
+			if end || fitness != 0 {
+				t.Fatalf("expected non-terminal predict at %d, fitness=%f end=%t", i, fitness, end)
+			}
+			continue
+		}
+		if !end || fitness < 1000 {
+			t.Fatalf("expected terminal high-fitness xor response, fitness=%f end=%t", fitness, end)
+		}
+	}
+	state = sim.State()
+	if state.CaseIndex != 0 || state.ErrAcc != 0 || state.LastSSE != 0 || state.LastFitness < 1000 || len(state.Predictions) != 0 {
+		t.Fatalf("unexpected terminal reset state: %+v", state)
+	}
+
+	if _, _, err := sim.Predict(context.Background(), []float64{}); err == nil {
+		t.Fatal("expected empty prediction error")
+	}
+	sim.Reset()
+	state = sim.State()
+	if state.CaseIndex != 0 || state.LastFitness != 0 || state.LastSSE != 0 {
+		t.Fatalf("unexpected reset state: %+v", state)
+	}
+}
+
+func TestXORProcessCommandWrapper(t *testing.T) {
+	process := NewXORProcess()
+	ctx := context.Background()
+
+	if response := process.Call(ctx, XORSenseMessage{}); response.Err == nil {
+		t.Fatal("expected sense before start to fail")
+	}
+	start := process.Call(ctx, XORStartMessage{Mode: "validation"})
+	if start.Err != nil || !start.OK {
+		t.Fatalf("start response=%+v", start)
+	}
+	if start.State.Mode != "validation" || start.State.CaseIndex != 0 {
+		t.Fatalf("unexpected start state=%+v", start.State)
+	}
+
+	sense := process.Call(ctx, XORSenseMessage{})
+	if sense.Err != nil || !sense.OK {
+		t.Fatalf("sense response=%+v", sense)
+	}
+	if len(sense.Percept) != 2 {
+		t.Fatalf("expected xor percept width 2, got response=%+v", sense)
+	}
+
+	predict := process.Call(ctx, XORPredictMessage{Output: []float64{1}})
+	if predict.Err != nil || !predict.OK {
+		t.Fatalf("predict response=%+v", predict)
+	}
+	if predict.End || predict.Fitness != 0 || predict.State.CaseIndex != 1 {
+		t.Fatalf("unexpected non-terminal predict response=%+v", predict)
+	}
+
+	state := process.Call(ctx, XORStateMessage{})
+	if state.Err != nil || !state.OK || state.State.CaseIndex != 1 {
+		t.Fatalf("state response=%+v", state)
+	}
+
+	stop := process.Call(ctx, XORStopMessage{Reason: "normal"})
+	if stop.Err != nil || !stop.OK || !stop.End {
+		t.Fatalf("stop response=%+v", stop)
+	}
+	if stop.StopReason != "normal" {
+		t.Fatalf("unexpected stop response=%+v", stop)
+	}
+	if response := process.Call(ctx, XORSenseMessage{}); response.Err == nil {
+		t.Fatal("expected sense after stop to fail")
+	}
+
+	restart := process.Call(ctx, XORRestartMessage{})
+	if restart.Err != nil || !restart.OK {
+		t.Fatalf("restart response=%+v", restart)
+	}
+	if restart.State.CaseIndex != 0 || restart.State.Mode != "validation" {
+		t.Fatalf("unexpected restart response=%+v", restart)
+	}
+}

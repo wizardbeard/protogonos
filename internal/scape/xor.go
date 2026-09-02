@@ -15,6 +15,25 @@ type StepAgent interface {
 
 type XORScape struct{}
 
+type XORSimulator struct {
+	cfg         xorModeConfig
+	caseIndex   int
+	errAcc      float64
+	predictions []float64
+	lastSSE     float64
+	lastFitness Fitness
+}
+
+type XORSimulatorState struct {
+	Mode        string
+	CaseIndex   int
+	Cases       int
+	ErrAcc      float64
+	LastSSE     float64
+	LastFitness Fitness
+	Predictions []float64
+}
+
 func (XORScape) Name() string {
 	return "xor"
 }
@@ -41,6 +60,88 @@ func (XORScape) EvaluateMode(ctx context.Context, agent Agent, mode string) (Fit
 		return 0, nil, fmt.Errorf("agent %s does not implement step runner", agent.ID())
 	}
 	return evaluateXORWithStep(ctx, runner, cfg)
+}
+
+func NewXORSimulator(mode string) (*XORSimulator, error) {
+	cfg, err := xorConfigForMode(mode)
+	if err != nil {
+		return nil, err
+	}
+	return &XORSimulator{
+		cfg:         cfg,
+		predictions: make([]float64, 0, len(cfg.cases)),
+	}, nil
+}
+
+func (s *XORSimulator) Sense(ctx context.Context) ([]float64, error) {
+	if s == nil {
+		return nil, fmt.Errorf("xor simulator is nil")
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	if len(s.cfg.cases) == 0 {
+		return nil, fmt.Errorf("xor simulator has no cases")
+	}
+	return append([]float64(nil), s.cfg.cases[s.caseIndex].in...), nil
+}
+
+func (s *XORSimulator) Predict(ctx context.Context, output []float64) (Fitness, bool, error) {
+	if s == nil {
+		return 0, false, fmt.Errorf("xor simulator is nil")
+	}
+	if err := ctx.Err(); err != nil {
+		return 0, false, err
+	}
+	if len(output) != 1 {
+		return 0, false, fmt.Errorf("xor requires one output, got %d", len(output))
+	}
+	if len(s.cfg.cases) == 0 {
+		return 0, false, fmt.Errorf("xor simulator has no cases")
+	}
+
+	current := s.cfg.cases[s.caseIndex]
+	predicted := output[0]
+	delta := predicted - current.want
+	s.errAcc += delta * delta
+	s.predictions = append(s.predictions, predicted)
+	s.caseIndex++
+	if s.caseIndex < len(s.cfg.cases) {
+		return 0, false, nil
+	}
+
+	s.lastSSE = s.errAcc
+	s.lastFitness = Fitness(1.0 / (s.lastSSE + 0.000001))
+	s.caseIndex = 0
+	s.errAcc = 0
+	s.predictions = s.predictions[:0]
+	return s.lastFitness, true, nil
+}
+
+func (s *XORSimulator) Reset() {
+	if s == nil {
+		return
+	}
+	s.caseIndex = 0
+	s.errAcc = 0
+	s.predictions = s.predictions[:0]
+	s.lastSSE = 0
+	s.lastFitness = 0
+}
+
+func (s *XORSimulator) State() XORSimulatorState {
+	if s == nil {
+		return XORSimulatorState{}
+	}
+	return XORSimulatorState{
+		Mode:        s.cfg.mode,
+		CaseIndex:   s.caseIndex,
+		Cases:       len(s.cfg.cases),
+		ErrAcc:      s.errAcc,
+		LastSSE:     s.lastSSE,
+		LastFitness: s.lastFitness,
+		Predictions: append([]float64(nil), s.predictions...),
+	}
 }
 
 type xorCase struct {
