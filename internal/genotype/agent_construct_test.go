@@ -323,6 +323,53 @@ func TestConstructCortexSupportsScapeAliasDefaultMorphologies(t *testing.T) {
 	}
 }
 
+func TestConstructCortexSupportsLegacyMorphologyFunctionNames(t *testing.T) {
+	tests := []struct {
+		name         string
+		morphology   string
+		seed         int64
+		wantSensors  int
+		wantActuator string
+		wantOutputs  int
+	}{
+		{name: "pole balancing", morphology: "pole_balancing", seed: 57, wantSensors: 3, wantActuator: protoio.Pole2PushActuatorName, wantOutputs: 1},
+		{name: "discrete tmaze", morphology: "discrete_tmaze", seed: 58, wantSensors: 7, wantActuator: protoio.DTMMoveActuatorName, wantOutputs: 1},
+		{name: "prey", morphology: "prey", seed: 59, wantSensors: 20, wantActuator: protoio.FlatlandTwoWheelsActuatorName, wantOutputs: 2},
+		{name: "predator", morphology: "predator", seed: 60, wantSensors: 20, wantActuator: protoio.FlatlandTwoWheelsActuatorName, wantOutputs: 2},
+		{name: "forex trader", morphology: "forex_trader", seed: 61, wantSensors: 2, wantActuator: protoio.FXTradeActuatorName, wantOutputs: 1},
+		{name: "general predictor", morphology: "general_predictor", seed: 62, wantSensors: 1, wantActuator: protoio.GTSAPredictActuatorName, wantOutputs: 1},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			constraint := DefaultConstructConstraint()
+			constraint.Morphology = tt.morphology
+
+			out, err := ConstructCortex(
+				"agent-"+tt.name,
+				0,
+				constraint,
+				"neural",
+				"none",
+				"l2l_feedforward",
+				rand.New(rand.NewSource(tt.seed)),
+			)
+			if err != nil {
+				t.Fatalf("construct cortex: %v", err)
+			}
+			if got := len(out.Genome.SensorIDs); got != tt.wantSensors {
+				t.Fatalf("unexpected sensor count: got=%d sensors=%v", got, out.Genome.SensorIDs)
+			}
+			if len(out.Genome.ActuatorIDs) != 1 || out.Genome.ActuatorIDs[0] != tt.wantActuator {
+				t.Fatalf("unexpected actuator ids: %v", out.Genome.ActuatorIDs)
+			}
+			if len(out.InputNeuronIDs) != tt.wantSensors || len(out.OutputNeuronIDs) != tt.wantOutputs {
+				t.Fatalf("unexpected input/output ids: in=%v out=%v", out.InputNeuronIDs, out.OutputNeuronIDs)
+			}
+		})
+	}
+}
+
 func TestConstructCortexSupportsScapeAliasProfiledMorphologies(t *testing.T) {
 	tests := []struct {
 		name         string

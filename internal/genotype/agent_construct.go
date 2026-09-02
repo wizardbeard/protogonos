@@ -292,6 +292,10 @@ func resolveConstructMorphology(raw string) (morphology.Morphology, error) {
 	switch key {
 	case "", "xor", "xor-v1", "xor-mimic":
 		return morphology.XORMorphology{}, nil
+	case "pole-balancing":
+		return morphology.ConstructMorphology("pole2-balancing", "3")
+	case "discrete-tmaze":
+		return morphology.DTMMorphology{}, nil
 	case "regression-mimic", "regression-mimic-v1":
 		return morphology.RegressionMimicMorphology{}, nil
 	case "cart-pole-lite", "cart-pole-lite-v1":
@@ -300,6 +304,8 @@ func resolveConstructMorphology(raw string) (morphology.Morphology, error) {
 		return morphology.Pole2BalancingMorphology{}, nil
 	case "flatland", "flatland-v1":
 		return morphology.FlatlandMorphology{}, nil
+	case "prey", "predator":
+		return morphology.FlatlandScannerMorphology{}, nil
 	case "flatland-classic", "flatland-classic-v1", "flatland_classic", "flatland_classic_v1":
 		return morphology.FlatlandClassicMorphology{}, nil
 	case "flatland-scanner", "flatland-scanner-v1", "flatland_scanner", "flatland_scanner_v1", "flatland-prey", "flatland-prey-v1", "flatland_prey", "flatland_prey_v1":
@@ -320,10 +326,14 @@ func resolveConstructMorphology(raw string) (morphology.Morphology, error) {
 		return morphology.ConstructMorphology("pole2-balancing", "6")
 	case "gtsa", "gtsa-v1":
 		return morphology.GTSAMorphology{}, nil
+	case "general-predictor":
+		return morphology.GTSACoreMorphology{}, nil
 	case "gtsa-core", "gtsa-core-v1", "gtsa_core", "gtsa_core_v1":
 		return morphology.GTSACoreMorphology{}, nil
 	case "fx", "fx-v1":
 		return morphology.FXMorphology{}, nil
+	case "forex-trader":
+		return morphology.FXMarketMorphology{}, nil
 	case "fx-market", "fx-market-v1", "fx_market", "fx_market_v1":
 		return morphology.FXMarketMorphology{}, nil
 	case "epitopes-core", "epitopes-core-v1", "epitopes_core", "epitopes_core_v1":

@@ -151,6 +151,39 @@ func TestConstructMorphologyAcceptsFullProfileAliases(t *testing.T) {
 	}
 }
 
+func TestConstructMorphologyAcceptsReferenceFunctionNames(t *testing.T) {
+	tests := []struct {
+		name        string
+		wantName    string
+		wantSensors int
+		wantProfile string
+	}{
+		{name: "xor_mimic", wantName: "xor-v1", wantSensors: 2, wantProfile: "default"},
+		{name: "pole_balancing", wantName: "pole2-balancing-3-v1", wantSensors: 3, wantProfile: "3"},
+		{name: "discrete_tmaze", wantName: "dtm-v1", wantSensors: 7, wantProfile: "default"},
+		{name: "prey", wantName: "flatland-scanner-v1", wantSensors: 20, wantProfile: "scanner"},
+		{name: "predator", wantName: "flatland-scanner-v1", wantSensors: 20, wantProfile: "scanner"},
+		{name: "forex_trader", wantName: "fx-market-v1", wantSensors: 2, wantProfile: "market"},
+		{name: "general_predictor", wantName: "gtsa-core-v1", wantSensors: 1, wantProfile: "core"},
+	}
+
+	for _, tt := range tests {
+		m, err := ConstructMorphology(tt.name, "")
+		if err != nil {
+			t.Fatalf("construct legacy morphology %s: %v", tt.name, err)
+		}
+		if m.Name() != tt.wantName {
+			t.Fatalf("legacy morphology %s name=%s want=%s", tt.name, m.Name(), tt.wantName)
+		}
+		if sensors := m.Sensors(); len(sensors) != tt.wantSensors {
+			t.Fatalf("legacy morphology %s sensors=%v want count=%d", tt.name, sensors, tt.wantSensors)
+		}
+		if profiles := AvailableMorphologyProfiles(tt.name); !containsProfile(profiles, tt.wantProfile) {
+			t.Fatalf("legacy morphology %s profiles=%v missing %s", tt.name, profiles, tt.wantProfile)
+		}
+	}
+}
+
 func TestConstructMorphologyPole2Profiles(t *testing.T) {
 	m3, err := ConstructMorphology("pole2-balancing", "3")
 	if err != nil {
@@ -170,6 +203,15 @@ func TestConstructMorphologyPole2Profiles(t *testing.T) {
 	if got := m6.Sensors(); len(got) != 6 {
 		t.Fatalf("expected 6-sensor profile, got=%v", got)
 	}
+}
+
+func containsProfile(values []string, want string) bool {
+	for _, value := range values {
+		if value == want {
+			return true
+		}
+	}
+	return false
 }
 
 func TestConstructMorphologyRejectsUnsupportedProfile(t *testing.T) {

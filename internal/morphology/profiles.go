@@ -128,8 +128,15 @@ func EnsureScapeCompatibilityWithProfile(scapeName, profile string) error {
 }
 
 func ConstructMorphology(scapeName, profile string) (Morphology, error) {
-	scapeName = scapeid.Normalize(scapeName)
 	profile = normalizeMorphologyProfile(profile)
+	if aliasScape, aliasProfile, ok := legacyMorphologyAlias(scapeName); ok {
+		scapeName = aliasScape
+		if profile == "" || profile == "default" {
+			profile = aliasProfile
+		}
+	} else {
+		scapeName = scapeid.Normalize(scapeName)
+	}
 	switch scapeName {
 	case "flatland":
 		switch profile {
@@ -217,7 +224,11 @@ func ConstructMorphology(scapeName, profile string) (Morphology, error) {
 }
 
 func AvailableMorphologyProfiles(scapeName string) []string {
-	scapeName = scapeid.Normalize(scapeName)
+	if aliasScape, _, ok := legacyMorphologyAlias(scapeName); ok {
+		scapeName = aliasScape
+	} else {
+		scapeName = scapeid.Normalize(scapeName)
+	}
 	var profiles []string
 	switch scapeName {
 	case "flatland":
@@ -247,4 +258,24 @@ func normalizeMorphologyProfile(raw string) string {
 	profile := strings.TrimSpace(strings.ToLower(raw))
 	profile = strings.ReplaceAll(profile, "-", "_")
 	return profile
+}
+
+func legacyMorphologyAlias(raw string) (scapeName, profile string, ok bool) {
+	name := normalizeMorphologyProfile(raw)
+	switch name {
+	case "xor_mimic":
+		return "xor", "default", true
+	case "pole_balancing":
+		return "pole2-balancing", "3", true
+	case "discrete_tmaze":
+		return "dtm", "default", true
+	case "prey", "predator":
+		return "flatland", "scanner", true
+	case "forex_trader":
+		return "fx", "market", true
+	case "general_predictor":
+		return "gtsa", "core", true
+	default:
+		return "", "", false
+	}
 }
