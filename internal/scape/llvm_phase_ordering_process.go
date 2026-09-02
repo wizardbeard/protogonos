@@ -113,6 +113,7 @@ func (p *LLVMPhaseOrderingProcess) stop(reason string) LLVMPhaseOrderingResponse
 	p.stopReason = reason
 	p.sim.halted = true
 	p.sim.terminationReason = reason
+	p.sim.lastFitness = Fitness(p.sim.fitness())
 	return LLVMPhaseOrderingResponse{OK: true, End: true, State: p.sim.State(), StopReason: reason}
 }
 

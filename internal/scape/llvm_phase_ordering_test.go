@@ -588,11 +588,20 @@ func TestLLVMPhaseOrderingSimulatorSenseOptimizeAndReset(t *testing.T) {
 	if state.Complexity >= 1.25 {
 		t.Fatalf("expected scalar optimize to reduce complexity, got %+v", state)
 	}
+	if state.LastDecisionMode != "scalar" || state.LastOptimization == "" || state.LastOptimizationIndex < 0 {
+		t.Fatalf("expected retained scalar decision diagnostics, got %+v", state)
+	}
+	if state.LastScalarAction != 1 || state.LastStepGain <= 0 || state.LastFitness != 0 || state.TerminationReason != "" {
+		t.Fatalf("unexpected retained scalar step diagnostics, got %+v", state)
+	}
 
 	sim.Reset()
 	state = sim.State()
 	if state.PhasesUsed != 0 || state.ScalarDecisions != 0 || state.VectorDecisions != 0 || state.Halted || len(state.SelectedOptimizations) != 0 {
 		t.Fatalf("unexpected state after reset: %+v", state)
+	}
+	if state.LastDecisionMode != "" || state.LastOptimization != "" || state.LastStepGain != 0 || state.TerminationReason != "" {
+		t.Fatalf("expected reset to clear retained decision diagnostics, got %+v", state)
 	}
 }
 
@@ -620,6 +629,12 @@ func TestLLVMPhaseOrderingSimulatorVectorDoneTerminates(t *testing.T) {
 	}
 	if state.VectorDecisions != 1 || state.SelectedOptimizations[0] != "done" {
 		t.Fatalf("expected done vector decision history, got %+v", state)
+	}
+	if state.LastDecisionMode != "vector" || state.LastOptimization != "done" || state.LastOptimizationIndex != 0 {
+		t.Fatalf("expected retained done-vector diagnostics, got %+v", state)
+	}
+	if state.LastFitness != fitness {
+		t.Fatalf("expected terminal fitness to be retained, fitness=%f state=%+v", fitness, state)
 	}
 	if _, err := sim.Sense(context.Background(), "all"); err == nil {
 		t.Fatalf("expected halted simulator sense to fail")
@@ -694,6 +709,9 @@ func TestLLVMPhaseOrderingProcessCommandWrapper(t *testing.T) {
 	if optimize.State.PhasesUsed != 1 || optimize.State.ScalarDecisions != 1 {
 		t.Fatalf("unexpected optimize state=%+v", optimize.State)
 	}
+	if optimize.State.LastDecisionMode != "scalar" || optimize.State.LastOptimization == "" || optimize.State.LastStepGain <= 0 {
+		t.Fatalf("expected process retained decision diagnostics, got %+v", optimize.State)
+	}
 
 	state := process.Call(ctx, LLVMPhaseOrderingStateMessage{})
 	if state.Err != nil || !state.OK {
@@ -710,6 +728,9 @@ func TestLLVMPhaseOrderingProcessCommandWrapper(t *testing.T) {
 	if stop.StopReason != "normal" || !stop.State.Halted || stop.State.TerminationReason != "normal" {
 		t.Fatalf("unexpected stop state=%+v", stop)
 	}
+	if stop.State.LastFitness <= 0 {
+		t.Fatalf("expected stop to retain current fitness, got %+v", stop.State)
+	}
 	if response := process.Call(ctx, LLVMPhaseOrderingSenseMessage{Parameter: "core"}); response.Err == nil {
 		t.Fatal("expected sense after stop to fail")
 	}
@@ -720,5 +741,8 @@ func TestLLVMPhaseOrderingProcessCommandWrapper(t *testing.T) {
 	}
 	if restart.State.Halted || restart.State.PhasesUsed != 0 || restart.State.Mode != "validation" {
 		t.Fatalf("unexpected restart state=%+v", restart.State)
+	}
+	if restart.State.LastDecisionMode != "" || restart.State.LastOptimization != "" || restart.State.LastFitness != 0 {
+		t.Fatalf("expected restart to clear process diagnostics, got %+v", restart.State)
 	}
 }

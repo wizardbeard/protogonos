@@ -182,6 +182,7 @@ Status keys:
 - Expanded DTM `scape.erl` process parity with a typed `DTMProcess` command wrapper for start/stop/restart/sense/move/state flows over the direct simulator session.
 - Expanded LLVM workflow protocol parity with `NewLLVMPhaseOrderingSimulator`, exposing direct `sense`, `optimize`, reset, state inspection, scalar/vector decision history, terminal reason, and context-scoped workflow-source state.
 - Expanded LLVM workflow process parity with a typed `LLVMPhaseOrderingProcess` command wrapper for start/stop/restart/sense/optimize/state flows over the direct simulator session.
+- Expanded LLVM workflow direct-session telemetry parity by retaining last decision mode, scalar action, optimization index/name, per-step complexity gain, last terminal/stop fitness, and reset-cleared terminal reason in `LLVMPhaseOrderingSimulatorState`.
 - Expanded pole2 `scape.erl` protocol parity with `NewPole2Simulator`, exposing reference-style `sense`, `push`, reset, and state inspection over the existing double-pole physics and step-fitness logic.
 - Expanded pole2 `scape.erl` process parity with a typed `Pole2Process` command wrapper for start/stop/restart/sense/push/state flows over the direct simulator session.
 - Expanded `xor_sim` protocol parity with `NewXORSimulator` and a typed `XORProcess` command wrapper for start/stop/restart/sense/predict/state flows, including terminal reciprocal-SSE fitness and reference-style post-terminal reset.

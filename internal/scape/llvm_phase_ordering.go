@@ -33,6 +33,12 @@ type LLVMPhaseOrderingSimulator struct {
 	runtimeGainAcc      float64
 	scalarDecisions     int
 	vectorDecisions     int
+	lastDecisionMode    string
+	lastScalarAction    float64
+	lastOptimizationIdx int
+	lastOptimization    string
+	lastStepGain        float64
+	lastFitness         Fitness
 	done                bool
 	halted              bool
 	terminationReason   string
@@ -58,6 +64,12 @@ type LLVMPhaseOrderingSimulatorState struct {
 	UniqueOptimizations   int
 	ScalarDecisions       int
 	VectorDecisions       int
+	LastDecisionMode      string
+	LastScalarAction      float64
+	LastOptimizationIndex int
+	LastOptimization      string
+	LastStepGain          float64
+	LastFitness           Fitness
 	Fitness               float64
 	Done                  bool
 	Halted                bool
@@ -182,19 +194,21 @@ func (s *LLVMPhaseOrderingSimulator) Optimize(ctx context.Context, output []floa
 		return 0, false, err
 	}
 	if s.halted {
-		return Fitness(s.fitness()), true, nil
+		return s.lastTerminalFitness(), true, nil
 	}
 	if s.complexity <= s.cfg.targetComplexity {
 		s.done = true
 		s.halted = true
 		s.terminationReason = "target_complexity"
-		return Fitness(s.fitness()), true, nil
+		s.lastFitness = Fitness(s.fitness())
+		return s.lastFitness, true, nil
 	}
 	if s.phasesUsed >= s.cfg.maxPhases {
 		s.done = false
 		s.halted = true
 		s.terminationReason = "max_phases"
-		return Fitness(s.fitness()), true, nil
+		s.lastFitness = Fitness(s.fitness())
+		return s.lastFitness, true, nil
 	}
 	if len(output) == 0 {
 		return 0, false, fmt.Errorf("llvm-phase-ordering requires at least one output")
@@ -209,6 +223,11 @@ func (s *LLVMPhaseOrderingSimulator) Optimize(ctx context.Context, output []floa
 	} else {
 		s.vectorDecisions++
 	}
+	s.lastDecisionMode = decision.mode
+	s.lastScalarAction = decision.scalarAction
+	s.lastOptimizationIdx = decision.optimizationIndex
+	s.lastOptimization = decision.optimization
+	s.lastStepGain = 0
 	s.alignmentAcc += decision.alignment
 	s.alignmentSignalAcc += s.lastAlignment
 	s.diversityAcc += diversity
@@ -222,10 +241,12 @@ func (s *LLVMPhaseOrderingSimulator) Optimize(ctx context.Context, output []floa
 		s.done = true
 		s.halted = true
 		s.terminationReason = "done_action"
-		return Fitness(s.fitness()), true, nil
+		s.lastFitness = Fitness(s.fitness())
+		return s.lastFitness, true, nil
 	}
 
 	gain := llvmOptimizationGain(s.cfg, decision, s.phasesUsed, s.complexity, s.optimizationHistory)
+	s.lastStepGain = gain
 	s.complexity = clampLLVM(s.complexity-gain, 0.03, 2.5)
 	if s.complexity < s.bestComplexity {
 		s.bestComplexity = s.complexity
@@ -234,13 +255,15 @@ func (s *LLVMPhaseOrderingSimulator) Optimize(ctx context.Context, output []floa
 		s.done = true
 		s.halted = true
 		s.terminationReason = "target_complexity"
-		return Fitness(s.fitness()), true, nil
+		s.lastFitness = Fitness(s.fitness())
+		return s.lastFitness, true, nil
 	}
 	if s.phasesUsed >= s.cfg.maxPhases {
 		s.done = false
 		s.halted = true
 		s.terminationReason = "max_phases"
-		return Fitness(s.fitness()), true, nil
+		s.lastFitness = Fitness(s.fitness())
+		return s.lastFitness, true, nil
 	}
 	return 0, false, nil
 }
@@ -262,9 +285,15 @@ func (s *LLVMPhaseOrderingSimulator) Reset() {
 	s.runtimeGainAcc = 0
 	s.scalarDecisions = 0
 	s.vectorDecisions = 0
+	s.lastDecisionMode = ""
+	s.lastScalarAction = 0
+	s.lastOptimizationIdx = 0
+	s.lastOptimization = ""
+	s.lastStepGain = 0
+	s.lastFitness = 0
 	s.done = false
 	s.halted = false
-	s.terminationReason = "max_phases"
+	s.terminationReason = ""
 }
 
 func (s *LLVMPhaseOrderingSimulator) State() LLVMPhaseOrderingSimulatorState {
@@ -291,6 +320,12 @@ func (s *LLVMPhaseOrderingSimulator) State() LLVMPhaseOrderingSimulatorState {
 		UniqueOptimizations:   len(s.uniqueOpts),
 		ScalarDecisions:       s.scalarDecisions,
 		VectorDecisions:       s.vectorDecisions,
+		LastDecisionMode:      s.lastDecisionMode,
+		LastScalarAction:      s.lastScalarAction,
+		LastOptimizationIndex: s.lastOptimizationIdx,
+		LastOptimization:      s.lastOptimization,
+		LastStepGain:          s.lastStepGain,
+		LastFitness:           s.lastFitness,
 		Fitness:               s.fitness(),
 		Done:                  s.done,
 		Halted:                s.halted,
@@ -298,6 +333,16 @@ func (s *LLVMPhaseOrderingSimulator) State() LLVMPhaseOrderingSimulatorState {
 		OptimizationSurface:   len(s.cfg.optimizations),
 		PerceptWidth:          llvmPerceptWidth,
 	}
+}
+
+func (s *LLVMPhaseOrderingSimulator) lastTerminalFitness() Fitness {
+	if s == nil {
+		return 0
+	}
+	if s.lastFitness != 0 {
+		return s.lastFitness
+	}
+	return Fitness(s.fitness())
 }
 
 func (s *LLVMPhaseOrderingSimulator) percept() []float64 {
