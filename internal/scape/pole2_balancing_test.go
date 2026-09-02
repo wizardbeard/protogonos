@@ -117,6 +117,65 @@ func TestPole2SimulatorSensePushStateAndReset(t *testing.T) {
 	}
 }
 
+func TestPole2ProcessCommandWrapper(t *testing.T) {
+	process := NewPole2Process()
+	ctx := context.Background()
+
+	if response := process.Call(ctx, Pole2SenseMessage{Parameter: "3"}); response.Err == nil {
+		t.Fatal("expected sense before start to fail")
+	}
+	start := process.Call(ctx, Pole2StartMessage{Mode: "validation"})
+	if start.Err != nil || !start.OK {
+		t.Fatalf("start response=%+v", start)
+	}
+	if start.State.Mode != "validation" || start.State.Halted {
+		t.Fatalf("unexpected start state=%+v", start.State)
+	}
+
+	sense := process.Call(ctx, Pole2SenseMessage{Parameter: "3"})
+	if sense.Err != nil || !sense.OK {
+		t.Fatalf("sense response=%+v", sense)
+	}
+	if len(sense.Percept) != 3 {
+		t.Fatalf("expected 3-channel percept, got response=%+v", sense)
+	}
+
+	push := process.Call(ctx, Pole2PushMessage{Output: []float64{0.25, -1, -1}})
+	if push.Err != nil || !push.OK {
+		t.Fatalf("push response=%+v", push)
+	}
+	if push.End || push.Fitness <= 0 {
+		t.Fatalf("expected non-terminal positive push response, got %+v", push)
+	}
+	if push.State.StepsSurvived != 1 || push.State.VectorControlSteps != 1 || push.State.DampingOffSteps != 1 || push.State.SinglePoleSteps != 1 {
+		t.Fatalf("unexpected push state=%+v", push.State)
+	}
+
+	state := process.Call(ctx, Pole2StateMessage{})
+	if state.Err != nil || !state.OK || state.State.StepsSurvived != 1 {
+		t.Fatalf("state response=%+v", state)
+	}
+
+	stop := process.Call(ctx, Pole2StopMessage{Reason: "normal"})
+	if stop.Err != nil || !stop.OK || !stop.End {
+		t.Fatalf("stop response=%+v", stop)
+	}
+	if stop.StopReason != "normal" || !stop.State.Halted || stop.State.TerminationReason != "normal" {
+		t.Fatalf("unexpected stop response=%+v", stop)
+	}
+	if response := process.Call(ctx, Pole2SenseMessage{Parameter: "6"}); response.Err == nil {
+		t.Fatal("expected sense after stop to fail")
+	}
+
+	restart := process.Call(ctx, Pole2RestartMessage{})
+	if restart.Err != nil || !restart.OK {
+		t.Fatalf("restart response=%+v", restart)
+	}
+	if restart.State.Halted || restart.State.StepsSurvived != 0 || restart.State.FitnessAcc != 0 || restart.State.Mode != "validation" {
+		t.Fatalf("unexpected restart response=%+v", restart)
+	}
+}
+
 func TestPole2BalancingScapeEvaluateWithIOComponents(t *testing.T) {
 	genome := model.Genome{
 		SensorIDs: []string{
