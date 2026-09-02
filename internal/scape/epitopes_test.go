@@ -618,3 +618,64 @@ func TestNewEpitopesSimulatorRejectsUnknownTable(t *testing.T) {
 		t.Fatal("expected unknown epitopes simulator table error")
 	}
 }
+
+func TestEpitopesProcessCommandWrapper(t *testing.T) {
+	process := NewEpitopesProcess()
+	ctx := context.Background()
+	params := EpitopesSimParameters{
+		TableName:  "abc_pred16",
+		StartIndex: 1,
+		EndIndex:   2,
+	}
+
+	if response := process.Call(ctx, EpitopesSenseMessage{}); response.Err == nil {
+		t.Fatal("expected sense before start to fail")
+	}
+	start := process.Call(ctx, EpitopesStartMessage{OpMode: "gt", Params: params})
+	if start.Err != nil || !start.OK {
+		t.Fatalf("start response=%+v", start)
+	}
+	if start.State.OpMode != "gt" || start.State.TableName != "abc_pred16" || start.State.Halted {
+		t.Fatalf("unexpected start state=%+v", start.State)
+	}
+
+	sense := process.Call(ctx, EpitopesSenseMessage{})
+	if sense.Err != nil || !sense.OK {
+		t.Fatalf("sense response=%+v", sense)
+	}
+	if len(sense.Percept) == 0 || sense.State.IndexCurrent != 1 {
+		t.Fatalf("unexpected sense response=%+v", sense)
+	}
+
+	classify := process.Call(ctx, EpitopesClassifyMessage{Output: []float64{1}})
+	if classify.Err != nil || !classify.OK {
+		t.Fatalf("classify response=%+v", classify)
+	}
+	if classify.End {
+		t.Fatalf("expected first classify to remain active, got %+v", classify)
+	}
+
+	state := process.Call(ctx, EpitopesStateMessage{})
+	if state.Err != nil || !state.OK || state.State.IndexCurrent != 2 {
+		t.Fatalf("state response=%+v", state)
+	}
+
+	stop := process.Call(ctx, EpitopesStopMessage{Reason: "normal"})
+	if stop.Err != nil || !stop.OK || !stop.End {
+		t.Fatalf("stop response=%+v", stop)
+	}
+	if stop.StopReason != "normal" || !stop.State.Halted {
+		t.Fatalf("unexpected stop response=%+v", stop)
+	}
+	if response := process.Call(ctx, EpitopesSenseMessage{}); response.Err == nil {
+		t.Fatal("expected sense after stop to fail")
+	}
+
+	restart := process.Call(ctx, EpitopesRestartMessage{})
+	if restart.Err != nil || !restart.OK {
+		t.Fatalf("restart response=%+v", restart)
+	}
+	if restart.State.Halted || restart.State.OpMode != "gt" || restart.State.IndexCurrent != 0 {
+		t.Fatalf("unexpected restart response=%+v", restart)
+	}
+}
