@@ -11,6 +11,25 @@ import (
 // RegressionMimicScape evaluates a one-dimensional regression target y=x.
 type RegressionMimicScape struct{}
 
+type RegressionMimicSimulator struct {
+	cfg         regressionModeConfig
+	sampleIndex int
+	errAcc      float64
+	predictions []float64
+	lastMSE     float64
+	lastFitness Fitness
+}
+
+type RegressionMimicSimulatorState struct {
+	Mode        string
+	SampleIndex int
+	Samples     int
+	ErrAcc      float64
+	LastMSE     float64
+	LastFitness Fitness
+	Predictions []float64
+}
+
 func (RegressionMimicScape) Name() string {
 	return "regression-mimic"
 }
@@ -37,6 +56,88 @@ func (RegressionMimicScape) EvaluateMode(ctx context.Context, agent Agent, mode 
 		return 0, nil, fmt.Errorf("agent %s does not implement step runner", agent.ID())
 	}
 	return evaluateRegressionMimicWithStep(ctx, runner, cfg)
+}
+
+func NewRegressionMimicSimulator(mode string) (*RegressionMimicSimulator, error) {
+	cfg, err := regressionConfigForMode(mode)
+	if err != nil {
+		return nil, err
+	}
+	return &RegressionMimicSimulator{
+		cfg:         cfg,
+		predictions: make([]float64, 0, len(cfg.inputs)),
+	}, nil
+}
+
+func (s *RegressionMimicSimulator) Sense(ctx context.Context) ([]float64, error) {
+	if s == nil {
+		return nil, fmt.Errorf("regression-mimic simulator is nil")
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	if len(s.cfg.inputs) == 0 {
+		return nil, fmt.Errorf("regression-mimic simulator has no samples")
+	}
+	return []float64{s.cfg.inputs[s.sampleIndex]}, nil
+}
+
+func (s *RegressionMimicSimulator) Predict(ctx context.Context, output []float64) (Fitness, bool, error) {
+	if s == nil {
+		return 0, false, fmt.Errorf("regression-mimic simulator is nil")
+	}
+	if err := ctx.Err(); err != nil {
+		return 0, false, err
+	}
+	if len(output) != 1 {
+		return 0, false, fmt.Errorf("regression-mimic requires one output, got %d", len(output))
+	}
+	if len(s.cfg.inputs) == 0 {
+		return 0, false, fmt.Errorf("regression-mimic simulator has no samples")
+	}
+
+	current := s.cfg.inputs[s.sampleIndex]
+	predicted := output[0]
+	delta := predicted - current
+	s.errAcc += delta * delta
+	s.predictions = append(s.predictions, predicted)
+	s.sampleIndex++
+	if s.sampleIndex < len(s.cfg.inputs) {
+		return 0, false, nil
+	}
+
+	s.lastMSE = s.errAcc / float64(len(s.cfg.inputs))
+	s.lastFitness = Fitness(1.0 - s.lastMSE)
+	s.sampleIndex = 0
+	s.errAcc = 0
+	s.predictions = s.predictions[:0]
+	return s.lastFitness, true, nil
+}
+
+func (s *RegressionMimicSimulator) Reset() {
+	if s == nil {
+		return
+	}
+	s.sampleIndex = 0
+	s.errAcc = 0
+	s.predictions = s.predictions[:0]
+	s.lastMSE = 0
+	s.lastFitness = 0
+}
+
+func (s *RegressionMimicSimulator) State() RegressionMimicSimulatorState {
+	if s == nil {
+		return RegressionMimicSimulatorState{}
+	}
+	return RegressionMimicSimulatorState{
+		Mode:        s.cfg.mode,
+		SampleIndex: s.sampleIndex,
+		Samples:     len(s.cfg.inputs),
+		ErrAcc:      s.errAcc,
+		LastMSE:     s.lastMSE,
+		LastFitness: s.lastFitness,
+		Predictions: append([]float64(nil), s.predictions...),
+	}
 }
 
 type regressionModeConfig struct {
