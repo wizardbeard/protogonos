@@ -430,6 +430,12 @@ func TestFXSimulatorSenseTradeInternalsAndRestart(t *testing.T) {
 	if afterOpen.Position != 1 || afterOpen.OrdersOpened != 1 {
 		t.Fatalf("expected opened long position, got %+v", afterOpen)
 	}
+	if afterOpen.ExecutedTrades != 1 || afterOpen.LastRawAction != 1 || afterOpen.LastAction != 1 || afterOpen.LastQuote <= 0 {
+		t.Fatalf("expected retained trade diagnostics, got %+v", afterOpen)
+	}
+	if afterOpen.Turnover != 1 || afterOpen.DirectionChanges != 0 || afterOpen.LastFitness != 0 {
+		t.Fatalf("unexpected first-trade diagnostics, got %+v", afterOpen)
+	}
 
 	internals, err := sim.Internals(context.Background())
 	if err != nil {
@@ -462,11 +468,20 @@ func TestFXSimulatorSenseTradeInternalsAndRestart(t *testing.T) {
 	if finalState.Position != 0 || finalState.OrdersClosed <= 0 {
 		t.Fatalf("expected closed final position, got %+v", finalState)
 	}
+	if finalState.TerminationReason != "episode_limit" || finalState.LastFitness != fitness {
+		t.Fatalf("expected terminal reason and final fitness, fitness=%f state=%+v", fitness, finalState)
+	}
+	if finalState.ExecutedTrades <= 1 || finalState.LastQuote <= 0 || finalState.MaxDrawdown < 0 {
+		t.Fatalf("expected retained terminal diagnostics, got %+v", finalState)
+	}
 
 	sim.Restart()
 	restarted := sim.State()
 	if restarted.Halted || restarted.CurrentStep != restarted.StartStep || restarted.OrdersOpened != 0 || restarted.Position != 0 {
 		t.Fatalf("unexpected restarted state: %+v", restarted)
+	}
+	if restarted.ExecutedTrades != 0 || restarted.Turnover != 0 || restarted.TerminationReason != "" || restarted.LastFitness != 0 {
+		t.Fatalf("expected restart to clear diagnostics, got %+v", restarted)
 	}
 }
 
@@ -503,6 +518,9 @@ func TestFXProcessCommandWrapper(t *testing.T) {
 	if trade.State.Position != 1 || trade.State.OrdersOpened != 1 {
 		t.Fatalf("expected opened long position, got %+v", trade.State)
 	}
+	if trade.State.ExecutedTrades != 1 || trade.State.LastAction != 1 || trade.State.Turnover != 1 {
+		t.Fatalf("expected process trade diagnostics, got %+v", trade.State)
+	}
 
 	internals := process.Call(ctx, FXInternalsMessage{})
 	if internals.Err != nil || !internals.OK {
@@ -524,6 +542,9 @@ func TestFXProcessCommandWrapper(t *testing.T) {
 	if stop.StopReason != "normal" || !stop.State.Halted {
 		t.Fatalf("unexpected stop response=%+v", stop)
 	}
+	if stop.State.TerminationReason != "normal" {
+		t.Fatalf("expected stop reason in state, got %+v", stop.State)
+	}
 	if response := process.Call(ctx, FXSenseMessage{}); response.Err == nil {
 		t.Fatal("expected sense after stop to fail")
 	}
@@ -534,6 +555,9 @@ func TestFXProcessCommandWrapper(t *testing.T) {
 	}
 	if restart.State.Halted || restart.State.CurrentStep != restart.State.StartStep || restart.State.OrdersOpened != 0 {
 		t.Fatalf("unexpected restart response=%+v", restart)
+	}
+	if restart.State.ExecutedTrades != 0 || restart.State.Turnover != 0 || restart.State.TerminationReason != "" {
+		t.Fatalf("expected restart to clear process diagnostics, got %+v", restart.State)
 	}
 }
 

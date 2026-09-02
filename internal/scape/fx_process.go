@@ -117,6 +117,7 @@ func (p *FXProcess) stop(reason string) FXResponse {
 	}
 	p.stopReason = reason
 	p.sim.halted = true
+	p.sim.terminationReason = reason
 	return FXResponse{OK: true, End: true, State: p.sim.State(), StopReason: reason}
 }
 

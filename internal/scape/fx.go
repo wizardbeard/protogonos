@@ -23,15 +23,22 @@ type fxSeries struct {
 }
 
 type FXSimulator struct {
-	cfg          fxModeConfig
-	series       fxSeries
-	account      fxAccount
-	step         int
-	lastAction   float64
-	lastQuote    float64
-	ordersOpened int
-	ordersClosed int
-	halted       bool
+	cfg               fxModeConfig
+	series            fxSeries
+	account           fxAccount
+	step              int
+	lastRawAction     float64
+	lastAction        float64
+	lastQuote         float64
+	lastFitness       Fitness
+	ordersOpened      int
+	ordersClosed      int
+	executedTrades    int
+	directionChanges  int
+	turnover          float64
+	marginCall        bool
+	halted            bool
+	terminationReason string
 }
 
 type FXSimulatorState struct {
@@ -42,18 +49,28 @@ type FXSimulatorState struct {
 	CurrentStep          int
 	EndStep              int
 	Halted               bool
+	TerminationReason    string
 	Balance              float64
 	NetAssetValue        float64
 	RealizedPL           float64
 	UnrealizedPL         float64
+	MaxDrawdown          float64
 	Position             float64
 	Entry                float64
 	Units                float64
 	PercentageChange     float64
 	PrevPercentageChange float64
 	Profit               float64
+	LastRawAction        float64
+	LastAction           float64
+	LastQuote            float64
+	LastFitness          Fitness
 	OrdersOpened         int
 	OrdersClosed         int
+	ExecutedTrades       int
+	DirectionChanges     int
+	Turnover             float64
+	MarginCall           bool
 }
 
 var (
@@ -161,14 +178,23 @@ func (s *FXSimulator) Trade(ctx context.Context, rawAction float64) (fitness Fit
 		return 0, false, err
 	}
 	if s.halted {
-		return 0, true, nil
+		return s.lastFitness, true, nil
 	}
 
 	quote := fxPrice(s.series, s.step)
+	previousAction := s.lastAction
 	action := fxTradeAction(rawAction)
+	if action != previousAction {
+		s.turnover += math.Abs(action - previousAction)
+		if action != 0 && previousAction != 0 {
+			s.directionChanges++
+		}
+	}
 	opened, closed := applyFXTradeAction(&s.account, quote, action)
 	s.ordersOpened += opened
 	s.ordersClosed += closed
+	s.executedTrades++
+	s.lastRawAction = rawAction
 	s.lastAction = action
 	s.lastQuote = quote
 	updateFXMarkToMarket(&s.account, quote)
@@ -180,7 +206,10 @@ func (s *FXSimulator) Trade(ctx context.Context, rawAction float64) (fitness Fit
 			}
 		}
 		s.halted = true
-		return 0, true, nil
+		s.marginCall = true
+		s.terminationReason = "margin_call"
+		s.lastFitness = 0
+		return s.lastFitness, true, nil
 	}
 
 	if s.step+1 >= s.cfg.startStep+s.cfg.steps || s.step+1 >= len(s.series.values) {
@@ -189,8 +218,11 @@ func (s *FXSimulator) Trade(ctx context.Context, rawAction float64) (fitness Fit
 				s.ordersClosed++
 			}
 		}
+		updateFXMarkToMarket(&s.account, quote)
 		s.halted = true
-		return Fitness(s.account.netAssetValue), true, nil
+		s.terminationReason = "episode_limit"
+		s.lastFitness = Fitness(s.account.netAssetValue)
+		return s.lastFitness, true, nil
 	}
 
 	s.step++
@@ -205,11 +237,18 @@ func (s *FXSimulator) Restart() {
 	}
 	s.account = newFXAccount()
 	s.step = s.cfg.startStep
+	s.lastRawAction = 0
 	s.lastAction = 0
 	s.lastQuote = fxPrice(s.series, s.cfg.startStep)
+	s.lastFitness = 0
 	s.ordersOpened = 0
 	s.ordersClosed = 0
+	s.executedTrades = 0
+	s.directionChanges = 0
+	s.turnover = 0
+	s.marginCall = false
 	s.halted = false
+	s.terminationReason = ""
 	updateFXMarkToMarket(&s.account, s.lastQuote)
 }
 
@@ -239,18 +278,28 @@ func (s *FXSimulator) State() FXSimulatorState {
 		CurrentStep:          s.step,
 		EndStep:              s.cfg.startStep + s.cfg.steps - 1,
 		Halted:               s.halted,
+		TerminationReason:    s.terminationReason,
 		Balance:              s.account.balance,
 		NetAssetValue:        s.account.netAssetValue,
 		RealizedPL:           s.account.realizedPL,
 		UnrealizedPL:         s.account.unrealizedPL,
+		MaxDrawdown:          s.account.maxDrawdown,
 		Position:             position,
 		Entry:                entry,
 		Units:                units,
 		PercentageChange:     percentageChange,
 		PrevPercentageChange: prevPercentageChange,
 		Profit:               profit,
+		LastRawAction:        s.lastRawAction,
+		LastAction:           s.lastAction,
+		LastQuote:            s.lastQuote,
+		LastFitness:          s.lastFitness,
 		OrdersOpened:         s.ordersOpened,
 		OrdersClosed:         s.ordersClosed,
+		ExecutedTrades:       s.executedTrades,
+		DirectionChanges:     s.directionChanges,
+		Turnover:             s.turnover,
+		MarginCall:           s.marginCall,
 	}
 }
 
