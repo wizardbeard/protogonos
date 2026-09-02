@@ -18,25 +18,47 @@ import (
 type GTSAScape struct{}
 
 type GTSASimulator struct {
-	cfg    gtsaModeConfig
-	table  gtsaTable
-	state  *gtsaWindowState
-	halted bool
+	cfg               gtsaModeConfig
+	table             gtsaTable
+	state             *gtsaWindowState
+	halted            bool
+	terminationReason string
+	predictionCount   int
+	lastPrediction    float64
+	lastExpected      float64
+	lastError         float64
+	lastFitness       Fitness
+	squaredErr        float64
+	absErr            float64
+	directionalHits   int
+	lastCurrent       float64
+	lastHadCurrent    bool
 }
 
 type GTSASimulatorState struct {
-	Mode          string
-	TableName     string
-	IndexStart    int
-	IndexCurrent  int
-	IndexEnd      int
-	WindowLength  int
-	WindowRows    int
-	Window        []float64
-	Halted        bool
-	LastProgress  float64
-	FeatureWidth  int
-	TableRowCount int
+	Mode              string
+	TableName         string
+	IndexStart        int
+	IndexCurrent      int
+	IndexEnd          int
+	WindowLength      int
+	WindowRows        int
+	Window            []float64
+	Halted            bool
+	TerminationReason string
+	LastProgress      float64
+	FeatureWidth      int
+	TableRowCount     int
+	PredictionCount   int
+	LastPrediction    float64
+	LastExpected      float64
+	LastError         float64
+	LastFitness       Fitness
+	MeanSquaredError  float64
+	MeanAbsoluteError float64
+	DirectionAccuracy float64
+	LastCurrent       float64
+	LastHadCurrent    bool
 }
 
 var (
@@ -113,7 +135,11 @@ func (s *GTSASimulator) PredictValue(ctx context.Context, prediction float64) (F
 		return 0, false, err
 	}
 	if s.halted {
-		return 0, true, nil
+		return s.lastFitness, true, nil
+	}
+	percept, err := s.state.peekPercept()
+	if err != nil {
+		return 0, false, err
 	}
 	expected, done, err := s.state.applyPrediction()
 	if err != nil {
@@ -121,9 +147,23 @@ func (s *GTSASimulator) PredictValue(ctx context.Context, prediction float64) (F
 	}
 	if done {
 		s.halted = true
-		return 0, true, nil
+		s.terminationReason = "index_end"
+		return s.lastFitness, true, nil
 	}
-	fitness := Fitness(1.0 / (math.Abs(expected-prediction) + 0.0001))
+	errDelta := prediction - expected
+	fitness := Fitness(1.0 / (math.Abs(errDelta) + 0.0001))
+	s.predictionCount++
+	s.lastPrediction = prediction
+	s.lastExpected = expected
+	s.lastError = errDelta
+	s.lastFitness = fitness
+	s.squaredErr += errDelta * errDelta
+	s.absErr += math.Abs(errDelta)
+	if gtsaDirectionalMatch(percept.current, prediction, expected) {
+		s.directionalHits++
+	}
+	s.lastCurrent = percept.current
+	s.lastHadCurrent = true
 	return fitness, false, nil
 }
 
@@ -140,6 +180,17 @@ func (s *GTSASimulator) Restart(ctx context.Context) error {
 	}
 	s.state = state
 	s.halted = false
+	s.terminationReason = ""
+	s.predictionCount = 0
+	s.lastPrediction = 0
+	s.lastExpected = 0
+	s.lastError = 0
+	s.lastFitness = 0
+	s.squaredErr = 0
+	s.absErr = 0
+	s.directionalHits = 0
+	s.lastCurrent = 0
+	s.lastHadCurrent = false
 	return nil
 }
 
@@ -147,19 +198,38 @@ func (s *GTSASimulator) State() GTSASimulatorState {
 	if s == nil || s.state == nil {
 		return GTSASimulatorState{}
 	}
+	mse := 0.0
+	mae := 0.0
+	directionAccuracy := 0.0
+	if s.predictionCount > 0 {
+		mse = s.squaredErr / float64(s.predictionCount)
+		mae = s.absErr / float64(s.predictionCount)
+		directionAccuracy = float64(s.directionalHits) / float64(s.predictionCount)
+	}
 	return GTSASimulatorState{
-		Mode:          s.cfg.mode,
-		TableName:     s.state.info.name,
-		IndexStart:    s.state.indexStart,
-		IndexCurrent:  s.state.indexCurrent,
-		IndexEnd:      s.state.indexEnd,
-		WindowLength:  s.state.windowLength,
-		WindowRows:    s.state.totRows,
-		Window:        append([]float64(nil), s.state.window...),
-		Halted:        s.halted,
-		LastProgress:  gtsaProgress(s.state.indexStart, s.state.indexCurrent, s.state.indexEnd),
-		FeatureWidth:  s.state.windowLength,
-		TableRowCount: maxGTSA(0, len(s.table.values)-1),
+		Mode:              s.cfg.mode,
+		TableName:         s.state.info.name,
+		IndexStart:        s.state.indexStart,
+		IndexCurrent:      s.state.indexCurrent,
+		IndexEnd:          s.state.indexEnd,
+		WindowLength:      s.state.windowLength,
+		WindowRows:        s.state.totRows,
+		Window:            append([]float64(nil), s.state.window...),
+		Halted:            s.halted,
+		TerminationReason: s.terminationReason,
+		LastProgress:      gtsaProgress(s.state.indexStart, s.state.indexCurrent, s.state.indexEnd),
+		FeatureWidth:      s.state.windowLength,
+		TableRowCount:     maxGTSA(0, len(s.table.values)-1),
+		PredictionCount:   s.predictionCount,
+		LastPrediction:    s.lastPrediction,
+		LastExpected:      s.lastExpected,
+		LastError:         s.lastError,
+		LastFitness:       s.lastFitness,
+		MeanSquaredError:  mse,
+		MeanAbsoluteError: mae,
+		DirectionAccuracy: directionAccuracy,
+		LastCurrent:       s.lastCurrent,
+		LastHadCurrent:    s.lastHadCurrent,
 	}
 }
 
@@ -850,6 +920,35 @@ func (s *gtsaWindowState) getPercept() (gtsaPercept, error) {
 		delta:      value - prev,
 		windowMean: windowMean,
 		progress:   progress,
+	}, nil
+}
+
+func (s *gtsaWindowState) peekPercept() (gtsaPercept, error) {
+	if s.indexCurrent <= 0 || s.indexCurrent >= len(s.values) {
+		return gtsaPercept{}, fmt.Errorf("gtsa index out of range: %d", s.indexCurrent)
+	}
+	value := s.values[s.indexCurrent]
+	prev := value
+	if len(s.window) > 1 {
+		prev = s.window[1]
+	} else if len(s.window) == 1 {
+		prev = s.window[0]
+	}
+	windowMean := 0.0
+	for _, v := range s.window {
+		windowMean += v
+	}
+	if len(s.window) > 0 {
+		windowMean /= float64(len(s.window))
+	} else {
+		windowMean = value
+	}
+	return gtsaPercept{
+		current:    value,
+		delta:      value - prev,
+		windowMean: windowMean,
+		progress:   gtsaProgress(s.indexStart, s.indexCurrent, s.indexEnd),
+		vector:     append([]float64(nil), s.window...),
 	}, nil
 }
 

@@ -174,6 +174,7 @@ Status keys:
 - Expanded `fx.erl` process parity with a typed `FXProcess` command wrapper for start/stop/restart/sense/internals/trade/state flows over the direct simulator session.
 - Expanded `scape_GTSA.erl` protocol parity with `NewGTSASimulator`, exposing reference-style `get_window`, `predict_value`, restart, and state inspection over the existing table-window runtime.
 - Expanded `scape_GTSA.erl` process parity with a typed `GTSAProcess` command wrapper for start/stop/restart/sense/sense_percept/predict_value/state flows over the direct simulator session.
+- Expanded `scape_GTSA.erl` direct-session telemetry parity by retaining per-session prediction diagnostics (`last_prediction`, expected value, absolute/MSE aggregates, directional accuracy, last fitness, and terminal reason) in `GTSASimulatorState`.
 - Expanded `flatland.erl` public scape parity with direct public-agent `sense`/`act` APIs and a typed `FlatlandPublicProcess` command wrapper for start/stop/sync/enter/leave/sense/act/tick/update/get_all flows.
 - Expanded DTM `scape.erl` protocol parity with `NewDTMSimulator`, exposing reference-style `sense`, `move`, reset, state inspection, terminal run accounting, and switch-event state over the existing delayed T-maze run flow.
 - Expanded DTM `scape.erl` process parity with a typed `DTMProcess` command wrapper for start/stop/restart/sense/move/state flows over the direct simulator session.

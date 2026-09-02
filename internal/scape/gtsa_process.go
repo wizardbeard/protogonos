@@ -120,6 +120,7 @@ func (p *GTSAProcess) stop(reason string) GTSAResponse {
 	}
 	p.stopReason = reason
 	p.sim.halted = true
+	p.sim.terminationReason = reason
 	return GTSAResponse{OK: true, End: true, State: p.sim.State(), StopReason: reason}
 }
 

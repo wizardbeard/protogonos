@@ -476,6 +476,12 @@ func TestGTSASimulatorSensePredictStateAndRestart(t *testing.T) {
 	if afterPredict.IndexCurrent != 2 || afterPredict.LastProgress <= 0 {
 		t.Fatalf("expected prediction to advance state, got %+v", afterPredict)
 	}
+	if afterPredict.PredictionCount != 1 || afterPredict.LastPrediction != 12 || afterPredict.LastExpected != 12 {
+		t.Fatalf("expected prediction diagnostics to be retained, got %+v", afterPredict)
+	}
+	if afterPredict.LastFitness != fitness || afterPredict.MeanAbsoluteError != 0 || afterPredict.MeanSquaredError != 0 || afterPredict.DirectionAccuracy != 1 {
+		t.Fatalf("unexpected exact-prediction diagnostics, fitness=%f state=%+v", fitness, afterPredict)
+	}
 
 	window, err = sim.Sense(context.Background())
 	if err != nil {
@@ -501,6 +507,9 @@ func TestGTSASimulatorSensePredictStateAndRestart(t *testing.T) {
 	if !finalState.Halted {
 		t.Fatalf("expected halted terminal state, got %+v", finalState)
 	}
+	if finalState.TerminationReason != "index_end" || finalState.PredictionCount <= 1 || finalState.MeanAbsoluteError <= 0 {
+		t.Fatalf("expected retained terminal diagnostics, got %+v", finalState)
+	}
 	if _, err := sim.Sense(context.Background()); err == nil {
 		t.Fatal("expected halted simulator sense error")
 	}
@@ -511,6 +520,9 @@ func TestGTSASimulatorSensePredictStateAndRestart(t *testing.T) {
 	restarted := sim.State()
 	if restarted.Halted || restarted.IndexCurrent != restarted.IndexStart || len(restarted.Window) != 0 {
 		t.Fatalf("unexpected restarted simulator state: %+v", restarted)
+	}
+	if restarted.PredictionCount != 0 || restarted.LastFitness != 0 || restarted.TerminationReason != "" {
+		t.Fatalf("expected restart to clear diagnostics, got %+v", restarted)
 	}
 }
 
@@ -565,6 +577,9 @@ func TestGTSAProcessCommandWrapper(t *testing.T) {
 	if predict.State.IndexCurrent != 2 {
 		t.Fatalf("expected predict to advance state, got %+v", predict.State)
 	}
+	if predict.State.PredictionCount != 1 || predict.State.LastExpected != 12 || predict.State.DirectionAccuracy != 1 {
+		t.Fatalf("expected process prediction diagnostics, got %+v", predict.State)
+	}
 
 	state := process.Call(ctx, GTSAStateMessage{})
 	if state.Err != nil || !state.OK || state.State.IndexCurrent != 2 {
@@ -577,6 +592,9 @@ func TestGTSAProcessCommandWrapper(t *testing.T) {
 	}
 	if stop.StopReason != "normal" || !stop.State.Halted {
 		t.Fatalf("unexpected stop response=%+v", stop)
+	}
+	if stop.State.TerminationReason != "normal" {
+		t.Fatalf("expected stop reason in state, got %+v", stop.State)
 	}
 	if response := process.Call(ctx, GTSASenseMessage{}); response.Err == nil {
 		t.Fatal("expected sense after stop to fail")
