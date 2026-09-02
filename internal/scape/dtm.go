@@ -13,25 +13,47 @@ import (
 type DTMScape struct{}
 
 type DTMSimulator struct {
-	cfg     dtmModeConfig
-	episode dtmEpisode
-	halted  bool
+	cfg               dtmModeConfig
+	episode           dtmEpisode
+	halted            bool
+	terminationReason string
+	lastMove          float64
+	lastMoveAction    string
+	lastReward        float64
+	lastFitness       Fitness
+	stepsExecuted     int
+	terminalRuns      int
+	crashRuns         int
+	timeoutRuns       int
+	leftTerminalRuns  int
+	rightTerminalRuns int
 }
 
 type DTMSimulatorState struct {
-	Mode         string
-	PositionX    int
-	PositionY    int
-	Direction    int
-	TotalRuns    int
-	RunIndex     int
-	StepIndex    int
-	SwitchEvent  int
-	Switched     bool
-	FitnessAcc   float64
-	RunProgress  float64
-	StepProgress float64
-	Halted       bool
+	Mode              string
+	PositionX         int
+	PositionY         int
+	Direction         int
+	TotalRuns         int
+	RunIndex          int
+	StepIndex         int
+	SwitchEvent       int
+	Switched          bool
+	FitnessAcc        float64
+	RunProgress       float64
+	StepProgress      float64
+	Halted            bool
+	TerminationReason string
+	LastMove          float64
+	LastMoveAction    string
+	LastReward        float64
+	LastFitness       Fitness
+	StepsExecuted     int
+	TerminalRuns      int
+	CrashRuns         int
+	TimeoutRuns       int
+	LeftTerminalRuns  int
+	RightTerminalRuns int
 }
 
 func (DTMScape) Name() string {
@@ -109,7 +131,7 @@ func (s *DTMSimulator) Move(ctx context.Context, output []float64) (Fitness, boo
 		return 0, false, err
 	}
 	if s.halted {
-		return 0, true, nil
+		return s.lastFitness, true, nil
 	}
 	s.applySwitchEvent()
 
@@ -117,13 +139,45 @@ func (s *DTMSimulator) Move(ctx context.Context, output []float64) (Fitness, boo
 	if len(output) > 0 {
 		move = output[0]
 	}
-	_, _, _, _, _, err := s.episode.applyMove(move)
+	s.lastMove = move
+	s.lastMoveAction = dtmMoveAction(move)
+	done, crashed, reachedTerminal, reward, terminalPosition, err := s.episode.applyMove(move)
 	if err != nil {
 		return 0, false, err
 	}
+	s.stepsExecuted++
+	s.lastReward = reward
+	if done {
+		if crashed {
+			s.crashRuns++
+			s.terminationReason = "crash"
+		}
+		if reachedTerminal {
+			s.terminalRuns++
+			s.terminationReason = "terminal"
+			switch terminalPosition {
+			case (dtmCoord{x: -1, y: 1}):
+				s.leftTerminalRuns++
+			case (dtmCoord{x: 1, y: 1}):
+				s.rightTerminalRuns++
+			}
+		}
+	}
+	if !done && s.cfg.maxStepsPerRun > 0 && s.episode.stepIndex >= s.cfg.maxStepsPerRun {
+		s.episode.fitnessAcc -= 0.4
+		s.episode.resetRun()
+		s.episode.runIndex++
+		s.crashRuns++
+		s.timeoutRuns++
+		s.terminationReason = "timeout"
+	}
 	if s.episode.runIndex >= s.episode.totalRuns {
 		s.halted = true
-		return Fitness(s.episode.fitnessAcc), true, nil
+		if s.terminationReason == "" {
+			s.terminationReason = "total_runs"
+		}
+		s.lastFitness = Fitness(s.episode.fitnessAcc)
+		return s.lastFitness, true, nil
 	}
 	return 0, false, nil
 }
@@ -134,6 +188,17 @@ func (s *DTMSimulator) Reset() {
 	}
 	s.episode = newDTMEpisode("dtm-simulator", s.cfg)
 	s.halted = false
+	s.terminationReason = ""
+	s.lastMove = 0
+	s.lastMoveAction = ""
+	s.lastReward = 0
+	s.lastFitness = 0
+	s.stepsExecuted = 0
+	s.terminalRuns = 0
+	s.crashRuns = 0
+	s.timeoutRuns = 0
+	s.leftTerminalRuns = 0
+	s.rightTerminalRuns = 0
 }
 
 func (s *DTMSimulator) State() DTMSimulatorState {
@@ -141,19 +206,30 @@ func (s *DTMSimulator) State() DTMSimulatorState {
 		return DTMSimulatorState{}
 	}
 	return DTMSimulatorState{
-		Mode:         s.cfg.mode,
-		PositionX:    s.episode.position.x,
-		PositionY:    s.episode.position.y,
-		Direction:    s.episode.direction,
-		TotalRuns:    s.episode.totalRuns,
-		RunIndex:     s.episode.runIndex,
-		StepIndex:    s.episode.stepIndex,
-		SwitchEvent:  s.episode.switchEvent,
-		Switched:     s.episode.switched,
-		FitnessAcc:   s.episode.fitnessAcc,
-		RunProgress:  dtmRunProgress(s.episode.runIndex, s.episode.totalRuns),
-		StepProgress: dtmStepProgress(s.episode.stepIndex),
-		Halted:       s.halted,
+		Mode:              s.cfg.mode,
+		PositionX:         s.episode.position.x,
+		PositionY:         s.episode.position.y,
+		Direction:         s.episode.direction,
+		TotalRuns:         s.episode.totalRuns,
+		RunIndex:          s.episode.runIndex,
+		StepIndex:         s.episode.stepIndex,
+		SwitchEvent:       s.episode.switchEvent,
+		Switched:          s.episode.switched,
+		FitnessAcc:        s.episode.fitnessAcc,
+		RunProgress:       dtmRunProgress(s.episode.runIndex, s.episode.totalRuns),
+		StepProgress:      dtmStepProgress(s.episode.stepIndex),
+		Halted:            s.halted,
+		TerminationReason: s.terminationReason,
+		LastMove:          s.lastMove,
+		LastMoveAction:    s.lastMoveAction,
+		LastReward:        s.lastReward,
+		LastFitness:       s.lastFitness,
+		StepsExecuted:     s.stepsExecuted,
+		TerminalRuns:      s.terminalRuns,
+		CrashRuns:         s.crashRuns,
+		TimeoutRuns:       s.timeoutRuns,
+		LeftTerminalRuns:  s.leftTerminalRuns,
+		RightTerminalRuns: s.rightTerminalRuns,
 	}
 }
 
@@ -635,6 +711,16 @@ func (e *dtmEpisode) applyMove(move float64) (done bool, crashed bool, reachedTe
 		return false, false, false, 0, dtmCoord{}, fmt.Errorf("dtm missing forward view for direction=%d at position=%+v", e.direction, e.position)
 	}
 	return e.applyTransition(view)
+}
+
+func dtmMoveAction(move float64) string {
+	if move > 0.33 {
+		return "left"
+	}
+	if move < -0.33 {
+		return "right"
+	}
+	return "forward"
 }
 
 func (e *dtmEpisode) applyTransition(view dtmView) (done bool, crashed bool, reachedTerminal bool, reward float64, terminalPosition dtmCoord, err error) {

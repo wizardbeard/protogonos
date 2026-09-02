@@ -539,11 +539,17 @@ func TestDTMSimulatorSenseMoveStateAndReset(t *testing.T) {
 	if state.PositionX != 0 || state.PositionY != 1 || state.Direction != 90 || state.StepIndex != 1 {
 		t.Fatalf("unexpected state after forward move: %+v", state)
 	}
+	if state.LastMove != 0 || state.LastMoveAction != "forward" || state.StepsExecuted != 1 || state.LastFitness != 0 {
+		t.Fatalf("unexpected move diagnostics after forward move: %+v", state)
+	}
 
 	sim.Reset()
 	state = sim.State()
 	if state.PositionX != 0 || state.PositionY != 0 || state.Direction != 90 || state.RunIndex != 0 || state.StepIndex != 0 || state.Halted {
 		t.Fatalf("unexpected state after reset: %+v", state)
+	}
+	if state.StepsExecuted != 0 || state.LastMoveAction != "" || state.TerminationReason != "" || state.LastFitness != 0 {
+		t.Fatalf("expected reset to clear diagnostics, got %+v", state)
 	}
 }
 
@@ -569,6 +575,12 @@ func TestDTMSimulatorTerminalRunAccounting(t *testing.T) {
 	state := sim.State()
 	if !state.Halted || state.RunIndex != state.TotalRuns || state.StepIndex != 0 {
 		t.Fatalf("unexpected terminal state: %+v", state)
+	}
+	if state.TerminationReason != "terminal" || state.TerminalRuns != 1 || state.LastReward != 1 || state.LastFitness != fitness {
+		t.Fatalf("unexpected terminal diagnostics, fitness=%f state=%+v", fitness, state)
+	}
+	if state.RightTerminalRuns != 1 || state.LeftTerminalRuns != 0 || state.StepsExecuted != 1 {
+		t.Fatalf("unexpected terminal side counters, got %+v", state)
 	}
 	if _, err := sim.Sense(context.Background(), "all"); err == nil {
 		t.Fatalf("expected halted simulator sense to fail")
@@ -647,6 +659,9 @@ func TestDTMProcessCommandWrapper(t *testing.T) {
 	if move.State.PositionX != 0 || move.State.PositionY != 1 || move.State.StepIndex != 1 {
 		t.Fatalf("unexpected move state=%+v", move.State)
 	}
+	if move.State.LastMoveAction != "forward" || move.State.StepsExecuted != 1 {
+		t.Fatalf("expected process move diagnostics, got %+v", move.State)
+	}
 
 	state := process.Call(ctx, DTMStateMessage{})
 	if state.Err != nil || !state.OK || state.State.StepIndex != 1 {
@@ -660,6 +675,9 @@ func TestDTMProcessCommandWrapper(t *testing.T) {
 	if stop.StopReason != "normal" || !stop.State.Halted {
 		t.Fatalf("unexpected stop response=%+v", stop)
 	}
+	if stop.State.TerminationReason != "normal" {
+		t.Fatalf("expected stop reason in state, got %+v", stop.State)
+	}
 	if response := process.Call(ctx, DTMSenseMessage{Parameter: "all"}); response.Err == nil {
 		t.Fatal("expected sense after stop to fail")
 	}
@@ -670,5 +688,8 @@ func TestDTMProcessCommandWrapper(t *testing.T) {
 	}
 	if restart.State.Halted || restart.State.RunIndex != 0 || restart.State.StepIndex != 0 || restart.State.Mode != "validation" {
 		t.Fatalf("unexpected restart response=%+v", restart)
+	}
+	if restart.State.StepsExecuted != 0 || restart.State.TerminationReason != "" || restart.State.LastMoveAction != "" {
+		t.Fatalf("expected restart to clear process diagnostics, got %+v", restart.State)
 	}
 }

@@ -112,6 +112,7 @@ func (p *DTMProcess) stop(reason string) DTMResponse {
 	}
 	p.stopReason = reason
 	p.sim.halted = true
+	p.sim.terminationReason = reason
 	return DTMResponse{OK: true, End: true, State: p.sim.State(), StopReason: reason}
 }
 
