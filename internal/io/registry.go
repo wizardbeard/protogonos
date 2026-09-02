@@ -179,11 +179,25 @@ func findRegisteredSensor(name string) (registeredSensor, string, bool) {
 	sensorRegistry.mu.RLock()
 	defer sensorRegistry.mu.RUnlock()
 
-	entry, ok := sensorRegistry.m[lookupName]
-	if !ok {
-		return registeredSensor{}, "", false
+	if entry, ok := sensorRegistry.m[lookupName]; ok {
+		return entry, lookupName, true
 	}
-	return entry, lookupName, true
+
+	canonicalName := CanonicalSensorName(lookupName)
+	if canonicalName != "" && canonicalName != lookupName {
+		if entry, ok := sensorRegistry.m[canonicalName]; ok {
+			return entry, canonicalName, true
+		}
+	}
+	if canonicalName == "" {
+		canonicalName = lookupName
+	}
+	for registeredName, entry := range sensorRegistry.m {
+		if CanonicalSensorName(registeredName) == canonicalName {
+			return entry, registeredName, true
+		}
+	}
+	return registeredSensor{}, "", false
 }
 
 func RegisterActuator(name string, factory ActuatorFactory) error {

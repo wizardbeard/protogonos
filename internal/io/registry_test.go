@@ -48,6 +48,93 @@ func TestRegisterAndResolveSensorTrimsNames(t *testing.T) {
 	}
 }
 
+func TestCanonicalSensorNameNormalizesReferenceAliases(t *testing.T) {
+	tests := map[string]string{
+		" xor_GetInput ":           XORInputLeftSensorName,
+		"pb_GetInput":              Pole2CartPositionSensorName,
+		"dtm_GetInput":             DTMRangeFrontSensorName,
+		"distance_scanner":         FlatlandDistanceScan0SensorName,
+		"color_scanner":            FlatlandColorScan0SensorName,
+		"energy_scaner":            FlatlandEnergyScan0SensorName,
+		"energy_scanner":           FlatlandEnergyScan0SensorName,
+		"fx_PCI":                   FXPercentChangeSensorName,
+		"fx_PLI":                   FXPercentChangeSensorName,
+		"fx_Internals":             FXNAVSensorName,
+		"abc_pred":                 EpitopesSignalSensorName,
+		"general_predictor":        GTSAInputSensorName,
+		"get_BitCodeStatistics":    LLVMRuntimeGainSensorName,
+		"flatland_distance_scan_1": FlatlandDistanceScan1SensorName,
+	}
+
+	for input, want := range tests {
+		if got := CanonicalSensorName(input); got != want {
+			t.Fatalf("CanonicalSensorName(%q)=%q, want %q", input, got, want)
+		}
+	}
+}
+
+func TestResolveSensorAcceptsReferenceAliases(t *testing.T) {
+	resetRegistriesForTests()
+	t.Cleanup(resetRegistriesForTests)
+
+	tests := []struct {
+		name  string
+		scape string
+	}{
+		{XORGetInputSensorAliasName, "xor"},
+		{PBGetInputSensorAliasName, "pb_sim"},
+		{DTMGetInputSensorAliasName, "dtm_sim"},
+		{DistanceScannerSensorAliasName, "scape_flatland"},
+		{ColorScannerSensorAliasName, "scape_flatland"},
+		{EnergyScannerSensorAliasName, "scape_flatland"},
+		{EnergyScannerSensorCorrectedName, "scape_flatland"},
+		{FXPCISensorAliasName, "fx"},
+		{FXPLISensorAliasName, "fx"},
+		{FXInternalsSensorAliasName, "fx"},
+		{ABCPredSensorAliasName, "epitopes"},
+		{GeneralPredictorSensorAliasName, "gtsa"},
+		{BitCodeStatisticsSensorAliasName, "llvm-phase-ordering"},
+	}
+
+	for _, tt := range tests {
+		if _, err := ResolveSensor(tt.name, tt.scape); err != nil {
+			t.Fatalf("ResolveSensor(%q, %q): %v", tt.name, tt.scape, err)
+		}
+		if !SensorCompatibleWithScape(tt.name, tt.scape) {
+			t.Fatalf("expected alias %q to be compatible with %q", tt.name, tt.scape)
+		}
+	}
+	if SensorCompatibleWithScape(XORGetInputSensorAliasName, "dtm") {
+		t.Fatal("expected xor_GetInput alias to be incompatible with dtm")
+	}
+}
+
+func TestResolveSensorCanonicalLookupMatchesAliasRegistration(t *testing.T) {
+	sensorRegistry.mu.Lock()
+	originalSensors := sensorRegistry.m
+	sensorRegistry.m = make(map[string]registeredSensor)
+	sensorRegistry.mu.Unlock()
+	t.Cleanup(func() {
+		sensorRegistry.mu.Lock()
+		sensorRegistry.m = originalSensors
+		sensorRegistry.mu.Unlock()
+	})
+
+	if err := RegisterSensor(XORGetInputSensorAliasName, func() Sensor { return testSensor{} }); err != nil {
+		t.Fatalf("register alias sensor: %v", err)
+	}
+	s, err := ResolveSensor(XORInputLeftSensorName, "xor")
+	if err != nil {
+		t.Fatalf("resolve canonical sensor through alias registration: %v", err)
+	}
+	if s.Name() != "test-sensor" {
+		t.Fatalf("unexpected canonical sensor from alias registration: %s", s.Name())
+	}
+	if !SensorCompatibleWithScape(XORInputLeftSensorName, "xor") {
+		t.Fatal("expected canonical sensor compatibility lookup to resolve alias registration")
+	}
+}
+
 func TestSensorCompatibleWithScapeTrimsNames(t *testing.T) {
 	resetRegistriesForTests()
 	t.Cleanup(resetRegistriesForTests)
