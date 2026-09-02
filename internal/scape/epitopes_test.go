@@ -564,6 +564,13 @@ func TestEpitopesSimulatorSenseClassifyFlowResetsAfterHalt(t *testing.T) {
 	} else if halt {
 		t.Fatalf("expected halt=false on first classify, reward=%d", reward)
 	}
+	afterFirst := sim.State()
+	if afterFirst.ClassificationCount != 1 || afterFirst.LastPredictedClass != 1 || afterFirst.LastClassifiedIndex != 1 {
+		t.Fatalf("expected first classification diagnostics, got %+v", afterFirst)
+	}
+	if afterFirst.LastExpectedClass != afterFirst.LastReward || afterFirst.Accuracy != float64(afterFirst.CorrectCount) {
+		t.Fatalf("unexpected first classification score state: %+v", afterFirst)
+	}
 	if _, err := sim.Sense(); err != nil {
 		t.Fatalf("sense #2: %v", err)
 	}
@@ -577,6 +584,9 @@ func TestEpitopesSimulatorSenseClassifyFlowResetsAfterHalt(t *testing.T) {
 	if !haltedState.Halted || haltedState.IndexCurrent != 0 {
 		t.Fatalf("expected halted simulator state after end index classify, got %+v", haltedState)
 	}
+	if haltedState.TerminationReason != "end_index" || haltedState.ClassificationCount != 2 || haltedState.LastClassifiedIndex != 2 {
+		t.Fatalf("expected terminal classification diagnostics, got %+v", haltedState)
+	}
 
 	if _, err := sim.Sense(); err != nil {
 		t.Fatalf("sense after halt reset: %v", err)
@@ -584,6 +594,9 @@ func TestEpitopesSimulatorSenseClassifyFlowResetsAfterHalt(t *testing.T) {
 	resetState := sim.State()
 	if resetState.Halted || resetState.IndexCurrent != 1 {
 		t.Fatalf("expected sense to reset simulator index to start, got %+v", resetState)
+	}
+	if resetState.TerminationReason != "" || resetState.ClassificationCount != 0 || resetState.CorrectCount != 0 {
+		t.Fatalf("expected halt-reset sense to clear diagnostics, got %+v", resetState)
 	}
 }
 
@@ -654,6 +667,9 @@ func TestEpitopesProcessCommandWrapper(t *testing.T) {
 	if classify.End {
 		t.Fatalf("expected first classify to remain active, got %+v", classify)
 	}
+	if classify.State.ClassificationCount != 1 || classify.State.LastPredictedClass != 1 || classify.State.LastClassifiedIndex != 1 {
+		t.Fatalf("expected process classification diagnostics, got %+v", classify.State)
+	}
 
 	state := process.Call(ctx, EpitopesStateMessage{})
 	if state.Err != nil || !state.OK || state.State.IndexCurrent != 2 {
@@ -667,6 +683,9 @@ func TestEpitopesProcessCommandWrapper(t *testing.T) {
 	if stop.StopReason != "normal" || !stop.State.Halted {
 		t.Fatalf("unexpected stop response=%+v", stop)
 	}
+	if stop.State.TerminationReason != "normal" {
+		t.Fatalf("expected stop reason in state, got %+v", stop.State)
+	}
 	if response := process.Call(ctx, EpitopesSenseMessage{}); response.Err == nil {
 		t.Fatal("expected sense after stop to fail")
 	}
@@ -677,5 +696,8 @@ func TestEpitopesProcessCommandWrapper(t *testing.T) {
 	}
 	if restart.State.Halted || restart.State.OpMode != "gt" || restart.State.IndexCurrent != 0 {
 		t.Fatalf("unexpected restart response=%+v", restart)
+	}
+	if restart.State.TerminationReason != "" || restart.State.ClassificationCount != 0 {
+		t.Fatalf("expected restart to clear process diagnostics, got %+v", restart.State)
 	}
 }

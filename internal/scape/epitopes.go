@@ -60,19 +60,36 @@ type EpitopesSimParameters struct {
 
 // EpitopesSimState captures the current simulator window/index state.
 type EpitopesSimState struct {
-	TableName    string
-	OpMode       string
-	StartIndex   int
-	EndIndex     int
-	IndexCurrent int
-	Halted       bool
+	TableName           string
+	OpMode              string
+	StartIndex          int
+	EndIndex            int
+	IndexCurrent        int
+	Halted              bool
+	TerminationReason   string
+	LastClassifiedIndex int
+	LastPredictedClass  int
+	LastExpectedClass   int
+	LastReward          int
+	LastMargin          float64
+	ClassificationCount int
+	CorrectCount        int
+	Accuracy            float64
 }
 
 // EpitopesSimulator mirrors epitopes:sim sense/classify sequencing in Go form.
 type EpitopesSimulator struct {
-	opMode  string
-	table   epitopesTable
-	session *epitopesSession
+	opMode              string
+	table               epitopesTable
+	session             *epitopesSession
+	terminationReason   string
+	lastClassifiedIndex int
+	lastPredictedClass  int
+	lastExpectedClass   int
+	lastReward          int
+	lastMargin          float64
+	classificationCount int
+	correctCount        int
 }
 
 // EpitopesTableDB mirrors epitopes:start()/db() lifecycle semantics:
@@ -242,6 +259,7 @@ func (s *EpitopesSimulator) Sense() ([]float64, error) {
 	if s.session.halted {
 		s.session.halted = false
 		s.session.indexCurrent = 0
+		s.resetDiagnostics()
 	}
 	percept, _, _, err := s.session.sense()
 	if err != nil {
@@ -256,7 +274,27 @@ func (s *EpitopesSimulator) Classify(output []float64) (reward int, halt bool, e
 		return 0, false, fmt.Errorf("epitopes simulator is not initialized")
 	}
 	prediction := epitopesOutputToBinary(output)
+	classifiedIndex := s.session.indexCurrent
 	reward, halt, _, err = s.session.classify(prediction)
+	if err != nil {
+		return reward, halt, err
+	}
+	row, rowErr := s.table.rowAt(classifiedIndex)
+	if rowErr != nil {
+		return reward, halt, rowErr
+	}
+	s.classificationCount++
+	if reward == 1 {
+		s.correctCount++
+	}
+	s.lastClassifiedIndex = classifiedIndex
+	s.lastPredictedClass = prediction
+	s.lastExpectedClass = row.classification
+	s.lastReward = reward
+	s.lastMargin = epitopesBinaryToSigned(prediction) * epitopesBinaryToSigned(row.classification)
+	if halt {
+		s.terminationReason = "end_index"
+	}
 	return reward, halt, err
 }
 
@@ -265,14 +303,38 @@ func (s *EpitopesSimulator) State() EpitopesSimState {
 	if s == nil || s.session == nil {
 		return EpitopesSimState{}
 	}
-	return EpitopesSimState{
-		TableName:    s.table.name,
-		OpMode:       s.opMode,
-		StartIndex:   s.session.startIndex,
-		EndIndex:     s.session.endIndex,
-		IndexCurrent: s.session.indexCurrent,
-		Halted:       s.session.halted,
+	accuracy := 0.0
+	if s.classificationCount > 0 {
+		accuracy = float64(s.correctCount) / float64(s.classificationCount)
 	}
+	return EpitopesSimState{
+		TableName:           s.table.name,
+		OpMode:              s.opMode,
+		StartIndex:          s.session.startIndex,
+		EndIndex:            s.session.endIndex,
+		IndexCurrent:        s.session.indexCurrent,
+		Halted:              s.session.halted,
+		TerminationReason:   s.terminationReason,
+		LastClassifiedIndex: s.lastClassifiedIndex,
+		LastPredictedClass:  s.lastPredictedClass,
+		LastExpectedClass:   s.lastExpectedClass,
+		LastReward:          s.lastReward,
+		LastMargin:          s.lastMargin,
+		ClassificationCount: s.classificationCount,
+		CorrectCount:        s.correctCount,
+		Accuracy:            accuracy,
+	}
+}
+
+func (s *EpitopesSimulator) resetDiagnostics() {
+	s.terminationReason = ""
+	s.lastClassifiedIndex = 0
+	s.lastPredictedClass = 0
+	s.lastExpectedClass = 0
+	s.lastReward = 0
+	s.lastMargin = 0
+	s.classificationCount = 0
+	s.correctCount = 0
 }
 
 var defaultEpitopesTableSpecs = []struct {

@@ -116,6 +116,7 @@ func (p *EpitopesProcess) stop(reason string) EpitopesResponse {
 	p.stopReason = reason
 	p.stopped = true
 	p.sim.session.halted = true
+	p.sim.terminationReason = reason
 	return EpitopesResponse{OK: true, End: true, State: p.sim.State(), StopReason: reason}
 }
 
