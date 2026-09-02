@@ -236,13 +236,16 @@ func TestXORSimulatorSensePredictAndReset(t *testing.T) {
 	if state.CaseIndex != 0 || state.ErrAcc != 0 || state.LastSSE != 0 || state.LastFitness < 1000 || len(state.Predictions) != 0 {
 		t.Fatalf("unexpected terminal reset state: %+v", state)
 	}
+	if state.TerminationReason != "completed" {
+		t.Fatalf("expected completed terminal reason, got %+v", state)
+	}
 
 	if _, _, err := sim.Predict(context.Background(), []float64{}); err == nil {
 		t.Fatal("expected empty prediction error")
 	}
 	sim.Reset()
 	state = sim.State()
-	if state.CaseIndex != 0 || state.LastFitness != 0 || state.LastSSE != 0 {
+	if state.CaseIndex != 0 || state.LastFitness != 0 || state.LastSSE != 0 || state.TerminationReason != "" {
 		t.Fatalf("unexpected reset state: %+v", state)
 	}
 }
@@ -290,6 +293,9 @@ func TestXORProcessCommandWrapper(t *testing.T) {
 	if stop.StopReason != "normal" {
 		t.Fatalf("unexpected stop response=%+v", stop)
 	}
+	if stop.State.TerminationReason != "normal" {
+		t.Fatalf("expected stop reason in state, got %+v", stop.State)
+	}
 	if response := process.Call(ctx, XORSenseMessage{}); response.Err == nil {
 		t.Fatal("expected sense after stop to fail")
 	}
@@ -300,5 +306,8 @@ func TestXORProcessCommandWrapper(t *testing.T) {
 	}
 	if restart.State.CaseIndex != 0 || restart.State.Mode != "validation" {
 		t.Fatalf("unexpected restart response=%+v", restart)
+	}
+	if restart.State.TerminationReason != "" {
+		t.Fatalf("expected restart to clear terminal reason, got %+v", restart.State)
 	}
 }

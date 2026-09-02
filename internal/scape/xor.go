@@ -16,22 +16,24 @@ type StepAgent interface {
 type XORScape struct{}
 
 type XORSimulator struct {
-	cfg         xorModeConfig
-	caseIndex   int
-	errAcc      float64
-	predictions []float64
-	lastSSE     float64
-	lastFitness Fitness
+	cfg               xorModeConfig
+	caseIndex         int
+	errAcc            float64
+	predictions       []float64
+	lastSSE           float64
+	lastFitness       Fitness
+	terminationReason string
 }
 
 type XORSimulatorState struct {
-	Mode        string
-	CaseIndex   int
-	Cases       int
-	ErrAcc      float64
-	LastSSE     float64
-	LastFitness Fitness
-	Predictions []float64
+	Mode              string
+	CaseIndex         int
+	Cases             int
+	ErrAcc            float64
+	LastSSE           float64
+	LastFitness       Fitness
+	TerminationReason string
+	Predictions       []float64
 }
 
 func (XORScape) Name() string {
@@ -112,6 +114,7 @@ func (s *XORSimulator) Predict(ctx context.Context, output []float64) (Fitness, 
 
 	s.lastSSE = s.errAcc
 	s.lastFitness = Fitness(1.0 / (s.lastSSE + 0.000001))
+	s.terminationReason = "completed"
 	s.caseIndex = 0
 	s.errAcc = 0
 	s.predictions = s.predictions[:0]
@@ -127,6 +130,7 @@ func (s *XORSimulator) Reset() {
 	s.predictions = s.predictions[:0]
 	s.lastSSE = 0
 	s.lastFitness = 0
+	s.terminationReason = ""
 }
 
 func (s *XORSimulator) State() XORSimulatorState {
@@ -134,13 +138,14 @@ func (s *XORSimulator) State() XORSimulatorState {
 		return XORSimulatorState{}
 	}
 	return XORSimulatorState{
-		Mode:        s.cfg.mode,
-		CaseIndex:   s.caseIndex,
-		Cases:       len(s.cfg.cases),
-		ErrAcc:      s.errAcc,
-		LastSSE:     s.lastSSE,
-		LastFitness: s.lastFitness,
-		Predictions: append([]float64(nil), s.predictions...),
+		Mode:              s.cfg.mode,
+		CaseIndex:         s.caseIndex,
+		Cases:             len(s.cfg.cases),
+		ErrAcc:            s.errAcc,
+		LastSSE:           s.lastSSE,
+		LastFitness:       s.lastFitness,
+		TerminationReason: s.terminationReason,
+		Predictions:       append([]float64(nil), s.predictions...),
 	}
 }
 

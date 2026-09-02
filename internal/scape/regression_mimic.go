@@ -12,22 +12,24 @@ import (
 type RegressionMimicScape struct{}
 
 type RegressionMimicSimulator struct {
-	cfg         regressionModeConfig
-	sampleIndex int
-	errAcc      float64
-	predictions []float64
-	lastMSE     float64
-	lastFitness Fitness
+	cfg               regressionModeConfig
+	sampleIndex       int
+	errAcc            float64
+	predictions       []float64
+	lastMSE           float64
+	lastFitness       Fitness
+	terminationReason string
 }
 
 type RegressionMimicSimulatorState struct {
-	Mode        string
-	SampleIndex int
-	Samples     int
-	ErrAcc      float64
-	LastMSE     float64
-	LastFitness Fitness
-	Predictions []float64
+	Mode              string
+	SampleIndex       int
+	Samples           int
+	ErrAcc            float64
+	LastMSE           float64
+	LastFitness       Fitness
+	TerminationReason string
+	Predictions       []float64
 }
 
 func (RegressionMimicScape) Name() string {
@@ -108,6 +110,7 @@ func (s *RegressionMimicSimulator) Predict(ctx context.Context, output []float64
 
 	s.lastMSE = s.errAcc / float64(len(s.cfg.inputs))
 	s.lastFitness = Fitness(1.0 - s.lastMSE)
+	s.terminationReason = "completed"
 	s.sampleIndex = 0
 	s.errAcc = 0
 	s.predictions = s.predictions[:0]
@@ -123,6 +126,7 @@ func (s *RegressionMimicSimulator) Reset() {
 	s.predictions = s.predictions[:0]
 	s.lastMSE = 0
 	s.lastFitness = 0
+	s.terminationReason = ""
 }
 
 func (s *RegressionMimicSimulator) State() RegressionMimicSimulatorState {
@@ -130,13 +134,14 @@ func (s *RegressionMimicSimulator) State() RegressionMimicSimulatorState {
 		return RegressionMimicSimulatorState{}
 	}
 	return RegressionMimicSimulatorState{
-		Mode:        s.cfg.mode,
-		SampleIndex: s.sampleIndex,
-		Samples:     len(s.cfg.inputs),
-		ErrAcc:      s.errAcc,
-		LastMSE:     s.lastMSE,
-		LastFitness: s.lastFitness,
-		Predictions: append([]float64(nil), s.predictions...),
+		Mode:              s.cfg.mode,
+		SampleIndex:       s.sampleIndex,
+		Samples:           len(s.cfg.inputs),
+		ErrAcc:            s.errAcc,
+		LastMSE:           s.lastMSE,
+		LastFitness:       s.lastFitness,
+		TerminationReason: s.terminationReason,
+		Predictions:       append([]float64(nil), s.predictions...),
 	}
 }
 

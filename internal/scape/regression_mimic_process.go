@@ -112,6 +112,7 @@ func (p *RegressionMimicProcess) stop(reason string) RegressionMimicResponse {
 	}
 	p.stopped = true
 	p.stopReason = reason
+	p.sim.terminationReason = reason
 	return RegressionMimicResponse{OK: true, End: true, State: p.sim.State(), StopReason: reason}
 }
 

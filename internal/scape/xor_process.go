@@ -112,6 +112,7 @@ func (p *XORProcess) stop(reason string) XORResponse {
 	}
 	p.stopped = true
 	p.stopReason = reason
+	p.sim.terminationReason = reason
 	return XORResponse{OK: true, End: true, State: p.sim.State(), StopReason: reason}
 }
 
