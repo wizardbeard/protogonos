@@ -12,6 +12,36 @@ import (
 // CartPoleLiteScape is a simplified 1D balancing control task.
 type CartPoleLiteScape struct{}
 
+type CartPoleLiteSimulator struct {
+	cfg               cartPoleLiteModeConfig
+	episodeIndex      int
+	stepIndex         int
+	position          float64
+	velocity          float64
+	totalReward       float64
+	stepsSurvived     int
+	lastStepReward    float64
+	lastFitness       Fitness
+	halted            bool
+	terminationReason string
+}
+
+type CartPoleLiteSimulatorState struct {
+	Mode              string
+	EpisodeIndex      int
+	Episodes          int
+	StepIndex         int
+	StepsPerEpisode   int
+	Position          float64
+	Velocity          float64
+	TotalReward       float64
+	StepsSurvived     int
+	LastStepReward    float64
+	LastFitness       Fitness
+	Halted            bool
+	TerminationReason string
+}
+
 func (CartPoleLiteScape) Name() string {
 	return "cart-pole-lite"
 }
@@ -38,6 +68,118 @@ func (CartPoleLiteScape) EvaluateMode(ctx context.Context, agent Agent, mode str
 		return 0, nil, fmt.Errorf("agent %s does not implement step runner", agent.ID())
 	}
 	return evaluateCartPoleLiteWithStep(ctx, runner, cfg)
+}
+
+func NewCartPoleLiteSimulator(mode string) (*CartPoleLiteSimulator, error) {
+	cfg, err := cartPoleLiteConfigForMode(mode)
+	if err != nil {
+		return nil, err
+	}
+	sim := &CartPoleLiteSimulator{cfg: cfg}
+	sim.Reset()
+	return sim, nil
+}
+
+func (s *CartPoleLiteSimulator) Sense(ctx context.Context) ([]float64, error) {
+	if s == nil {
+		return nil, fmt.Errorf("cart-pole-lite simulator is nil")
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	if s.halted {
+		return nil, fmt.Errorf("cart-pole-lite simulator halted")
+	}
+	return []float64{s.position, s.velocity}, nil
+}
+
+func (s *CartPoleLiteSimulator) Push(ctx context.Context, output []float64) (Fitness, bool, error) {
+	if s == nil {
+		return 0, false, fmt.Errorf("cart-pole-lite simulator is nil")
+	}
+	if err := ctx.Err(); err != nil {
+		return 0, false, err
+	}
+	if s.halted {
+		return s.lastFitness, true, nil
+	}
+
+	force := 0.0
+	if len(output) > 0 {
+		force = output[0]
+	}
+
+	var reward float64
+	s.position, s.velocity, reward = cartPoleLiteStep(s.position, s.velocity, force)
+	s.totalReward += reward
+	s.stepsSurvived++
+	s.stepIndex++
+	s.lastStepReward = reward
+
+	reason := ""
+	if math.Abs(s.position) > 2.0 {
+		reason = "out_of_bounds"
+	} else if s.stepIndex >= s.cfg.stepsPerEpisode {
+		reason = "episode_limit"
+	}
+	if reason == "" {
+		return Fitness(reward), false, nil
+	}
+
+	if s.episodeIndex+1 < len(s.cfg.startPositions) {
+		s.episodeIndex++
+		s.stepIndex = 0
+		s.position = s.cfg.startPositions[s.episodeIndex]
+		s.velocity = 0
+		return Fitness(reward), false, nil
+	}
+
+	s.halted = true
+	s.terminationReason = reason
+	if s.stepsSurvived > 0 {
+		s.lastFitness = Fitness(s.totalReward / float64(s.stepsSurvived))
+	}
+	return s.lastFitness, true, nil
+}
+
+func (s *CartPoleLiteSimulator) Reset() {
+	if s == nil {
+		return
+	}
+	s.episodeIndex = 0
+	s.stepIndex = 0
+	s.position = 0
+	if len(s.cfg.startPositions) > 0 {
+		s.position = s.cfg.startPositions[0]
+	}
+	s.velocity = 0
+	s.totalReward = 0
+	s.stepsSurvived = 0
+	s.lastStepReward = 0
+	s.lastFitness = 0
+	s.halted = false
+	s.terminationReason = ""
+}
+
+func (s *CartPoleLiteSimulator) State() CartPoleLiteSimulatorState {
+	if s == nil {
+		return CartPoleLiteSimulatorState{}
+	}
+	return CartPoleLiteSimulatorState{
+		Mode:              s.cfg.mode,
+		EpisodeIndex:      s.episodeIndex,
+		Episodes:          len(s.cfg.startPositions),
+		StepIndex:         s.stepIndex,
+		StepsPerEpisode:   s.cfg.stepsPerEpisode,
+		Position:          s.position,
+		Velocity:          s.velocity,
+		TotalReward:       s.totalReward,
+		StepsSurvived:     s.stepsSurvived,
+		LastStepReward:    s.lastStepReward,
+		LastFitness:       s.lastFitness,
+		Halted:            s.halted,
+		TerminationReason: s.terminationReason,
+	}
 }
 
 type cartPoleLiteModeConfig struct {

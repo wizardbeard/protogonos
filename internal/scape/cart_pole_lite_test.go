@@ -162,3 +162,106 @@ func TestCartPoleLiteScapeEvaluateModeAnnotatesMode(t *testing.T) {
 		t.Fatalf("expected test mode trace marker, got %+v", testTrace)
 	}
 }
+
+func TestCartPoleLiteSimulatorSensePushStateAndReset(t *testing.T) {
+	sim, err := NewCartPoleLiteSimulator("validation")
+	if err != nil {
+		t.Fatalf("new simulator: %v", err)
+	}
+
+	state := sim.State()
+	if state.Mode != "validation" || state.Episodes != 4 || state.StepsPerEpisode != 48 {
+		t.Fatalf("unexpected initial state: %+v", state)
+	}
+	if state.Position != -1.0 || state.Velocity != 0 {
+		t.Fatalf("unexpected initial observation: %+v", state)
+	}
+
+	percept, err := sim.Sense(context.Background())
+	if err != nil {
+		t.Fatalf("sense: %v", err)
+	}
+	if len(percept) != 2 || percept[0] != -1.0 || percept[1] != 0 {
+		t.Fatalf("unexpected percept: %v", percept)
+	}
+
+	fitness, end, err := sim.Push(context.Background(), []float64{0})
+	if err != nil {
+		t.Fatalf("push: %v", err)
+	}
+	if end {
+		t.Fatalf("expected first push to continue")
+	}
+	if fitness <= 0 {
+		t.Fatalf("expected positive step fitness, got %f", fitness)
+	}
+	state = sim.State()
+	if state.StepsSurvived != 1 || state.LastStepReward <= 0 || state.TotalReward <= 0 {
+		t.Fatalf("unexpected post-push state: %+v", state)
+	}
+
+	sim.Reset()
+	state = sim.State()
+	if state.StepsSurvived != 0 || state.StepIndex != 0 || state.Position != -1.0 || state.Halted {
+		t.Fatalf("unexpected reset state: %+v", state)
+	}
+
+	for !end {
+		fitness, end, err = sim.Push(context.Background(), []float64{0})
+		if err != nil {
+			t.Fatalf("push to completion: %v", err)
+		}
+	}
+	state = sim.State()
+	if !state.Halted || state.TerminationReason == "" {
+		t.Fatalf("expected terminal state with reason: %+v", state)
+	}
+	if fitness <= 0 || state.LastFitness != fitness {
+		t.Fatalf("expected final averaged fitness, got fitness=%f state=%+v", fitness, state)
+	}
+}
+
+func TestCartPoleLiteProcessCommandWrapper(t *testing.T) {
+	process := NewCartPoleLiteProcess()
+	ctx := context.Background()
+
+	start := process.Call(ctx, CartPoleLiteStartMessage{Mode: "test"})
+	if start.Err != nil || !start.OK {
+		t.Fatalf("start failed: %+v", start)
+	}
+	if start.State.Mode != "test" || start.State.Episodes != 5 {
+		t.Fatalf("unexpected start state: %+v", start.State)
+	}
+
+	sense := process.Call(ctx, CartPoleLiteSenseMessage{})
+	if sense.Err != nil || !sense.OK {
+		t.Fatalf("sense failed: %+v", sense)
+	}
+	if len(sense.Percept) != 2 {
+		t.Fatalf("unexpected percept width: %v", sense.Percept)
+	}
+
+	push := process.Call(ctx, CartPoleLitePushMessage{Output: []float64{0.25}})
+	if push.Err != nil || !push.OK || push.End {
+		t.Fatalf("push failed or ended early: %+v", push)
+	}
+	if push.Fitness <= 0 || push.State.StepsSurvived != 1 {
+		t.Fatalf("unexpected push response: %+v", push)
+	}
+
+	restart := process.Call(ctx, CartPoleLiteRestartMessage{})
+	if restart.Err != nil || !restart.OK {
+		t.Fatalf("restart failed: %+v", restart)
+	}
+	if restart.State.StepsSurvived != 0 || restart.State.Position != -1.2 {
+		t.Fatalf("unexpected restart state: %+v", restart.State)
+	}
+
+	stop := process.Call(ctx, CartPoleLiteStopMessage{Reason: "done"})
+	if stop.Err != nil || !stop.OK || !stop.End || stop.StopReason != "done" {
+		t.Fatalf("stop failed: %+v", stop)
+	}
+	if !stop.State.Halted || stop.State.TerminationReason != "done" {
+		t.Fatalf("unexpected stopped state: %+v", stop.State)
+	}
+}
