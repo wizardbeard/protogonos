@@ -609,6 +609,123 @@ func TestGTSAProcessCommandWrapper(t *testing.T) {
 	}
 }
 
+func TestGTSAProcessIOAdaptersUseSharedScapeSession(t *testing.T) {
+	sensorIDs := []string{
+		protoio.GTSAInputSensorName,
+		protoio.GTSADeltaSensorName,
+		protoio.GTSAWindowMeanSensorName,
+		protoio.GTSAProgressSensorName,
+	}
+	sensors, actuators, err := NewGTSAProcessIO("gt", sensorIDs, []string{protoio.GTSAPredictActuatorName})
+	if err != nil {
+		t.Fatalf("new gtsa process io: %v", err)
+	}
+
+	ctx := context.Background()
+	values := make(map[string]float64, len(sensorIDs))
+	for _, sensorID := range sensorIDs {
+		reader, ok := sensors[sensorID].(protoio.SensorProcessReader)
+		if !ok {
+			t.Fatalf("sensor %s does not implement SensorProcessReader: %T", sensorID, sensors[sensorID])
+		}
+		value, err := reader.ReadForSensorProcess(ctx, protoio.SensorProcessCall{
+			Scape:      "gtsa",
+			SensorName: protoio.GeneralPredictorSensorAliasName,
+			VL:         1,
+			OpMode:     "gt",
+		})
+		if err != nil {
+			t.Fatalf("read %s: %v", sensorID, err)
+		}
+		if len(value) != 1 {
+			t.Fatalf("expected scalar value for %s, got %v", sensorID, value)
+		}
+		values[sensorID] = value[0]
+	}
+	if values[protoio.GTSAInputSensorName] == 0 {
+		t.Fatalf("expected non-zero default gtsa input, got values=%+v", values)
+	}
+
+	writer, ok := actuators[protoio.GTSAPredictActuatorName].(protoio.ActuatorProcessWriter)
+	if !ok {
+		t.Fatalf("predict actuator does not implement ActuatorProcessWriter: %T", actuators[protoio.GTSAPredictActuatorName])
+	}
+	sync, err := writer.WriteForActuatorProcess(ctx, protoio.ActuatorProcessCall{
+		Scape:        "gtsa",
+		ActuatorName: protoio.GeneralPredictorActuatorAliasName,
+		Output:       []float64{values[protoio.GTSAInputSensorName]},
+		OpMode:       "gt",
+	})
+	if err != nil {
+		t.Fatalf("write prediction: %v", err)
+	}
+	if sync.EndFlag != 0 || len(sync.Fitness) != 1 || sync.Fitness[0] <= 0 {
+		t.Fatalf("expected non-terminal positive-fitness prediction sync, got %+v", sync)
+	}
+}
+
+func TestGTSAScapeEvaluateWithActorProcessIO(t *testing.T) {
+	genome := model.Genome{
+		SensorIDs: []string{
+			protoio.GTSAInputSensorName,
+			protoio.GTSADeltaSensorName,
+			protoio.GTSAWindowMeanSensorName,
+			protoio.GTSAProgressSensorName,
+		},
+		ActuatorIDs: []string{protoio.GTSAPredictActuatorName},
+		Neurons: []model.Neuron{
+			{ID: "input", Activation: "identity"},
+			{ID: "delta", Activation: "identity"},
+			{ID: "mean", Activation: "identity"},
+			{ID: "progress", Activation: "identity"},
+			{ID: "predict", Activation: "identity"},
+		},
+		Synapses: []model.Synapse{
+			{From: "input", To: "predict", Weight: 0.7, Enabled: true},
+			{From: "delta", To: "predict", Weight: 0.2, Enabled: true},
+			{From: "mean", To: "predict", Weight: 0.2, Enabled: true},
+			{From: "progress", To: "predict", Weight: -0.1, Enabled: true},
+		},
+	}
+
+	sensors, actuators, err := NewGTSAProcessIO("gt", genome.SensorIDs, genome.ActuatorIDs)
+	if err != nil {
+		t.Fatalf("new gtsa process io: %v", err)
+	}
+	cortex, err := agent.NewCortex(
+		"gtsa-agent-actor-process-io",
+		genome,
+		sensors,
+		actuators,
+		[]string{"input", "delta", "mean", "progress"},
+		[]string{"predict"},
+		nil,
+		agent.WithIOProcessContext("gtsa", "gt"),
+		agent.WithIOActors(),
+	)
+	if err != nil {
+		t.Fatalf("new cortex: %v", err)
+	}
+	t.Cleanup(cortex.Terminate)
+
+	fitness, trace, err := GTSAScape{}.EvaluateMode(context.Background(), cortex, "gt")
+	if err != nil {
+		t.Fatalf("evaluate actor process io: %v", err)
+	}
+	if fitness <= 0 {
+		t.Fatalf("expected positive actor-process gtsa fitness, got %f trace=%+v", fitness, trace)
+	}
+	if surface, ok := trace["sensor_surface"].(string); !ok || surface != "extended" {
+		t.Fatalf("expected extended gtsa sensor surface, got %+v", trace)
+	}
+	if width, ok := trace["sensor_width"].(int); !ok || width != 4 {
+		t.Fatalf("expected gtsa sensor_width=4, got %+v", trace)
+	}
+	if surface, ok := trace["control_surface"].(string); !ok || surface != protoio.GTSAPredictActuatorName {
+		t.Fatalf("expected control_surface=%s, got %+v", protoio.GTSAPredictActuatorName, trace)
+	}
+}
+
 func TestGTSAScapeLoadTableCSV(t *testing.T) {
 	ResetGTSATableSource()
 	t.Cleanup(ResetGTSATableSource)
