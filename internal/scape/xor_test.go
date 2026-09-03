@@ -311,3 +311,126 @@ func TestXORProcessCommandWrapper(t *testing.T) {
 		t.Fatalf("expected restart to clear terminal reason, got %+v", restart.State)
 	}
 }
+
+func TestXORProcessIOAdaptersUseSharedScapeSession(t *testing.T) {
+	sensors, actuators, err := NewXORProcessIO(
+		"gt",
+		[]string{protoio.XORInputLeftSensorName, protoio.XORInputRightSensorName},
+		[]string{protoio.XOROutputActuatorName},
+	)
+	if err != nil {
+		t.Fatalf("new xor process io: %v", err)
+	}
+
+	left, ok := sensors[protoio.XORInputLeftSensorName].(protoio.SensorProcessReader)
+	if !ok {
+		t.Fatalf("left sensor does not implement SensorProcessReader: %T", sensors[protoio.XORInputLeftSensorName])
+	}
+	right, ok := sensors[protoio.XORInputRightSensorName].(protoio.SensorProcessReader)
+	if !ok {
+		t.Fatalf("right sensor does not implement SensorProcessReader: %T", sensors[protoio.XORInputRightSensorName])
+	}
+	output, ok := actuators[protoio.XOROutputActuatorName].(protoio.ActuatorProcessWriter)
+	if !ok {
+		t.Fatalf("output actuator does not implement ActuatorProcessWriter: %T", actuators[protoio.XOROutputActuatorName])
+	}
+
+	ctx := context.Background()
+	for i, want := range []float64{0, 1, 1, 0} {
+		leftValue, err := left.ReadForSensorProcess(ctx, protoio.SensorProcessCall{
+			Scape:      "xor",
+			SensorName: protoio.XORGetInputSensorAliasName,
+			VL:         1,
+			OpMode:     "gt",
+		})
+		if err != nil {
+			t.Fatalf("left read %d: %v", i, err)
+		}
+		rightValue, err := right.ReadForSensorProcess(ctx, protoio.SensorProcessCall{
+			Scape:      "xor",
+			SensorName: protoio.XORGetInputSensorAliasName,
+			VL:         1,
+			OpMode:     "gt",
+		})
+		if err != nil {
+			t.Fatalf("right read %d: %v", i, err)
+		}
+		if len(leftValue) != 1 || len(rightValue) != 1 {
+			t.Fatalf("expected scalar percepts at %d, left=%v right=%v", i, leftValue, rightValue)
+		}
+
+		sync, err := output.WriteForActuatorProcess(ctx, protoio.ActuatorProcessCall{
+			Scape:        "xor",
+			ActuatorName: protoio.XORSendOutputActuatorAliasName,
+			Output:       []float64{want},
+			OpMode:       "gt",
+		})
+		if err != nil {
+			t.Fatalf("write %d: %v", i, err)
+		}
+		if i < 3 {
+			if sync.EndFlag != 0 || len(sync.Fitness) != 1 || sync.Fitness[0] != 0 {
+				t.Fatalf("expected non-terminal sync at %d, got %+v", i, sync)
+			}
+			continue
+		}
+		if sync.EndFlag != 1 || len(sync.Fitness) != 1 || sync.Fitness[0] < 1000 {
+			t.Fatalf("expected terminal high-fitness sync, got %+v", sync)
+		}
+	}
+}
+
+func TestXORScapeEvaluateWithActorProcessIO(t *testing.T) {
+	genome := model.Genome{
+		SensorIDs:   []string{protoio.XORInputLeftSensorName, protoio.XORInputRightSensorName},
+		ActuatorIDs: []string{protoio.XOROutputActuatorName},
+		Neurons: []model.Neuron{
+			{ID: "i1", Activation: "identity"},
+			{ID: "i2", Activation: "identity"},
+			{ID: "h1", Activation: "sigmoid", Bias: -10},
+			{ID: "h2", Activation: "sigmoid", Bias: 30},
+			{ID: "o", Activation: "sigmoid", Bias: -30},
+		},
+		Synapses: []model.Synapse{
+			{From: "i1", To: "h1", Weight: 20, Enabled: true},
+			{From: "i2", To: "h1", Weight: 20, Enabled: true},
+			{From: "i1", To: "h2", Weight: -20, Enabled: true},
+			{From: "i2", To: "h2", Weight: -20, Enabled: true},
+			{From: "h1", To: "o", Weight: 20, Enabled: true},
+			{From: "h2", To: "o", Weight: 20, Enabled: true},
+		},
+	}
+
+	sensors, actuators, err := NewXORProcessIO("gt", genome.SensorIDs, genome.ActuatorIDs)
+	if err != nil {
+		t.Fatalf("new xor process io: %v", err)
+	}
+	cortex, err := agent.NewCortex(
+		"xor-agent-actor-process-io",
+		genome,
+		sensors,
+		actuators,
+		[]string{"i1", "i2"},
+		[]string{"o"},
+		nil,
+		agent.WithIOProcessContext("xor", "gt"),
+		agent.WithIOActors(),
+	)
+	if err != nil {
+		t.Fatalf("new cortex: %v", err)
+	}
+	t.Cleanup(func() {
+		cortex.Terminate()
+	})
+
+	fitness, trace, err := XORScape{}.EvaluateMode(context.Background(), cortex, "gt")
+	if err != nil {
+		t.Fatalf("evaluate actor process io: %v", err)
+	}
+	if cases, ok := trace["cases"].(int); !ok || cases != 4 {
+		t.Fatalf("expected 4 xor cases, got trace=%+v", trace)
+	}
+	if fitness < 1000 {
+		t.Fatalf("expected high actor-process xor fitness, got %f trace=%+v", fitness, trace)
+	}
+}

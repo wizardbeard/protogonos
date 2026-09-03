@@ -1871,10 +1871,12 @@ func (m *PopulationMonitor) buildCortex(genome model.Genome) (*agent.Cortex, err
 	if err != nil {
 		return nil, err
 	}
-	options, err := agent.OptionsForIOExecution(m.cfg.IOExecution)
+	ioOptions, err := agent.OptionsForIOExecution(m.cfg.IOExecution)
 	if err != nil {
 		return nil, err
 	}
+	options := []agent.CortexOption{agent.WithIOProcessContext(m.cfg.Scape.Name(), m.cfg.OpMode)}
+	options = append(options, ioOptions...)
 
 	cortex, err := agent.NewCortex(
 		genome.ID,
@@ -1956,6 +1958,9 @@ func traceGoalReached(trace scape.Trace) bool {
 
 func (m *PopulationMonitor) buildIO(genome model.Genome) (map[string]protoio.Sensor, map[string]protoio.Actuator, error) {
 	scapeName := m.cfg.Scape.Name()
+	if scape.UsesReferenceXORIO(scapeName, m.cfg.IOExecution) {
+		return scape.NewXORProcessIO(m.cfg.OpMode, genome.SensorIDs, genome.ActuatorIDs)
+	}
 
 	var sensors map[string]protoio.Sensor
 	if len(genome.SensorIDs) > 0 {

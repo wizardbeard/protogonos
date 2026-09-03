@@ -70,6 +70,8 @@ type Cortex struct {
 	sensorActors      map[string]*protoio.SensorActor
 	actuatorActors    map[string]*protoio.ActuatorActor
 	actuatorActorSync []protoio.ActuatorSyncMessage
+	ioScapeName       string
+	ioOpMode          string
 	inputNeuronIDs    []string
 	outputNeuronIDs   []string
 	substrate         substrate.Runtime
@@ -90,6 +92,14 @@ func WithIOProcesses() CortexOption {
 func WithIOActors() CortexOption {
 	return func(c *Cortex) error {
 		return c.enableIOActors()
+	}
+}
+
+func WithIOProcessContext(scapeName string, opMode string) CortexOption {
+	return func(c *Cortex) error {
+		c.ioScapeName = strings.TrimSpace(scapeName)
+		c.ioOpMode = strings.TrimSpace(opMode)
+		return nil
 	}
 }
 
@@ -225,7 +235,15 @@ func (c *Cortex) enableIOProcesses() error {
 		if !ok {
 			return fmt.Errorf("sensor not registered: %s", sensorID)
 		}
-		process, err := protoio.NewSensorProcess(sensorID, c.id, c.id, sensor, 0, nil)
+		process, err := protoio.NewSensorProcessWithState(protoio.SensorInitMessage{
+			ID:         sensorID,
+			FromPID:    c.id,
+			CxPID:      c.id,
+			Scape:      c.ioScapeName,
+			SensorName: sensorID,
+			OpMode:     c.ioOpMode,
+			Sensor:     sensor,
+		})
 		if err != nil {
 			return err
 		}
@@ -239,7 +257,16 @@ func (c *Cortex) enableIOProcesses() error {
 		if !ok {
 			return fmt.Errorf("actuator not registered: %s", actuatorID)
 		}
-		process, err := protoio.NewActuatorProcess(actuatorID, c.id, c.id, actuator, 0, faninByActuator[actuatorID])
+		process, err := protoio.NewActuatorProcessWithState(protoio.ActuatorInitMessage{
+			ID:           actuatorID,
+			FromPID:      c.id,
+			CxPID:        c.id,
+			Scape:        c.ioScapeName,
+			ActuatorName: actuatorID,
+			FaninPIDs:    faninByActuator[actuatorID],
+			OpMode:       c.ioOpMode,
+			Actuator:     actuator,
+		})
 		if err != nil {
 			return err
 		}
@@ -258,7 +285,15 @@ func (c *Cortex) enableIOActors() error {
 		if !ok {
 			return fmt.Errorf("sensor not registered: %s", sensorID)
 		}
-		process, err := protoio.NewSensorProcess(sensorID, c.id, c.id, sensor, 0, nil)
+		process, err := protoio.NewSensorProcessWithState(protoio.SensorInitMessage{
+			ID:         sensorID,
+			FromPID:    c.id,
+			CxPID:      c.id,
+			Scape:      c.ioScapeName,
+			SensorName: sensorID,
+			OpMode:     c.ioOpMode,
+			Sensor:     sensor,
+		})
 		if err != nil {
 			return err
 		}
@@ -276,7 +311,16 @@ func (c *Cortex) enableIOActors() error {
 		if !ok {
 			return fmt.Errorf("actuator not registered: %s", actuatorID)
 		}
-		process, err := protoio.NewActuatorProcess(actuatorID, c.id, c.id, actuator, 0, faninByActuator[actuatorID])
+		process, err := protoio.NewActuatorProcessWithState(protoio.ActuatorInitMessage{
+			ID:           actuatorID,
+			FromPID:      c.id,
+			CxPID:        c.id,
+			Scape:        c.ioScapeName,
+			ActuatorName: actuatorID,
+			FaninPIDs:    faninByActuator[actuatorID],
+			OpMode:       c.ioOpMode,
+			Actuator:     actuator,
+		})
 		if err != nil {
 			return err
 		}
