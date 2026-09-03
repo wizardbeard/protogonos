@@ -20,6 +20,23 @@ func (s scriptedSensor) Read(context.Context) ([]float64, error) {
 	return append([]float64(nil), s.values...), s.err
 }
 
+type processAwareSensor struct {
+	call SensorProcessCall
+}
+
+func (s *processAwareSensor) Name() string {
+	return "process-aware"
+}
+
+func (s *processAwareSensor) Read(context.Context) ([]float64, error) {
+	return nil, errors.New("direct read should not be used")
+}
+
+func (s *processAwareSensor) ReadForSensorProcess(_ context.Context, call SensorProcessCall) ([]float64, error) {
+	s.call = call
+	return []float64{float64(call.VL)}, nil
+}
+
 type captureSensorFanout struct {
 	pid     string
 	fromPID string
@@ -58,6 +75,45 @@ func TestSensorProcessSyncForwardsVector(t *testing.T) {
 	}
 	if !reflect.DeepEqual(target.values, []float64{0.25, 0.75}) {
 		t.Fatalf("fanout values = %v, want [0.25 0.75]", target.values)
+	}
+}
+
+func TestSensorProcessUsesProcessAwareReader(t *testing.T) {
+	sensor := &processAwareSensor{}
+	process, err := NewSensorProcessWithState(SensorInitMessage{
+		ID:         "sensor_pid",
+		FromPID:    "exo_pid",
+		CxPID:      "cx_pid",
+		Scape:      "xor",
+		SensorName: "xor_GetInput",
+		VL:         1,
+		Parameters: map[string]float64{"spread": 0.5},
+		OpMode:     "gt",
+		Sensor:     sensor,
+	})
+	if err != nil {
+		t.Fatalf("NewSensorProcessWithState: %v", err)
+	}
+
+	values, err := process.SyncFrom(context.Background(), "cx_pid")
+	if err != nil {
+		t.Fatalf("SyncFrom: %v", err)
+	}
+	if !reflect.DeepEqual(values, []float64{1}) {
+		t.Fatalf("values = %v, want [1]", values)
+	}
+	if sensor.call.ProcessID != "sensor_pid" || sensor.call.ExoSelfPID != "exo_pid" || sensor.call.CortexPID != "cx_pid" {
+		t.Fatalf("unexpected process ids in call: %+v", sensor.call)
+	}
+	if sensor.call.Scape != "xor" || sensor.call.SensorName != "xor_GetInput" || sensor.call.OpMode != "gt" || sensor.call.VL != 1 {
+		t.Fatalf("unexpected call metadata: %+v", sensor.call)
+	}
+	if sensor.call.Parameters["spread"] != 0.5 {
+		t.Fatalf("unexpected call parameters: %+v", sensor.call.Parameters)
+	}
+	sensor.call.Parameters["spread"] = 9
+	if process.parameters["spread"] != 0.5 {
+		t.Fatalf("process parameters were not isolated: %+v", process.parameters)
 	}
 }
 

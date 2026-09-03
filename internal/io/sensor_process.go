@@ -70,6 +70,21 @@ type SensorFanoutTarget interface {
 	ForwardFromSensor(fromPID string, values []float64) error
 }
 
+type SensorProcessCall struct {
+	ProcessID  string
+	ExoSelfPID string
+	CortexPID  string
+	Scape      string
+	SensorName string
+	VL         int
+	Parameters map[string]float64
+	OpMode     string
+}
+
+type SensorProcessReader interface {
+	ReadForSensorProcess(ctx context.Context, call SensorProcessCall) ([]float64, error)
+}
+
 type SensorProcess struct {
 	id           string
 	exoselfPID   string
@@ -177,7 +192,7 @@ func (p *SensorProcess) SyncFrom(ctx context.Context, fromPID string) ([]float64
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	values, err := p.sensor.Read(ctx)
+	values, err := p.read(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -186,6 +201,22 @@ func (p *SensorProcess) SyncFrom(ctx context.Context, fromPID string) ([]float64
 		return nil, err
 	}
 	return append([]float64(nil), values...), nil
+}
+
+func (p *SensorProcess) read(ctx context.Context) ([]float64, error) {
+	if reader, ok := p.sensor.(SensorProcessReader); ok {
+		return reader.ReadForSensorProcess(ctx, SensorProcessCall{
+			ProcessID:  p.id,
+			ExoSelfPID: p.exoselfPID,
+			CortexPID:  p.cxPID,
+			Scape:      p.scape,
+			SensorName: p.sensorName,
+			VL:         p.vl,
+			Parameters: cloneSensorFloatMap(p.parameters),
+			OpMode:     p.opMode,
+		})
+	}
+	return p.sensor.Read(ctx)
 }
 
 func (p *SensorProcess) TerminateFrom(fromPID string) error {

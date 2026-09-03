@@ -21,6 +21,23 @@ func (a *captureActuator) Write(_ context.Context, values []float64) error {
 	return a.err
 }
 
+type processAwareActuator struct {
+	call ActuatorProcessCall
+}
+
+func (a *processAwareActuator) Name() string {
+	return "process-aware"
+}
+
+func (a *processAwareActuator) Write(context.Context, []float64) error {
+	return errors.New("direct write should not be used")
+}
+
+func (a *processAwareActuator) WriteForActuatorProcess(_ context.Context, call ActuatorProcessCall) (ActuatorSyncMessage, error) {
+	a.call = call
+	return ActuatorSyncMessage{Fitness: []float64{7}, EndFlag: 1, GoalReached: true}, nil
+}
+
 type feedbackActuator struct {
 	captureActuator
 	feedback ActuatorSyncMessage
@@ -94,6 +111,48 @@ func TestActuatorProcessNormalizesOutputWidth(t *testing.T) {
 	}
 	if !reflect.DeepEqual(actuator.values, []float64{1, 2, 3}) {
 		t.Fatalf("long values = %v, want truncated output", actuator.values)
+	}
+}
+
+func TestActuatorProcessUsesProcessAwareWriter(t *testing.T) {
+	actuator := &processAwareActuator{}
+	process, err := NewActuatorProcessWithState(ActuatorInitMessage{
+		ID:           "actuator_pid",
+		FromPID:      "exo_pid",
+		CxPID:        "cx_pid",
+		Scape:        "xor",
+		ActuatorName: "xor_SendOutput",
+		VL:           2,
+		Parameters:   map[string]float64{"gain": 0.25},
+		OpMode:       "test",
+		Actuator:     actuator,
+	})
+	if err != nil {
+		t.Fatalf("NewActuatorProcessWithState: %v", err)
+	}
+
+	sync, err := process.ForwardFrom(context.Background(), "n1", []float64{0.5})
+	if err != nil {
+		t.Fatalf("ForwardFrom: %v", err)
+	}
+	if sync == nil || sync.FromPID != "actuator_pid" || !reflect.DeepEqual(sync.Fitness, []float64{7}) || sync.EndFlag != 1 || !sync.GoalReached {
+		t.Fatalf("sync = %+v, want process-aware feedback", sync)
+	}
+	if actuator.call.ProcessID != "actuator_pid" || actuator.call.ExoSelfPID != "exo_pid" || actuator.call.CortexPID != "cx_pid" {
+		t.Fatalf("unexpected process ids in call: %+v", actuator.call)
+	}
+	if actuator.call.Scape != "xor" || actuator.call.ActuatorName != "xor_SendOutput" || actuator.call.OpMode != "test" || actuator.call.VL != 2 {
+		t.Fatalf("unexpected call metadata: %+v", actuator.call)
+	}
+	if !reflect.DeepEqual(actuator.call.Output, []float64{0.5, 0}) {
+		t.Fatalf("call output = %v, want padded output [0.5 0]", actuator.call.Output)
+	}
+	if actuator.call.Parameters["gain"] != 0.25 {
+		t.Fatalf("unexpected call parameters: %+v", actuator.call.Parameters)
+	}
+	actuator.call.Parameters["gain"] = 9
+	if process.parameters["gain"] != 0.25 {
+		t.Fatalf("process parameters were not isolated: %+v", process.parameters)
 	}
 }
 

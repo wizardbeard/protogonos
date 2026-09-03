@@ -68,6 +68,22 @@ type ActuatorFeedbackProvider interface {
 	ConsumeActuatorFeedback() (ActuatorSyncMessage, bool)
 }
 
+type ActuatorProcessCall struct {
+	ProcessID    string
+	ExoSelfPID   string
+	CortexPID    string
+	Scape        string
+	ActuatorName string
+	VL           int
+	Parameters   map[string]float64
+	OpMode       string
+	Output       []float64
+}
+
+type ActuatorProcessWriter interface {
+	WriteForActuatorProcess(ctx context.Context, call ActuatorProcessCall) (ActuatorSyncMessage, error)
+}
+
 type ActuatorProcess struct {
 	id           string
 	exoselfPID   string
@@ -215,6 +231,36 @@ func (p *ActuatorProcess) nextFaninPID() (string, bool) {
 
 func (p *ActuatorProcess) flush(ctx context.Context) (*ActuatorSyncMessage, error) {
 	output := p.normalizedOutput()
+	sync, err := p.write(ctx, output)
+	if err != nil {
+		return nil, err
+	}
+	p.acc = nil
+	p.pendingPIDs = append([]string(nil), p.faninPIDs...)
+	p.lastSync = cloneActuatorSync(sync)
+	return cloneActuatorSync(sync), nil
+}
+
+func (p *ActuatorProcess) write(ctx context.Context, output []float64) (*ActuatorSyncMessage, error) {
+	if writer, ok := p.actuator.(ActuatorProcessWriter); ok {
+		feedback, err := writer.WriteForActuatorProcess(ctx, ActuatorProcessCall{
+			ProcessID:    p.id,
+			ExoSelfPID:   p.exoselfPID,
+			CortexPID:    p.cxPID,
+			Scape:        p.scape,
+			ActuatorName: p.actuatorName,
+			VL:           p.vl,
+			Parameters:   cloneActuatorFloatMap(p.parameters),
+			OpMode:       p.opMode,
+			Output:       append([]float64(nil), output...),
+		})
+		if err != nil {
+			return nil, err
+		}
+		feedback.FromPID = p.id
+		feedback.Fitness = append([]float64(nil), feedback.Fitness...)
+		return &feedback, nil
+	}
 	if err := p.actuator.Write(ctx, output); err != nil {
 		return nil, err
 	}
@@ -225,14 +271,6 @@ func (p *ActuatorProcess) flush(ctx context.Context) (*ActuatorSyncMessage, erro
 			sync.EndFlag = feedback.EndFlag
 			sync.GoalReached = feedback.GoalReached
 		}
-	}
-	p.acc = nil
-	p.pendingPIDs = append([]string(nil), p.faninPIDs...)
-	p.lastSync = &ActuatorSyncMessage{
-		FromPID:     sync.FromPID,
-		Fitness:     append([]float64(nil), sync.Fitness...),
-		EndFlag:     sync.EndFlag,
-		GoalReached: sync.GoalReached,
 	}
 	return sync, nil
 }
@@ -383,4 +421,16 @@ func trimActuatorPIDs(in []string) []string {
 		}
 	}
 	return out
+}
+
+func cloneActuatorSync(in *ActuatorSyncMessage) *ActuatorSyncMessage {
+	if in == nil {
+		return nil
+	}
+	return &ActuatorSyncMessage{
+		FromPID:     in.FromPID,
+		Fitness:     append([]float64(nil), in.Fitness...),
+		EndFlag:     in.EndFlag,
+		GoalReached: in.GoalReached,
+	}
 }
