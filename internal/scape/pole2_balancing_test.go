@@ -176,6 +176,61 @@ func TestPole2ProcessCommandWrapper(t *testing.T) {
 	}
 }
 
+func TestPole2ProcessIOAdaptersUseSharedScapeSession(t *testing.T) {
+	sensorIDs := []string{
+		protoio.Pole2CartPositionSensorName,
+		protoio.Pole2CartVelocitySensorName,
+		protoio.Pole2Angle1SensorName,
+		protoio.Pole2Velocity1SensorName,
+		protoio.Pole2Angle2SensorName,
+		protoio.Pole2Velocity2SensorName,
+		protoio.Pole2RunProgressSensorName,
+		protoio.Pole2StepProgressSensorName,
+		protoio.Pole2FitnessSignalSensorName,
+	}
+	sensors, actuators, err := NewPole2ProcessIO("validation", sensorIDs, []string{protoio.Pole2PushActuatorName})
+	if err != nil {
+		t.Fatalf("new pole2 process io: %v", err)
+	}
+
+	ctx := context.Background()
+	for _, sensorID := range sensorIDs {
+		reader, ok := sensors[sensorID].(protoio.SensorProcessReader)
+		if !ok {
+			t.Fatalf("sensor %s does not implement SensorProcessReader: %T", sensorID, sensors[sensorID])
+		}
+		value, err := reader.ReadForSensorProcess(ctx, protoio.SensorProcessCall{
+			Scape:      "pole2-balancing",
+			SensorName: protoio.PBGetInputSensorAliasName,
+			VL:         1,
+			OpMode:     "validation",
+		})
+		if err != nil {
+			t.Fatalf("read %s: %v", sensorID, err)
+		}
+		if len(value) != 1 {
+			t.Fatalf("expected scalar value for %s, got %v", sensorID, value)
+		}
+	}
+
+	writer, ok := actuators[protoio.Pole2PushActuatorName].(protoio.ActuatorProcessWriter)
+	if !ok {
+		t.Fatalf("push actuator does not implement ActuatorProcessWriter: %T", actuators[protoio.Pole2PushActuatorName])
+	}
+	sync, err := writer.WriteForActuatorProcess(ctx, protoio.ActuatorProcessCall{
+		Scape:        "pole2-balancing",
+		ActuatorName: protoio.PBSendOutputActuatorAliasName,
+		Output:       []float64{0.25, -1, -1},
+		OpMode:       "validation",
+	})
+	if err != nil {
+		t.Fatalf("write push: %v", err)
+	}
+	if sync.EndFlag != 0 || len(sync.Fitness) != 1 || sync.Fitness[0] <= 0 {
+		t.Fatalf("expected non-terminal positive-fitness push sync, got %+v", sync)
+	}
+}
+
 func TestPole2BalancingScapeEvaluateWithIOComponents(t *testing.T) {
 	genome := model.Genome{
 		SensorIDs: []string{
@@ -268,6 +323,80 @@ func TestPole2BalancingScapeEvaluateWithIOComponents(t *testing.T) {
 	}
 	if _, ok := trace["mean_fitness_signal"].(float64); !ok {
 		t.Fatalf("expected mean_fitness_signal in trace, got %+v", trace)
+	}
+}
+
+func TestPole2BalancingScapeEvaluateWithActorProcessIO(t *testing.T) {
+	genome := model.Genome{
+		SensorIDs: []string{
+			protoio.Pole2CartPositionSensorName,
+			protoio.Pole2CartVelocitySensorName,
+			protoio.Pole2Angle1SensorName,
+			protoio.Pole2Velocity1SensorName,
+			protoio.Pole2Angle2SensorName,
+			protoio.Pole2Velocity2SensorName,
+			protoio.Pole2RunProgressSensorName,
+			protoio.Pole2StepProgressSensorName,
+			protoio.Pole2FitnessSignalSensorName,
+		},
+		ActuatorIDs: []string{protoio.Pole2PushActuatorName},
+		Neurons: []model.Neuron{
+			{ID: "x", Activation: "identity"},
+			{ID: "v", Activation: "identity"},
+			{ID: "a1", Activation: "identity"},
+			{ID: "w1", Activation: "identity"},
+			{ID: "a2", Activation: "identity"},
+			{ID: "w2", Activation: "identity"},
+			{ID: "rp", Activation: "identity"},
+			{ID: "sp", Activation: "identity"},
+			{ID: "fs", Activation: "identity"},
+			{ID: "f", Activation: "tanh"},
+		},
+		Synapses: []model.Synapse{
+			{From: "x", To: "f", Weight: -0.8, Enabled: true},
+			{From: "v", To: "f", Weight: -0.2, Enabled: true},
+			{From: "a1", To: "f", Weight: -4.5, Enabled: true},
+			{From: "w1", To: "f", Weight: -0.9, Enabled: true},
+			{From: "a2", To: "f", Weight: -6.0, Enabled: true},
+			{From: "w2", To: "f", Weight: -1.1, Enabled: true},
+			{From: "rp", To: "f", Weight: 0.2, Enabled: true},
+			{From: "sp", To: "f", Weight: 0.15, Enabled: true},
+			{From: "fs", To: "f", Weight: 0.25, Enabled: true},
+		},
+	}
+
+	sensors, actuators, err := NewPole2ProcessIO("validation", genome.SensorIDs, genome.ActuatorIDs)
+	if err != nil {
+		t.Fatalf("new pole2 process io: %v", err)
+	}
+	cortex, err := agent.NewCortex(
+		"pole2-agent-actor-process-io",
+		genome,
+		sensors,
+		actuators,
+		[]string{"x", "v", "a1", "w1", "a2", "w2", "rp", "sp", "fs"},
+		[]string{"f"},
+		nil,
+		agent.WithIOProcessContext("pole2-balancing", "validation"),
+		agent.WithIOActors(),
+	)
+	if err != nil {
+		t.Fatalf("new cortex: %v", err)
+	}
+	t.Cleanup(cortex.Terminate)
+
+	fitness, trace, err := Pole2BalancingScape{}.EvaluateMode(context.Background(), cortex, "validation")
+	if err != nil {
+		t.Fatalf("evaluate actor process io: %v", err)
+	}
+	if fitness <= 0 {
+		t.Fatalf("expected positive actor-process pole2 fitness, got %f trace=%+v", fitness, trace)
+	}
+	if surface, ok := trace["sensor_surface"].(string); !ok || surface != "6" {
+		t.Fatalf("expected full pole2 sensor_surface=6, got %+v", trace)
+	}
+	if surface, ok := trace["workflow_surface"].(string); !ok || surface != "all" {
+		t.Fatalf("expected pole2 workflow_surface=all, got %+v", trace)
 	}
 }
 

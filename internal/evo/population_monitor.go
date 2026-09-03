@@ -1964,6 +1964,9 @@ func (m *PopulationMonitor) buildIO(genome model.Genome) (map[string]protoio.Sen
 	if scape.UsesReferenceDTMIO(scapeName, m.cfg.IOExecution) {
 		return scape.NewDTMProcessIO(m.cfg.OpMode, genome.SensorIDs, genome.ActuatorIDs)
 	}
+	if scape.UsesReferencePole2IO(scapeName, m.cfg.IOExecution) {
+		return scape.NewPole2ProcessIO(m.cfg.OpMode, genome.SensorIDs, genome.ActuatorIDs)
+	}
 
 	var sensors map[string]protoio.Sensor
 	if len(genome.SensorIDs) > 0 {
