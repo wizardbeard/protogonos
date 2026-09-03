@@ -406,6 +406,147 @@ func TestCortexTerminateClosesIOProcesses(t *testing.T) {
 	}
 }
 
+func TestCortexTickUsesIOActorPath(t *testing.T) {
+	genome := model.Genome{
+		SensorIDs:   []string{"s1", "s2"},
+		ActuatorIDs: []string{"a1"},
+		Neurons: []model.Neuron{
+			{ID: "i1", Activation: "identity"},
+			{ID: "i2", Activation: "identity"},
+			{ID: "o", Activation: "identity"},
+		},
+		Synapses: []model.Synapse{
+			{From: "i1", To: "o", Weight: 1, Enabled: true},
+			{From: "i2", To: "o", Weight: 1, Enabled: true},
+		},
+	}
+	sensors := map[string]protoio.Sensor{
+		"s1": testSensor{values: []float64{0.5}},
+		"s2": testSensor{values: []float64{0.25}},
+	}
+	actuator := &testActuator{}
+	c, err := NewCortex("agent-actor", genome, sensors, map[string]protoio.Actuator{"a1": actuator}, []string{"i1", "i2"}, []string{"o"}, nil, WithIOActors())
+	if err != nil {
+		t.Fatalf("new cortex: %v", err)
+	}
+	defer c.Terminate()
+
+	out, err := c.Tick(context.Background())
+	if err != nil {
+		t.Fatalf("tick: %v", err)
+	}
+	if !reflect.DeepEqual(out, []float64{0.75}) {
+		t.Fatalf("out = %v, want [0.75]", out)
+	}
+	if !reflect.DeepEqual(actuator.last, []float64{0.75}) {
+		t.Fatalf("actuator last = %v, want [0.75]", actuator.last)
+	}
+}
+
+func TestCortexIOActorPathUsesOrderedActuatorFanin(t *testing.T) {
+	genome := model.Genome{
+		SensorIDs:   []string{"s1"},
+		ActuatorIDs: []string{"a1"},
+		Neurons: []model.Neuron{
+			{ID: "i1", Activation: "identity"},
+			{ID: "o1", Activation: "identity"},
+			{ID: "o2", Activation: "identity"},
+		},
+		Synapses: []model.Synapse{
+			{From: "i1", To: "o1", Weight: 1, Enabled: true},
+			{From: "i1", To: "o2", Weight: 2, Enabled: true},
+		},
+		NeuronActuatorLinks: []model.NeuronActuatorLink{
+			{NeuronID: "o1", ActuatorID: "a1"},
+			{NeuronID: "o2", ActuatorID: "a1"},
+		},
+	}
+	sensors := map[string]protoio.Sensor{"s1": testSensor{values: []float64{0.5}}}
+	actuator := &testActuator{}
+	c, err := NewCortex("agent-actor-fanin", genome, sensors, map[string]protoio.Actuator{"a1": actuator}, []string{"i1"}, []string{"o1", "o2"}, nil, WithIOActors())
+	if err != nil {
+		t.Fatalf("new cortex: %v", err)
+	}
+	defer c.Terminate()
+
+	if _, err := c.Tick(context.Background()); err != nil {
+		t.Fatalf("tick: %v", err)
+	}
+	if !reflect.DeepEqual(actuator.last, []float64{0.5, 1}) {
+		t.Fatalf("actuator last = %v, want ordered linked outputs [0.5 1]", actuator.last)
+	}
+}
+
+func TestCortexIOActorPathConsumesActuatorFeedback(t *testing.T) {
+	genome := model.Genome{
+		SensorIDs:   []string{"s1"},
+		ActuatorIDs: []string{"a1"},
+		Neurons: []model.Neuron{
+			{ID: "i1", Activation: "identity"},
+			{ID: "o1", Activation: "identity"},
+		},
+		Synapses: []model.Synapse{
+			{From: "i1", To: "o1", Weight: 1, Enabled: true},
+		},
+	}
+	sensors := map[string]protoio.Sensor{"s1": testSensor{values: []float64{0.5}}}
+	actuator := &processFeedbackActuator{
+		feedback: protoio.ActuatorSyncMessage{Fitness: []float64{3.5}, EndFlag: 1, GoalReached: true},
+		ok:       true,
+	}
+	c, err := NewCortex("agent-actor-feedback", genome, sensors, map[string]protoio.Actuator{"a1": actuator}, []string{"i1"}, []string{"o1"}, nil, WithIOActors())
+	if err != nil {
+		t.Fatalf("new cortex: %v", err)
+	}
+	defer c.Terminate()
+
+	if _, err := c.Tick(context.Background()); err != nil {
+		t.Fatalf("tick: %v", err)
+	}
+	fitness, endFlag, goalReached := c.consumeActuatorSyncFeedback()
+	if !reflect.DeepEqual(fitness, []float64{3.5}) || endFlag != 1 || !goalReached {
+		t.Fatalf("feedback = fitness:%v end:%d goal:%t, want [3.5], 1, true", fitness, endFlag, goalReached)
+	}
+}
+
+func TestCortexTerminateClosesIOActors(t *testing.T) {
+	genome := model.Genome{
+		SensorIDs:   []string{"s1"},
+		ActuatorIDs: []string{"a1"},
+		Neurons: []model.Neuron{
+			{ID: "i1", Activation: "identity"},
+			{ID: "o1", Activation: "identity"},
+		},
+		Synapses: []model.Synapse{
+			{From: "i1", To: "o1", Weight: 1, Enabled: true},
+		},
+	}
+	c, err := NewCortex(
+		"agent-actor-terminate",
+		genome,
+		map[string]protoio.Sensor{"s1": testSensor{values: []float64{1}}},
+		map[string]protoio.Actuator{"a1": &testActuator{}},
+		[]string{"i1"},
+		[]string{"o1"},
+		nil,
+		WithIOActors(),
+	)
+	if err != nil {
+		t.Fatalf("new cortex: %v", err)
+	}
+	sensorActor := c.sensorActors["s1"]
+	actuatorActor := c.actuatorActors["a1"]
+
+	c.Terminate()
+
+	if _, err := sensorActor.SyncFrom(context.Background(), c.id); !errors.Is(err, protoio.ErrSensorActorTerminated) {
+		t.Fatalf("sensor actor err = %v, want ErrSensorActorTerminated", err)
+	}
+	if _, err := actuatorActor.ForwardFrom(context.Background(), c.id, []float64{1}); !errors.Is(err, protoio.ErrActuatorActorTerminated) {
+		t.Fatalf("actuator actor err = %v, want ErrActuatorActorTerminated", err)
+	}
+}
+
 func TestCortexSubstrateTransformsOutputs(t *testing.T) {
 	genome := model.Genome{
 		Neurons: []model.Neuron{
