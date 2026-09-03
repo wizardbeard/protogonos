@@ -140,6 +140,123 @@ func TestFXScapeEvaluateWithIOComponents(t *testing.T) {
 	}
 }
 
+func TestFXProcessIOAdaptersUseSharedScapeSession(t *testing.T) {
+	sensorIDs := []string{
+		protoio.FXPriceSensorName,
+		protoio.FXSignalSensorName,
+		protoio.FXMomentumSensorName,
+		protoio.FXVolatilitySensorName,
+		protoio.FXNAVSensorName,
+		protoio.FXDrawdownSensorName,
+		protoio.FXPositionSensorName,
+		protoio.FXEntrySensorName,
+		protoio.FXPercentChangeSensorName,
+		protoio.FXPrevPercentChangeSensorName,
+		protoio.FXProfitSensorName,
+	}
+	sensors, actuators, err := NewFXProcessIO("gt", sensorIDs, []string{protoio.FXTradeActuatorName})
+	if err != nil {
+		t.Fatalf("new fx process io: %v", err)
+	}
+
+	ctx := context.Background()
+	values := make(map[string]float64, len(sensorIDs))
+	for _, sensorID := range sensorIDs {
+		reader, ok := sensors[sensorID].(protoio.SensorProcessReader)
+		if !ok {
+			t.Fatalf("sensor %s does not implement SensorProcessReader: %T", sensorID, sensors[sensorID])
+		}
+		value, err := reader.ReadForSensorProcess(ctx, protoio.SensorProcessCall{
+			Scape:      "fx",
+			SensorName: protoio.FXPCISensorAliasName,
+			VL:         1,
+			OpMode:     "gt",
+		})
+		if err != nil {
+			t.Fatalf("read %s: %v", sensorID, err)
+		}
+		if len(value) != 1 {
+			t.Fatalf("expected scalar value for %s, got %v", sensorID, value)
+		}
+		values[sensorID] = value[0]
+	}
+	if values[protoio.FXPriceSensorName] <= 0 {
+		t.Fatalf("expected positive fx price, got values=%+v", values)
+	}
+
+	writer, ok := actuators[protoio.FXTradeActuatorName].(protoio.ActuatorProcessWriter)
+	if !ok {
+		t.Fatalf("trade actuator does not implement ActuatorProcessWriter: %T", actuators[protoio.FXTradeActuatorName])
+	}
+	sync, err := writer.WriteForActuatorProcess(ctx, protoio.ActuatorProcessCall{
+		Scape:        "fx",
+		ActuatorName: protoio.FXTradeActuatorAliasName,
+		Output:       []float64{values[protoio.FXSignalSensorName]},
+		OpMode:       "gt",
+	})
+	if err != nil {
+		t.Fatalf("write trade: %v", err)
+	}
+	if sync.EndFlag != 0 || len(sync.Fitness) != 1 || sync.Fitness[0] != 0 {
+		t.Fatalf("expected non-terminal zero-fitness trade sync, got %+v", sync)
+	}
+}
+
+func TestFXScapeEvaluateWithActorProcessIO(t *testing.T) {
+	genome := model.Genome{
+		SensorIDs: []string{
+			protoio.FXPriceSensorName,
+			protoio.FXSignalSensorName,
+		},
+		ActuatorIDs: []string{protoio.FXTradeActuatorName},
+		Neurons: []model.Neuron{
+			{ID: "price", Activation: "identity"},
+			{ID: "signal", Activation: "identity"},
+			{ID: "trade", Activation: "tanh"},
+		},
+		Synapses: []model.Synapse{
+			{From: "signal", To: "trade", Weight: 1, Enabled: true},
+		},
+	}
+
+	sensors, actuators, err := NewFXProcessIO("gt", genome.SensorIDs, genome.ActuatorIDs)
+	if err != nil {
+		t.Fatalf("new fx process io: %v", err)
+	}
+	cortex, err := agent.NewCortex(
+		"fx-agent-actor-process-io",
+		genome,
+		sensors,
+		actuators,
+		[]string{"price", "signal"},
+		[]string{"trade"},
+		nil,
+		agent.WithIOProcessContext("fx", "gt"),
+		agent.WithIOActors(),
+	)
+	if err != nil {
+		t.Fatalf("new cortex: %v", err)
+	}
+	t.Cleanup(cortex.Terminate)
+
+	fitness, trace, err := FXScape{}.EvaluateMode(context.Background(), cortex, "gt")
+	if err != nil {
+		t.Fatalf("evaluate actor process io: %v", err)
+	}
+	if fitness <= 0 {
+		t.Fatalf("expected positive actor-process fx fitness, got %f trace=%+v", fitness, trace)
+	}
+	if surface, ok := trace["sensor_surface"].(string); !ok || surface != "market" {
+		t.Fatalf("expected market fx sensor surface, got %+v", trace)
+	}
+	if width, ok := trace["sensor_width"].(int); !ok || width != 2 {
+		t.Fatalf("expected fx sensor_width=2, got %+v", trace)
+	}
+	if surface, ok := trace["control_surface"].(string); !ok || surface != protoio.FXTradeActuatorName {
+		t.Fatalf("expected control_surface=%s, got %+v", protoio.FXTradeActuatorName, trace)
+	}
+}
+
 func TestFXScapeEvaluateWithExtendedIOComponents(t *testing.T) {
 	genome := model.Genome{
 		SensorIDs: []string{
