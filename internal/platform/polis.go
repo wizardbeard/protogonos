@@ -120,6 +120,7 @@ type EvolutionConfig struct {
 	RunID                string
 	OpMode               string
 	EvolutionType        string
+	IOExecution          string
 	SpeciationMode       string
 	ScapeName            string
 	PopulationSize       int
@@ -765,6 +766,7 @@ func (p *Polis) RunEvolution(ctx context.Context, cfg EvolutionConfig) (Evolutio
 		Scape:                targetScape,
 		OpMode:               cfg.OpMode,
 		EvolutionType:        cfg.EvolutionType,
+		IOExecution:          cfg.IOExecution,
 		SpeciationMode:       cfg.SpeciationMode,
 		Mutation:             cfg.Mutation,
 		PopulationSize:       cfg.PopulationSize,

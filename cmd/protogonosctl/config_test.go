@@ -16,6 +16,7 @@ func TestLoadRunRequestFromConfigUsesConstraintAndPMP(t *testing.T) {
 		"scape":                   "gtsa",
 		"seed":                    77,
 		"workers":                 3,
+		"io_execution":            "actor",
 		"start_paused":            true,
 		"auto_continue_ms":        25,
 		"tune_perturbation_range": 1.8,
@@ -74,6 +75,9 @@ func TestLoadRunRequestFromConfigUsesConstraintAndPMP(t *testing.T) {
 	}
 	if !req.StartPaused || req.AutoContinueAfter != 25*time.Millisecond {
 		t.Fatalf("expected pause controls from top-level config, got start=%t after=%s", req.StartPaused, req.AutoContinueAfter)
+	}
+	if req.IOExecution != "actor" {
+		t.Fatalf("expected io execution actor, got %q", req.IOExecution)
 	}
 	if req.Population != 12 || req.Generations != 9 {
 		t.Fatalf("expected pmp derived population/generations, got pop=%d gens=%d", req.Population, req.Generations)

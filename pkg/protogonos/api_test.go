@@ -170,6 +170,46 @@ func TestClientRunRunsAndExport(t *testing.T) {
 	}
 }
 
+func TestClientRunSupportsActorIOExecution(t *testing.T) {
+	base := t.TempDir()
+	client, err := New(Options{
+		StoreKind:     "memory",
+		BenchmarksDir: filepath.Join(base, "benchmarks"),
+		ExportsDir:    filepath.Join(base, "exports"),
+	})
+	if err != nil {
+		t.Fatalf("new client: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = client.Close()
+	})
+
+	summary, err := client.Run(context.Background(), RunRequest{
+		RunID:       "actor-io-run",
+		Scape:       "xor",
+		Population:  2,
+		Generations: 1,
+		Seed:        44,
+		Workers:     1,
+		IOExecution: "actor",
+	})
+	if err != nil {
+		t.Fatalf("run: %v", err)
+	}
+
+	data, err := os.ReadFile(filepath.Join(base, "benchmarks", summary.RunID, "config.json"))
+	if err != nil {
+		t.Fatalf("read config: %v", err)
+	}
+	var cfg stats.RunConfig
+	if err := json.Unmarshal(data, &cfg); err != nil {
+		t.Fatalf("decode config: %v", err)
+	}
+	if cfg.IOExecution != "actor" {
+		t.Fatalf("expected artifact io execution actor, got %q", cfg.IOExecution)
+	}
+}
+
 func TestClientSubstrateSnapshotsFiltersStoredTopGenomes(t *testing.T) {
 	client, err := New(Options{StoreKind: "memory", BenchmarksDir: t.TempDir(), ExportsDir: t.TempDir()})
 	if err != nil {
@@ -1042,6 +1082,48 @@ func TestMaterializeRunConfigFromRequestParsesCompositeOpModeForGTProbes(t *test
 	}
 	if !cfg.Request.ValidationProbe || !cfg.Request.TestProbe {
 		t.Fatalf("expected validation/test probes implied by composite op mode, got validation=%t test=%t", cfg.Request.ValidationProbe, cfg.Request.TestProbe)
+	}
+}
+
+func TestMaterializeRunConfigFromRequestNormalizesIOExecution(t *testing.T) {
+	cfg, err := materializeRunConfigFromRequest(RunRequest{
+		Scape:       "xor",
+		Population:  6,
+		Generations: 1,
+		OpMode:      "gt",
+		IOExecution: "actors",
+	})
+	if err != nil {
+		t.Fatalf("materialize run config: %v", err)
+	}
+	if cfg.Request.IOExecution != "actor" {
+		t.Fatalf("expected io execution actor, got %q", cfg.Request.IOExecution)
+	}
+
+	cfg, err = materializeRunConfigFromRequest(RunRequest{
+		Scape:       "xor",
+		Population:  6,
+		Generations: 1,
+		OpMode:      "gt",
+	})
+	if err != nil {
+		t.Fatalf("materialize default run config: %v", err)
+	}
+	if cfg.Request.IOExecution != "direct" {
+		t.Fatalf("expected default io execution direct, got %q", cfg.Request.IOExecution)
+	}
+}
+
+func TestMaterializeRunConfigFromRequestRejectsInvalidIOExecution(t *testing.T) {
+	_, err := materializeRunConfigFromRequest(RunRequest{
+		Scape:       "xor",
+		Population:  6,
+		Generations: 1,
+		OpMode:      "gt",
+		IOExecution: "mailbox",
+	})
+	if err == nil || !strings.Contains(err.Error(), "invalid io execution mode") {
+		t.Fatalf("expected invalid io execution error, got %v", err)
 	}
 }
 

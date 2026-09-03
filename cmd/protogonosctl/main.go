@@ -177,6 +177,7 @@ func runRun(ctx context.Context, args []string) error {
 	specieIdentifier := fs.String("specie-identifier", "topology", "species identifier: topology|tot_n|fingerprint")
 	opMode := fs.String("op-mode", "gt", "operation mode: gt|validation|test (or composite gt+validation/test)")
 	evolutionType := fs.String("evolution-type", "generational", "evolution type: generational|steady_state")
+	ioExecution := fs.String("io-execution", "direct", "IO execution mode: direct|process|actor")
 	scapeName := fs.String("scape", "xor", "scape name")
 	gtsaCSV := fs.String("gtsa-csv", "", "optional GTSA CSV table path")
 	gtsaProfile := fs.String("gtsa-profile", "", "optional GTSA seed profile override: default|core")
@@ -290,6 +291,7 @@ func runRun(ctx context.Context, args []string) error {
 			EpitopesBenchmarkEnd:    *epitopesBenchmarkEnd,
 			OpMode:                  *opMode,
 			EvolutionType:           *evolutionType,
+			IOExecution:             *ioExecution,
 			RunID:                   *runID,
 			ContinuePopulationID:    *continuePopID,
 			SpecieIdentifier:        *specieIdentifier,
@@ -361,6 +363,7 @@ func runRun(ctx context.Context, args []string) error {
 			"epitopes-benchmark-end":    *epitopesBenchmarkEnd,
 			"op-mode":                   *opMode,
 			"evolution-type":            *evolutionType,
+			"io-execution":              *ioExecution,
 			"run-id":                    *runID,
 			"continue-pop-id":           *continuePopID,
 			"specie-identifier":         *specieIdentifier,
@@ -1317,6 +1320,7 @@ func runBenchmark(ctx context.Context, args []string) error {
 	specieIdentifier := fs.String("specie-identifier", "topology", "species identifier: topology|tot_n|fingerprint")
 	opMode := fs.String("op-mode", "gt", "operation mode: gt|validation|test (or composite gt+validation/test)")
 	evolutionType := fs.String("evolution-type", "generational", "evolution type: generational|steady_state")
+	ioExecution := fs.String("io-execution", "direct", "IO execution mode: direct|process|actor")
 	scapeName := fs.String("scape", "xor", "scape name")
 	gtsaCSV := fs.String("gtsa-csv", "", "optional GTSA CSV table path")
 	gtsaProfile := fs.String("gtsa-profile", "", "optional GTSA seed profile override: default|core")
@@ -1430,6 +1434,7 @@ func runBenchmark(ctx context.Context, args []string) error {
 			EpitopesBenchmarkEnd:    *epitopesBenchmarkEnd,
 			OpMode:                  *opMode,
 			EvolutionType:           *evolutionType,
+			IOExecution:             *ioExecution,
 			RunID:                   *runID,
 			ContinuePopulationID:    *continuePopID,
 			SpecieIdentifier:        *specieIdentifier,
@@ -1500,6 +1505,7 @@ func runBenchmark(ctx context.Context, args []string) error {
 			"epitopes-benchmark-end":    *epitopesBenchmarkEnd,
 			"op-mode":                   *opMode,
 			"evolution-type":            *evolutionType,
+			"io-execution":              *ioExecution,
 			"run-id":                    *runID,
 			"continue-pop-id":           *continuePopID,
 			"specie-identifier":         *specieIdentifier,

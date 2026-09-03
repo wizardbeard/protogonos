@@ -54,6 +54,7 @@ type RunRequest struct {
 	SpecieIdentifier        string
 	OpMode                  string
 	EvolutionType           string
+	IOExecution             string
 	Scape                   string
 	GTSACSVPath             string
 	GTSATrainEnd            int
@@ -517,6 +518,7 @@ func (c *Client) Run(ctx context.Context, req RunRequest) (RunSummary, error) {
 			RunID:                runID,
 			OpMode:               req.OpMode,
 			EvolutionType:        req.EvolutionType,
+			IOExecution:          req.IOExecution,
 			SpeciationMode:       cfg.SpeciationMode,
 			ScapeName:            req.Scape,
 			PopulationSize:       req.Population,
@@ -630,6 +632,7 @@ func (c *Client) Run(ctx context.Context, req RunRequest) (RunSummary, error) {
 			RunID:                   runID,
 			OpMode:                  req.OpMode,
 			EvolutionType:           req.EvolutionType,
+			IOExecution:             req.IOExecution,
 			Scape:                   req.Scape,
 			GTSACSVPath:             req.GTSACSVPath,
 			GTSATrainEnd:            req.GTSATrainEnd,
@@ -807,6 +810,7 @@ func applyScapeDataSources(ctx context.Context, req RunRequest) (context.Context
 func runRequestFromArtifactsConfig(cfg stats.RunConfig) RunRequest {
 	return RunRequest{
 		Scape:                   cfg.Scape,
+		IOExecution:             cfg.IOExecution,
 		GTSACSVPath:             cfg.GTSACSVPath,
 		GTSATrainEnd:            cfg.GTSATrainEnd,
 		GTSAValidationEnd:       cfg.GTSAValidationEnd,
@@ -2222,6 +2226,11 @@ func materializeRunConfigFromRequest(req RunRequest) (materializedRunConfig, err
 	default:
 		return materializedRunConfig{}, errors.New("evolution type must be one of generational|steady_state")
 	}
+	ioExecution, err := agent.NormalizeIOExecution(req.IOExecution)
+	if err != nil {
+		return materializedRunConfig{}, err
+	}
+	req.IOExecution = ioExecution
 	if req.Scape == "" {
 		req.Scape = "xor"
 	}

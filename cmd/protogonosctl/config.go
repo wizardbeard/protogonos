@@ -136,6 +136,9 @@ func loadRunRequestFromConfig(path string) (protoapi.RunRequest, error) {
 			req.OpMode = joined
 		}
 	}
+	if v, ok := asString(raw["io_execution"]); ok {
+		req.IOExecution = v
+	}
 	if v, ok := asString(raw["evolution_type"]); ok {
 		req.EvolutionType = mapPopulationEvolutionType(v)
 	}
@@ -645,6 +648,8 @@ func overrideFromFlags(req *protoapi.RunRequest, set map[string]bool, flagValue 
 			req.EpitopesBenchmarkEnd = v.(int)
 		case "op-mode":
 			req.OpMode = v.(string)
+		case "io-execution":
+			req.IOExecution = v.(string)
 		case "evolution-type":
 			req.EvolutionType = mapPopulationEvolutionType(v.(string))
 		case "pop":

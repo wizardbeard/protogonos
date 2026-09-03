@@ -136,6 +136,7 @@ type MonitorConfig struct {
 	Scape                scape.Scape
 	OpMode               string
 	EvolutionType        string
+	IOExecution          string
 	SpeciationMode       string
 	Mutation             Operator
 	MutationPolicy       []WeightedMutation
@@ -1870,6 +1871,10 @@ func (m *PopulationMonitor) buildCortex(genome model.Genome) (*agent.Cortex, err
 	if err != nil {
 		return nil, err
 	}
+	options, err := agent.OptionsForIOExecution(m.cfg.IOExecution)
+	if err != nil {
+		return nil, err
+	}
 
 	cortex, err := agent.NewCortex(
 		genome.ID,
@@ -1879,6 +1884,7 @@ func (m *PopulationMonitor) buildCortex(genome model.Genome) (*agent.Cortex, err
 		m.cfg.InputNeuronIDs,
 		m.cfg.OutputNeuronIDs,
 		substrateRuntime,
+		options...,
 	)
 	if err != nil {
 		return nil, err

@@ -25,11 +25,18 @@ const (
 	CortexStatusTerminated CortexStatus = "terminated"
 )
 
+const (
+	IOExecutionDirect  = "direct"
+	IOExecutionProcess = "process"
+	IOExecutionActor   = "actor"
+)
+
 var (
-	ErrCortexInactive   = errors.New("cortex is inactive")
-	ErrCortexTerminated = errors.New("cortex is terminated")
-	ErrNoWeightBackup   = errors.New("no cortex weight backup available")
-	ErrNoSynapses       = errors.New("no synapses available for perturbation")
+	ErrCortexInactive     = errors.New("cortex is inactive")
+	ErrCortexTerminated   = errors.New("cortex is terminated")
+	ErrNoWeightBackup     = errors.New("no cortex weight backup available")
+	ErrNoSynapses         = errors.New("no synapses available for perturbation")
+	ErrInvalidIOExecution = errors.New("invalid io execution mode")
 )
 
 type EvaluationReport struct {
@@ -83,6 +90,36 @@ func WithIOProcesses() CortexOption {
 func WithIOActors() CortexOption {
 	return func(c *Cortex) error {
 		return c.enableIOActors()
+	}
+}
+
+func NormalizeIOExecution(mode string) (string, error) {
+	switch strings.ToLower(strings.TrimSpace(mode)) {
+	case "", IOExecutionDirect:
+		return IOExecutionDirect, nil
+	case IOExecutionProcess, "processes":
+		return IOExecutionProcess, nil
+	case IOExecutionActor, "actors":
+		return IOExecutionActor, nil
+	default:
+		return "", fmt.Errorf("%w: %s", ErrInvalidIOExecution, mode)
+	}
+}
+
+func OptionsForIOExecution(mode string) ([]CortexOption, error) {
+	normalized, err := NormalizeIOExecution(mode)
+	if err != nil {
+		return nil, err
+	}
+	switch normalized {
+	case IOExecutionDirect:
+		return nil, nil
+	case IOExecutionProcess:
+		return []CortexOption{WithIOProcesses()}, nil
+	case IOExecutionActor:
+		return []CortexOption{WithIOActors()}, nil
+	default:
+		return nil, fmt.Errorf("%w: %s", ErrInvalidIOExecution, mode)
 	}
 }
 

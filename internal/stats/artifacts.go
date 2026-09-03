@@ -23,6 +23,7 @@ type RunConfig struct {
 	SpecieIdentifier        string   `json:"specie_identifier,omitempty"`
 	OpMode                  string   `json:"op_mode,omitempty"`
 	EvolutionType           string   `json:"evolution_type,omitempty"`
+	IOExecution             string   `json:"io_execution,omitempty"`
 	InitialGeneration       int      `json:"initial_generation"`
 	Scape                   string   `json:"scape"`
 	GTSACSVPath             string   `json:"gtsa_csv_path,omitempty"`
