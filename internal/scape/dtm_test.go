@@ -693,3 +693,113 @@ func TestDTMProcessCommandWrapper(t *testing.T) {
 		t.Fatalf("expected restart to clear process diagnostics, got %+v", restart.State)
 	}
 }
+
+func TestDTMProcessIOAdaptersUseSharedScapeSession(t *testing.T) {
+	sensorIDs := []string{
+		protoio.DTMRangeLeftSensorName,
+		protoio.DTMRangeFrontSensorName,
+		protoio.DTMRangeRightSensorName,
+		protoio.DTMRewardSensorName,
+		protoio.DTMRunProgressSensorName,
+		protoio.DTMStepProgressSensorName,
+		protoio.DTMSwitchedSensorName,
+	}
+	sensors, actuators, err := NewDTMProcessIO("gt", sensorIDs, []string{protoio.DTMMoveActuatorName})
+	if err != nil {
+		t.Fatalf("new dtm process io: %v", err)
+	}
+
+	ctx := context.Background()
+	for _, sensorID := range sensorIDs {
+		reader, ok := sensors[sensorID].(protoio.SensorProcessReader)
+		if !ok {
+			t.Fatalf("sensor %s does not implement SensorProcessReader: %T", sensorID, sensors[sensorID])
+		}
+		value, err := reader.ReadForSensorProcess(ctx, protoio.SensorProcessCall{
+			Scape:      "dtm",
+			SensorName: protoio.DTMGetInputSensorAliasName,
+			VL:         1,
+			OpMode:     "gt",
+		})
+		if err != nil {
+			t.Fatalf("read %s: %v", sensorID, err)
+		}
+		if len(value) != 1 {
+			t.Fatalf("expected scalar value for %s, got %v", sensorID, value)
+		}
+	}
+
+	writer, ok := actuators[protoio.DTMMoveActuatorName].(protoio.ActuatorProcessWriter)
+	if !ok {
+		t.Fatalf("move actuator does not implement ActuatorProcessWriter: %T", actuators[protoio.DTMMoveActuatorName])
+	}
+	sync, err := writer.WriteForActuatorProcess(ctx, protoio.ActuatorProcessCall{
+		Scape:        "dtm",
+		ActuatorName: protoio.DTMSendOutputActuatorAliasName,
+		Output:       []float64{0},
+		OpMode:       "gt",
+	})
+	if err != nil {
+		t.Fatalf("write move: %v", err)
+	}
+	if sync.EndFlag != 0 || len(sync.Fitness) != 1 || sync.Fitness[0] != 0 {
+		t.Fatalf("expected non-terminal zero-fitness move sync, got %+v", sync)
+	}
+}
+
+func TestDTMScapeEvaluateWithActorProcessIO(t *testing.T) {
+	genome := model.Genome{
+		SensorIDs: []string{
+			protoio.DTMRangeLeftSensorName,
+			protoio.DTMRangeFrontSensorName,
+			protoio.DTMRangeRightSensorName,
+			protoio.DTMRewardSensorName,
+		},
+		ActuatorIDs: []string{protoio.DTMMoveActuatorName},
+		Neurons: []model.Neuron{
+			{ID: "rl", Activation: "identity"},
+			{ID: "rf", Activation: "identity"},
+			{ID: "rr", Activation: "identity"},
+			{ID: "r", Activation: "identity"},
+			{ID: "m", Activation: "tanh"},
+		},
+		Synapses: []model.Synapse{
+			{From: "rl", To: "m", Weight: 1, Enabled: true},
+			{From: "rr", To: "m", Weight: 1, Enabled: true},
+		},
+	}
+
+	sensors, actuators, err := NewDTMProcessIO("gt", genome.SensorIDs, genome.ActuatorIDs)
+	if err != nil {
+		t.Fatalf("new dtm process io: %v", err)
+	}
+	cortex, err := agent.NewCortex(
+		"dtm-agent-actor-process-io",
+		genome,
+		sensors,
+		actuators,
+		[]string{"rl", "rf", "rr", "r"},
+		[]string{"m"},
+		nil,
+		agent.WithIOProcessContext("dtm", "gt"),
+		agent.WithIOActors(),
+	)
+	if err != nil {
+		t.Fatalf("new cortex: %v", err)
+	}
+	t.Cleanup(cortex.Terminate)
+
+	fitness, trace, err := DTMScape{}.EvaluateMode(context.Background(), cortex, "gt")
+	if err != nil {
+		t.Fatalf("evaluate actor process io: %v", err)
+	}
+	if fitness <= 0 {
+		t.Fatalf("expected positive actor-process dtm fitness, got %f trace=%+v", fitness, trace)
+	}
+	if surface, ok := trace["sensor_surface"].(string); !ok || surface != "all" {
+		t.Fatalf("expected sensor_surface=all, got %+v", trace)
+	}
+	if surface, ok := trace["control_surface"].(string); !ok || surface != protoio.DTMMoveActuatorName {
+		t.Fatalf("expected control_surface=%s, got %+v", protoio.DTMMoveActuatorName, trace)
+	}
+}
