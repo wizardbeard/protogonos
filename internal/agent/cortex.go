@@ -54,17 +54,27 @@ type ActuatorSyncReporter interface {
 }
 
 type Cortex struct {
-	id              string
-	genome          model.Genome
-	sensors         map[string]protoio.Sensor
-	actuators       map[string]protoio.Actuator
-	inputNeuronIDs  []string
-	outputNeuronIDs []string
-	substrate       substrate.Runtime
-	nnState         *nn.ForwardState
-	mu              sync.Mutex
-	status          CortexStatus
-	weightBackup    *model.Genome
+	id                string
+	genome            model.Genome
+	sensors           map[string]protoio.Sensor
+	actuators         map[string]protoio.Actuator
+	sensorProcesses   map[string]*protoio.SensorProcess
+	actuatorProcesses map[string]*protoio.ActuatorProcess
+	inputNeuronIDs    []string
+	outputNeuronIDs   []string
+	substrate         substrate.Runtime
+	nnState           *nn.ForwardState
+	mu                sync.Mutex
+	status            CortexStatus
+	weightBackup      *model.Genome
+}
+
+type CortexOption func(*Cortex) error
+
+func WithIOProcesses() CortexOption {
+	return func(c *Cortex) error {
+		return c.enableIOProcesses()
+	}
 }
 
 func NewCortex(
@@ -75,6 +85,7 @@ func NewCortex(
 	inputNeuronIDs []string,
 	outputNeuronIDs []string,
 	substrateRuntime substrate.Runtime,
+	options ...CortexOption,
 ) (*Cortex, error) {
 	if id == "" {
 		return nil, fmt.Errorf("agent id is required")
@@ -86,7 +97,7 @@ func NewCortex(
 		return nil, fmt.Errorf("output neuron ids are required")
 	}
 
-	return &Cortex{
+	c := &Cortex{
 		id:              id,
 		genome:          genome,
 		sensors:         sensors,
@@ -96,7 +107,16 @@ func NewCortex(
 		substrate:       substrateRuntime,
 		nnState:         nn.NewForwardState(),
 		status:          CortexStatusActive,
-	}, nil
+	}
+	for _, option := range options {
+		if option == nil {
+			continue
+		}
+		if err := option(c); err != nil {
+			return nil, err
+		}
+	}
+	return c, nil
 }
 
 func (c *Cortex) ID() string {
@@ -152,6 +172,52 @@ func (c *Cortex) RegisteredActuator(id string) (protoio.Actuator, bool) {
 	return nil, false
 }
 
+func (c *Cortex) enableIOProcesses() error {
+	sensorProcesses := make(map[string]*protoio.SensorProcess, len(c.sensors))
+	for _, sensorID := range c.genome.SensorIDs {
+		sensor, ok := c.sensors[sensorID]
+		if !ok {
+			return fmt.Errorf("sensor not registered: %s", sensorID)
+		}
+		process, err := protoio.NewSensorProcess(sensorID, c.id, c.id, sensor, 0, nil)
+		if err != nil {
+			return err
+		}
+		sensorProcesses[sensorID] = process
+	}
+
+	actuatorProcesses := make(map[string]*protoio.ActuatorProcess, len(c.actuators))
+	faninByActuator := c.actuatorFaninPIDs()
+	for _, actuatorID := range c.genome.ActuatorIDs {
+		actuator, ok := c.actuators[actuatorID]
+		if !ok {
+			return fmt.Errorf("actuator not registered: %s", actuatorID)
+		}
+		process, err := protoio.NewActuatorProcess(actuatorID, c.id, c.id, actuator, 0, faninByActuator[actuatorID])
+		if err != nil {
+			return err
+		}
+		actuatorProcesses[actuatorID] = process
+	}
+
+	c.sensorProcesses = sensorProcesses
+	c.actuatorProcesses = actuatorProcesses
+	return nil
+}
+
+func (c *Cortex) actuatorFaninPIDs() map[string][]string {
+	out := make(map[string][]string, len(c.genome.ActuatorIDs))
+	for _, link := range c.genome.NeuronActuatorLinks {
+		actuatorID := strings.TrimSpace(link.ActuatorID)
+		neuronID := strings.TrimSpace(link.NeuronID)
+		if actuatorID == "" || neuronID == "" {
+			continue
+		}
+		out[actuatorID] = append(out[actuatorID], neuronID)
+	}
+	return out
+}
+
 func (c *Cortex) Status() CortexStatus {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -176,6 +242,16 @@ func (c *Cortex) Terminate() {
 	c.mu.Lock()
 	if managed, ok := c.substrate.(substrate.TerminableRuntime); ok {
 		managed.Terminate()
+	}
+	for _, process := range c.sensorProcesses {
+		if process != nil {
+			_ = process.TerminateFrom(c.id)
+		}
+	}
+	for _, process := range c.actuatorProcesses {
+		if process != nil {
+			_ = process.TerminateFrom(c.id)
+		}
 	}
 	c.status = CortexStatusTerminated
 	c.mu.Unlock()
@@ -432,11 +508,7 @@ func (c *Cortex) collectTickInputs(ctx context.Context) (map[string]float64, err
 
 	fallbackInputIndex := 0
 	for _, sensorID := range c.genome.SensorIDs {
-		sensor, ok := c.sensors[sensorID]
-		if !ok {
-			return nil, fmt.Errorf("sensor not registered: %s", sensorID)
-		}
-		values, err := sensor.Read(ctx)
+		values, err := c.readSensorValues(ctx, sensorID)
 		if err != nil {
 			return nil, err
 		}
@@ -475,6 +547,17 @@ func (c *Cortex) collectTickInputs(ctx context.Context) (map[string]float64, err
 	return inputByNeuron, nil
 }
 
+func (c *Cortex) readSensorValues(ctx context.Context, sensorID string) ([]float64, error) {
+	if process := c.sensorProcesses[sensorID]; process != nil {
+		return process.SyncFrom(ctx, c.id)
+	}
+	sensor, ok := c.sensors[sensorID]
+	if !ok {
+		return nil, fmt.Errorf("sensor not registered: %s", sensorID)
+	}
+	return sensor.Read(ctx)
+}
+
 func (c *Cortex) dispatchActuators(ctx context.Context, neuronValues map[string]float64, outputs []float64) error {
 	if len(c.genome.ActuatorIDs) == 0 {
 		return nil
@@ -506,9 +589,9 @@ func (c *Cortex) dispatchActuators(ctx context.Context, neuronValues map[string]
 			return fmt.Errorf("actuator not registered: %s", actuatorID)
 		}
 
+		linkedNeurons := linkNeuronsByActuator[actuatorID]
 		var chunk []float64
 		if useLinkRouting {
-			linkedNeurons := linkNeuronsByActuator[actuatorID]
 			if len(linkedNeurons) > 0 {
 				chunk = make([]float64, len(linkedNeurons))
 				for idx, neuronID := range linkedNeurons {
@@ -529,6 +612,20 @@ func (c *Cortex) dispatchActuators(ctx context.Context, neuronValues map[string]
 			if offset, ok := c.genome.ActuatorTunables[actuatorID]; ok && offset != 0 {
 				chunk = applyActuatorOffset(chunk, offset)
 			}
+		}
+		if process := c.actuatorProcesses[actuatorID]; process != nil {
+			if useLinkRouting && len(linkedNeurons) > 0 {
+				for idx, neuronID := range linkedNeurons {
+					if _, err := process.ForwardFrom(ctx, neuronID, []float64{chunk[idx]}); err != nil {
+						return err
+					}
+				}
+				continue
+			}
+			if _, err := process.ForwardFrom(ctx, c.id, chunk); err != nil {
+				return err
+			}
+			continue
 		}
 		if err := actuator.Write(ctx, chunk); err != nil {
 			return err
@@ -630,6 +727,26 @@ func (c *Cortex) consumeActuatorSyncFeedback() ([]float64, int, bool) {
 	fitness := []float64(nil)
 	endFlag := 0
 	goalReached := false
+	for _, actuatorID := range c.genome.ActuatorIDs {
+		process := c.actuatorProcesses[actuatorID]
+		if process == nil {
+			continue
+		}
+		feedback, ok := process.ConsumeActuatorFeedback()
+		if !ok {
+			continue
+		}
+		fitness = addFitnessVectors(fitness, feedback.Fitness)
+		if feedback.EndFlag > 0 {
+			endFlag += feedback.EndFlag
+		}
+		if feedback.GoalReached {
+			goalReached = true
+			if feedback.EndFlag <= 0 {
+				endFlag++
+			}
+		}
+	}
 	for _, actuatorID := range c.genome.ActuatorIDs {
 		actuator, ok := c.actuators[actuatorID]
 		if !ok {

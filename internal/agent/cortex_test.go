@@ -55,6 +55,27 @@ func (a *scriptedFeedbackActuator) ConsumeSyncFeedback() (ActuatorSyncFeedback, 
 	return feedback, true
 }
 
+type processFeedbackActuator struct {
+	last     []float64
+	feedback protoio.ActuatorSyncMessage
+	ok       bool
+}
+
+func (a *processFeedbackActuator) Name() string { return "process-feedback" }
+
+func (a *processFeedbackActuator) Write(_ context.Context, values []float64) error {
+	a.last = append([]float64(nil), values...)
+	return nil
+}
+
+func (a *processFeedbackActuator) ConsumeActuatorFeedback() (protoio.ActuatorSyncMessage, bool) {
+	if !a.ok {
+		return protoio.ActuatorSyncMessage{}, false
+	}
+	a.ok = false
+	return a.feedback, true
+}
+
 type terminableRuntimeStub struct {
 	terminated bool
 }
@@ -244,6 +265,144 @@ func TestCortexTickSensorToActuator(t *testing.T) {
 	}
 	if len(act.last) != 1 || act.last[0] != want {
 		t.Fatalf("unexpected actuator write: got=%v want=[%f]", act.last, want)
+	}
+}
+
+func TestCortexTickUsesIOProcessPath(t *testing.T) {
+	genome := model.Genome{
+		SensorIDs:   []string{"s1", "s2"},
+		ActuatorIDs: []string{"a1"},
+		Neurons: []model.Neuron{
+			{ID: "i1", Activation: "identity"},
+			{ID: "i2", Activation: "identity"},
+			{ID: "o", Activation: "identity"},
+		},
+		Synapses: []model.Synapse{
+			{From: "i1", To: "o", Weight: 1, Enabled: true},
+			{From: "i2", To: "o", Weight: 1, Enabled: true},
+		},
+	}
+	sensors := map[string]protoio.Sensor{
+		"s1": testSensor{values: []float64{0.5}},
+		"s2": testSensor{values: []float64{0.25}},
+	}
+	actuator := &testActuator{}
+	c, err := NewCortex("agent-process", genome, sensors, map[string]protoio.Actuator{"a1": actuator}, []string{"i1", "i2"}, []string{"o"}, nil, WithIOProcesses())
+	if err != nil {
+		t.Fatalf("new cortex: %v", err)
+	}
+
+	out, err := c.Tick(context.Background())
+	if err != nil {
+		t.Fatalf("tick: %v", err)
+	}
+	if !reflect.DeepEqual(out, []float64{0.75}) {
+		t.Fatalf("out = %v, want [0.75]", out)
+	}
+	if !reflect.DeepEqual(actuator.last, []float64{0.75}) {
+		t.Fatalf("actuator last = %v, want [0.75]", actuator.last)
+	}
+}
+
+func TestCortexIOProcessPathUsesOrderedActuatorFanin(t *testing.T) {
+	genome := model.Genome{
+		SensorIDs:   []string{"s1"},
+		ActuatorIDs: []string{"a1"},
+		Neurons: []model.Neuron{
+			{ID: "i1", Activation: "identity"},
+			{ID: "o1", Activation: "identity"},
+			{ID: "o2", Activation: "identity"},
+		},
+		Synapses: []model.Synapse{
+			{From: "i1", To: "o1", Weight: 1, Enabled: true},
+			{From: "i1", To: "o2", Weight: 2, Enabled: true},
+		},
+		NeuronActuatorLinks: []model.NeuronActuatorLink{
+			{NeuronID: "o1", ActuatorID: "a1"},
+			{NeuronID: "o2", ActuatorID: "a1"},
+		},
+	}
+	sensors := map[string]protoio.Sensor{"s1": testSensor{values: []float64{0.5}}}
+	actuator := &testActuator{}
+	c, err := NewCortex("agent-process-fanin", genome, sensors, map[string]protoio.Actuator{"a1": actuator}, []string{"i1"}, []string{"o1", "o2"}, nil, WithIOProcesses())
+	if err != nil {
+		t.Fatalf("new cortex: %v", err)
+	}
+
+	if _, err := c.Tick(context.Background()); err != nil {
+		t.Fatalf("tick: %v", err)
+	}
+	if !reflect.DeepEqual(actuator.last, []float64{0.5, 1}) {
+		t.Fatalf("actuator last = %v, want ordered linked outputs [0.5 1]", actuator.last)
+	}
+}
+
+func TestCortexIOProcessPathConsumesActuatorFeedback(t *testing.T) {
+	genome := model.Genome{
+		SensorIDs:   []string{"s1"},
+		ActuatorIDs: []string{"a1"},
+		Neurons: []model.Neuron{
+			{ID: "i1", Activation: "identity"},
+			{ID: "o1", Activation: "identity"},
+		},
+		Synapses: []model.Synapse{
+			{From: "i1", To: "o1", Weight: 1, Enabled: true},
+		},
+	}
+	sensors := map[string]protoio.Sensor{"s1": testSensor{values: []float64{0.5}}}
+	actuator := &processFeedbackActuator{
+		feedback: protoio.ActuatorSyncMessage{Fitness: []float64{2.5}, EndFlag: 1, GoalReached: true},
+		ok:       true,
+	}
+	c, err := NewCortex("agent-process-feedback", genome, sensors, map[string]protoio.Actuator{"a1": actuator}, []string{"i1"}, []string{"o1"}, nil, WithIOProcesses())
+	if err != nil {
+		t.Fatalf("new cortex: %v", err)
+	}
+
+	if _, err := c.Tick(context.Background()); err != nil {
+		t.Fatalf("tick: %v", err)
+	}
+	fitness, endFlag, goalReached := c.consumeActuatorSyncFeedback()
+	if !reflect.DeepEqual(fitness, []float64{2.5}) || endFlag != 1 || !goalReached {
+		t.Fatalf("feedback = fitness:%v end:%d goal:%t, want [2.5], 1, true", fitness, endFlag, goalReached)
+	}
+}
+
+func TestCortexTerminateClosesIOProcesses(t *testing.T) {
+	genome := model.Genome{
+		SensorIDs:   []string{"s1"},
+		ActuatorIDs: []string{"a1"},
+		Neurons: []model.Neuron{
+			{ID: "i1", Activation: "identity"},
+			{ID: "o1", Activation: "identity"},
+		},
+		Synapses: []model.Synapse{
+			{From: "i1", To: "o1", Weight: 1, Enabled: true},
+		},
+	}
+	c, err := NewCortex(
+		"agent-process-terminate",
+		genome,
+		map[string]protoio.Sensor{"s1": testSensor{values: []float64{1}}},
+		map[string]protoio.Actuator{"a1": &testActuator{}},
+		[]string{"i1"},
+		[]string{"o1"},
+		nil,
+		WithIOProcesses(),
+	)
+	if err != nil {
+		t.Fatalf("new cortex: %v", err)
+	}
+	sensorProcess := c.sensorProcesses["s1"]
+	actuatorProcess := c.actuatorProcesses["a1"]
+
+	c.Terminate()
+
+	if _, err := sensorProcess.SyncFrom(context.Background(), c.id); !errors.Is(err, protoio.ErrSensorProcessTerminated) {
+		t.Fatalf("sensor process err = %v, want ErrSensorProcessTerminated", err)
+	}
+	if _, err := actuatorProcess.ForwardFrom(context.Background(), c.id, []float64{1}); !errors.Is(err, protoio.ErrActuatorProcessTerminated) {
+		t.Fatalf("actuator process err = %v, want ErrActuatorProcessTerminated", err)
 	}
 }
 
