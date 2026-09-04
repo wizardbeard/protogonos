@@ -3,6 +3,7 @@ package io
 import "strings"
 
 const (
+	PrintToScreenActuatorAliasName           = "pts"
 	XORSendOutputActuatorAliasName           = "xor_SendOutput"
 	PBSendOutputActuatorAliasName            = "pb_SendOutput"
 	DTMSendOutputActuatorAliasName           = "dtm_SendOutput"
@@ -14,6 +15,7 @@ const (
 )
 
 var actuatorAliasToCanonical = map[string]string{
+	strings.ToLower(PrintToScreenActuatorAliasName):           PrintToScreenActuatorName,
 	strings.ToLower(XORSendOutputActuatorAliasName):           XOROutputActuatorName,
 	strings.ToLower(PBSendOutputActuatorAliasName):            Pole2PushActuatorName,
 	strings.ToLower(DTMSendOutputActuatorAliasName):           DTMMoveActuatorName,

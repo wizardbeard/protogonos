@@ -2868,6 +2868,9 @@ func sensorCandidates(genome model.Genome, scapeName string) []string {
 	existing := toIDSet(genome.SensorIDs)
 	candidates := make([]string, 0)
 	for _, name := range protoio.ListSensorsForScape(scapeName) {
+		if utilitySensorMutationExcluded(name) {
+			continue
+		}
 		if _, ok := existing[name]; ok {
 			continue
 		}
@@ -2880,12 +2883,23 @@ func actuatorCandidates(genome model.Genome, scapeName string) []string {
 	existing := toIDSet(genome.ActuatorIDs)
 	candidates := make([]string, 0)
 	for _, name := range protoio.ListActuatorsForScape(scapeName) {
+		if utilityActuatorMutationExcluded(name) {
+			continue
+		}
 		if _, ok := existing[name]; ok {
 			continue
 		}
 		candidates = append(candidates, name)
 	}
 	return candidates
+}
+
+func utilitySensorMutationExcluded(name string) bool {
+	return protoio.CanonicalSensorName(name) == protoio.RandomSensorName
+}
+
+func utilityActuatorMutationExcluded(name string) bool {
+	return protoio.CanonicalActuatorName(name) == protoio.PrintToScreenActuatorName
 }
 
 func filterOutString(values []string, drop string) []string {

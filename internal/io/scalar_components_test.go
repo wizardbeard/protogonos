@@ -51,6 +51,39 @@ func TestVectorInputSensor(t *testing.T) {
 	}
 }
 
+func TestRandomSensorUsesReferenceWidthAndRange(t *testing.T) {
+	s := NewRandomSensor(2, 7)
+	values, err := s.Read(context.Background())
+	if err != nil {
+		t.Fatalf("read: %v", err)
+	}
+	if len(values) != 2 {
+		t.Fatalf("unexpected default width: got=%d values=%+v", len(values), values)
+	}
+	for _, value := range values {
+		if value < 0 || value > 1 {
+			t.Fatalf("random value out of reference range [0,1]: %f", value)
+		}
+	}
+
+	reader, ok := any(s).(SensorProcessReader)
+	if !ok {
+		t.Fatal("expected RandomSensor to implement SensorProcessReader")
+	}
+	processValues, err := reader.ReadForSensorProcess(context.Background(), SensorProcessCall{VL: 4})
+	if err != nil {
+		t.Fatalf("process read: %v", err)
+	}
+	if len(processValues) != 4 {
+		t.Fatalf("unexpected process width: got=%d values=%+v", len(processValues), processValues)
+	}
+	for _, value := range processValues {
+		if value < 0 || value > 1 {
+			t.Fatalf("process random value out of reference range [0,1]: %f", value)
+		}
+	}
+}
+
 func TestScalarOutputActuator(t *testing.T) {
 	a := NewScalarOutputActuator()
 	if err := a.Write(context.Background(), []float64{0.9}); err != nil {
@@ -59,6 +92,35 @@ func TestScalarOutputActuator(t *testing.T) {
 	last := a.Last()
 	if len(last) != 1 || last[0] != 0.9 {
 		t.Fatalf("unexpected actuator last output: %+v", last)
+	}
+}
+
+func TestPrintToScreenActuatorProcessFeedback(t *testing.T) {
+	a := NewPrintToScreenActuator()
+	sync, err := a.WriteForActuatorProcess(context.Background(), ActuatorProcessCall{
+		OpMode: "test",
+		Output: []float64{0.2, -0.1},
+	})
+	if err != nil {
+		t.Fatalf("write process: %v", err)
+	}
+	if len(sync.Fitness) != 3 || sync.Fitness[0] != 1 || sync.Fitness[1] != 0 || sync.Fitness[2] != 0 {
+		t.Fatalf("unexpected test-mode pts feedback: %+v", sync)
+	}
+	if sync.EndFlag != 0 {
+		t.Fatalf("unexpected pts end flag: %d", sync.EndFlag)
+	}
+	last := a.Last()
+	if len(last) != 2 || last[0] != 0.2 || last[1] != -0.1 {
+		t.Fatalf("unexpected pts last output: %+v", last)
+	}
+
+	sync, err = a.WriteForActuatorProcess(context.Background(), ActuatorProcessCall{Output: []float64{0.5}})
+	if err != nil {
+		t.Fatalf("write process default: %v", err)
+	}
+	if len(sync.Fitness) != 1 || sync.Fitness[0] != 1 {
+		t.Fatalf("unexpected default pts feedback: %+v", sync)
 	}
 }
 
@@ -88,6 +150,13 @@ func TestScalarComponentsRegistered(t *testing.T) {
 	if vectorSensor.Name() != VectorInputSensorName {
 		t.Fatalf("unexpected vector sensor name: %s", vectorSensor.Name())
 	}
+	randomSensor, err := ResolveSensor(RandomSensorName, "xor")
+	if err != nil {
+		t.Fatalf("resolve random sensor: %v", err)
+	}
+	if randomSensor.Name() != RandomSensorName {
+		t.Fatalf("unexpected random sensor name: %s", randomSensor.Name())
+	}
 
 	actuator, err := ResolveActuator(ScalarOutputActuatorName, "regression-mimic")
 	if err != nil {
@@ -102,6 +171,13 @@ func TestScalarComponentsRegistered(t *testing.T) {
 	}
 	if vectorActuator.Name() != VectorOutputActuatorName {
 		t.Fatalf("unexpected vector actuator name: %s", vectorActuator.Name())
+	}
+	printActuator, err := ResolveActuator(PrintToScreenActuatorName, "xor")
+	if err != nil {
+		t.Fatalf("resolve print-to-screen actuator: %v", err)
+	}
+	if printActuator.Name() != PrintToScreenActuatorName {
+		t.Fatalf("unexpected print-to-screen actuator name: %s", printActuator.Name())
 	}
 
 	xorLeft, err := ResolveSensor(XORInputLeftSensorName, "xor")
@@ -669,6 +745,7 @@ func TestActuatorReferenceAliasResolution(t *testing.T) {
 		canonical string
 		scape     string
 	}{
+		{PrintToScreenActuatorAliasName, PrintToScreenActuatorName, "xor"},
 		{XORSendOutputActuatorAliasName, XOROutputActuatorName, "xor"},
 		{PBSendOutputActuatorAliasName, Pole2PushActuatorName, "pb_sim"},
 		{DTMSendOutputActuatorAliasName, DTMMoveActuatorName, "dtm_sim"},

@@ -3,6 +3,7 @@ package io
 import "strings"
 
 const (
+	RandomSensorAliasName            = "rng"
 	XORGetInputSensorAliasName       = "xor_GetInput"
 	PBGetInputSensorAliasName        = "pb_GetInput"
 	DTMGetInputSensorAliasName       = "dtm_GetInput"
@@ -19,6 +20,7 @@ const (
 )
 
 var sensorAliasToCanonical = map[string]string{
+	strings.ToLower(RandomSensorAliasName):            RandomSensorName,
 	strings.ToLower(XORGetInputSensorAliasName):       XORInputLeftSensorName,
 	strings.ToLower(PBGetInputSensorAliasName):        Pole2CartPositionSensorName,
 	strings.ToLower(DTMGetInputSensorAliasName):       DTMRangeFrontSensorName,

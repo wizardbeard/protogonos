@@ -3,14 +3,17 @@ package io
 import (
 	"context"
 	"fmt"
+	"math/rand"
 	"sync"
 )
 
 const (
 	ScalarInputSensorName               = "scalar_input"
 	VectorInputSensorName               = "vector_input"
+	RandomSensorName                    = "rng"
 	ScalarOutputActuatorName            = "scalar_output"
 	VectorOutputActuatorName            = "vector_output"
+	PrintToScreenActuatorName           = "pts"
 	XORInputLeftSensorName              = "xor_input_left"
 	XORInputRightSensorName             = "xor_input_right"
 	XOROutputActuatorName               = "xor_output"
@@ -147,6 +150,53 @@ func (s *VectorInputSensor) Set(values []float64) {
 	s.mu.Unlock()
 }
 
+type RandomSensor struct {
+	mu    sync.Mutex
+	rng   *rand.Rand
+	width int
+}
+
+func NewRandomSensor(width int, seed int64) *RandomSensor {
+	if width <= 0 {
+		width = 1
+	}
+	return &RandomSensor{
+		rng:   rand.New(rand.NewSource(seed)),
+		width: width,
+	}
+}
+
+func (s *RandomSensor) Name() string {
+	return RandomSensorName
+}
+
+func (s *RandomSensor) Read(ctx context.Context) ([]float64, error) {
+	return s.read(ctx, s.width)
+}
+
+func (s *RandomSensor) ReadForSensorProcess(ctx context.Context, call SensorProcessCall) ([]float64, error) {
+	return s.read(ctx, call.VL)
+}
+
+func (s *RandomSensor) read(ctx context.Context, width int) ([]float64, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	if width <= 0 {
+		width = s.width
+	}
+	if width <= 0 {
+		width = 1
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	values := make([]float64, width)
+	for i := range values {
+		values[i] = s.rng.Float64()
+	}
+	return values, nil
+}
+
 type ScalarOutputActuator struct {
 	mu   sync.RWMutex
 	last []float64
@@ -199,6 +249,44 @@ func (a *VectorOutputActuator) Last() []float64 {
 	return append([]float64(nil), a.last...)
 }
 
+type PrintToScreenActuator struct {
+	mu   sync.RWMutex
+	last []float64
+}
+
+func NewPrintToScreenActuator() *PrintToScreenActuator {
+	return &PrintToScreenActuator{}
+}
+
+func (a *PrintToScreenActuator) Name() string {
+	return PrintToScreenActuatorName
+}
+
+func (a *PrintToScreenActuator) Write(_ context.Context, values []float64) error {
+	a.mu.Lock()
+	a.last = append([]float64(nil), values...)
+	a.mu.Unlock()
+	fmt.Printf("actuator:pts(Result): %v\n", values)
+	return nil
+}
+
+func (a *PrintToScreenActuator) Last() []float64 {
+	a.mu.RLock()
+	defer a.mu.RUnlock()
+	return append([]float64(nil), a.last...)
+}
+
+func (a *PrintToScreenActuator) WriteForActuatorProcess(ctx context.Context, call ActuatorProcessCall) (ActuatorSyncMessage, error) {
+	if err := a.Write(ctx, call.Output); err != nil {
+		return ActuatorSyncMessage{}, err
+	}
+	fitness := []float64{1}
+	if call.OpMode == "test" {
+		fitness = []float64{1, 0, 0}
+	}
+	return ActuatorSyncMessage{Fitness: fitness}, nil
+}
+
 func init() {
 	initializeDefaultComponents()
 }
@@ -230,6 +318,15 @@ func initializeDefaultComponents() {
 			}
 			return nil
 		},
+	})
+	if err != nil {
+		panic(err)
+	}
+	err = RegisterSensorWithSpec(SensorSpec{
+		Name:          RandomSensorName,
+		Factory:       func() Sensor { return NewRandomSensor(1, 1) },
+		SchemaVersion: SupportedSchemaVersion,
+		CodecVersion:  SupportedCodecVersion,
 	})
 	if err != nil {
 		panic(err)
@@ -1165,6 +1262,15 @@ func initializeDefaultComponents() {
 			}
 			return nil
 		},
+	})
+	if err != nil {
+		panic(err)
+	}
+	err = RegisterActuatorWithSpec(ActuatorSpec{
+		Name:          PrintToScreenActuatorName,
+		Factory:       func() Actuator { return NewPrintToScreenActuator() },
+		SchemaVersion: SupportedSchemaVersion,
+		CodecVersion:  SupportedCodecVersion,
 	})
 	if err != nil {
 		panic(err)

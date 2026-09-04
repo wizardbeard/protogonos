@@ -50,6 +50,7 @@ func TestRegisterAndResolveSensorTrimsNames(t *testing.T) {
 
 func TestCanonicalSensorNameNormalizesReferenceAliases(t *testing.T) {
 	tests := map[string]string{
+		" rng ":                    RandomSensorName,
 		" xor_GetInput ":           XORInputLeftSensorName,
 		"pb_GetInput":              Pole2CartPositionSensorName,
 		"dtm_GetInput":             DTMRangeFrontSensorName,
@@ -81,6 +82,7 @@ func TestResolveSensorAcceptsReferenceAliases(t *testing.T) {
 		name  string
 		scape string
 	}{
+		{RandomSensorAliasName, "xor"},
 		{XORGetInputSensorAliasName, "xor"},
 		{PBGetInputSensorAliasName, "pb_sim"},
 		{DTMGetInputSensorAliasName, "dtm_sim"},
