@@ -668,6 +668,88 @@ func TestConstructCortexSupportsActuatorVectorLengths(t *testing.T) {
 	}
 }
 
+func TestConstructCortexUsesReferenceActuatorVectorLength(t *testing.T) {
+	constraint := DefaultConstructConstraint()
+	constraint.Morphology = "llvm_phase_ordering"
+
+	out, err := ConstructCortex(
+		"agent-reference-vl",
+		0,
+		constraint,
+		"neural",
+		"none",
+		"l2l_feedforward",
+		rand.New(rand.NewSource(81)),
+	)
+	if err != nil {
+		t.Fatalf("construct cortex with reference vl: %v", err)
+	}
+	if len(out.OutputNeuronIDs) != 55 {
+		t.Fatalf("expected 55 output neurons from reference actuator vl, got=%d ids=%v", len(out.OutputNeuronIDs), out.OutputNeuronIDs)
+	}
+	if len(out.Genome.NeuronActuatorLinks) != 55 {
+		t.Fatalf("expected 55 actuator links, got=%d links=%v", len(out.Genome.NeuronActuatorLinks), out.Genome.NeuronActuatorLinks)
+	}
+	for _, link := range out.Genome.NeuronActuatorLinks {
+		if link.ActuatorID != protoio.LLVMPhaseActuatorName {
+			t.Fatalf("expected all output links to llvm phase actuator, got=%+v", out.Genome.NeuronActuatorLinks)
+		}
+	}
+}
+
+func TestConstructCortexConfiguredActuatorVectorLengthOverridesReference(t *testing.T) {
+	constraint := DefaultConstructConstraint()
+	constraint.Morphology = "llvm_phase_ordering"
+	constraint.ActuatorVectorLengths = map[string]int{
+		protoio.LLVMPhaseActuatorName: 3,
+	}
+
+	out, err := ConstructCortex(
+		"agent-reference-vl-override",
+		0,
+		constraint,
+		"neural",
+		"none",
+		"l2l_feedforward",
+		rand.New(rand.NewSource(82)),
+	)
+	if err != nil {
+		t.Fatalf("construct cortex with overridden reference vl: %v", err)
+	}
+	if len(out.OutputNeuronIDs) != 3 {
+		t.Fatalf("expected configured output width 3 to override reference vl, got=%d ids=%v", len(out.OutputNeuronIDs), out.OutputNeuronIDs)
+	}
+}
+
+func TestConstructCortexUsesReferenceSensorVectorLength(t *testing.T) {
+	constraint := DefaultConstructConstraint()
+	constraint.Morphology = "general_predictor"
+
+	out, err := ConstructCortex(
+		"agent-reference-sensor-vl",
+		0,
+		constraint,
+		"neural",
+		"none",
+		"l2l_feedforward",
+		rand.New(rand.NewSource(83)),
+	)
+	if err != nil {
+		t.Fatalf("construct cortex with reference sensor vl: %v", err)
+	}
+	if len(out.InputNeuronIDs) != 1 || len(out.OutputNeuronIDs) != 1 {
+		t.Fatalf("unexpected reference general_predictor io ids: in=%v out=%v", out.InputNeuronIDs, out.OutputNeuronIDs)
+	}
+	if len(out.Genome.Synapses) != 30 {
+		t.Fatalf("expected 30 inbound weights from reference sensor vl, got=%d synapses=%v", len(out.Genome.Synapses), out.Genome.Synapses)
+	}
+	for _, synapse := range out.Genome.Synapses {
+		if synapse.From != out.InputNeuronIDs[0] || synapse.To != out.OutputNeuronIDs[0] {
+			t.Fatalf("unexpected reference sensor-width synapse: %+v", synapse)
+		}
+	}
+}
+
 func TestDefaultSubstrateDensities(t *testing.T) {
 	got := defaultSubstrateDensities(5)
 	want := []int{1, 1, 5, 5, 5}

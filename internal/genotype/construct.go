@@ -77,6 +77,33 @@ func ConstructSeedNNWithActuatorVL(
 	neuralAggrFs []string,
 	rng *rand.Rand,
 ) (SeedNetwork, error) {
+	return ConstructSeedNNWithIOVL(
+		generation,
+		sensors,
+		actuators,
+		nil,
+		actuatorVectorLengths,
+		neuralAFs,
+		neuralPFs,
+		neuralAggrFs,
+		rng,
+	)
+}
+
+// ConstructSeedNNWithIOVL extends ConstructSeedNN with explicit sensor and
+// actuator vector-length hints. Sensor widths increase per-source inbound
+// weight arity; actuator widths increase output-neuron multiplicity.
+func ConstructSeedNNWithIOVL(
+	generation int,
+	sensors []string,
+	actuators []string,
+	sensorVectorLengths map[string]int,
+	actuatorVectorLengths map[string]int,
+	neuralAFs []string,
+	neuralPFs []string,
+	neuralAggrFs []string,
+	rng *rand.Rand,
+) (SeedNetwork, error) {
 	rng = ensureRNG(rng)
 	uniqSensors := uniqueNonEmpty(sensors)
 	uniqActuators := uniqueNonEmpty(actuators)
@@ -110,8 +137,14 @@ func ConstructSeedNNWithActuatorVL(
 	}
 
 	inputSpecs := make([]InputSpec, 0, len(inputNeuronIDs))
-	for _, inputID := range inputNeuronIDs {
-		inputSpecs = append(inputSpecs, InputSpec{FromID: inputID, Width: 1})
+	for i, inputID := range inputNeuronIDs {
+		width := 1
+		if sensorVectorLengths != nil {
+			if configured := sensorVectorLengths[uniqSensors[i]]; configured > 0 {
+				width = configured
+			}
+		}
+		inputSpecs = append(inputSpecs, InputSpec{FromID: inputID, Width: width})
 	}
 
 	circuitMode, circuitActivation := circuitActivationTag(neuralAFs)

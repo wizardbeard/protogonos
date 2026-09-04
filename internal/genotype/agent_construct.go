@@ -182,7 +182,10 @@ func ConstructCortex(
 	isSubstrateEncoding := strings.EqualFold(strings.TrimSpace(encodingType), "substrate")
 	seedSensors := append([]string(nil), sensors...)
 	seedActuators := append([]string(nil), actuators...)
-	seedActuatorVectorLengths := mergeDefaultActuatorVectorLengths(seedActuators, constraint.ActuatorVectorLengths)
+	seedSensorVectorLengths := referenceSensorVectorLengths(constraint.Morphology)
+	seedActuatorVectorLengths := mergeDefaultActuatorVectorLengths(seedActuators, nil)
+	seedActuatorVectorLengths = mergeActuatorVectorLengths(seedActuatorVectorLengths, referenceActuatorVectorLengths(constraint.Morphology))
+	seedActuatorVectorLengths = mergeActuatorVectorLengths(seedActuatorVectorLengths, constraint.ActuatorVectorLengths)
 	var substrateCPPIDs []string
 	var substrateCEPIDs []string
 	var substrateDensities []int
@@ -201,13 +204,15 @@ func ConstructCortex(
 		substrateCPPIDs, substrateCEPIDs = constructSubstrateEndpointIDs(substrateDimension, len(sensors), len(actuators))
 		seedSensors = append([]string(nil), substrateCPPIDs...)
 		seedActuators = append([]string(nil), substrateCEPIDs...)
+		seedSensorVectorLengths = nil
 		seedActuatorVectorLengths = nil
 	}
 
-	seed, err := ConstructSeedNNWithActuatorVL(
+	seed, err := ConstructSeedNNWithIOVL(
 		generation,
 		seedSensors,
 		seedActuators,
+		seedSensorVectorLengths,
 		seedActuatorVectorLengths,
 		constraint.NeuralAFs,
 		constraint.NeuralPFNs,
@@ -464,18 +469,15 @@ func defaultSubstrateDensities(dimension int) []int {
 }
 
 func mergeDefaultActuatorVectorLengths(actuatorIDs []string, configured map[string]int) map[string]int {
-	out := make(map[string]int, len(configured))
-	for actuatorID, width := range configured {
-		if strings.TrimSpace(actuatorID) == "" || width <= 0 {
-			continue
-		}
-		out[actuatorID] = width
-	}
+	out := mergeActuatorVectorLengths(nil, configured)
 	for _, actuatorID := range actuatorIDs {
 		if _, exists := out[actuatorID]; exists {
 			continue
 		}
 		if width := defaultActuatorVectorLength(actuatorID); width > 1 {
+			if out == nil {
+				out = make(map[string]int)
+			}
 			out[actuatorID] = width
 		}
 	}
@@ -483,6 +485,99 @@ func mergeDefaultActuatorVectorLengths(actuatorIDs []string, configured map[stri
 		return nil
 	}
 	return out
+}
+
+func mergeActuatorVectorLengths(base, override map[string]int) map[string]int {
+	out := make(map[string]int, len(base)+len(override))
+	for actuatorID, width := range base {
+		if strings.TrimSpace(actuatorID) == "" || width <= 0 {
+			continue
+		}
+		out[protoio.CanonicalActuatorName(actuatorID)] = width
+	}
+	for actuatorID, width := range override {
+		if strings.TrimSpace(actuatorID) == "" || width <= 0 {
+			continue
+		}
+		out[protoio.CanonicalActuatorName(actuatorID)] = width
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
+}
+
+func referenceActuatorVectorLengths(morphologyName string) map[string]int {
+	if !usesReferenceMorphologySpecs(morphologyName) {
+		return nil
+	}
+	specs, err := morphology.GetReferenceActuatorSpecs(morphologyName, "")
+	if err != nil {
+		return nil
+	}
+	out := make(map[string]int, len(specs))
+	for _, spec := range specs {
+		if spec.VL <= 1 {
+			continue
+		}
+		name := protoio.CanonicalActuatorName(spec.Name)
+		if name == "" {
+			continue
+		}
+		out[name] = spec.VL
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
+}
+
+func referenceSensorVectorLengths(morphologyName string) map[string]int {
+	if !usesReferenceMorphologySpecs(morphologyName) {
+		return nil
+	}
+	specs, err := morphology.GetReferenceSensorSpecs(morphologyName, "")
+	if err != nil {
+		return nil
+	}
+	out := make(map[string]int, len(specs))
+	for _, spec := range specs {
+		if spec.VL <= 1 {
+			continue
+		}
+		name := protoio.CanonicalSensorName(spec.Name)
+		if name == "" {
+			continue
+		}
+		out[name] = spec.VL
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
+}
+
+func usesReferenceMorphologySpecs(raw string) bool {
+	name := strings.TrimSpace(raw)
+	if name == "" {
+		return false
+	}
+	normalized := strings.ToLower(name)
+	normalized = strings.ReplaceAll(normalized, "-", "_")
+	switch normalized {
+	case "xor_mimic",
+		"pole_balancing",
+		"discrete_tmaze",
+		"prey",
+		"predator",
+		"forex_trader",
+		"general_predictor",
+		"epitopes",
+		"llvm_phase_ordering":
+		return true
+	default:
+		return false
+	}
 }
 
 func defaultActuatorVectorLength(actuatorID string) int {
