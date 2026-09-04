@@ -701,3 +701,144 @@ func TestEpitopesProcessCommandWrapper(t *testing.T) {
 		t.Fatalf("expected restart to clear process diagnostics, got %+v", restart.State)
 	}
 }
+
+func TestEpitopesProcessIOAdapters(t *testing.T) {
+	sensorIDs := []string{
+		protoio.EpitopesSignalSensorName,
+		protoio.EpitopesMemorySensorName,
+		protoio.EpitopesTargetSensorName,
+		protoio.EpitopesProgressSensorName,
+		protoio.EpitopesMarginSensorName,
+	}
+	actuatorIDs := []string{protoio.EpitopesResponseActuatorName}
+
+	sensors, actuators, err := NewEpitopesProcessIO("gt", sensorIDs, actuatorIDs)
+	if err != nil {
+		t.Fatalf("new epitopes process io: %v", err)
+	}
+	values := make(map[string]float64, len(sensorIDs))
+	for _, sensorID := range sensorIDs {
+		reader, ok := sensors[sensorID].(protoio.SensorProcessReader)
+		if !ok {
+			t.Fatalf("sensor %s does not expose process reader", sensorID)
+		}
+		value, err := reader.ReadForSensorProcess(context.Background(), protoio.SensorProcessCall{
+			Scape:      "epitopes",
+			SensorName: protoio.ABCPredSensorAliasName,
+			VL:         1,
+			OpMode:     "gt",
+		})
+		if err != nil {
+			t.Fatalf("read process sensor %s: %v", sensorID, err)
+		}
+		if len(value) != 1 {
+			t.Fatalf("expected one scalar from %s, got %+v", sensorID, value)
+		}
+		values[sensorID] = value[0]
+	}
+	margin := values[protoio.EpitopesSignalSensorName] + 0.7*values[protoio.EpitopesMemorySensorName]
+	if math.Abs(values[protoio.EpitopesMarginSensorName]-margin) > 1e-9 {
+		t.Fatalf("expected derived margin %f, got %f", margin, values[protoio.EpitopesMarginSensorName])
+	}
+
+	writer, ok := actuators[protoio.EpitopesResponseActuatorName].(protoio.ActuatorProcessWriter)
+	if !ok {
+		t.Fatal("epitopes response actuator does not expose process writer")
+	}
+	sync, err := writer.WriteForActuatorProcess(context.Background(), protoio.ActuatorProcessCall{
+		Scape:        "epitopes",
+		ActuatorName: protoio.ABCPredActuatorAliasName,
+		OpMode:       "gt",
+		Output:       []float64{values[protoio.EpitopesTargetSensorName]},
+	})
+	if err != nil {
+		t.Fatalf("write process actuator: %v", err)
+	}
+	if sync.EndFlag != 0 || len(sync.Fitness) != 1 || sync.Fitness[0] != 1 {
+		t.Fatalf("expected non-terminal correct classification sync, got %+v", sync)
+	}
+}
+
+func TestEpitopesProcessIOStartConfigUsesModeWindows(t *testing.T) {
+	source := currentEpitopesSource(context.Background())
+	opMode, params := epitopesProcessStartConfig("validation")
+	if opMode != "benchmark" {
+		t.Fatalf("expected validation to use benchmark simulator mode, got %s", opMode)
+	}
+	if params.StartBenchmarkIndex != source.windows.validationStart || params.EndBenchmarkIndex != source.windows.validationEnd {
+		t.Fatalf("expected validation benchmark bounds %+v, got %+v", source.windows, params)
+	}
+
+	opMode, params = epitopesProcessStartConfig("test")
+	if opMode != "benchmark" {
+		t.Fatalf("expected test to use benchmark simulator mode, got %s", opMode)
+	}
+	if params.StartBenchmarkIndex != source.windows.testStart || params.EndBenchmarkIndex != source.windows.testEnd {
+		t.Fatalf("expected test benchmark bounds %+v, got %+v", source.windows, params)
+	}
+}
+
+func TestEpitopesScapeEvaluateWithActorProcessIO(t *testing.T) {
+	genome := model.Genome{
+		SensorIDs: []string{
+			protoio.EpitopesSignalSensorName,
+			protoio.EpitopesMemorySensorName,
+			protoio.EpitopesTargetSensorName,
+			protoio.EpitopesProgressSensorName,
+			protoio.EpitopesMarginSensorName,
+		},
+		ActuatorIDs: []string{protoio.EpitopesResponseActuatorName},
+		Neurons: []model.Neuron{
+			{ID: "s", Activation: "identity"},
+			{ID: "m", Activation: "identity"},
+			{ID: "t", Activation: "identity"},
+			{ID: "p", Activation: "identity"},
+			{ID: "g", Activation: "identity"},
+			{ID: "r", Activation: "tanh"},
+		},
+		Synapses: []model.Synapse{
+			{From: "s", To: "r", Weight: 0.2, Enabled: true},
+			{From: "m", To: "r", Weight: 0.2, Enabled: true},
+			{From: "t", To: "r", Weight: 1.2, Enabled: true},
+			{From: "p", To: "r", Weight: 0.05, Enabled: true},
+			{From: "g", To: "r", Weight: 0.1, Enabled: true},
+		},
+	}
+
+	sensors, actuators, err := NewEpitopesProcessIO("gt", genome.SensorIDs, genome.ActuatorIDs)
+	if err != nil {
+		t.Fatalf("new epitopes process io: %v", err)
+	}
+	cortex, err := agent.NewCortex(
+		"epitopes-agent-actor-process-io",
+		genome,
+		sensors,
+		actuators,
+		[]string{"s", "m", "t", "p", "g"},
+		[]string{"r"},
+		nil,
+		agent.WithIOProcessContext("epitopes", "gt"),
+		agent.WithIOActors(),
+	)
+	if err != nil {
+		t.Fatalf("new cortex: %v", err)
+	}
+	t.Cleanup(cortex.Terminate)
+
+	fitness, trace, err := EpitopesScape{}.EvaluateMode(context.Background(), cortex, "gt")
+	if err != nil {
+		t.Fatalf("evaluate actor process io: %v", err)
+	}
+	if fitness < 0.9 {
+		t.Fatalf("expected high actor-process epitopes fitness, got %f trace=%+v", fitness, trace)
+	}
+	if surface, ok := trace["sensor_surface"].(string); !ok || surface != "extended" {
+		t.Fatalf("expected extended epitopes sensor surface, got %+v", trace)
+	}
+	if width, ok := trace["sensor_width"].(int); !ok || width != 5 {
+		t.Fatalf("expected epitopes sensor_width=5, got %+v", trace)
+	}
+	if surface, ok := trace["control_surface"].(string); !ok || surface != protoio.EpitopesResponseActuatorName {
+		t.Fatalf("expected control_surface=%s, got %+v", protoio.EpitopesResponseActuatorName, trace)
+	}
+}

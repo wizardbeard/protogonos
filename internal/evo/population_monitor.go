@@ -1973,6 +1973,9 @@ func (m *PopulationMonitor) buildIO(genome model.Genome) (map[string]protoio.Sen
 	if scape.UsesReferenceFXIO(scapeName, m.cfg.IOExecution) {
 		return scape.NewFXProcessIO(m.cfg.OpMode, genome.SensorIDs, genome.ActuatorIDs)
 	}
+	if scape.UsesReferenceEpitopesIO(scapeName, m.cfg.IOExecution) {
+		return scape.NewEpitopesProcessIO(m.cfg.OpMode, genome.SensorIDs, genome.ActuatorIDs)
+	}
 
 	var sensors map[string]protoio.Sensor
 	if len(genome.SensorIDs) > 0 {
