@@ -114,6 +114,94 @@ func TestFlatlandPublicProcessCommandWrapper(t *testing.T) {
 	}
 }
 
+func TestFlatlandProcessIOAdapters(t *testing.T) {
+	sensorIDs := []string{
+		protoio.DistanceScannerSensorAliasName,
+		protoio.ColorScannerSensorAliasName,
+		protoio.EnergyScannerSensorAliasName,
+	}
+	actuatorIDs := []string{protoio.TwoWheelsActuatorAliasName}
+
+	sensors, actuators, err := NewFlatlandProcessIO("gt", sensorIDs, actuatorIDs)
+	if err != nil {
+		t.Fatalf("new flatland process io: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = FlatlandScape{}.StopWithReason(context.Background(), "normal")
+	})
+
+	for _, sensorID := range sensorIDs {
+		reader, ok := sensors[sensorID].(protoio.SensorProcessReader)
+		if !ok {
+			t.Fatalf("sensor %s does not expose process reader", sensorID)
+		}
+		values, err := reader.ReadForSensorProcess(context.Background(), protoio.SensorProcessCall{
+			Scape:      "flatland",
+			SensorName: sensorID,
+			VL:         flatlandScannerDensity,
+			OpMode:     "gt",
+		})
+		if err != nil {
+			t.Fatalf("read process sensor %s: %v", sensorID, err)
+		}
+		if len(values) != flatlandScannerDensity {
+			t.Fatalf("expected scanner width %d from %s, got %+v", flatlandScannerDensity, sensorID, values)
+		}
+	}
+
+	writer, ok := actuators[protoio.TwoWheelsActuatorAliasName].(protoio.ActuatorProcessWriter)
+	if !ok {
+		t.Fatal("two_wheels actuator does not expose process writer")
+	}
+	sync, err := writer.WriteForActuatorProcess(context.Background(), protoio.ActuatorProcessCall{
+		Scape:        "flatland",
+		ActuatorName: protoio.TwoWheelsActuatorAliasName,
+		OpMode:       "gt",
+		Output:       []float64{1, 1},
+	})
+	if err != nil {
+		t.Fatalf("write process actuator: %v", err)
+	}
+	if sync.EndFlag != 0 || len(sync.Fitness) != 1 || sync.Fitness[0] <= 0 {
+		t.Fatalf("expected non-terminal positive flatland sync, got %+v", sync)
+	}
+}
+
+func TestFlatlandPublicProcessInstancesAreIsolated(t *testing.T) {
+	first := NewFlatlandPublicProcess()
+	second := NewFlatlandPublicProcess()
+	ctx := context.Background()
+
+	if response := first.Call(ctx, FlatlandPublicStartMessage{}); response.Err != nil || !response.OK {
+		t.Fatalf("start first response=%+v", response)
+	}
+	if response := second.Call(ctx, FlatlandPublicStartMessage{}); response.Err != nil || !response.OK {
+		t.Fatalf("start second response=%+v", response)
+	}
+	if response := first.Call(ctx, FlatlandPublicEnterMessage{Agent: FlatlandPublicAgent{ID: "first-agent"}}); response.Err != nil || !response.OK {
+		t.Fatalf("enter first response=%+v", response)
+	}
+	if response := second.Call(ctx, FlatlandPublicEnterMessage{Agent: FlatlandPublicAgent{ID: "second-agent"}}); response.Err != nil || !response.OK {
+		t.Fatalf("enter second response=%+v", response)
+	}
+
+	firstAgents := first.Call(ctx, FlatlandPublicGetAllMessage{})
+	if firstAgents.Err != nil || !firstAgents.OK || len(firstAgents.Agents) != 1 {
+		t.Fatalf("get first agents response=%+v", firstAgents)
+	}
+	if id, _ := firstAgents.Agents[0]["id"].(string); id != "first-agent" {
+		t.Fatalf("expected first process to retain only first-agent, got %+v", firstAgents)
+	}
+
+	secondAgents := second.Call(ctx, FlatlandPublicGetAllMessage{})
+	if secondAgents.Err != nil || !secondAgents.OK || len(secondAgents.Agents) != 1 {
+		t.Fatalf("get second agents response=%+v", secondAgents)
+	}
+	if id, _ := secondAgents.Agents[0]["id"].(string); id != "second-agent" {
+		t.Fatalf("expected second process to retain only second-agent, got %+v", secondAgents)
+	}
+}
+
 func TestFlatlandScapePublicLifecycleAndTick(t *testing.T) {
 	scape := FlatlandScape{}
 	if _, err := scape.TickPublic(context.Background()); err == nil {
@@ -1010,6 +1098,68 @@ func TestFlatlandScapeEvaluateWithTwoWheelsActuator(t *testing.T) {
 	}
 	if width, ok := trace["last_control_width"].(int); !ok || width != 2 {
 		t.Fatalf("expected two-channel control width, trace=%+v", trace)
+	}
+}
+
+func TestFlatlandScapeEvaluateWithActorProcessIO(t *testing.T) {
+	genome := model.Genome{
+		SensorIDs: []string{
+			protoio.FlatlandDistanceSensorName,
+			protoio.FlatlandEnergySensorName,
+		},
+		ActuatorIDs: []string{protoio.FlatlandTwoWheelsActuatorName},
+		Neurons: []model.Neuron{
+			{ID: "distance", Activation: "identity"},
+			{ID: "energy", Activation: "identity"},
+			{ID: "left", Activation: "tanh"},
+			{ID: "right", Activation: "tanh"},
+		},
+		Synapses: []model.Synapse{
+			{From: "distance", To: "left", Weight: -0.8, Enabled: true},
+			{From: "energy", To: "left", Weight: 0.25, Enabled: true},
+			{From: "distance", To: "right", Weight: 0.8, Enabled: true},
+			{From: "energy", To: "right", Weight: 0.25, Enabled: true},
+		},
+	}
+
+	sensors, actuators, err := NewFlatlandProcessIO("gt", genome.SensorIDs, genome.ActuatorIDs)
+	if err != nil {
+		t.Fatalf("new flatland process io: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = FlatlandScape{}.StopWithReason(context.Background(), "normal")
+	})
+	cortex, err := agent.NewCortex(
+		"flatland-agent-actor-process-io",
+		genome,
+		sensors,
+		actuators,
+		[]string{"distance", "energy"},
+		[]string{"left", "right"},
+		nil,
+		agent.WithIOProcessContext("flatland", "gt"),
+		agent.WithIOActors(),
+	)
+	if err != nil {
+		t.Fatalf("new cortex: %v", err)
+	}
+	t.Cleanup(cortex.Terminate)
+
+	fitness, trace, err := FlatlandScape{}.EvaluateMode(context.Background(), cortex, "gt")
+	if err != nil {
+		t.Fatalf("evaluate actor process io: %v", err)
+	}
+	if fitness <= 0 {
+		t.Fatalf("expected positive actor-process flatland fitness, got %f trace=%+v", fitness, trace)
+	}
+	if surface, ok := trace["sensor_surface"].(string); !ok || surface != "classic" {
+		t.Fatalf("expected classic flatland sensor surface, got %+v", trace)
+	}
+	if width, ok := trace["sensor_width"].(int); !ok || width != 2 {
+		t.Fatalf("expected flatland sensor_width=2, got %+v", trace)
+	}
+	if surface, ok := trace["control_surface"].(string); !ok || surface != protoio.FlatlandTwoWheelsActuatorName {
+		t.Fatalf("expected control_surface=%s, got %+v", protoio.FlatlandTwoWheelsActuatorName, trace)
 	}
 }
 
