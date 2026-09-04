@@ -746,3 +746,124 @@ func TestLLVMPhaseOrderingProcessCommandWrapper(t *testing.T) {
 		t.Fatalf("expected restart to clear process diagnostics, got %+v", restart.State)
 	}
 }
+
+func TestLLVMPhaseOrderingProcessIOAdapters(t *testing.T) {
+	sensorIDs := []string{
+		protoio.LLVMComplexitySensorName,
+		protoio.LLVMPassIndexSensorName,
+		protoio.LLVMAlignmentSensorName,
+		protoio.LLVMDiversitySensorName,
+		protoio.LLVMRuntimeGainSensorName,
+	}
+	actuatorIDs := []string{protoio.LLVMPhaseActuatorName}
+
+	sensors, actuators, err := NewLLVMPhaseOrderingProcessIO("gt", sensorIDs, actuatorIDs)
+	if err != nil {
+		t.Fatalf("new llvm process io: %v", err)
+	}
+	values := make(map[string]float64, len(sensorIDs))
+	for _, sensorID := range sensorIDs {
+		reader, ok := sensors[sensorID].(protoio.SensorProcessReader)
+		if !ok {
+			t.Fatalf("sensor %s does not expose process reader", sensorID)
+		}
+		value, err := reader.ReadForSensorProcess(context.Background(), protoio.SensorProcessCall{
+			Scape:      "llvm-phase-ordering",
+			SensorName: protoio.BitCodeStatisticsSensorAliasName,
+			VL:         1,
+			OpMode:     "gt",
+		})
+		if err != nil {
+			t.Fatalf("read process sensor %s: %v", sensorID, err)
+		}
+		if len(value) != 1 {
+			t.Fatalf("expected one scalar from %s, got %+v", sensorID, value)
+		}
+		values[sensorID] = value[0]
+	}
+	if values[protoio.LLVMComplexitySensorName] <= 0 {
+		t.Fatalf("expected positive complexity signal, got %+v", values)
+	}
+
+	writer, ok := actuators[protoio.LLVMPhaseActuatorName].(protoio.ActuatorProcessWriter)
+	if !ok {
+		t.Fatal("llvm phase actuator does not expose process writer")
+	}
+	sync, err := writer.WriteForActuatorProcess(context.Background(), protoio.ActuatorProcessCall{
+		Scape:        "llvm-phase-ordering",
+		ActuatorName: protoio.ChooseOptimizationPhaseActuatorAliasName,
+		OpMode:       "gt",
+		Output:       []float64{1 - 2*values[protoio.LLVMPassIndexSensorName]},
+	})
+	if err != nil {
+		t.Fatalf("write process actuator: %v", err)
+	}
+	if sync.EndFlag != 0 || len(sync.Fitness) != 1 || sync.Fitness[0] != 0 {
+		t.Fatalf("expected non-terminal zero-fitness optimize sync, got %+v", sync)
+	}
+}
+
+func TestLLVMPhaseOrderingScapeEvaluateWithActorProcessIO(t *testing.T) {
+	genome := model.Genome{
+		SensorIDs: []string{
+			protoio.LLVMComplexitySensorName,
+			protoio.LLVMPassIndexSensorName,
+			protoio.LLVMAlignmentSensorName,
+			protoio.LLVMDiversitySensorName,
+			protoio.LLVMRuntimeGainSensorName,
+		},
+		ActuatorIDs: []string{protoio.LLVMPhaseActuatorName},
+		Neurons: []model.Neuron{
+			{ID: "c", Activation: "identity"},
+			{ID: "p", Activation: "identity"},
+			{ID: "a", Activation: "identity"},
+			{ID: "d", Activation: "identity"},
+			{ID: "r", Activation: "identity"},
+			{ID: "o", Activation: "identity", Bias: 0.2},
+		},
+		Synapses: []model.Synapse{
+			{From: "c", To: "o", Weight: -0.6, Enabled: true},
+			{From: "p", To: "o", Weight: -1.2, Enabled: true},
+			{From: "a", To: "o", Weight: 0.5, Enabled: true},
+			{From: "d", To: "o", Weight: 0.4, Enabled: true},
+			{From: "r", To: "o", Weight: 0.3, Enabled: true},
+		},
+	}
+
+	sensors, actuators, err := NewLLVMPhaseOrderingProcessIO("gt", genome.SensorIDs, genome.ActuatorIDs)
+	if err != nil {
+		t.Fatalf("new llvm process io: %v", err)
+	}
+	cortex, err := agent.NewCortex(
+		"llvm-agent-actor-process-io",
+		genome,
+		sensors,
+		actuators,
+		[]string{"c", "p", "a", "d", "r"},
+		[]string{"o"},
+		nil,
+		agent.WithIOProcessContext("llvm-phase-ordering", "gt"),
+		agent.WithIOActors(),
+	)
+	if err != nil {
+		t.Fatalf("new cortex: %v", err)
+	}
+	t.Cleanup(cortex.Terminate)
+
+	fitness, trace, err := LLVMPhaseOrderingScape{}.EvaluateMode(context.Background(), cortex, "gt")
+	if err != nil {
+		t.Fatalf("evaluate actor process io: %v", err)
+	}
+	if fitness <= 0 {
+		t.Fatalf("expected positive actor-process llvm fitness, got %f trace=%+v", fitness, trace)
+	}
+	if surface, ok := trace["sensor_surface"].(string); !ok || surface != "extended" {
+		t.Fatalf("expected extended llvm sensor surface, got %+v", trace)
+	}
+	if width, ok := trace["sensor_width"].(int); !ok || width != 5 {
+		t.Fatalf("expected llvm sensor_width=5, got %+v", trace)
+	}
+	if surface, ok := trace["control_surface"].(string); !ok || surface != protoio.LLVMPhaseActuatorName {
+		t.Fatalf("expected control_surface=%s, got %+v", protoio.LLVMPhaseActuatorName, trace)
+	}
+}
