@@ -195,6 +195,61 @@ func TestFlatlandTwoWheelsControlUsesReferenceSpeedAndTurn(t *testing.T) {
 	}
 }
 
+func TestFlatlandPublicProcessStateActuatorCommands(t *testing.T) {
+	process := NewFlatlandPublicProcess()
+	ctx := context.Background()
+
+	if response := process.Call(ctx, FlatlandPublicStartMessage{}); response.Err != nil || !response.OK {
+		t.Fatalf("start response=%+v", response)
+	}
+	t.Cleanup(func() {
+		_ = process.Call(context.Background(), FlatlandPublicStopMessage{Reason: "normal"}).Err
+	})
+	if response := process.Call(ctx, FlatlandPublicEnterMessage{Agent: FlatlandPublicAgent{ID: "speaker"}}); response.Err != nil || !response.OK {
+		t.Fatalf("enter response=%+v", response)
+	}
+	before := process.Call(ctx, FlatlandPublicSenseMessage{AgentID: "speaker"})
+	if before.Err != nil || !before.OK {
+		t.Fatalf("sense response=%+v", before)
+	}
+	startAge, _ := before.Trace["age"].(int)
+	startEnergy, _ := before.Trace["energy"].(float64)
+
+	speak := process.Call(ctx, FlatlandPublicActMessage{
+		AgentID:      "speaker",
+		ActuatorName: flatlandSpeakActuatorName,
+		Output:       []float64{0.75},
+	})
+	if speak.Err != nil || !speak.OK {
+		t.Fatalf("speak response=%+v", speak)
+	}
+	if sound, _ := speak.Trace["sound"].(float64); sound != 0.75 {
+		t.Fatalf("expected sound=0.75, trace=%+v", speak.Trace)
+	}
+	if age, _ := speak.Trace["age"].(int); age != startAge {
+		t.Fatalf("expected speak to leave age unchanged, before=%d trace=%+v", startAge, speak.Trace)
+	}
+	if energy, _ := speak.Trace["energy"].(float64); energy != startEnergy {
+		t.Fatalf("expected speak to leave energy unchanged, before=%f trace=%+v", startEnergy, speak.Trace)
+	}
+
+	gestalt := process.Call(ctx, FlatlandPublicActMessage{
+		AgentID:      "speaker",
+		ActuatorName: flatlandGestaltActuatorName,
+		Output:       []float64{0.1, 0.2, 0.3},
+	})
+	if gestalt.Err != nil || !gestalt.OK {
+		t.Fatalf("gestalt response=%+v", gestalt)
+	}
+	gotGestalt := mustTraceFloat64Slice(t, gestalt.Trace, "gestalt")
+	if !reflect.DeepEqual(gotGestalt, []float64{0.1, 0.2, 0.3}) {
+		t.Fatalf("unexpected gestalt trace=%+v", gestalt.Trace)
+	}
+	if fitness := float64(gestalt.Fitness); math.Abs(fitness-0.001) > 1e-12 {
+		t.Fatalf("expected reference-style state-actuator fitness=0.001, got %+v", gestalt)
+	}
+}
+
 func TestFlatlandEpisodeTwoWheelsRotatesBeforeMoving(t *testing.T) {
 	episode := newFlatlandEpisode(flatlandModeConfig{
 		mode:            "test",

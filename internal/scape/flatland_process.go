@@ -7,6 +7,11 @@ import (
 	"strings"
 )
 
+const (
+	flatlandSpeakActuatorName   = "speak"
+	flatlandGestaltActuatorName = "gestalt_output"
+)
+
 type FlatlandPublicMessage interface {
 	isFlatlandPublicMessage()
 }
@@ -363,10 +368,6 @@ func (p *FlatlandPublicProcess) act(ctx context.Context, agentID string, actuato
 	if err := ctx.Err(); err != nil {
 		return 0, false, nil, err
 	}
-	control, err := flatlandControlFromActuatorOutput(actuatorName, output)
-	if err != nil {
-		return 0, false, nil, err
-	}
 
 	p.runtime.mu.Lock()
 	defer p.runtime.mu.Unlock()
@@ -386,6 +387,25 @@ func (p *FlatlandPublicProcess) act(ctx context.Context, agentID string, actuato
 	}
 
 	previousKills := flatlandReferenceKills(state.episode)
+	if flatlandApplyStateActuator(state, actuatorName, output) {
+		referenceFitness := flatlandActuatorFeedback(true, previousKills)
+		trace := flatlandPublicAgentTrace(state)
+		trace["move_step"] = 0
+		trace["hit_food"] = false
+		trace["hit_poison"] = false
+		trace["wall_collision"] = false
+		trace["terminal_reason"] = ""
+		trace["control_surface"] = strings.TrimSpace(actuatorName)
+		trace["last_control_width"] = len(output)
+		trace["reference_fitness"] = float64(referenceFitness)
+		trace["shaped_fitness"] = float64(flatlandPublicShapedFitness(state.episode))
+		trace["end"] = false
+		return referenceFitness, false, trace, nil
+	}
+	control, err := flatlandControlFromActuatorOutput(actuatorName, output)
+	if err != nil {
+		return 0, false, nil, err
+	}
 	moveStep, hitFood, hitPoison, wallCollision, reason := state.episode.stepControl(control)
 	if reason != "" {
 		state.terminated = true
@@ -405,6 +425,26 @@ func (p *FlatlandPublicProcess) act(ctx context.Context, agentID string, actuato
 	trace["end"] = state.terminated
 
 	return referenceFitness, state.terminated, trace, nil
+}
+
+func flatlandApplyStateActuator(state *flatlandPublicAgentState, actuatorName string, output []float64) bool {
+	if state == nil {
+		return false
+	}
+	switch strings.TrimSpace(strings.ToLower(actuatorName)) {
+	case flatlandSpeakActuatorName:
+		if len(output) == 0 {
+			state.sound = 0
+			return true
+		}
+		state.sound = output[0]
+		return true
+	case flatlandGestaltActuatorName:
+		state.gestalt = append([]float64(nil), output...)
+		return true
+	default:
+		return false
+	}
 }
 
 func (p *FlatlandPublicProcess) tick(ctx context.Context) (Trace, error) {
