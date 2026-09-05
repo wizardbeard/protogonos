@@ -367,6 +367,88 @@ func TestFlatlandPublicProcessShootCommandUsesReferenceEnergyGate(t *testing.T) 
 	}
 }
 
+func TestFlatlandPublicProcessCreateOffspringCommandReportsGrantState(t *testing.T) {
+	process := NewFlatlandPublicProcess()
+	ctx := context.Background()
+
+	if response := process.Call(ctx, FlatlandPublicStartMessage{}); response.Err != nil || !response.OK {
+		t.Fatalf("start response=%+v", response)
+	}
+	t.Cleanup(func() {
+		_ = process.Call(context.Background(), FlatlandPublicStopMessage{Reason: "normal"}).Err
+	})
+	if response := process.Call(ctx, FlatlandPublicEnterMessage{Agent: FlatlandPublicAgent{ID: "parent", NeuronCount: 3}}); response.Err != nil || !response.OK {
+		t.Fatalf("enter response=%+v", response)
+	}
+
+	noOp := process.Call(ctx, FlatlandPublicActMessage{
+		AgentID:      "parent",
+		ActuatorName: flatlandOffspringActuatorName,
+		Output:       []float64{0},
+	})
+	if noOp.Err != nil || !noOp.OK {
+		t.Fatalf("no-op offspring response=%+v", noOp)
+	}
+	if requested, _ := noOp.Trace["offspring_requested"].(bool); requested {
+		t.Fatalf("expected non-positive offspring output not to request clone, trace=%+v", noOp.Trace)
+	}
+	if energy, _ := noOp.Trace["energy"].(float64); math.Abs(energy-flatlandInitialEnergy) > 1e-12 {
+		t.Fatalf("expected no-op offspring output to leave energy unchanged, trace=%+v", noOp.Trace)
+	}
+
+	process.runtime.mu.Lock()
+	state := process.runtime.agents["parent"]
+	state.episode.energy = 1200
+	process.runtime.mu.Unlock()
+
+	denied := process.Call(ctx, FlatlandPublicActMessage{
+		AgentID:      "parent",
+		ActuatorName: flatlandOffspringActuatorName,
+		Output:       []float64{1},
+	})
+	if denied.Err != nil || !denied.OK {
+		t.Fatalf("denied offspring response=%+v", denied)
+	}
+	if requested, _ := denied.Trace["offspring_requested"].(bool); !requested {
+		t.Fatalf("expected offspring request to be recorded, trace=%+v", denied.Trace)
+	}
+	if granted, _ := denied.Trace["offspring_granted"].(bool); granted {
+		t.Fatalf("expected offspring request to be denied below grant threshold, trace=%+v", denied.Trace)
+	}
+	if cost, _ := denied.Trace["offspring_cost"].(float64); cost != 50 {
+		t.Fatalf("expected denied offspring cost=50, trace=%+v", denied.Trace)
+	}
+	if energy, _ := denied.Trace["energy"].(float64); math.Abs(energy-1150) > 1e-12 {
+		t.Fatalf("expected denied offspring energy=1150, trace=%+v", denied.Trace)
+	}
+
+	process.runtime.mu.Lock()
+	state = process.runtime.agents["parent"]
+	state.episode.energy = 1400
+	process.runtime.mu.Unlock()
+
+	granted := process.Call(ctx, FlatlandPublicActMessage{
+		AgentID:      "parent",
+		ActuatorName: flatlandOffspringActuatorName,
+		Output:       []float64{1},
+	})
+	if granted.Err != nil || !granted.OK {
+		t.Fatalf("granted offspring response=%+v", granted)
+	}
+	if grantedFlag, _ := granted.Trace["offspring_granted"].(bool); !grantedFlag {
+		t.Fatalf("expected offspring request to be granted, trace=%+v", granted.Trace)
+	}
+	if parentID, _ := granted.Trace["offspring_parent_id"].(string); parentID != "parent" {
+		t.Fatalf("expected offspring parent id to be recorded, trace=%+v", granted.Trace)
+	}
+	if cost, _ := granted.Trace["offspring_cost"].(float64); cost != 1300 {
+		t.Fatalf("expected granted offspring cost=1300, trace=%+v", granted.Trace)
+	}
+	if energy, _ := granted.Trace["energy"].(float64); math.Abs(energy-100) > 1e-12 {
+		t.Fatalf("expected granted offspring energy=100, trace=%+v", granted.Trace)
+	}
+}
+
 func TestFlatlandEpisodeTwoWheelsRotatesBeforeMoving(t *testing.T) {
 	episode := newFlatlandEpisode(flatlandModeConfig{
 		mode:            "test",

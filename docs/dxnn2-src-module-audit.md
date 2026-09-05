@@ -249,6 +249,7 @@ Status legend:
 - 2026-09-05: added Flatland public-process state actuator command parity for `speak` and `gestalt_output`, preserving avatar sound/gestalt state in traces while leaving movement, age, and energy unchanged.
 - 2026-09-05: added Flatland public-process `spear` actuator parity with reference-style energy gating, spear flag tracing, and terminal depletion handling after spear energy costs.
 - 2026-09-05: added Flatland public-process `shoot` actuator parity with reference-style energy costs, terminal depletion handling, non-positive no-op behavior, and no spear-state mutation.
+- 2026-09-05: added Flatland public-process `create_offspring` parity with reference neural-cost/grant threshold accounting and trace-visible clone request/grant metadata while leaving clone creation to exoself/population orchestration.
 - 2026-09-01: expanded DTM `scape.erl` protocol parity with `NewDTMSimulator`, exposing reference-style `sense`, `move`, reset, state inspection, terminal run accounting, and switch-event state over the existing delayed T-maze run flow.
 - 2026-09-01: expanded DTM `scape.erl` process parity with a typed `DTMProcess` command wrapper for start/stop/restart/sense/move/state flows over the direct simulator session.
 - 2026-09-01: expanded LLVM workflow protocol parity with `NewLLVMPhaseOrderingSimulator`, exposing direct `sense`, `optimize`, reset, state inspection, scalar/vector decision history, terminal reason, and context-scoped workflow-source state.

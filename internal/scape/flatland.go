@@ -16,20 +16,26 @@ import (
 type FlatlandScape struct{}
 
 type FlatlandPublicAgent struct {
-	ID     string
-	Mode   string
-	Decide func(input []float64) []float64
+	ID          string
+	Mode        string
+	NeuronCount int
+	Decide      func(input []float64) []float64
 }
 
 type flatlandPublicAgentState struct {
-	id         string
-	mode       string
-	episode    *flatlandEpisode
-	decide     func([]float64) []float64
-	terminated bool
-	sound      float64
-	gestalt    []float64
-	spear      bool
+	id                 string
+	mode               string
+	neuronCount        int
+	episode            *flatlandEpisode
+	decide             func([]float64) []float64
+	terminated         bool
+	sound              float64
+	gestalt            []float64
+	spear              bool
+	offspringRequested bool
+	offspringGranted   bool
+	offspringCost      float64
+	offspringParentID  string
 }
 
 type flatlandPublicRuntime struct {
@@ -147,10 +153,11 @@ func (FlatlandScape) EnterPublicAgent(agent FlatlandPublicAgent) error {
 	}
 	episode := newFlatlandEpisodeForAgent(cfg, agentID)
 	flatlandPublicWorld.agents[agentID] = &flatlandPublicAgentState{
-		id:      agentID,
-		mode:    mode,
-		episode: episode,
-		decide:  agent.Decide,
+		id:          agentID,
+		mode:        mode,
+		neuronCount: max(agent.NeuronCount, 0),
+		episode:     episode,
+		decide:      agent.Decide,
 	}
 	return nil
 }
@@ -261,6 +268,7 @@ func (FlatlandScape) UpdatePublicAgents(agents []FlatlandPublicAgent) error {
 				existing.episode = newFlatlandEpisodeForAgent(modeCfg, agentID)
 				existing.terminated = false
 			}
+			existing.neuronCount = max(agent.NeuronCount, 0)
 			existing.decide = agent.Decide
 			next[agentID] = existing
 			continue
@@ -277,10 +285,11 @@ func (FlatlandScape) UpdatePublicAgents(agents []FlatlandPublicAgent) error {
 			mode = modeCfg.mode
 		}
 		next[agentID] = &flatlandPublicAgentState{
-			id:      agentID,
-			mode:    mode,
-			episode: newFlatlandEpisodeForAgent(cfg, agentID),
-			decide:  agent.Decide,
+			id:          agentID,
+			mode:        mode,
+			neuronCount: max(agent.NeuronCount, 0),
+			episode:     newFlatlandEpisodeForAgent(cfg, agentID),
+			decide:      agent.Decide,
 		}
 	}
 
@@ -470,6 +479,7 @@ func flatlandPublicAgentTrace(state *flatlandPublicAgentState) Trace {
 	return Trace{
 		"id":                       state.id,
 		"mode":                     state.mode,
+		"neuron_count":             state.neuronCount,
 		"position":                 episode.position,
 		"age":                      episode.age,
 		"energy":                   episode.energy,
@@ -482,6 +492,10 @@ func flatlandPublicAgentTrace(state *flatlandPublicAgentState) Trace {
 		"sound":                    state.sound,
 		"gestalt":                  append([]float64(nil), state.gestalt...),
 		"spear":                    state.spear,
+		"offspring_requested":      state.offspringRequested,
+		"offspring_granted":        state.offspringGranted,
+		"offspring_cost":           state.offspringCost,
+		"offspring_parent_id":      state.offspringParentID,
 		"terminated":               state.terminated,
 	}
 }

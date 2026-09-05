@@ -8,10 +8,12 @@ import (
 )
 
 const (
-	flatlandSpeakActuatorName   = "speak"
-	flatlandGestaltActuatorName = "gestalt_output"
-	flatlandSpearActuatorName   = "spear"
-	flatlandShootActuatorName   = "shoot"
+	flatlandSpeakActuatorName     = "speak"
+	flatlandGestaltActuatorName   = "gestalt_output"
+	flatlandSpearActuatorName     = "spear"
+	flatlandShootActuatorName     = "shoot"
+	flatlandOffspringActuatorName = "create_offspring"
+	flatlandNeuralCost            = 100.0
 )
 
 type FlatlandPublicMessage interface {
@@ -203,10 +205,11 @@ func (p *FlatlandPublicProcess) enter(agent FlatlandPublicAgent) error {
 		mode = modeCfg.mode
 	}
 	p.runtime.agents[agentID] = &flatlandPublicAgentState{
-		id:      agentID,
-		mode:    mode,
-		episode: newFlatlandEpisodeForAgent(cfg, agentID),
-		decide:  agent.Decide,
+		id:          agentID,
+		mode:        mode,
+		neuronCount: max(agent.NeuronCount, 0),
+		episode:     newFlatlandEpisodeForAgent(cfg, agentID),
+		decide:      agent.Decide,
 	}
 	return nil
 }
@@ -250,6 +253,7 @@ func (p *FlatlandPublicProcess) updateAgents(agents []FlatlandPublicAgent) error
 				existing.episode = newFlatlandEpisodeForAgent(modeCfg, agentID)
 				existing.terminated = false
 			}
+			existing.neuronCount = max(agent.NeuronCount, 0)
 			existing.decide = agent.Decide
 			next[agentID] = existing
 			continue
@@ -266,10 +270,11 @@ func (p *FlatlandPublicProcess) updateAgents(agents []FlatlandPublicAgent) error
 			mode = modeCfg.mode
 		}
 		next[agentID] = &flatlandPublicAgentState{
-			id:      agentID,
-			mode:    mode,
-			episode: newFlatlandEpisodeForAgent(cfg, agentID),
-			decide:  agent.Decide,
+			id:          agentID,
+			mode:        mode,
+			neuronCount: max(agent.NeuronCount, 0),
+			episode:     newFlatlandEpisodeForAgent(cfg, agentID),
+			decide:      agent.Decide,
 		}
 	}
 
@@ -472,6 +477,31 @@ func flatlandApplyStateActuator(state *flatlandPublicAgentState, actuatorName st
 			state.episode.energy -= 20
 		} else {
 			state.episode.energy -= 1
+		}
+		if state.episode.energy <= 0 {
+			state.episode.energy = 0
+			return true, "depleted"
+		}
+		return true, ""
+	case flatlandOffspringActuatorName:
+		state.offspringRequested = false
+		state.offspringGranted = false
+		state.offspringCost = 0
+		state.offspringParentID = ""
+		if len(output) == 0 || output[0] <= 0 {
+			return true, ""
+		}
+		offspringCost := float64(max(state.neuronCount, 0)) * flatlandNeuralCost
+		totalGrantCost := offspringCost + 1000
+		state.offspringRequested = true
+		state.offspringParentID = state.id
+		if state.episode.energy > totalGrantCost {
+			state.episode.energy -= totalGrantCost
+			state.offspringGranted = true
+			state.offspringCost = totalGrantCost
+		} else {
+			state.episode.energy -= 50
+			state.offspringCost = 50
 		}
 		if state.episode.energy <= 0 {
 			state.episode.energy = 0
