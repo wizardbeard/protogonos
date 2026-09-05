@@ -178,6 +178,8 @@ func ConstructCortex(
 
 	sensors := append([]string(nil), morph.Sensors()...)
 	actuators := append([]string(nil), morph.Actuators()...)
+	referenceSensors := referenceSensorRecordSpecs(constraint.Morphology)
+	referenceActuators := referenceActuatorRecordSpecs(constraint.Morphology)
 
 	isSubstrateEncoding := strings.EqualFold(strings.TrimSpace(encodingType), "substrate")
 	seedSensors := append([]string(nil), sensors...)
@@ -250,6 +252,8 @@ func ConstructCortex(
 		Synapses:            append([]model.Synapse(nil), seed.Synapses...),
 		SensorIDs:           sensors,
 		ActuatorIDs:         actuators,
+		ReferenceSensors:    referenceSensors,
+		ReferenceActuators:  referenceActuators,
 		SensorNeuronLinks:   genomeSensorLinks,
 		NeuronActuatorLinks: genomeActuatorLinks,
 		SensorLinks:         sensorLinksCount,
@@ -550,6 +554,48 @@ func referenceSensorVectorLengths(morphologyName string) map[string]int {
 			continue
 		}
 		out[name] = spec.VL
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
+}
+
+func referenceSensorRecordSpecs(morphologyName string) []model.IORecordSpec {
+	if !usesReferenceMorphologySpecs(morphologyName) {
+		return nil
+	}
+	specs, err := morphology.GetReferenceSensorSpecs(morphologyName, "")
+	if err != nil {
+		return nil
+	}
+	return referenceIORecordSpecs(specs)
+}
+
+func referenceActuatorRecordSpecs(morphologyName string) []model.IORecordSpec {
+	if !usesReferenceMorphologySpecs(morphologyName) {
+		return nil
+	}
+	specs, err := morphology.GetReferenceActuatorSpecs(morphologyName, "")
+	if err != nil {
+		return nil
+	}
+	return referenceIORecordSpecs(specs)
+}
+
+func referenceIORecordSpecs(specs []morphology.IOSpec) []model.IORecordSpec {
+	out := make([]model.IORecordSpec, 0, len(specs))
+	for _, spec := range specs {
+		out = append(out, model.IORecordSpec{
+			Name:          spec.Name,
+			ReferenceName: spec.ReferenceName,
+			Type:          spec.Type,
+			ScapeKind:     spec.ScapeKind,
+			ScapeName:     spec.ScapeName,
+			Format:        spec.Format,
+			VL:            spec.VL,
+			Parameters:    append([]string(nil), spec.Parameters...),
+		})
 	}
 	if len(out) == 0 {
 		return nil

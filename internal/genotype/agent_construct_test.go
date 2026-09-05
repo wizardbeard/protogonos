@@ -750,6 +750,36 @@ func TestConstructCortexUsesReferenceSensorVectorLength(t *testing.T) {
 	}
 }
 
+func TestConstructCortexStoresReferenceIOSpecs(t *testing.T) {
+	constraint := DefaultConstructConstraint()
+	constraint.Morphology = "general_predictor"
+
+	out, err := ConstructCortex(
+		"agent-reference-io-records",
+		0,
+		constraint,
+		"neural",
+		"none",
+		"l2l_feedforward",
+		rand.New(rand.NewSource(84)),
+	)
+	if err != nil {
+		t.Fatalf("construct cortex with reference io records: %v", err)
+	}
+	if len(out.Genome.ReferenceSensors) != 1 {
+		t.Fatalf("expected one reference sensor record, got=%+v", out.Genome.ReferenceSensors)
+	}
+	if got := out.Genome.ReferenceSensors[0]; got.ReferenceName != protoio.GeneralPredictorSensorAliasName || got.VL != 30 || got.ScapeName != "scape_GTSA" {
+		t.Fatalf("unexpected reference sensor record: %+v", got)
+	}
+	if len(out.Genome.ReferenceActuators) != 1 {
+		t.Fatalf("expected one reference actuator record, got=%+v", out.Genome.ReferenceActuators)
+	}
+	if got := out.Genome.ReferenceActuators[0]; got.ReferenceName != protoio.GeneralPredictorActuatorAliasName || got.VL != 1 || got.ScapeName != "scape_GTSA" {
+		t.Fatalf("unexpected reference actuator record: %+v", got)
+	}
+}
+
 func TestDefaultSubstrateDensities(t *testing.T) {
 	got := defaultSubstrateDensities(5)
 	want := []int{1, 1, 5, 5, 5}

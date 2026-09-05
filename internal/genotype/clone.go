@@ -24,6 +24,8 @@ func CloneGenome(g model.Genome) model.Genome {
 	}
 	out.SensorIDs = append([]string(nil), g.SensorIDs...)
 	out.ActuatorIDs = append([]string(nil), g.ActuatorIDs...)
+	out.ReferenceSensors = cloneIORecordSpecs(g.ReferenceSensors)
+	out.ReferenceActuators = cloneIORecordSpecs(g.ReferenceActuators)
 	if g.ActuatorTunables != nil {
 		out.ActuatorTunables = make(map[string]float64, len(g.ActuatorTunables))
 		for k, v := range g.ActuatorTunables {
@@ -60,6 +62,17 @@ func CloneGenome(g model.Genome) model.Genome {
 	if g.Strategy != nil {
 		s := *g.Strategy
 		out.Strategy = &s
+	}
+	return out
+}
+
+func cloneIORecordSpecs(specs []model.IORecordSpec) []model.IORecordSpec {
+	if len(specs) == 0 {
+		return nil
+	}
+	out := append([]model.IORecordSpec(nil), specs...)
+	for i := range out {
+		out[i].Parameters = append([]string(nil), out[i].Parameters...)
 	}
 	return out
 }

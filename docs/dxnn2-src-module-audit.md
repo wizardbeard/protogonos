@@ -310,6 +310,7 @@ Status legend:
 - 2026-09-04: expanded non-scape `sensor.erl`/`actuator.erl` IO parity with Go-native `rng` and `pts` registry components, including reference-name alias normalization, process-call VL handling for `rng`, reference default/test feedback tuples for `pts`, and utility-IO exclusion from random add-sensor/add-actuator mutation candidates.
 - 2026-09-04: expanded `morphology.erl` record-surface parity with current-scope reference IO descriptor helpers that preserve Erlang `#sensor{}`/`#actuator{}` names, canonical runtime IDs, private/public scape metadata, formats, vector lengths, and parameters alongside the existing name-only runtime morphology APIs.
 - 2026-09-04: wired reference morphology descriptor `vl` values into genotype constructor paths for reference morphology names, so sensor `vl` drives seed inbound weight arity and actuator `vl` drives output-neuron multiplicity while preserving explicit `ActuatorVectorLengths` override precedence.
+- 2026-09-04: persisted reference morphology IO descriptor metadata on constructed genomes (`reference_sensors` / `reference_actuators`) and codec/run-artifact paths, so exported or replayed genomes retain Erlang `#sensor{}` / `#actuator{}` shape without recomputing it from names.
 
 ## Summary
 

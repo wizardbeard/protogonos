@@ -15,6 +15,8 @@ type Genome struct {
 	Synapses            []Synapse            `json:"synapses"`
 	SensorIDs           []string             `json:"sensor_ids"`
 	ActuatorIDs         []string             `json:"actuator_ids"`
+	ReferenceSensors    []IORecordSpec       `json:"reference_sensors,omitempty"`
+	ReferenceActuators  []IORecordSpec       `json:"reference_actuators,omitempty"`
 	ActuatorTunables    map[string]float64   `json:"actuator_tunables,omitempty"`
 	ActuatorGenerations map[string]int       `json:"actuator_generations,omitempty"`
 	SensorNeuronLinks   []SensorNeuronLink   `json:"sensor_neuron_links,omitempty"`
@@ -24,6 +26,17 @@ type Genome struct {
 	Substrate           *SubstrateConfig     `json:"substrate,omitempty"`
 	Plasticity          *PlasticityConfig    `json:"plasticity,omitempty"`
 	Strategy            *StrategyConfig      `json:"strategy,omitempty"`
+}
+
+type IORecordSpec struct {
+	Name          string   `json:"name"`
+	ReferenceName string   `json:"reference_name,omitempty"`
+	Type          string   `json:"type,omitempty"`
+	ScapeKind     string   `json:"scape_kind,omitempty"`
+	ScapeName     string   `json:"scape_name,omitempty"`
+	Format        string   `json:"format,omitempty"`
+	VL            int      `json:"vl,omitempty"`
+	Parameters    []string `json:"parameters,omitempty"`
 }
 
 type SensorNeuronLink struct {

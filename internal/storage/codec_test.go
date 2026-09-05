@@ -147,6 +147,30 @@ func TestGenomeCodecRoundTrip(t *testing.T) {
 		},
 		SensorIDs:   []string{"sensor:input"},
 		ActuatorIDs: []string{"actuator:output"},
+		ReferenceSensors: []model.IORecordSpec{
+			{
+				Name:          "sensor:input",
+				ReferenceName: "general_predictor",
+				Type:          "standard",
+				ScapeKind:     "private",
+				ScapeName:     "scape_GTSA",
+				Format:        "no_geo",
+				VL:            30,
+				Parameters:    []string{"10"},
+			},
+		},
+		ReferenceActuators: []model.IORecordSpec{
+			{
+				Name:          "actuator:output",
+				ReferenceName: "choose_OptimizationPhase",
+				Type:          "standard",
+				ScapeKind:     "private",
+				ScapeName:     "scape_LLVMPhaseOrdering",
+				Format:        "no_geo",
+				VL:            55,
+				Parameters:    []string{"bzip2"},
+			},
+		},
 	}
 
 	encoded, err := EncodeGenome(input)
@@ -164,6 +188,12 @@ func TestGenomeCodecRoundTrip(t *testing.T) {
 	}
 	if len(decoded.Neurons) != len(input.Neurons) {
 		t.Fatalf("neuron count mismatch: got=%d want=%d", len(decoded.Neurons), len(input.Neurons))
+	}
+	if len(decoded.ReferenceSensors) != 1 || decoded.ReferenceSensors[0].ReferenceName != "general_predictor" || decoded.ReferenceSensors[0].VL != 30 {
+		t.Fatalf("reference sensor metadata mismatch: %+v", decoded.ReferenceSensors)
+	}
+	if len(decoded.ReferenceActuators) != 1 || decoded.ReferenceActuators[0].ReferenceName != "choose_OptimizationPhase" || decoded.ReferenceActuators[0].VL != 55 {
+		t.Fatalf("reference actuator metadata mismatch: %+v", decoded.ReferenceActuators)
 	}
 }
 
