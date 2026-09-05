@@ -327,14 +327,19 @@ func (FlatlandScape) ActPublicAgent(ctx context.Context, agentID string, output 
 	}
 	if state.terminated {
 		trace := flatlandPublicAgentTrace(state)
+		trace["reference_fitness"] = 0.0
+		trace["shaped_fitness"] = float64(flatlandPublicShapedFitness(state.episode))
 		trace["end"] = true
 		return 0, true, trace, nil
 	}
 
+	previousKills := flatlandReferenceKills(state.episode)
 	moveStep, hitFood, hitPoison, wallCollision, reason := state.episode.step(control.move)
 	if reason != "" {
 		state.terminated = true
 	}
+	referenceFitness := flatlandActuatorFeedback(!state.terminated, previousKills)
+	shapedFitness := flatlandPublicShapedFitness(state.episode)
 	trace := flatlandPublicAgentTrace(state)
 	trace["move_step"] = moveStep
 	trace["hit_food"] = hitFood
@@ -343,16 +348,11 @@ func (FlatlandScape) ActPublicAgent(ctx context.Context, agentID string, output 
 	trace["terminal_reason"] = reason
 	trace["control_surface"] = "step_output"
 	trace["last_control_width"] = control.width
+	trace["reference_fitness"] = float64(referenceFitness)
+	trace["shaped_fitness"] = float64(shapedFitness)
 	trace["end"] = state.terminated
 
-	fitness := clamp(
-		float64(state.episode.age)/float64(state.episode.maxAge)+
-			0.25*state.episode.normalizedEnergy()+
-			0.1*float64(state.episode.foodCollected-state.episode.poisonHits),
-		0,
-		1.4,
-	)
-	return Fitness(fitness), state.terminated, trace, nil
+	return referenceFitness, state.terminated, trace, nil
 }
 
 func (FlatlandScape) TickPublic(ctx context.Context) (Trace, error) {
@@ -478,6 +478,37 @@ func flatlandPublicAgentTrace(state *flatlandPublicAgentState) Trace {
 		"predator_pressure_events": episode.predatorPressureEvents,
 		"terminated":               state.terminated,
 	}
+}
+
+func flatlandReferenceKills(episode *flatlandEpisode) int {
+	if episode == nil {
+		return 0
+	}
+	return episode.foodCollected + episode.preyCollected
+}
+
+func flatlandActuatorFeedback(alive bool, previousKills int) Fitness {
+	if !alive {
+		return 0
+	}
+	return Fitness(0.001 + float64(previousKills))
+}
+
+func flatlandPublicShapedFitness(episode *flatlandEpisode) Fitness {
+	if episode == nil {
+		return 0
+	}
+	maxAge := episode.maxAge
+	if maxAge <= 0 {
+		maxAge = 1
+	}
+	return Fitness(clamp(
+		float64(episode.age)/float64(maxAge)+
+			0.25*episode.normalizedEnergy()+
+			0.1*float64(episode.foodCollected-episode.poisonHits),
+		0,
+		1.4,
+	))
 }
 
 func defaultFlatlandPublicPolicy(sense flatlandSenseInput) []float64 {

@@ -77,6 +77,15 @@ func TestFlatlandPublicProcessCommandWrapper(t *testing.T) {
 	if act.Fitness <= 0 {
 		t.Fatalf("expected positive act fitness, got %+v", act)
 	}
+	if math.Abs(float64(act.Fitness)-0.001) > 1e-12 {
+		t.Fatalf("expected reference-style immediate act fitness=0.001, got %+v", act)
+	}
+	if referenceFitness, _ := act.Trace["reference_fitness"].(float64); math.Abs(referenceFitness-0.001) > 1e-12 {
+		t.Fatalf("expected reference_fitness trace=0.001, got %+v", act.Trace)
+	}
+	if shapedFitness, _ := act.Trace["shaped_fitness"].(float64); shapedFitness <= float64(act.Fitness) {
+		t.Fatalf("expected shaped_fitness diagnostic above immediate feedback, got %+v", act.Trace)
+	}
 	if width, _ := act.Trace["last_control_width"].(int); width != 1 {
 		t.Fatalf("expected single-channel control trace, got %+v", act.Trace)
 	}
@@ -162,8 +171,11 @@ func TestFlatlandProcessIOAdapters(t *testing.T) {
 	if err != nil {
 		t.Fatalf("write process actuator: %v", err)
 	}
-	if sync.EndFlag != 0 || len(sync.Fitness) != 1 || sync.Fitness[0] <= 0 {
-		t.Fatalf("expected non-terminal positive flatland sync, got %+v", sync)
+	if sync.EndFlag != 0 || len(sync.Fitness) != 1 {
+		t.Fatalf("expected non-terminal single-channel flatland sync, got %+v", sync)
+	}
+	if math.Abs(sync.Fitness[0]-0.001) > 1e-12 {
+		t.Fatalf("expected reference-style immediate flatland sync fitness=0.001, got %+v", sync)
 	}
 }
 
