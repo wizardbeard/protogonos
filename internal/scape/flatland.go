@@ -29,6 +29,7 @@ type flatlandPublicAgentState struct {
 	terminated bool
 	sound      float64
 	gestalt    []float64
+	spear      bool
 }
 
 type flatlandPublicRuntime struct {
@@ -480,6 +481,7 @@ func flatlandPublicAgentTrace(state *flatlandPublicAgentState) Trace {
 		"predator_pressure_events": episode.predatorPressureEvents,
 		"sound":                    state.sound,
 		"gestalt":                  append([]float64(nil), state.gestalt...),
+		"spear":                    state.spear,
 		"terminated":               state.terminated,
 	}
 }

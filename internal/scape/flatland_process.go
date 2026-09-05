@@ -10,6 +10,7 @@ import (
 const (
 	flatlandSpeakActuatorName   = "speak"
 	flatlandGestaltActuatorName = "gestalt_output"
+	flatlandSpearActuatorName   = "spear"
 )
 
 type FlatlandPublicMessage interface {
@@ -387,20 +388,23 @@ func (p *FlatlandPublicProcess) act(ctx context.Context, agentID string, actuato
 	}
 
 	previousKills := flatlandReferenceKills(state.episode)
-	if flatlandApplyStateActuator(state, actuatorName, output) {
-		referenceFitness := flatlandActuatorFeedback(true, previousKills)
+	if handled, terminalReason := flatlandApplyStateActuator(state, actuatorName, output); handled {
+		if terminalReason != "" {
+			state.terminated = true
+		}
+		referenceFitness := flatlandActuatorFeedback(!state.terminated, previousKills)
 		trace := flatlandPublicAgentTrace(state)
 		trace["move_step"] = 0
 		trace["hit_food"] = false
 		trace["hit_poison"] = false
 		trace["wall_collision"] = false
-		trace["terminal_reason"] = ""
+		trace["terminal_reason"] = terminalReason
 		trace["control_surface"] = strings.TrimSpace(actuatorName)
 		trace["last_control_width"] = len(output)
 		trace["reference_fitness"] = float64(referenceFitness)
 		trace["shaped_fitness"] = float64(flatlandPublicShapedFitness(state.episode))
-		trace["end"] = false
-		return referenceFitness, false, trace, nil
+		trace["end"] = state.terminated
+		return referenceFitness, state.terminated, trace, nil
 	}
 	control, err := flatlandControlFromActuatorOutput(actuatorName, output)
 	if err != nil {
@@ -427,23 +431,40 @@ func (p *FlatlandPublicProcess) act(ctx context.Context, agentID string, actuato
 	return referenceFitness, state.terminated, trace, nil
 }
 
-func flatlandApplyStateActuator(state *flatlandPublicAgentState, actuatorName string, output []float64) bool {
+func flatlandApplyStateActuator(state *flatlandPublicAgentState, actuatorName string, output []float64) (bool, string) {
 	if state == nil {
-		return false
+		return false, ""
 	}
 	switch strings.TrimSpace(strings.ToLower(actuatorName)) {
 	case flatlandSpeakActuatorName:
 		if len(output) == 0 {
 			state.sound = 0
-			return true
+			return true, ""
 		}
 		state.sound = output[0]
-		return true
+		return true, ""
 	case flatlandGestaltActuatorName:
 		state.gestalt = append([]float64(nil), output...)
-		return true
+		return true, ""
+	case flatlandSpearActuatorName:
+		if len(output) == 0 || output[0] <= 0 {
+			state.spear = false
+			return true, ""
+		}
+		if state.episode.energy > 100 {
+			state.episode.energy -= 10
+			state.spear = true
+		} else {
+			state.episode.energy -= 1
+			state.spear = false
+		}
+		if state.episode.energy <= 0 {
+			state.episode.energy = 0
+			return true, "depleted"
+		}
+		return true, ""
 	default:
-		return false
+		return false, ""
 	}
 }
 

@@ -250,6 +250,60 @@ func TestFlatlandPublicProcessStateActuatorCommands(t *testing.T) {
 	}
 }
 
+func TestFlatlandPublicProcessSpearCommandUsesReferenceEnergyGate(t *testing.T) {
+	process := NewFlatlandPublicProcess()
+	ctx := context.Background()
+
+	if response := process.Call(ctx, FlatlandPublicStartMessage{}); response.Err != nil || !response.OK {
+		t.Fatalf("start response=%+v", response)
+	}
+	t.Cleanup(func() {
+		_ = process.Call(context.Background(), FlatlandPublicStopMessage{Reason: "normal"}).Err
+	})
+	if response := process.Call(ctx, FlatlandPublicEnterMessage{Agent: FlatlandPublicAgent{ID: "hunter"}}); response.Err != nil || !response.OK {
+		t.Fatalf("enter response=%+v", response)
+	}
+
+	low := process.Call(ctx, FlatlandPublicActMessage{
+		AgentID:      "hunter",
+		ActuatorName: flatlandSpearActuatorName,
+		Output:       []float64{1},
+	})
+	if low.Err != nil || !low.OK {
+		t.Fatalf("low-energy spear response=%+v", low)
+	}
+	if spear, _ := low.Trace["spear"].(bool); spear {
+		t.Fatalf("expected low-energy spear to remain disabled, trace=%+v", low.Trace)
+	}
+	if energy, _ := low.Trace["energy"].(float64); math.Abs(energy-(flatlandInitialEnergy-1)) > 1e-12 {
+		t.Fatalf("expected low-energy spear cost=1, trace=%+v", low.Trace)
+	}
+	if end, _ := low.Trace["end"].(bool); end {
+		t.Fatalf("expected low-energy spear not to terminate at default energy, trace=%+v", low.Trace)
+	}
+
+	process.runtime.mu.Lock()
+	state := process.runtime.agents["hunter"]
+	state.episode.energy = 150
+	state.spear = false
+	process.runtime.mu.Unlock()
+
+	high := process.Call(ctx, FlatlandPublicActMessage{
+		AgentID:      "hunter",
+		ActuatorName: flatlandSpearActuatorName,
+		Output:       []float64{1},
+	})
+	if high.Err != nil || !high.OK {
+		t.Fatalf("high-energy spear response=%+v", high)
+	}
+	if spear, _ := high.Trace["spear"].(bool); !spear {
+		t.Fatalf("expected high-energy spear to enable spear flag, trace=%+v", high.Trace)
+	}
+	if energy, _ := high.Trace["energy"].(float64); math.Abs(energy-140) > 1e-12 {
+		t.Fatalf("expected high-energy spear cost=10, trace=%+v", high.Trace)
+	}
+}
+
 func TestFlatlandEpisodeTwoWheelsRotatesBeforeMoving(t *testing.T) {
 	episode := newFlatlandEpisode(flatlandModeConfig{
 		mode:            "test",
