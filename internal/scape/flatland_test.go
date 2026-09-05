@@ -304,6 +304,69 @@ func TestFlatlandPublicProcessSpearCommandUsesReferenceEnergyGate(t *testing.T) 
 	}
 }
 
+func TestFlatlandPublicProcessShootCommandUsesReferenceEnergyGate(t *testing.T) {
+	process := NewFlatlandPublicProcess()
+	ctx := context.Background()
+
+	if response := process.Call(ctx, FlatlandPublicStartMessage{}); response.Err != nil || !response.OK {
+		t.Fatalf("start response=%+v", response)
+	}
+	t.Cleanup(func() {
+		_ = process.Call(context.Background(), FlatlandPublicStopMessage{Reason: "normal"}).Err
+	})
+	if response := process.Call(ctx, FlatlandPublicEnterMessage{Agent: FlatlandPublicAgent{ID: "shooter"}}); response.Err != nil || !response.OK {
+		t.Fatalf("enter response=%+v", response)
+	}
+
+	noOp := process.Call(ctx, FlatlandPublicActMessage{
+		AgentID:      "shooter",
+		ActuatorName: flatlandShootActuatorName,
+		Output:       []float64{0},
+	})
+	if noOp.Err != nil || !noOp.OK {
+		t.Fatalf("no-op shoot response=%+v", noOp)
+	}
+	if energy, _ := noOp.Trace["energy"].(float64); math.Abs(energy-flatlandInitialEnergy) > 1e-12 {
+		t.Fatalf("expected non-positive shoot output to leave energy unchanged, trace=%+v", noOp.Trace)
+	}
+
+	low := process.Call(ctx, FlatlandPublicActMessage{
+		AgentID:      "shooter",
+		ActuatorName: flatlandShootActuatorName,
+		Output:       []float64{1},
+	})
+	if low.Err != nil || !low.OK {
+		t.Fatalf("low-energy shoot response=%+v", low)
+	}
+	if energy, _ := low.Trace["energy"].(float64); math.Abs(energy-(flatlandInitialEnergy-1)) > 1e-12 {
+		t.Fatalf("expected low-energy shoot cost=1, trace=%+v", low.Trace)
+	}
+	if spear, _ := low.Trace["spear"].(bool); spear {
+		t.Fatalf("expected shoot not to enable spear, trace=%+v", low.Trace)
+	}
+
+	process.runtime.mu.Lock()
+	state := process.runtime.agents["shooter"]
+	state.episode.energy = 150
+	state.spear = true
+	process.runtime.mu.Unlock()
+
+	high := process.Call(ctx, FlatlandPublicActMessage{
+		AgentID:      "shooter",
+		ActuatorName: flatlandShootActuatorName,
+		Output:       []float64{1},
+	})
+	if high.Err != nil || !high.OK {
+		t.Fatalf("high-energy shoot response=%+v", high)
+	}
+	if energy, _ := high.Trace["energy"].(float64); math.Abs(energy-130) > 1e-12 {
+		t.Fatalf("expected high-energy shoot cost=20, trace=%+v", high.Trace)
+	}
+	if spear, _ := high.Trace["spear"].(bool); !spear {
+		t.Fatalf("expected shoot to preserve spear flag, trace=%+v", high.Trace)
+	}
+}
+
 func TestFlatlandEpisodeTwoWheelsRotatesBeforeMoving(t *testing.T) {
 	episode := newFlatlandEpisode(flatlandModeConfig{
 		mode:            "test",

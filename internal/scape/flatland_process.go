@@ -11,6 +11,7 @@ const (
 	flatlandSpeakActuatorName   = "speak"
 	flatlandGestaltActuatorName = "gestalt_output"
 	flatlandSpearActuatorName   = "spear"
+	flatlandShootActuatorName   = "shoot"
 )
 
 type FlatlandPublicMessage interface {
@@ -457,6 +458,20 @@ func flatlandApplyStateActuator(state *flatlandPublicAgentState, actuatorName st
 		} else {
 			state.episode.energy -= 1
 			state.spear = false
+		}
+		if state.episode.energy <= 0 {
+			state.episode.energy = 0
+			return true, "depleted"
+		}
+		return true, ""
+	case flatlandShootActuatorName:
+		if len(output) == 0 || output[0] <= 0 {
+			return true, ""
+		}
+		if state.episode.energy > 100 {
+			state.episode.energy -= 20
+		} else {
+			state.episode.energy -= 1
 		}
 		if state.episode.energy <= 0 {
 			state.episode.energy = 0
