@@ -102,7 +102,11 @@ func (a *flatlandProcessIOActuator) WriteForActuatorProcess(ctx context.Context,
 
 	output := append([]float64(nil), call.Output...)
 	a.state.last = append([]float64(nil), output...)
-	response := a.state.process.Call(ctx, FlatlandPublicActMessage{AgentID: a.state.agentID, Output: output})
+	response := a.state.process.Call(ctx, FlatlandPublicActMessage{
+		AgentID:      a.state.agentID,
+		Output:       output,
+		ActuatorName: a.name,
+	})
 	a.state.cache = nil
 	if response.Err != nil {
 		return protoio.ActuatorSyncMessage{}, response.Err

@@ -334,7 +334,7 @@ func (FlatlandScape) ActPublicAgent(ctx context.Context, agentID string, output 
 	}
 
 	previousKills := flatlandReferenceKills(state.episode)
-	moveStep, hitFood, hitPoison, wallCollision, reason := state.episode.step(control.move)
+	moveStep, hitFood, hitPoison, wallCollision, reason := state.episode.stepControl(control)
 	if reason != "" {
 		state.terminated = true
 	}
@@ -403,7 +403,7 @@ func (FlatlandScape) TickPublic(ctx context.Context) (Trace, error) {
 		if err != nil {
 			return nil, err
 		}
-		_, _, _, _, reason := state.episode.step(control.move)
+		_, _, _, _, reason := state.episode.stepControl(control)
 		if reason != "" {
 			state.terminated = true
 			terminated++
@@ -869,7 +869,7 @@ func evaluateFlatland(
 		}
 		lastControlWidth = control.width
 
-		moveStep, hitFood, hitPoison, _, reason := episode.step(control.move)
+		moveStep, hitFood, hitPoison, _, reason := episode.stepControl(control)
 		if moveStep != 0 {
 			movementSteps++
 		}
@@ -1095,8 +1095,10 @@ type flatlandSenseInput struct {
 }
 
 type flatlandControl struct {
-	move  float64
-	width int
+	move      float64
+	turn      float64
+	twoWheels bool
+	width     int
 }
 
 type flatlandEpisode struct {
@@ -1816,12 +1818,26 @@ func (e *flatlandEpisode) activeResources(resources []flatlandResource) int {
 }
 
 func (e *flatlandEpisode) step(move float64) (int, bool, bool, bool, string) {
-	move = clamp(move, -1, 1)
+	return e.stepControl(flatlandControl{move: move, width: 1})
+}
+
+func (e *flatlandEpisode) stepControl(control flatlandControl) (int, bool, bool, bool, string) {
+	if e.heading == 0 {
+		e.heading = 1
+	}
+	move := clamp(control.move, -1, 1)
+	if control.twoWheels {
+		if control.turn > 0.33 {
+			e.heading = 1
+		} else if control.turn < -0.33 {
+			e.heading = -1
+		}
+	}
 	moveStep := 0
 	if move > 0.33 {
-		moveStep = 1
+		moveStep = e.heading
 	} else if move < -0.33 {
-		moveStep = -1
+		moveStep = -e.heading
 	}
 
 	wallCollision := false
@@ -2586,51 +2602,72 @@ func flatlandScannerActiveBinsFromTrace(trace Trace) []int {
 }
 
 func flatlandControlFromOutput(values []float64) (flatlandControl, error) {
+	if len(values) >= 2 {
+		return flatlandTwoWheelsControl(values)
+	}
+	return flatlandMoveControl(values)
+}
+
+func flatlandControlFromActuatorOutput(actuatorName string, values []float64) (flatlandControl, error) {
+	switch protoio.CanonicalActuatorName(actuatorName) {
+	case protoio.FlatlandMoveActuatorName:
+		return flatlandMoveControl(values)
+	case protoio.FlatlandTwoWheelsActuatorName:
+		return flatlandTwoWheelsControl(values)
+	default:
+		return flatlandControlFromOutput(values)
+	}
+}
+
+func flatlandMoveControl(values []float64) (flatlandControl, error) {
 	switch len(values) {
 	case 0:
 		return flatlandControl{}, fmt.Errorf("flatland requires at least one control output, got 0")
-	case 1:
+	default:
 		return flatlandControl{
 			move:  clamp(values[0], -1, 1),
 			width: 1,
 		}, nil
-	default:
-		left, right := flatlandWheelDrive(values)
-		avgDrive := 0.5 * (left + right)
-		differential := right - left
-		// Blend average drive with differential intent for stable 1D surrogate control.
-		move := clamp(0.65*avgDrive+0.35*differential, -1, 1)
-		return flatlandControl{
-			move:  move,
-			width: len(values),
-		}, nil
 	}
 }
 
+func flatlandTwoWheelsControl(values []float64) (flatlandControl, error) {
+	if len(values) == 0 {
+		return flatlandControl{}, fmt.Errorf("flatland requires at least one control output, got 0")
+	}
+	right, left := flatlandWheelDrive(values)
+	return flatlandControl{
+		move:      clamp(0.5*(right+left), -1, 1),
+		turn:      clamp(right-left, -1, 1),
+		twoWheels: true,
+		width:     len(values),
+	}, nil
+}
+
 func flatlandWheelDrive(values []float64) (float64, float64) {
-	leftTotal := 0.0
-	leftCount := 0
 	rightTotal := 0.0
 	rightCount := 0
+	leftTotal := 0.0
+	leftCount := 0
 	for i, value := range values {
 		clamped := clamp(value, -1, 1)
 		if i%2 == 0 {
-			leftTotal += clamped
-			leftCount++
+			rightTotal += clamped
+			rightCount++
 			continue
 		}
-		rightTotal += clamped
-		rightCount++
+		leftTotal += clamped
+		leftCount++
 	}
-	if leftCount == 0 {
+	if rightCount == 0 {
 		return 0, 0
 	}
-	left := leftTotal / float64(leftCount)
-	if rightCount == 0 {
-		return left, left
-	}
 	right := rightTotal / float64(rightCount)
-	return left, right
+	if leftCount == 0 {
+		return right, right
+	}
+	left := leftTotal / float64(leftCount)
+	return right, left
 }
 
 func meanFlatlandScan(values [flatlandScannerDensity]float64) float64 {

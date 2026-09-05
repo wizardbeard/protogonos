@@ -58,8 +58,9 @@ type FlatlandPublicSenseMessage struct {
 func (FlatlandPublicSenseMessage) isFlatlandPublicMessage() {}
 
 type FlatlandPublicActMessage struct {
-	AgentID string
-	Output  []float64
+	AgentID      string
+	Output       []float64
+	ActuatorName string
 }
 
 func (FlatlandPublicActMessage) isFlatlandPublicMessage() {}
@@ -126,7 +127,7 @@ func (p *FlatlandPublicProcess) Call(ctx context.Context, message FlatlandPublic
 		percept, trace, err := p.sense(ctx, msg.AgentID)
 		return FlatlandPublicResponse{OK: err == nil, Percept: percept, Trace: trace, Err: err}
 	case FlatlandPublicActMessage:
-		fitness, end, trace, err := p.act(ctx, msg.AgentID, msg.Output)
+		fitness, end, trace, err := p.act(ctx, msg.AgentID, msg.ActuatorName, msg.Output)
 		return FlatlandPublicResponse{OK: err == nil, Fitness: fitness, End: end, Trace: trace, Err: err}
 	default:
 		return FlatlandPublicResponse{Err: fmt.Errorf("unsupported flatland public process message %T", message)}
@@ -354,7 +355,7 @@ func (p *FlatlandPublicProcess) sense(ctx context.Context, agentID string) ([]fl
 	return flatlandStepInputVector(sense), trace, nil
 }
 
-func (p *FlatlandPublicProcess) act(ctx context.Context, agentID string, output []float64) (Fitness, bool, Trace, error) {
+func (p *FlatlandPublicProcess) act(ctx context.Context, agentID string, actuatorName string, output []float64) (Fitness, bool, Trace, error) {
 	agentID = strings.TrimSpace(agentID)
 	if agentID == "" {
 		return 0, false, nil, fmt.Errorf("flatland public agent id is required")
@@ -362,7 +363,7 @@ func (p *FlatlandPublicProcess) act(ctx context.Context, agentID string, output 
 	if err := ctx.Err(); err != nil {
 		return 0, false, nil, err
 	}
-	control, err := flatlandControlFromOutput(output)
+	control, err := flatlandControlFromActuatorOutput(actuatorName, output)
 	if err != nil {
 		return 0, false, nil, err
 	}
@@ -385,7 +386,7 @@ func (p *FlatlandPublicProcess) act(ctx context.Context, agentID string, output 
 	}
 
 	previousKills := flatlandReferenceKills(state.episode)
-	moveStep, hitFood, hitPoison, wallCollision, reason := state.episode.step(control.move)
+	moveStep, hitFood, hitPoison, wallCollision, reason := state.episode.stepControl(control)
 	if reason != "" {
 		state.terminated = true
 	}

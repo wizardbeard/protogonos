@@ -179,6 +179,54 @@ func TestFlatlandProcessIOAdapters(t *testing.T) {
 	}
 }
 
+func TestFlatlandTwoWheelsControlUsesReferenceSpeedAndTurn(t *testing.T) {
+	control, err := flatlandControlFromActuatorOutput(protoio.FlatlandTwoWheelsActuatorName, []float64{1, -1})
+	if err != nil {
+		t.Fatalf("two-wheels control: %v", err)
+	}
+	if control.width != 2 || !control.twoWheels {
+		t.Fatalf("expected two-wheel control metadata, got %+v", control)
+	}
+	if control.move != 0 {
+		t.Fatalf("expected zero speed from opposite wheels, got %+v", control)
+	}
+	if control.turn != 1 {
+		t.Fatalf("expected positive turn from right-left wheel delta, got %+v", control)
+	}
+}
+
+func TestFlatlandEpisodeTwoWheelsRotatesBeforeMoving(t *testing.T) {
+	episode := newFlatlandEpisode(flatlandModeConfig{
+		mode:            "test",
+		maxAge:          16,
+		forageGoal:      10,
+		foodPositions:   []int{7},
+		poisonPositions: []int{18},
+		wallPositions:   []int{8},
+	})
+	episode.position = 3
+	episode.heading = -1
+
+	moveStep, _, _, wallCollision, reason := episode.stepControl(flatlandControl{
+		move:      1,
+		turn:      1,
+		twoWheels: true,
+		width:     2,
+	})
+	if reason != "" {
+		t.Fatalf("expected non-terminal wheel step, reason=%s", reason)
+	}
+	if wallCollision {
+		t.Fatalf("expected no wall collision")
+	}
+	if moveStep != 1 {
+		t.Fatalf("expected turn-right then forward move step=1, got %d", moveStep)
+	}
+	if episode.position != 4 || episode.heading != 1 {
+		t.Fatalf("expected rotated forward position=4 heading=1, got position=%d heading=%d", episode.position, episode.heading)
+	}
+}
+
 func TestFlatlandPublicProcessInstancesAreIsolated(t *testing.T) {
 	first := NewFlatlandPublicProcess()
 	second := NewFlatlandPublicProcess()
