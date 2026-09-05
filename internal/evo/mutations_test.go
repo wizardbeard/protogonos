@@ -1473,6 +1473,12 @@ func TestAddRandomActuatorAddsCompatibleActuator(t *testing.T) {
 	if mutated.ActuatorIDs[0] != protoio.FXTradeActuatorName {
 		t.Fatalf("expected fx trade actuator to be added, got=%s", mutated.ActuatorIDs[0])
 	}
+	if len(mutated.ReferenceActuators) != 1 {
+		t.Fatalf("expected reference actuator metadata for added actuator, got=%+v", mutated.ReferenceActuators)
+	}
+	if got := mutated.ReferenceActuators[0]; got.Name != protoio.FXTradeActuatorName || got.ReferenceName != protoio.FXTradeActuatorAliasName || got.ScapeName != "fx_sim" {
+		t.Fatalf("unexpected reference actuator metadata: %+v", got)
+	}
 	if len(mutated.NeuronActuatorLinks) != 1 {
 		t.Fatalf("expected one neuron-actuator link for new actuator, got=%d", len(mutated.NeuronActuatorLinks))
 	}
@@ -1501,6 +1507,19 @@ func TestAddRandomActuatorAddsCompatibleActuator(t *testing.T) {
 	}
 	if mutated.ActuatorLinks != 1 {
 		t.Fatalf("expected synchronized actuator link counter, got=%d", mutated.ActuatorLinks)
+	}
+}
+
+func TestReferenceSensorMetadataAppendUsesScapeDescriptor(t *testing.T) {
+	genome := model.Genome{}
+	appendReferenceSensorMetadata(&genome, protoio.GTSAInputSensorName, "gtsa")
+	appendReferenceSensorMetadata(&genome, protoio.GTSAInputSensorName, "gtsa")
+
+	if len(genome.ReferenceSensors) != 1 {
+		t.Fatalf("expected one deduplicated reference sensor metadata record, got=%+v", genome.ReferenceSensors)
+	}
+	if got := genome.ReferenceSensors[0]; got.Name != protoio.GTSAInputSensorName || got.ReferenceName != protoio.GeneralPredictorSensorAliasName || got.VL != 30 || got.ScapeName != "scape_GTSA" {
+		t.Fatalf("unexpected reference sensor metadata: %+v", got)
 	}
 }
 
@@ -1677,6 +1696,10 @@ func TestRemoveRandomSensorRemovesAllLinksForSelectedSensor(t *testing.T) {
 	genome := model.Genome{
 		Neurons:   []model.Neuron{{ID: "n1", Activation: "identity"}, {ID: "n2", Activation: "identity"}},
 		SensorIDs: []string{protoio.XORInputLeftSensorName, protoio.XORInputRightSensorName},
+		ReferenceSensors: []model.IORecordSpec{
+			{Name: protoio.XORInputLeftSensorName, ReferenceName: protoio.XORGetInputSensorAliasName},
+			{Name: protoio.XORInputRightSensorName, ReferenceName: "right_alias"},
+		},
 		SensorNeuronLinks: []model.SensorNeuronLink{
 			{SensorID: protoio.XORInputLeftSensorName, NeuronID: "n1"},
 			{SensorID: protoio.XORInputLeftSensorName, NeuronID: "n2"},
@@ -1699,6 +1722,11 @@ func TestRemoveRandomSensorRemovesAllLinksForSelectedSensor(t *testing.T) {
 	for _, link := range mutated.SensorNeuronLinks {
 		if link.SensorID == removedSensorID {
 			t.Fatalf("found dangling sensor link for removed sensor %q: %+v", removedSensorID, link)
+		}
+	}
+	for _, spec := range mutated.ReferenceSensors {
+		if spec.Name == removedSensorID {
+			t.Fatalf("found dangling reference sensor metadata for removed sensor %q: %+v", removedSensorID, spec)
 		}
 	}
 	if mutated.SensorLinks != len(mutated.SensorNeuronLinks) {
@@ -1724,6 +1752,10 @@ func TestRemoveRandomActuatorRemovesAllLinksForSelectedActuator(t *testing.T) {
 	genome := model.Genome{
 		Neurons:     []model.Neuron{{ID: "n1", Activation: "identity"}, {ID: "n2", Activation: "identity"}},
 		ActuatorIDs: []string{protoio.XOROutputActuatorName, protoio.FXTradeActuatorName},
+		ReferenceActuators: []model.IORecordSpec{
+			{Name: protoio.XOROutputActuatorName, ReferenceName: protoio.XORSendOutputActuatorAliasName},
+			{Name: protoio.FXTradeActuatorName, ReferenceName: protoio.FXTradeActuatorAliasName},
+		},
 		NeuronActuatorLinks: []model.NeuronActuatorLink{
 			{NeuronID: "n1", ActuatorID: protoio.XOROutputActuatorName},
 			{NeuronID: "n2", ActuatorID: protoio.XOROutputActuatorName},
@@ -1746,6 +1778,11 @@ func TestRemoveRandomActuatorRemovesAllLinksForSelectedActuator(t *testing.T) {
 	for _, link := range mutated.NeuronActuatorLinks {
 		if link.ActuatorID == removedActuatorID {
 			t.Fatalf("found dangling actuator link for removed actuator %q: %+v", removedActuatorID, link)
+		}
+	}
+	for _, spec := range mutated.ReferenceActuators {
+		if spec.Name == removedActuatorID {
+			t.Fatalf("found dangling reference actuator metadata for removed actuator %q: %+v", removedActuatorID, spec)
 		}
 	}
 	if mutated.ActuatorLinks != len(mutated.NeuronActuatorLinks) {

@@ -12,6 +12,7 @@ import (
 	"protogonos/internal/genotype"
 	protoio "protogonos/internal/io"
 	"protogonos/internal/model"
+	"protogonos/internal/morphology"
 	"protogonos/internal/nn"
 	"protogonos/internal/substrate"
 	"protogonos/internal/tuning"
@@ -1806,6 +1807,7 @@ func (o *AddRandomSensor) Apply(_ context.Context, genome model.Genome) (model.G
 	choice := candidates[o.Rand.Intn(len(candidates))]
 	mutated := cloneGenome(genome)
 	mutated.SensorIDs = append(mutated.SensorIDs, choice)
+	appendReferenceSensorMetadata(&mutated, choice, o.ScapeName)
 	targetNeuron := mutated.Neurons[o.Rand.Intn(len(mutated.Neurons))].ID
 	mutated.SensorNeuronLinks = append(mutated.SensorNeuronLinks, model.SensorNeuronLink{
 		SensorID: choice,
@@ -1879,6 +1881,7 @@ func (o *AddRandomActuator) Apply(_ context.Context, genome model.Genome) (model
 	mutated := cloneGenome(genome)
 	currentGeneration := currentGenomeGeneration(mutated)
 	mutated.ActuatorIDs = append(mutated.ActuatorIDs, choice)
+	appendReferenceActuatorMetadata(&mutated, choice, o.ScapeName)
 	touchActuatorGeneration(&mutated, choice, currentGeneration)
 	sourceNeuron := mutated.Neurons[o.Rand.Intn(len(mutated.Neurons))].ID
 	helperNeuronID := uniqueNeuronID(mutated, o.Rand)
@@ -1968,6 +1971,7 @@ func (o *RemoveRandomSensor) Apply(_ context.Context, genome model.Genome) (mode
 		filtered = append(filtered, id)
 	}
 	mutated.SensorIDs = filtered
+	removeReferenceSensorMetadata(&mutated, selected)
 	filteredLinks := mutated.SensorNeuronLinks[:0]
 	for _, link := range mutated.SensorNeuronLinks {
 		if link.SensorID == selected {
@@ -2046,6 +2050,7 @@ func (o *RemoveRandomActuator) Apply(_ context.Context, genome model.Genome) (mo
 		filtered = append(filtered, id)
 	}
 	mutated.ActuatorIDs = filtered
+	removeReferenceActuatorMetadata(&mutated, selected)
 	deleteActuatorGeneration(&mutated, selected)
 	deleteActuatorTunable(&mutated, selected)
 	filteredLinks := mutated.NeuronActuatorLinks[:0]
@@ -2892,6 +2897,123 @@ func actuatorCandidates(genome model.Genome, scapeName string) []string {
 		candidates = append(candidates, name)
 	}
 	return candidates
+}
+
+func appendReferenceSensorMetadata(genome *model.Genome, sensorID, scapeName string) {
+	spec, ok := findReferenceSensorSpec(sensorID, scapeName)
+	if !ok || hasReferenceSensorMetadata(genome.ReferenceSensors, sensorID) {
+		return
+	}
+	genome.ReferenceSensors = append(genome.ReferenceSensors, modelIORecordSpec(spec))
+}
+
+func appendReferenceActuatorMetadata(genome *model.Genome, actuatorID, scapeName string) {
+	spec, ok := findReferenceActuatorSpec(actuatorID, scapeName)
+	if !ok || hasReferenceActuatorMetadata(genome.ReferenceActuators, actuatorID) {
+		return
+	}
+	genome.ReferenceActuators = append(genome.ReferenceActuators, modelIORecordSpec(spec))
+}
+
+func removeReferenceSensorMetadata(genome *model.Genome, sensorID string) {
+	if len(genome.ReferenceSensors) == 0 {
+		return
+	}
+	filtered := genome.ReferenceSensors[:0]
+	for _, spec := range genome.ReferenceSensors {
+		if sameCanonicalSensor(spec.Name, sensorID) {
+			continue
+		}
+		filtered = append(filtered, spec)
+	}
+	if len(filtered) == 0 {
+		genome.ReferenceSensors = nil
+		return
+	}
+	genome.ReferenceSensors = filtered
+}
+
+func removeReferenceActuatorMetadata(genome *model.Genome, actuatorID string) {
+	if len(genome.ReferenceActuators) == 0 {
+		return
+	}
+	filtered := genome.ReferenceActuators[:0]
+	for _, spec := range genome.ReferenceActuators {
+		if sameCanonicalActuator(spec.Name, actuatorID) {
+			continue
+		}
+		filtered = append(filtered, spec)
+	}
+	if len(filtered) == 0 {
+		genome.ReferenceActuators = nil
+		return
+	}
+	genome.ReferenceActuators = filtered
+}
+
+func findReferenceSensorSpec(sensorID, scapeName string) (morphology.IOSpec, bool) {
+	specs, err := morphology.GetReferenceSensorSpecs(scapeName, "")
+	if err != nil {
+		return morphology.IOSpec{}, false
+	}
+	for _, spec := range specs {
+		if sameCanonicalSensor(spec.Name, sensorID) {
+			return spec, true
+		}
+	}
+	return morphology.IOSpec{}, false
+}
+
+func findReferenceActuatorSpec(actuatorID, scapeName string) (morphology.IOSpec, bool) {
+	specs, err := morphology.GetReferenceActuatorSpecs(scapeName, "")
+	if err != nil {
+		return morphology.IOSpec{}, false
+	}
+	for _, spec := range specs {
+		if sameCanonicalActuator(spec.Name, actuatorID) {
+			return spec, true
+		}
+	}
+	return morphology.IOSpec{}, false
+}
+
+func hasReferenceSensorMetadata(specs []model.IORecordSpec, sensorID string) bool {
+	for _, spec := range specs {
+		if sameCanonicalSensor(spec.Name, sensorID) {
+			return true
+		}
+	}
+	return false
+}
+
+func hasReferenceActuatorMetadata(specs []model.IORecordSpec, actuatorID string) bool {
+	for _, spec := range specs {
+		if sameCanonicalActuator(spec.Name, actuatorID) {
+			return true
+		}
+	}
+	return false
+}
+
+func sameCanonicalSensor(left, right string) bool {
+	return protoio.CanonicalSensorName(left) == protoio.CanonicalSensorName(right)
+}
+
+func sameCanonicalActuator(left, right string) bool {
+	return protoio.CanonicalActuatorName(left) == protoio.CanonicalActuatorName(right)
+}
+
+func modelIORecordSpec(spec morphology.IOSpec) model.IORecordSpec {
+	return model.IORecordSpec{
+		Name:          spec.Name,
+		ReferenceName: spec.ReferenceName,
+		Type:          spec.Type,
+		ScapeKind:     spec.ScapeKind,
+		ScapeName:     spec.ScapeName,
+		Format:        spec.Format,
+		VL:            spec.VL,
+		Parameters:    append([]string(nil), spec.Parameters...),
+	}
 }
 
 func utilitySensorMutationExcluded(name string) bool {

@@ -36,6 +36,17 @@
   "actuator_ids": [
     "fx_trade"
   ],
+  "reference_actuators": [
+    {
+      "name": "fx_trade",
+      "reference_name": "fx_Trade",
+      "type": "standard",
+      "scape_kind": "private",
+      "scape_name": "fx_sim",
+      "format": "no_geo",
+      "vl": 1
+    }
+  ],
   "actuator_generations": {
     "fx_trade": 0
   },

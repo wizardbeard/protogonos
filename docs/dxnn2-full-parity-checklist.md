@@ -499,6 +499,7 @@ Status keys:
 - Expanded substrate CEP actor-topology strictness by removing runtime direct-process fallback and requiring actor-backed forwarding (`ErrMissingCEPActor` when actor state is absent), bringing CEP execution closer to pure process-mailbox semantics.
 - Tightened substrate CEP mailbox execution semantics by making `CEPActor.Post` enqueue-only (no per-post processing ack) and adding explicit posted sync-marker barriers (`PostSync`/`AwaitSync` carrying `CEPSyncMessage.SyncID`) before runtime command/error mailbox drain.
 - Persisted reference morphology IO descriptor metadata on constructed genomes (`reference_sensors` / `reference_actuators`) and codec/run-artifact paths, so exported or replayed genomes retain Erlang `#sensor{}` / `#actuator{}` shape without recomputing it from names.
+- Synchronized stored reference IO descriptor metadata during add/remove sensor and actuator mutations, so evolved genomes prune stale descriptor records and append matching scape descriptors when reference metadata exists.
 
 ## Highest-priority remaining gaps to reach strict parity
 
