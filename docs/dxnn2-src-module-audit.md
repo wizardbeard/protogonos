@@ -312,6 +312,7 @@ Status legend:
 - 2026-09-04: wired reference morphology descriptor `vl` values into genotype constructor paths for reference morphology names, so sensor `vl` drives seed inbound weight arity and actuator `vl` drives output-neuron multiplicity while preserving explicit `ActuatorVectorLengths` override precedence.
 - 2026-09-04: persisted reference morphology IO descriptor metadata on constructed genomes (`reference_sensors` / `reference_actuators`) and codec/run-artifact paths, so exported or replayed genomes retain Erlang `#sensor{}` / `#actuator{}` shape without recomputing it from names.
 - 2026-09-04: synchronized stored reference IO descriptor metadata during add/remove sensor and actuator mutations, so evolved genomes prune stale descriptor records and append matching scape descriptors when reference metadata exists.
+- 2026-09-04: added direct export/replay artifact coverage for stored reference IO descriptor metadata in top-genome and trace-acc champion genome payloads, confirming run artifacts and exported directories preserve `reference_sensors` / `reference_actuators`.
 
 ## Summary
 

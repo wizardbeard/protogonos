@@ -510,7 +510,15 @@ func TestTopGenomesCodecRoundTrip(t *testing.T) {
 		{
 			Rank:    1,
 			Fitness: 0.9,
-			Genome:  model.Genome{ID: "g1"},
+			Genome: model.Genome{
+				ID: "g1",
+				ReferenceSensors: []model.IORecordSpec{{
+					Name:          "gtsa_input",
+					ReferenceName: "general_predictor",
+					ScapeName:     "scape_GTSA",
+					VL:            30,
+				}},
+			},
 			SubstrateSnapshot: &substrate.LayerRuntimeSnapshot{
 				Plasticity: substrate.SubstratePlasticityNone,
 				LinkForm:   substrate.LinkFormL2LFeedforward,
@@ -530,6 +538,9 @@ func TestTopGenomesCodecRoundTrip(t *testing.T) {
 	}
 	if !reflect.DeepEqual(decoded, input) {
 		t.Fatalf("decoded top genomes mismatch: got=%+v want=%+v", decoded, input)
+	}
+	if len(decoded[0].Genome.ReferenceSensors) != 1 || decoded[0].Genome.ReferenceSensors[0].VL != 30 {
+		t.Fatalf("expected reference sensor metadata in top-genome codec, got %+v", decoded[0].Genome.ReferenceSensors)
 	}
 }
 

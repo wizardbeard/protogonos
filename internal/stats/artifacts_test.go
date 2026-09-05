@@ -15,6 +15,26 @@ func TestWriteAndExportRunArtifacts(t *testing.T) {
 	outDir := filepath.Join(t.TempDir(), "exports")
 
 	runID := "run-123"
+	referenceSensors := []model.IORecordSpec{{
+		Name:          "gtsa_input",
+		ReferenceName: "general_predictor",
+		Type:          "standard",
+		ScapeKind:     "private",
+		ScapeName:     "scape_GTSA",
+		Format:        "no_geo",
+		VL:            30,
+		Parameters:    []string{"10"},
+	}}
+	referenceActuators := []model.IORecordSpec{{
+		Name:          "gtsa_predict",
+		ReferenceName: "general_predictor",
+		Type:          "standard",
+		ScapeKind:     "private",
+		ScapeName:     "scape_GTSA",
+		Format:        "no_geo",
+		VL:            1,
+		Parameters:    []string{"1"},
+	}}
 	artifacts := RunArtifacts{
 		Config: RunConfig{
 			RunID:          runID,
@@ -44,7 +64,7 @@ func TestWriteAndExportRunArtifacts(t *testing.T) {
 					{
 						SpeciesKey:        "sp-1",
 						ChampionGenomeID:  "g1",
-						ChampionGenome:    model.Genome{ID: "g1"},
+						ChampionGenome:    model.Genome{ID: "g1", ReferenceSensors: referenceSensors, ReferenceActuators: referenceActuators},
 						BestFitness:       0.5,
 						ValidationFitness: float64Ptr(0.45),
 					},
@@ -55,7 +75,7 @@ func TestWriteAndExportRunArtifacts(t *testing.T) {
 		TopGenomes: []TopGenome{{
 			Rank:    1,
 			Fitness: 0.7,
-			Genome:  model.Genome{ID: "g1"},
+			Genome:  model.Genome{ID: "g1", ReferenceSensors: referenceSensors, ReferenceActuators: referenceActuators},
 			SubstrateSnapshot: &substrate.LayerRuntimeSnapshot{
 				Plasticity: substrate.SubstratePlasticityABCN,
 				LinkForm:   substrate.LinkFormL2LFeedforward,
@@ -173,6 +193,12 @@ func TestWriteAndExportRunArtifacts(t *testing.T) {
 	if readTop[0].SubstrateSnapshot == nil {
 		t.Fatalf("expected substrate snapshot in top genome artifact")
 	}
+	if len(readTop[0].Genome.ReferenceSensors) != 1 || readTop[0].Genome.ReferenceSensors[0].ReferenceName != "general_predictor" || readTop[0].Genome.ReferenceSensors[0].VL != 30 {
+		t.Fatalf("expected reference sensor metadata in top genome artifact, got %+v", readTop[0].Genome.ReferenceSensors)
+	}
+	if len(readTop[0].Genome.ReferenceActuators) != 1 || readTop[0].Genome.ReferenceActuators[0].ReferenceName != "general_predictor" {
+		t.Fatalf("expected reference actuator metadata in top genome artifact, got %+v", readTop[0].Genome.ReferenceActuators)
+	}
 	if got := readTop[0].SubstrateSnapshot.ABCN.Layers[0][0].Weights[0]; got.A != 0.1 || got.N != 0.4 {
 		t.Fatalf("unexpected substrate snapshot coefficients: %+v", readTop[0].SubstrateSnapshot)
 	}
@@ -186,6 +212,19 @@ func TestWriteAndExportRunArtifacts(t *testing.T) {
 	}
 	if len(readTraceAcc) != 1 || len(readTraceAcc[0].Stats) != 1 || readTraceAcc[0].Stats[0].ChampionGenomeID != "g1" {
 		t.Fatalf("unexpected trace acc payload: %+v", readTraceAcc)
+	}
+	if len(readTraceAcc[0].Stats[0].ChampionGenome.ReferenceSensors) != 1 {
+		t.Fatalf("expected reference sensor metadata in trace champion genome, got %+v", readTraceAcc[0].Stats[0].ChampionGenome.ReferenceSensors)
+	}
+	exportedTop, ok, err := ReadTopGenomes(outDir, runID)
+	if err != nil {
+		t.Fatalf("read exported top genomes: %v", err)
+	}
+	if !ok {
+		t.Fatalf("expected exported top genomes to exist for run id %s", runID)
+	}
+	if len(exportedTop) != 1 || len(exportedTop[0].Genome.ReferenceSensors) != 1 || exportedTop[0].Genome.ReferenceSensors[0].VL != 30 {
+		t.Fatalf("expected exported reference sensor metadata, got %+v", exportedTop)
 	}
 }
 
