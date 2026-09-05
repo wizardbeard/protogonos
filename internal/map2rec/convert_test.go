@@ -622,6 +622,28 @@ func TestConvertSensorMalformedKnownFieldKeepsDefault(t *testing.T) {
 	}
 }
 
+func TestSensorIORecordSpecCanonicalizesMap2RecOutput(t *testing.T) {
+	record := ConvertSensor(map[string]any{
+		"name":       "general_predictor",
+		"type":       "standard",
+		"scape":      []any{"private", "scape_GTSA"},
+		"vl":         30,
+		"format":     "no_geo",
+		"parameters": []any{10, "close"},
+	})
+
+	spec := SensorIORecordSpec(record)
+	if spec.Name != "gtsa_input" || spec.ReferenceName != "general_predictor" || spec.Type != "standard" {
+		t.Fatalf("unexpected sensor IO spec identity: %+v", spec)
+	}
+	if spec.ScapeKind != "private" || spec.ScapeName != "scape_GTSA" || spec.VL != 30 || spec.Format != "no_geo" {
+		t.Fatalf("unexpected sensor IO spec metadata: %+v", spec)
+	}
+	if len(spec.Parameters) != 2 || spec.Parameters[0] != "10" || spec.Parameters[1] != "close" {
+		t.Fatalf("unexpected sensor IO spec parameters: %+v", spec.Parameters)
+	}
+}
+
 func TestConvertActuatorMapsFields(t *testing.T) {
 	in := map[string]any{
 		"id":            "act-1",
@@ -653,6 +675,28 @@ func TestConvertActuatorMalformedKnownFieldKeepsDefault(t *testing.T) {
 	out := ConvertActuator(map[string]any{"fanin_ids": map[string]any{"x": 1}})
 	if len(out.FaninIDs) != 0 {
 		t.Fatalf("expected default empty fanin IDs, got %+v", out.FaninIDs)
+	}
+}
+
+func TestActuatorIORecordSpecCanonicalizesMap2RecOutput(t *testing.T) {
+	record := ConvertActuator(map[string]any{
+		"name":       "choose_OptimizationPhase",
+		"type":       "standard",
+		"scape":      []any{"private", "scape_LLVMPhaseOrdering"},
+		"vl":         55,
+		"format":     "no_geo",
+		"parameters": []any{"bzip2"},
+	})
+
+	spec := ActuatorIORecordSpec(record)
+	if spec.Name != "llvm_phase" || spec.ReferenceName != "choose_OptimizationPhase" || spec.Type != "standard" {
+		t.Fatalf("unexpected actuator IO spec identity: %+v", spec)
+	}
+	if spec.ScapeKind != "private" || spec.ScapeName != "scape_LLVMPhaseOrdering" || spec.VL != 55 || spec.Format != "no_geo" {
+		t.Fatalf("unexpected actuator IO spec metadata: %+v", spec)
+	}
+	if len(spec.Parameters) != 1 || spec.Parameters[0] != "bzip2" {
+		t.Fatalf("unexpected actuator IO spec parameters: %+v", spec.Parameters)
 	}
 }
 
