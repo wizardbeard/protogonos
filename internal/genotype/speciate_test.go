@@ -66,6 +66,28 @@ func TestSpeciateByFingerprintDifferentiatesDistinctIOSets(t *testing.T) {
 	}
 }
 
+func TestSpeciateByFingerprintDifferentiatesReferenceIOMetadata(t *testing.T) {
+	a := model.Genome{
+		ID:          "a",
+		SensorIDs:   []string{"gtsa_input"},
+		ActuatorIDs: []string{"gtsa_predict"},
+		ReferenceSensors: []model.IORecordSpec{{
+			Name:          "gtsa_input",
+			ReferenceName: "general_predictor",
+			ScapeName:     "scape_GTSA",
+			VL:            30,
+		}},
+	}
+	b := CloneGenome(a)
+	b.ID = "b"
+	b.ReferenceSensors[0].VL = 31
+
+	grouped := SpeciateByFingerprint([]model.Genome{a, b})
+	if len(grouped) != 2 {
+		t.Fatalf("expected 2 distinct species for different reference io metadata, got=%d", len(grouped))
+	}
+}
+
 func TestSpeciateByFingerprintWithHistoryDifferentiatesMutationTrajectories(t *testing.T) {
 	base := model.Genome{
 		ID:          "a",

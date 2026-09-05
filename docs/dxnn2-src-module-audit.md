@@ -314,6 +314,7 @@ Status legend:
 - 2026-09-04: synchronized stored reference IO descriptor metadata during add/remove sensor and actuator mutations, so evolved genomes prune stale descriptor records and append matching scape descriptors when reference metadata exists.
 - 2026-09-04: added direct export/replay artifact coverage for stored reference IO descriptor metadata in top-genome and trace-acc champion genome payloads, confirming run artifacts and exported directories preserve `reference_sensors` / `reference_actuators`.
 - 2026-09-04: bridged `map2rec` sensor/actuator record conversions to the compact genome `IORecordSpec` shape with alias canonicalization, scape metadata extraction, format preservation, and parameter stringification.
+- 2026-09-04: made generalized genotype fingerprints and fingerprint-based speciation sensitive to stored reference IO descriptor metadata, preventing genomes with identical canonical IO IDs but different Erlang record metadata from collapsing into one fingerprint bucket.
 
 ## Summary
 

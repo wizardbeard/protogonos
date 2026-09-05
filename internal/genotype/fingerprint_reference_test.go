@@ -40,6 +40,41 @@ func TestBuildReferenceFingerprintIncludesGeneralizedParts(t *testing.T) {
 	}
 }
 
+func TestBuildReferenceFingerprintIncludesReferenceIOMetadata(t *testing.T) {
+	genome := model.Genome{
+		SensorIDs:   []string{"gtsa_input"},
+		ActuatorIDs: []string{"gtsa_predict"},
+		ReferenceSensors: []model.IORecordSpec{{
+			Name:          "gtsa_input",
+			ReferenceName: "general_predictor",
+			Type:          "standard",
+			ScapeKind:     "private",
+			ScapeName:     "scape_GTSA",
+			Format:        "no_geo",
+			VL:            30,
+			Parameters:    []string{"10"},
+		}},
+		ReferenceActuators: []model.IORecordSpec{{
+			Name:          "gtsa_predict",
+			ReferenceName: "general_predictor",
+			Type:          "standard",
+			ScapeKind:     "private",
+			ScapeName:     "scape_GTSA",
+			Format:        "no_geo",
+			VL:            1,
+			Parameters:    []string{"1"},
+		}},
+	}
+
+	fp := BuildReferenceFingerprint(genome, nil)
+	if len(fp.ReferenceSensors) != 1 || fp.ReferenceSensors[0] != `{"name":"gtsa_input","reference_name":"general_predictor","type":"standard","scape_kind":"private","scape_name":"scape_GTSA","format":"no_geo","vl":30,"parameters":["10"]}` {
+		t.Fatalf("unexpected reference sensor fingerprint metadata: %+v", fp.ReferenceSensors)
+	}
+	if len(fp.ReferenceActuators) != 1 || fp.ReferenceActuators[0] != `{"name":"gtsa_predict","reference_name":"general_predictor","type":"standard","scape_kind":"private","scape_name":"scape_GTSA","format":"no_geo","vl":1,"parameters":["1"]}` {
+		t.Fatalf("unexpected reference actuator fingerprint metadata: %+v", fp.ReferenceActuators)
+	}
+}
+
 func TestComputeReferenceFingerprintDeterministicAndSensitive(t *testing.T) {
 	base := model.Genome{
 		SensorIDs:   []string{"s1"},
@@ -66,6 +101,26 @@ func TestComputeReferenceFingerprintDeterministicAndSensitive(t *testing.T) {
 	gotC := ComputeReferenceFingerprint(changed, history)
 	if gotC == gotA {
 		t.Fatalf("expected topology change to alter reference fingerprint, got=%q", gotC)
+	}
+}
+
+func TestComputeReferenceFingerprintSensitiveToReferenceIOMetadata(t *testing.T) {
+	base := model.Genome{
+		SensorIDs:   []string{"gtsa_input"},
+		ActuatorIDs: []string{"gtsa_predict"},
+		ReferenceSensors: []model.IORecordSpec{{
+			Name:          "gtsa_input",
+			ReferenceName: "general_predictor",
+			ScapeName:     "scape_GTSA",
+			VL:            30,
+			Parameters:    []string{"10"},
+		}},
+	}
+	changed := CloneGenome(base)
+	changed.ReferenceSensors[0].VL = 31
+
+	if ComputeReferenceFingerprint(base, nil) == ComputeReferenceFingerprint(changed, nil) {
+		t.Fatalf("expected reference IO metadata change to alter fingerprint")
 	}
 }
 

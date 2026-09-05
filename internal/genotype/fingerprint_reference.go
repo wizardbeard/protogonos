@@ -3,6 +3,7 @@ package genotype
 import (
 	"crypto/sha1"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"sort"
 	"strings"
@@ -13,11 +14,13 @@ import (
 // ReferenceFingerprint captures a reference-closer generalized fingerprint
 // structure akin to genotype:update_fingerprint/1 composition.
 type ReferenceFingerprint struct {
-	Pattern    []PatternLayer               `json:"pattern"`
-	EvoHistory []GeneralizedEvoHistoryEvent `json:"evo_history,omitempty"`
-	Sensors    []string                     `json:"sensors"`
-	Actuators  []string                     `json:"actuators"`
-	Topology   TopologySummary              `json:"topology"`
+	Pattern            []PatternLayer               `json:"pattern"`
+	EvoHistory         []GeneralizedEvoHistoryEvent `json:"evo_history,omitempty"`
+	Sensors            []string                     `json:"sensors"`
+	Actuators          []string                     `json:"actuators"`
+	ReferenceSensors   []string                     `json:"reference_sensors,omitempty"`
+	ReferenceActuators []string                     `json:"reference_actuators,omitempty"`
+	Topology           TopologySummary              `json:"topology"`
 }
 
 // BuildReferenceFingerprint builds generalized fingerprint parts mirroring
@@ -25,11 +28,13 @@ type ReferenceFingerprint struct {
 func BuildReferenceFingerprint(genome model.Genome, history []EvoHistoryEvent) ReferenceFingerprint {
 	pattern := buildReferencePattern(genome)
 	return ReferenceFingerprint{
-		Pattern:    pattern,
-		EvoHistory: GeneralizeEvoHistory(history),
-		Sensors:    sortedUniqueStrings(genome.SensorIDs),
-		Actuators:  sortedUniqueStrings(genome.ActuatorIDs),
-		Topology:   UpdateNNTopologySummary(genome),
+		Pattern:            pattern,
+		EvoHistory:         GeneralizeEvoHistory(history),
+		Sensors:            sortedUniqueStrings(genome.SensorIDs),
+		Actuators:          sortedUniqueStrings(genome.ActuatorIDs),
+		ReferenceSensors:   generalizedIORecordSpecs(genome.ReferenceSensors),
+		ReferenceActuators: generalizedIORecordSpecs(genome.ReferenceActuators),
+		Topology:           UpdateNNTopologySummary(genome),
 	}
 }
 
@@ -218,6 +223,12 @@ func ComputeReferenceFingerprint(genome model.Genome, history []EvoHistoryEvent)
 	for _, actuator := range fingerprint.Actuators {
 		parts = append(parts, "a:"+actuator)
 	}
+	for _, sensor := range fingerprint.ReferenceSensors {
+		parts = append(parts, "rs:"+sensor)
+	}
+	for _, actuator := range fingerprint.ReferenceActuators {
+		parts = append(parts, "ra:"+actuator)
+	}
 	parts = append(parts,
 		fmt.Sprintf("t:%s", fingerprint.Topology.Type),
 		fmt.Sprintf("n:%d", fingerprint.Topology.TotalNeurons),
@@ -240,6 +251,70 @@ func ComputeReferenceFingerprint(genome model.Genome, history []EvoHistoryEvent)
 
 	digest := sha1.Sum([]byte(strings.Join(parts, "|")))
 	return hex.EncodeToString(digest[:8])
+}
+
+func generalizedIORecordSpecs(specs []model.IORecordSpec) []string {
+	if len(specs) == 0 {
+		return nil
+	}
+	seen := make(map[string]struct{}, len(specs))
+	out := make([]string, 0, len(specs))
+	for _, spec := range specs {
+		normalized := model.IORecordSpec{
+			Name:          strings.TrimSpace(spec.Name),
+			ReferenceName: strings.TrimSpace(spec.ReferenceName),
+			Type:          strings.TrimSpace(spec.Type),
+			ScapeKind:     strings.TrimSpace(spec.ScapeKind),
+			ScapeName:     strings.TrimSpace(spec.ScapeName),
+			Format:        strings.TrimSpace(spec.Format),
+			VL:            spec.VL,
+			Parameters:    trimmedStringList(spec.Parameters),
+		}
+		if emptyIORecordSpec(normalized) {
+			continue
+		}
+		data, err := json.Marshal(normalized)
+		if err != nil {
+			continue
+		}
+		key := string(data)
+		if _, ok := seen[key]; ok {
+			continue
+		}
+		seen[key] = struct{}{}
+		out = append(out, key)
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	sort.Strings(out)
+	return out
+}
+
+func emptyIORecordSpec(spec model.IORecordSpec) bool {
+	return spec.Name == "" &&
+		spec.ReferenceName == "" &&
+		spec.Type == "" &&
+		spec.ScapeKind == "" &&
+		spec.ScapeName == "" &&
+		spec.Format == "" &&
+		spec.VL == 0 &&
+		len(spec.Parameters) == 0
+}
+
+func trimmedStringList(values []string) []string {
+	if len(values) == 0 {
+		return nil
+	}
+	out := make([]string, 0, len(values))
+	for _, value := range values {
+		value = strings.TrimSpace(value)
+		if value == "" {
+			continue
+		}
+		out = append(out, value)
+	}
+	return out
 }
 
 func sortedUniqueStrings(values []string) []string {
