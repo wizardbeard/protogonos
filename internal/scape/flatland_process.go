@@ -391,7 +391,8 @@ func (p *FlatlandPublicProcess) act(ctx context.Context, agentID string, actuato
 	}
 
 	previousKills := flatlandReferenceKills(state.episode)
-	if handled, terminalReason, spearPreyHit, spearPredatorHit := flatlandApplyStateActuator(state, actuatorName, output); handled {
+	if action := flatlandApplyStateActuator(state, actuatorName, output); action.handled {
+		terminalReason := action.terminalReason
 		if terminalReason != "" {
 			state.terminated = true
 		}
@@ -400,8 +401,11 @@ func (p *FlatlandPublicProcess) act(ctx context.Context, agentID string, actuato
 		trace["move_step"] = 0
 		trace["hit_food"] = false
 		trace["hit_poison"] = false
-		trace["spear_prey_hit"] = spearPreyHit
-		trace["spear_predator_hit"] = spearPredatorHit
+		trace["spear_prey_hit"] = action.spearPreyHit
+		trace["spear_predator_hit"] = action.spearPredatorHit
+		trace["shot_fired"] = action.shotFired
+		trace["shoot_prey_hit"] = action.shootPreyHit
+		trace["shoot_predator_hit"] = action.shootPredatorHit
 		trace["wall_collision"] = false
 		trace["terminal_reason"] = terminalReason
 		trace["control_surface"] = strings.TrimSpace(actuatorName)
@@ -436,25 +440,35 @@ func (p *FlatlandPublicProcess) act(ctx context.Context, agentID string, actuato
 	return referenceFitness, state.terminated, trace, nil
 }
 
-func flatlandApplyStateActuator(state *flatlandPublicAgentState, actuatorName string, output []float64) (bool, string, bool, bool) {
+type flatlandStateActuatorResult struct {
+	handled          bool
+	terminalReason   string
+	spearPreyHit     bool
+	spearPredatorHit bool
+	shotFired        bool
+	shootPreyHit     bool
+	shootPredatorHit bool
+}
+
+func flatlandApplyStateActuator(state *flatlandPublicAgentState, actuatorName string, output []float64) flatlandStateActuatorResult {
 	if state == nil {
-		return false, "", false, false
+		return flatlandStateActuatorResult{}
 	}
 	switch protoio.CanonicalActuatorName(actuatorName) {
 	case protoio.FlatlandSpeakActuatorName:
 		if len(output) == 0 {
 			state.sound = 0
-			return true, "", false, false
+			return flatlandStateActuatorResult{handled: true}
 		}
 		state.sound = output[0]
-		return true, "", false, false
+		return flatlandStateActuatorResult{handled: true}
 	case protoio.FlatlandGestaltActuatorName:
 		state.gestalt = append([]float64(nil), output...)
-		return true, "", false, false
+		return flatlandStateActuatorResult{handled: true}
 	case protoio.FlatlandSpearActuatorName:
 		if len(output) == 0 || output[0] <= 0 {
 			state.spear = false
-			return true, "", false, false
+			return flatlandStateActuatorResult{handled: true}
 		}
 		spearPreyHit := false
 		spearPredatorHit := false
@@ -468,30 +482,33 @@ func flatlandApplyStateActuator(state *flatlandPublicAgentState, actuatorName st
 		}
 		if state.episode.energy <= 0 {
 			state.episode.energy = 0
-			return true, "depleted", spearPreyHit, spearPredatorHit
+			return flatlandStateActuatorResult{handled: true, terminalReason: "depleted", spearPreyHit: spearPreyHit, spearPredatorHit: spearPredatorHit}
 		}
-		return true, "", spearPreyHit, spearPredatorHit
+		return flatlandStateActuatorResult{handled: true, spearPreyHit: spearPreyHit, spearPredatorHit: spearPredatorHit}
 	case protoio.FlatlandShootActuatorName:
 		if len(output) == 0 || output[0] <= 0 {
-			return true, "", false, false
+			return flatlandStateActuatorResult{handled: true}
 		}
+		result := flatlandStateActuatorResult{handled: true}
 		if state.episode.energy > 100 {
 			state.episode.energy -= 20
+			result.shotFired = true
+			result.shootPreyHit, result.shootPredatorHit = state.episode.shootForwardContact()
 		} else {
 			state.episode.energy -= 1
 		}
 		if state.episode.energy <= 0 {
 			state.episode.energy = 0
-			return true, "depleted", false, false
+			result.terminalReason = "depleted"
 		}
-		return true, "", false, false
+		return result
 	case protoio.FlatlandCreateOffspringActuatorName:
 		state.offspringRequested = false
 		state.offspringGranted = false
 		state.offspringCost = 0
 		state.offspringParentID = ""
 		if len(output) == 0 || output[0] <= 0 {
-			return true, "", false, false
+			return flatlandStateActuatorResult{handled: true}
 		}
 		offspringCost := float64(max(state.neuronCount, 0)) * flatlandNeuralCost
 		totalGrantCost := offspringCost + 1000
@@ -507,11 +524,11 @@ func flatlandApplyStateActuator(state *flatlandPublicAgentState, actuatorName st
 		}
 		if state.episode.energy <= 0 {
 			state.episode.energy = 0
-			return true, "depleted", false, false
+			return flatlandStateActuatorResult{handled: true, terminalReason: "depleted"}
 		}
-		return true, "", false, false
+		return flatlandStateActuatorResult{handled: true}
 	default:
-		return false, "", false, false
+		return flatlandStateActuatorResult{}
 	}
 }
 

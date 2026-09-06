@@ -492,6 +492,9 @@ func flatlandPublicAgentTrace(state *flatlandPublicAgentState) Trace {
 		"spear_kills":              episode.spearKills,
 		"spear_prey_kills":         episode.spearPreyKills,
 		"spear_predator_kills":     episode.spearPredatorKills,
+		"shoot_kills":              episode.shootKills,
+		"shoot_prey_kills":         episode.shootPreyKills,
+		"shoot_predator_kills":     episode.shootPredatorKills,
 		"sound":                    state.sound,
 		"gestalt":                  append([]float64(nil), state.gestalt...),
 		"spear":                    state.spear,
@@ -507,7 +510,7 @@ func flatlandReferenceKills(episode *flatlandEpisode) int {
 	if episode == nil {
 		return 0
 	}
-	return episode.foodCollected + episode.preyCollected + episode.spearKills
+	return episode.foodCollected + episode.preyCollected + episode.spearKills + episode.shootKills
 }
 
 func flatlandActuatorFeedback(alive bool, previousKills int) Fitness {
@@ -966,6 +969,9 @@ func evaluateFlatland(
 		"spear_kills":                     episode.spearKills,
 		"spear_prey_kills":                episode.spearPreyKills,
 		"spear_predator_kills":            episode.spearPredatorKills,
+		"shoot_kills":                     episode.shootKills,
+		"shoot_prey_kills":                episode.shootPreyKills,
+		"shoot_predator_kills":            episode.shootPredatorKills,
 		"social_collisions":               socialCollisions,
 		"collisions":                      totalCollisions,
 		"wall_collisions":                 episode.wallCollisions,
@@ -1052,6 +1058,9 @@ const (
 	flatlandSpearReach                    = 2
 	flatlandSpearPreyEnergyCredit         = 500.0
 	flatlandSpearPredatorEnergyCredit     = 100.0
+	flatlandShootReach                    = 5
+	flatlandShootPreyEnergyCredit         = 500.0
+	flatlandShootPredatorEnergyCredit     = 100.0
 	flatlandWallPenalty                   = 0.07
 	flatlandFoodRespawn                   = 12
 	flatlandPoisonRespawn                 = 16
@@ -1158,6 +1167,9 @@ type flatlandEpisode struct {
 	spearKills             int
 	spearPreyKills         int
 	spearPredatorKills     int
+	shootKills             int
+	shootPreyKills         int
+	shootPredatorKills     int
 	scannerSpread          float64
 	scannerOffset          float64
 	scannerProfile         string
@@ -1974,6 +1986,14 @@ func (e *flatlandEpisode) consumePreyAtPosition() bool {
 }
 
 func (e *flatlandEpisode) spearForwardContact() (bool, bool) {
+	return e.forwardTargetContact(flatlandSpearReach, flatlandSpearPreyEnergyCredit, flatlandSpearPredatorEnergyCredit, "spear")
+}
+
+func (e *flatlandEpisode) shootForwardContact() (bool, bool) {
+	return e.forwardTargetContact(flatlandShootReach, flatlandShootPreyEnergyCredit, flatlandShootPredatorEnergyCredit, "shoot")
+}
+
+func (e *flatlandEpisode) forwardTargetContact(reach int, preyEnergyCredit, predatorEnergyCredit float64, kind string) (bool, bool) {
 	if e.heading == 0 {
 		e.heading = 1
 	}
@@ -1986,7 +2006,7 @@ func (e *flatlandEpisode) spearForwardContact() (bool, bool) {
 			continue
 		}
 		distance := e.forwardDistance(resource.position)
-		if distance > 0 && distance <= flatlandSpearReach && distance < bestDistance {
+		if distance > 0 && distance <= reach && distance < bestDistance {
 			bestDistance = distance
 			bestKind = "prey"
 			bestIndex = i
@@ -1997,7 +2017,7 @@ func (e *flatlandEpisode) spearForwardContact() (bool, bool) {
 			continue
 		}
 		distance := e.forwardDistance(resource.position)
-		if distance > 0 && distance <= flatlandSpearReach && distance < bestDistance {
+		if distance > 0 && distance <= reach && distance < bestDistance {
 			bestDistance = distance
 			bestKind = "predator"
 			bestIndex = i
@@ -2009,22 +2029,39 @@ func (e *flatlandEpisode) spearForwardContact() (bool, bool) {
 		resource := &e.prey[bestIndex]
 		resource.cooldown = flatlandPreyRespawn
 		resource.potency = flatlandPreyEnergyMin
-		e.energy = math.Min(flatlandEnergyCap, e.energy+flatlandSpearPreyEnergyCredit)
+		e.energy = math.Min(flatlandEnergyCap, e.energy+preyEnergyCredit)
 		e.rewardAcc += flatlandPreyReward
-		e.spearKills++
-		e.spearPreyKills++
+		e.recordForwardTargetKill(kind, "prey")
 		return true, false
 	case "predator":
 		resource := &e.predators[bestIndex]
 		resource.cooldown = flatlandPredatorRespawn
 		resource.potency = flatlandPredatorDamageMin
-		e.energy = math.Min(flatlandEnergyCap, e.energy+flatlandSpearPredatorEnergyCredit)
+		e.energy = math.Min(flatlandEnergyCap, e.energy+predatorEnergyCredit)
 		e.rewardAcc += flatlandPredatorPenalty
-		e.spearKills++
-		e.spearPredatorKills++
+		e.recordForwardTargetKill(kind, "predator")
 		return false, true
 	default:
 		return false, false
+	}
+}
+
+func (e *flatlandEpisode) recordForwardTargetKill(kind, target string) {
+	switch kind {
+	case "spear":
+		e.spearKills++
+		if target == "prey" {
+			e.spearPreyKills++
+		} else if target == "predator" {
+			e.spearPredatorKills++
+		}
+	case "shoot":
+		e.shootKills++
+		if target == "prey" {
+			e.shootPreyKills++
+		} else if target == "predator" {
+			e.shootPredatorKills++
+		}
 	}
 }
 
