@@ -118,6 +118,12 @@ func TestFlatlandPublicProcessCommandWrapper(t *testing.T) {
 	if active, _ := tick.Trace["active_agents"].(int); active != 2 {
 		t.Fatalf("expected two active agents, trace=%+v", tick.Trace)
 	}
+	if len(tick.Avatars) != 2 {
+		t.Fatalf("expected process tick to return two typed avatar snapshots, response=%+v", tick)
+	}
+	if avatars, ok := tick.Trace["avatars"].([]FlatlandPublicAvatarSnapshot); !ok || len(avatars) != 2 {
+		t.Fatalf("expected typed avatars in process tick trace, trace=%+v", tick.Trace)
+	}
 
 	leave := process.Call(ctx, FlatlandPublicLeaveMessage{AgentID: "agent-1"})
 	if leave.Err != nil || !leave.OK {
@@ -1247,6 +1253,9 @@ func TestFlatlandScapePublicTraceIncludesTerminatedAgentAggregates(t *testing.T)
 	if totalHits, _ := trace["total_predator_hits"].(int); totalHits != 1 {
 		t.Fatalf("expected total_predator_hits to include terminated agent totals, trace=%+v", trace)
 	}
+	if avatars, ok := trace["avatars"].([]FlatlandPublicAvatarSnapshot); !ok || len(avatars) != 1 || !avatars[0].Terminated {
+		t.Fatalf("expected typed terminated avatar snapshot in public tick trace, trace=%+v", trace)
+	}
 }
 
 func TestFlatlandScapePublicTraceAggregatesMatchActiveAgentTrace(t *testing.T) {
@@ -1282,6 +1291,54 @@ func TestFlatlandScapePublicTraceAggregatesMatchActiveAgentTrace(t *testing.T) {
 	}
 	if totalHits, _ := trace["total_predator_hits"].(int); totalHits != agent["predator_hits"] {
 		t.Fatalf("expected total_predator_hits to match active agent trace, trace=%+v agent=%+v", trace, agent)
+	}
+	if totalPublicCollisions, _ := trace["total_public_agent_collisions"].(int); totalPublicCollisions != agent["public_agent_collisions"] {
+		t.Fatalf("expected total_public_agent_collisions to match active agent trace, trace=%+v agent=%+v", trace, agent)
+	}
+	if avatars, ok := trace["avatars"].([]FlatlandPublicAvatarSnapshot); !ok || len(avatars) != 1 || avatars[0].ID != "seed" {
+		t.Fatalf("expected typed avatar snapshot in public tick trace, trace=%+v", trace)
+	}
+}
+
+func TestFlatlandScapePublicTickAggregatesInteractionTotals(t *testing.T) {
+	scape := FlatlandScape{}
+	if err := scape.Start(context.Background()); err != nil {
+		t.Fatalf("start: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = scape.Stop(context.Background())
+	})
+	if err := scape.EnterPublicAgent(FlatlandPublicAgent{ID: "seed"}); err != nil {
+		t.Fatalf("enter public agent: %v", err)
+	}
+
+	flatlandPublicWorld.mu.Lock()
+	state := flatlandPublicWorld.agents["seed"]
+	state.episode.publicAgentCollisions = 2
+	state.episode.publicAgentKills = 1
+	state.episode.publicAgentDeaths = 1
+	state.episode.spearKills = 3
+	state.episode.shootKills = 4
+	flatlandPublicWorld.mu.Unlock()
+
+	trace, err := scape.TickPublic(context.Background())
+	if err != nil {
+		t.Fatalf("tick public: %v", err)
+	}
+	if total, _ := trace["total_public_agent_collisions"].(int); total != 2 {
+		t.Fatalf("expected public collision aggregate=2, trace=%+v", trace)
+	}
+	if total, _ := trace["total_public_agent_kills"].(int); total != 1 {
+		t.Fatalf("expected public kill aggregate=1, trace=%+v", trace)
+	}
+	if total, _ := trace["total_public_agent_deaths"].(int); total != 1 {
+		t.Fatalf("expected public death aggregate=1, trace=%+v", trace)
+	}
+	if total, _ := trace["total_spear_kills"].(int); total != 3 {
+		t.Fatalf("expected spear kill aggregate=3, trace=%+v", trace)
+	}
+	if total, _ := trace["total_shoot_kills"].(int); total != 4 {
+		t.Fatalf("expected shoot kill aggregate=4, trace=%+v", trace)
 	}
 }
 

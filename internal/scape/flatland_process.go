@@ -129,8 +129,8 @@ func (p *FlatlandPublicProcess) Call(ctx context.Context, message FlatlandPublic
 		agents, avatars, err := p.agents()
 		return FlatlandPublicResponse{OK: err == nil, Agents: agents, Avatars: avatars, Err: err}
 	case FlatlandPublicTickMessage:
-		trace, err := p.tick(ctx)
-		return FlatlandPublicResponse{OK: err == nil, Trace: trace, Err: err}
+		trace, avatars, err := p.tick(ctx)
+		return FlatlandPublicResponse{OK: err == nil, Trace: trace, Avatars: avatars, Err: err}
 	case FlatlandPublicSenseMessage:
 		percept, trace, err := p.sense(ctx, msg.AgentID)
 		return FlatlandPublicResponse{OK: err == nil, Percept: percept, Trace: trace, Err: err}
@@ -502,11 +502,11 @@ func flatlandApplyStateActuator(state *flatlandPublicAgentState, actuatorName st
 	}
 }
 
-func (p *FlatlandPublicProcess) tick(ctx context.Context) (Trace, error) {
+func (p *FlatlandPublicProcess) tick(ctx context.Context) (Trace, []FlatlandPublicAvatarSnapshot, error) {
 	p.runtime.mu.Lock()
 	defer p.runtime.mu.Unlock()
 	if !p.runtime.started {
-		return nil, fmt.Errorf("flatland public world is not started")
+		return nil, nil, fmt.Errorf("flatland public world is not started")
 	}
 
 	ids := make([]string, 0, len(p.runtime.agents))
@@ -520,11 +520,16 @@ func (p *FlatlandPublicProcess) tick(ctx context.Context) (Trace, error) {
 	totalFood := 0
 	totalPrey := 0
 	totalPredatorHits := 0
+	totalPublicCollisions := 0
+	totalPublicKills := 0
+	totalPublicDeaths := 0
+	totalSpearKills := 0
+	totalShootKills := 0
 	agentStates := make([]Trace, 0, len(ids))
 
 	for _, id := range ids {
 		if err := ctx.Err(); err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 		state := p.runtime.agents[id]
 		if state.terminated {
@@ -532,6 +537,11 @@ func (p *FlatlandPublicProcess) tick(ctx context.Context) (Trace, error) {
 			totalFood += state.episode.foodCollected
 			totalPrey += state.episode.preyCollected
 			totalPredatorHits += state.episode.predatorHits
+			totalPublicCollisions += state.episode.publicAgentCollisions
+			totalPublicKills += state.episode.publicAgentKills
+			totalPublicDeaths += state.episode.publicAgentDeaths
+			totalSpearKills += state.episode.spearKills
+			totalShootKills += state.episode.shootKills
 			terminated++
 			agentStates = append(agentStates, flatlandPublicAgentTrace(state))
 			continue
@@ -548,7 +558,7 @@ func (p *FlatlandPublicProcess) tick(ctx context.Context) (Trace, error) {
 		}
 		control, err := flatlandControlFromOutput(out)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 		_, _, _, _, reason := state.episode.step(control.move)
 		p.runtime.resolvePublicAgentContact(id, 0, 0)
@@ -560,6 +570,11 @@ func (p *FlatlandPublicProcess) tick(ctx context.Context) (Trace, error) {
 		totalFood += state.episode.foodCollected
 		totalPrey += state.episode.preyCollected
 		totalPredatorHits += state.episode.predatorHits
+		totalPublicCollisions += state.episode.publicAgentCollisions
+		totalPublicKills += state.episode.publicAgentKills
+		totalPublicDeaths += state.episode.publicAgentDeaths
+		totalSpearKills += state.episode.spearKills
+		totalShootKills += state.episode.shootKills
 		agentStates = append(agentStates, flatlandPublicAgentTrace(state))
 	}
 
@@ -568,15 +583,22 @@ func (p *FlatlandPublicProcess) tick(ctx context.Context) (Trace, error) {
 	if len(ids) > 0 {
 		avgEnergy = totalEnergy / float64(len(ids))
 	}
+	avatars := p.runtime.avatarSnapshots()
 	return Trace{
-		"tick":                p.runtime.tick,
-		"active_agents":       len(ids) - terminated,
-		"terminated_agents":   terminated,
-		"total_agents":        len(ids),
-		"avg_energy":          avgEnergy,
-		"total_food":          totalFood,
-		"total_prey":          totalPrey,
-		"total_predator_hits": totalPredatorHits,
-		"agents":              agentStates,
-	}, nil
+		"tick":                          p.runtime.tick,
+		"active_agents":                 len(ids) - terminated,
+		"terminated_agents":             terminated,
+		"total_agents":                  len(ids),
+		"avg_energy":                    avgEnergy,
+		"total_food":                    totalFood,
+		"total_prey":                    totalPrey,
+		"total_predator_hits":           totalPredatorHits,
+		"total_public_agent_collisions": totalPublicCollisions,
+		"total_public_agent_kills":      totalPublicKills,
+		"total_public_agent_deaths":     totalPublicDeaths,
+		"total_spear_kills":             totalSpearKills,
+		"total_shoot_kills":             totalShootKills,
+		"agents":                        agentStates,
+		"avatars":                       avatars,
+	}, avatars, nil
 }

@@ -532,6 +532,11 @@ func (FlatlandScape) TickPublic(ctx context.Context) (Trace, error) {
 	totalFood := 0
 	totalPrey := 0
 	totalPredatorHits := 0
+	totalPublicCollisions := 0
+	totalPublicKills := 0
+	totalPublicDeaths := 0
+	totalSpearKills := 0
+	totalShootKills := 0
 	agentStates := make([]Trace, 0, len(ids))
 
 	for _, id := range ids {
@@ -544,6 +549,11 @@ func (FlatlandScape) TickPublic(ctx context.Context) (Trace, error) {
 			totalFood += state.episode.foodCollected
 			totalPrey += state.episode.preyCollected
 			totalPredatorHits += state.episode.predatorHits
+			totalPublicCollisions += state.episode.publicAgentCollisions
+			totalPublicKills += state.episode.publicAgentKills
+			totalPublicDeaths += state.episode.publicAgentDeaths
+			totalSpearKills += state.episode.spearKills
+			totalShootKills += state.episode.shootKills
 			terminated++
 			agentStates = append(agentStates, flatlandPublicAgentTrace(state))
 			continue
@@ -572,6 +582,11 @@ func (FlatlandScape) TickPublic(ctx context.Context) (Trace, error) {
 		totalFood += state.episode.foodCollected
 		totalPrey += state.episode.preyCollected
 		totalPredatorHits += state.episode.predatorHits
+		totalPublicCollisions += state.episode.publicAgentCollisions
+		totalPublicKills += state.episode.publicAgentKills
+		totalPublicDeaths += state.episode.publicAgentDeaths
+		totalSpearKills += state.episode.spearKills
+		totalShootKills += state.episode.shootKills
 		agentStates = append(agentStates, flatlandPublicAgentTrace(state))
 	}
 
@@ -581,15 +596,21 @@ func (FlatlandScape) TickPublic(ctx context.Context) (Trace, error) {
 		avgEnergy = totalEnergy / float64(len(ids))
 	}
 	return Trace{
-		"mode":                 flatlandPublicWorld.config.mode,
-		"tick":                 flatlandPublicWorld.tick,
-		"active_agents":        len(ids) - terminated,
-		"terminated_agents":    terminated,
-		"avg_energy":           avgEnergy,
-		"total_food_collected": totalFood,
-		"total_prey_collected": totalPrey,
-		"total_predator_hits":  totalPredatorHits,
-		"agents":               agentStates,
+		"mode":                          flatlandPublicWorld.config.mode,
+		"tick":                          flatlandPublicWorld.tick,
+		"active_agents":                 len(ids) - terminated,
+		"terminated_agents":             terminated,
+		"avg_energy":                    avgEnergy,
+		"total_food_collected":          totalFood,
+		"total_prey_collected":          totalPrey,
+		"total_predator_hits":           totalPredatorHits,
+		"total_public_agent_collisions": totalPublicCollisions,
+		"total_public_agent_kills":      totalPublicKills,
+		"total_public_agent_deaths":     totalPublicDeaths,
+		"total_spear_kills":             totalSpearKills,
+		"total_shoot_kills":             totalShootKills,
+		"agents":                        agentStates,
+		"avatars":                       flatlandPublicWorld.avatarSnapshots(),
 	}, nil
 }
 
