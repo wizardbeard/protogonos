@@ -335,6 +335,105 @@ func TestFlatlandPublicProcessSpearCommandUsesReferenceEnergyGate(t *testing.T) 
 	}
 }
 
+func TestFlatlandPublicProcessSpearCommandDestroysForwardPrey(t *testing.T) {
+	process := NewFlatlandPublicProcess()
+	ctx := context.Background()
+
+	if response := process.Call(ctx, FlatlandPublicStartMessage{}); response.Err != nil || !response.OK {
+		t.Fatalf("start response=%+v", response)
+	}
+	t.Cleanup(func() {
+		_ = process.Call(context.Background(), FlatlandPublicStopMessage{Reason: "normal"}).Err
+	})
+	if response := process.Call(ctx, FlatlandPublicEnterMessage{Agent: FlatlandPublicAgent{ID: "hunter"}}); response.Err != nil || !response.OK {
+		t.Fatalf("enter response=%+v", response)
+	}
+
+	process.runtime.mu.Lock()
+	state := process.runtime.agents["hunter"]
+	state.episode.energy = 150
+	state.episode.position = 0
+	state.episode.heading = 1
+	state.episode.food = nil
+	state.episode.poison = nil
+	state.episode.prey = []flatlandResource{{position: flatlandSpearReach, potency: flatlandPreyEnergyMax}}
+	state.episode.predators = nil
+	state.spear = false
+	process.runtime.mu.Unlock()
+
+	response := process.Call(ctx, FlatlandPublicActMessage{
+		AgentID:      "hunter",
+		ActuatorName: protoio.FlatlandSpearActuatorAliasName,
+		Output:       []float64{1},
+	})
+	if response.Err != nil || !response.OK {
+		t.Fatalf("spear response=%+v", response)
+	}
+	if hit, _ := response.Trace["spear_prey_hit"].(bool); !hit {
+		t.Fatalf("expected spear_prey_hit=true, trace=%+v", response.Trace)
+	}
+	if kills, _ := response.Trace["spear_kills"].(int); kills != 1 {
+		t.Fatalf("expected spear_kills=1, trace=%+v", response.Trace)
+	}
+	if kills, _ := response.Trace["spear_prey_kills"].(int); kills != 1 {
+		t.Fatalf("expected spear_prey_kills=1, trace=%+v", response.Trace)
+	}
+	if energy, _ := response.Trace["energy"].(float64); math.Abs(energy-flatlandEnergyCap) > 1e-12 {
+		t.Fatalf("expected spear prey credit to saturate energy at cap, trace=%+v", response.Trace)
+	}
+	if state.episode.prey[0].cooldown != flatlandPreyRespawn {
+		t.Fatalf("expected speared prey cooldown=%d, got=%d", flatlandPreyRespawn, state.episode.prey[0].cooldown)
+	}
+}
+
+func TestFlatlandPublicProcessSpearCommandDestroysForwardPredator(t *testing.T) {
+	process := NewFlatlandPublicProcess()
+	ctx := context.Background()
+
+	if response := process.Call(ctx, FlatlandPublicStartMessage{}); response.Err != nil || !response.OK {
+		t.Fatalf("start response=%+v", response)
+	}
+	t.Cleanup(func() {
+		_ = process.Call(context.Background(), FlatlandPublicStopMessage{Reason: "normal"}).Err
+	})
+	if response := process.Call(ctx, FlatlandPublicEnterMessage{Agent: FlatlandPublicAgent{ID: "hunter"}}); response.Err != nil || !response.OK {
+		t.Fatalf("enter response=%+v", response)
+	}
+
+	process.runtime.mu.Lock()
+	state := process.runtime.agents["hunter"]
+	state.episode.energy = 150
+	state.episode.position = 0
+	state.episode.heading = 1
+	state.episode.food = nil
+	state.episode.poison = nil
+	state.episode.prey = nil
+	state.episode.predators = []flatlandResource{{position: flatlandSpearReach, potency: flatlandPredatorDamageMax}}
+	state.spear = false
+	process.runtime.mu.Unlock()
+
+	response := process.Call(ctx, FlatlandPublicActMessage{
+		AgentID:      "hunter",
+		ActuatorName: protoio.FlatlandSpearActuatorName,
+		Output:       []float64{1},
+	})
+	if response.Err != nil || !response.OK {
+		t.Fatalf("spear response=%+v", response)
+	}
+	if hit, _ := response.Trace["spear_predator_hit"].(bool); !hit {
+		t.Fatalf("expected spear_predator_hit=true, trace=%+v", response.Trace)
+	}
+	if kills, _ := response.Trace["spear_kills"].(int); kills != 1 {
+		t.Fatalf("expected spear_kills=1, trace=%+v", response.Trace)
+	}
+	if kills, _ := response.Trace["spear_predator_kills"].(int); kills != 1 {
+		t.Fatalf("expected spear_predator_kills=1, trace=%+v", response.Trace)
+	}
+	if state.episode.predators[0].cooldown != flatlandPredatorRespawn {
+		t.Fatalf("expected speared predator cooldown=%d, got=%d", flatlandPredatorRespawn, state.episode.predators[0].cooldown)
+	}
+}
+
 func TestFlatlandPublicProcessShootCommandUsesReferenceEnergyGate(t *testing.T) {
 	process := NewFlatlandPublicProcess()
 	ctx := context.Background()

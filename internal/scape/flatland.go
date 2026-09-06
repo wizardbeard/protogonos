@@ -489,6 +489,9 @@ func flatlandPublicAgentTrace(state *flatlandPublicAgentState) Trace {
 		"prey_hunted":              episode.preyHunted,
 		"predator_feeds":           episode.predatorFeeds,
 		"predator_pressure_events": episode.predatorPressureEvents,
+		"spear_kills":              episode.spearKills,
+		"spear_prey_kills":         episode.spearPreyKills,
+		"spear_predator_kills":     episode.spearPredatorKills,
 		"sound":                    state.sound,
 		"gestalt":                  append([]float64(nil), state.gestalt...),
 		"spear":                    state.spear,
@@ -504,7 +507,7 @@ func flatlandReferenceKills(episode *flatlandEpisode) int {
 	if episode == nil {
 		return 0
 	}
-	return episode.foodCollected + episode.preyCollected
+	return episode.foodCollected + episode.preyCollected + episode.spearKills
 }
 
 func flatlandActuatorFeedback(alive bool, previousKills int) Fitness {
@@ -960,6 +963,9 @@ func evaluateFlatland(
 		"prey_hunted":                     episode.preyHunted,
 		"predator_feeds":                  episode.predatorFeeds,
 		"predator_pressure_events":        episode.predatorPressureEvents,
+		"spear_kills":                     episode.spearKills,
+		"spear_prey_kills":                episode.spearPreyKills,
+		"spear_predator_kills":            episode.spearPredatorKills,
 		"social_collisions":               socialCollisions,
 		"collisions":                      totalCollisions,
 		"wall_collisions":                 episode.wallCollisions,
@@ -1043,6 +1049,9 @@ const (
 	flatlandPredatorPressureRadius        = 1
 	flatlandPredatorPreyPriorityRange     = 6
 	flatlandPreyPredatorAvoidRange        = 5
+	flatlandSpearReach                    = 2
+	flatlandSpearPreyEnergyCredit         = 500.0
+	flatlandSpearPredatorEnergyCredit     = 100.0
 	flatlandWallPenalty                   = 0.07
 	flatlandFoodRespawn                   = 12
 	flatlandPoisonRespawn                 = 16
@@ -1146,6 +1155,9 @@ type flatlandEpisode struct {
 	preyHunted             int
 	predatorFeeds          int
 	predatorPressureEvents int
+	spearKills             int
+	spearPreyKills         int
+	spearPredatorKills     int
 	scannerSpread          float64
 	scannerOffset          float64
 	scannerProfile         string
@@ -1959,6 +1971,72 @@ func (e *flatlandEpisode) consumePreyAtPosition() bool {
 		return true
 	}
 	return false
+}
+
+func (e *flatlandEpisode) spearForwardContact() (bool, bool) {
+	if e.heading == 0 {
+		e.heading = 1
+	}
+
+	bestDistance := flatlandWorldSize + 1
+	bestKind := ""
+	bestIndex := -1
+	for i, resource := range e.prey {
+		if resource.cooldown > 0 {
+			continue
+		}
+		distance := e.forwardDistance(resource.position)
+		if distance > 0 && distance <= flatlandSpearReach && distance < bestDistance {
+			bestDistance = distance
+			bestKind = "prey"
+			bestIndex = i
+		}
+	}
+	for i, resource := range e.predators {
+		if resource.cooldown > 0 {
+			continue
+		}
+		distance := e.forwardDistance(resource.position)
+		if distance > 0 && distance <= flatlandSpearReach && distance < bestDistance {
+			bestDistance = distance
+			bestKind = "predator"
+			bestIndex = i
+		}
+	}
+
+	switch bestKind {
+	case "prey":
+		resource := &e.prey[bestIndex]
+		resource.cooldown = flatlandPreyRespawn
+		resource.potency = flatlandPreyEnergyMin
+		e.energy = math.Min(flatlandEnergyCap, e.energy+flatlandSpearPreyEnergyCredit)
+		e.rewardAcc += flatlandPreyReward
+		e.spearKills++
+		e.spearPreyKills++
+		return true, false
+	case "predator":
+		resource := &e.predators[bestIndex]
+		resource.cooldown = flatlandPredatorRespawn
+		resource.potency = flatlandPredatorDamageMin
+		e.energy = math.Min(flatlandEnergyCap, e.energy+flatlandSpearPredatorEnergyCredit)
+		e.rewardAcc += flatlandPredatorPenalty
+		e.spearKills++
+		e.spearPredatorKills++
+		return false, true
+	default:
+		return false, false
+	}
+}
+
+func (e *flatlandEpisode) forwardDistance(position int) int {
+	delta := signedRingDistance(e.position, position, flatlandWorldSize)
+	if e.heading < 0 {
+		delta = -delta
+	}
+	if delta < 0 {
+		return flatlandWorldSize + delta
+	}
+	return delta
 }
 
 func (e *flatlandEpisode) collidePredatorAtPosition() bool {
