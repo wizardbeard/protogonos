@@ -347,6 +347,7 @@ func (FlatlandScape) ActPublicAgent(ctx context.Context, agentID string, output 
 
 	previousKills := flatlandReferenceKills(state.episode)
 	moveStep, hitFood, hitPoison, wallCollision, reason := state.episode.stepControl(control)
+	publicContact := flatlandPublicWorld.resolvePublicAgentContact(agentID, 0, 0)
 	if reason != "" {
 		state.terminated = true
 	}
@@ -357,6 +358,9 @@ func (FlatlandScape) ActPublicAgent(ctx context.Context, agentID string, output 
 	trace["hit_food"] = hitFood
 	trace["hit_poison"] = hitPoison
 	trace["wall_collision"] = wallCollision
+	trace["public_agent_collision"] = publicContact.collision
+	trace["public_agent_target_id"] = publicContact.targetID
+	trace["public_agent_target_terminated"] = publicContact.targetTerminated
 	trace["terminal_reason"] = reason
 	trace["control_surface"] = "step_output"
 	trace["last_control_width"] = control.width
@@ -416,6 +420,7 @@ func (FlatlandScape) TickPublic(ctx context.Context) (Trace, error) {
 			return nil, err
 		}
 		_, _, _, _, reason := state.episode.stepControl(control)
+		flatlandPublicWorld.resolvePublicAgentContact(id, 0, 0)
 		if reason != "" {
 			state.terminated = true
 			terminated++
@@ -489,6 +494,9 @@ func flatlandPublicAgentTrace(state *flatlandPublicAgentState) Trace {
 		"prey_hunted":              episode.preyHunted,
 		"predator_feeds":           episode.predatorFeeds,
 		"predator_pressure_events": episode.predatorPressureEvents,
+		"public_agent_collisions":  episode.publicAgentCollisions,
+		"public_agent_kills":       episode.publicAgentKills,
+		"public_agent_deaths":      episode.publicAgentDeaths,
 		"spear_kills":              episode.spearKills,
 		"spear_prey_kills":         episode.spearPreyKills,
 		"spear_predator_kills":     episode.spearPredatorKills,
@@ -510,7 +518,7 @@ func flatlandReferenceKills(episode *flatlandEpisode) int {
 	if episode == nil {
 		return 0
 	}
-	return episode.foodCollected + episode.preyCollected + episode.spearKills + episode.shootKills
+	return episode.foodCollected + episode.preyCollected + episode.spearKills + episode.shootKills + episode.publicAgentKills
 }
 
 func flatlandActuatorFeedback(alive bool, previousKills int) Fitness {
@@ -518,6 +526,62 @@ func flatlandActuatorFeedback(alive bool, previousKills int) Fitness {
 		return 0
 	}
 	return Fitness(0.001 + float64(previousKills))
+}
+
+type flatlandPublicContactResult struct {
+	collision        bool
+	targetID         string
+	targetTerminated bool
+}
+
+func (r *flatlandPublicRuntime) resolvePublicAgentContact(operatorID string, reach int, energyCredit float64) flatlandPublicContactResult {
+	operator := r.agents[operatorID]
+	if operator == nil || operator.terminated || operator.episode == nil {
+		return flatlandPublicContactResult{}
+	}
+
+	ids := make([]string, 0, len(r.agents))
+	for id := range r.agents {
+		if id != operatorID {
+			ids = append(ids, id)
+		}
+	}
+	sort.Strings(ids)
+
+	var result flatlandPublicContactResult
+	bestDistance := flatlandWorldSize + 1
+	var bestTarget *flatlandPublicAgentState
+	for _, id := range ids {
+		target := r.agents[id]
+		if target == nil || target.terminated || target.episode == nil {
+			continue
+		}
+		if target.episode.position == operator.episode.position {
+			operator.episode.publicAgentCollisions++
+			target.episode.publicAgentCollisions++
+			result.collision = true
+		}
+		if reach <= 0 {
+			continue
+		}
+		distance := operator.episode.forwardDistance(target.episode.position)
+		if distance > 0 && distance <= reach && distance < bestDistance {
+			bestDistance = distance
+			bestTarget = target
+		}
+	}
+
+	if bestTarget == nil {
+		return result
+	}
+	bestTarget.terminated = true
+	bestTarget.episode.publicAgentDeaths++
+	operator.episode.publicAgentKills++
+	operator.episode.energy = math.Min(flatlandEnergyCap, operator.episode.energy+energyCredit)
+	operator.episode.rewardAcc += flatlandPreyReward
+	result.targetID = bestTarget.id
+	result.targetTerminated = true
+	return result
 }
 
 func flatlandPublicShapedFitness(episode *flatlandEpisode) Fitness {
@@ -966,6 +1030,9 @@ func evaluateFlatland(
 		"prey_hunted":                     episode.preyHunted,
 		"predator_feeds":                  episode.predatorFeeds,
 		"predator_pressure_events":        episode.predatorPressureEvents,
+		"public_agent_collisions":         episode.publicAgentCollisions,
+		"public_agent_kills":              episode.publicAgentKills,
+		"public_agent_deaths":             episode.publicAgentDeaths,
 		"spear_kills":                     episode.spearKills,
 		"spear_prey_kills":                episode.spearPreyKills,
 		"spear_predator_kills":            episode.spearPredatorKills,
@@ -1164,6 +1231,9 @@ type flatlandEpisode struct {
 	preyHunted             int
 	predatorFeeds          int
 	predatorPressureEvents int
+	publicAgentCollisions  int
+	publicAgentKills       int
+	publicAgentDeaths      int
 	spearKills             int
 	spearPreyKills         int
 	spearPredatorKills     int

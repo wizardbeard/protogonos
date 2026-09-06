@@ -396,6 +396,10 @@ func (p *FlatlandPublicProcess) act(ctx context.Context, agentID string, actuato
 		if terminalReason != "" {
 			state.terminated = true
 		}
+		publicContact := flatlandPublicContactResult{}
+		if action.attackReach > 0 {
+			publicContact = p.runtime.resolvePublicAgentContact(agentID, action.attackReach, action.attackEnergyCredit)
+		}
 		referenceFitness := flatlandActuatorFeedback(!state.terminated, previousKills)
 		trace := flatlandPublicAgentTrace(state)
 		trace["move_step"] = 0
@@ -406,6 +410,9 @@ func (p *FlatlandPublicProcess) act(ctx context.Context, agentID string, actuato
 		trace["shot_fired"] = action.shotFired
 		trace["shoot_prey_hit"] = action.shootPreyHit
 		trace["shoot_predator_hit"] = action.shootPredatorHit
+		trace["public_agent_collision"] = publicContact.collision
+		trace["public_agent_target_id"] = publicContact.targetID
+		trace["public_agent_target_terminated"] = publicContact.targetTerminated
 		trace["wall_collision"] = false
 		trace["terminal_reason"] = terminalReason
 		trace["control_surface"] = strings.TrimSpace(actuatorName)
@@ -420,6 +427,7 @@ func (p *FlatlandPublicProcess) act(ctx context.Context, agentID string, actuato
 		return 0, false, nil, err
 	}
 	moveStep, hitFood, hitPoison, wallCollision, reason := state.episode.stepControl(control)
+	publicContact := p.runtime.resolvePublicAgentContact(agentID, 0, 0)
 	if reason != "" {
 		state.terminated = true
 	}
@@ -430,6 +438,9 @@ func (p *FlatlandPublicProcess) act(ctx context.Context, agentID string, actuato
 	trace["hit_food"] = hitFood
 	trace["hit_poison"] = hitPoison
 	trace["wall_collision"] = wallCollision
+	trace["public_agent_collision"] = publicContact.collision
+	trace["public_agent_target_id"] = publicContact.targetID
+	trace["public_agent_target_terminated"] = publicContact.targetTerminated
 	trace["terminal_reason"] = reason
 	trace["control_surface"] = "step_output"
 	trace["last_control_width"] = control.width
@@ -441,13 +452,15 @@ func (p *FlatlandPublicProcess) act(ctx context.Context, agentID string, actuato
 }
 
 type flatlandStateActuatorResult struct {
-	handled          bool
-	terminalReason   string
-	spearPreyHit     bool
-	spearPredatorHit bool
-	shotFired        bool
-	shootPreyHit     bool
-	shootPredatorHit bool
+	handled            bool
+	terminalReason     string
+	spearPreyHit       bool
+	spearPredatorHit   bool
+	shotFired          bool
+	shootPreyHit       bool
+	shootPredatorHit   bool
+	attackReach        int
+	attackEnergyCredit float64
 }
 
 func flatlandApplyStateActuator(state *flatlandPublicAgentState, actuatorName string, output []float64) flatlandStateActuatorResult {
@@ -484,7 +497,13 @@ func flatlandApplyStateActuator(state *flatlandPublicAgentState, actuatorName st
 			state.episode.energy = 0
 			return flatlandStateActuatorResult{handled: true, terminalReason: "depleted", spearPreyHit: spearPreyHit, spearPredatorHit: spearPredatorHit}
 		}
-		return flatlandStateActuatorResult{handled: true, spearPreyHit: spearPreyHit, spearPredatorHit: spearPredatorHit}
+		return flatlandStateActuatorResult{
+			handled:            true,
+			spearPreyHit:       spearPreyHit,
+			spearPredatorHit:   spearPredatorHit,
+			attackReach:        flatlandSpearReach,
+			attackEnergyCredit: flatlandSpearPreyEnergyCredit,
+		}
 	case protoio.FlatlandShootActuatorName:
 		if len(output) == 0 || output[0] <= 0 {
 			return flatlandStateActuatorResult{handled: true}
@@ -494,6 +513,8 @@ func flatlandApplyStateActuator(state *flatlandPublicAgentState, actuatorName st
 			state.episode.energy -= 20
 			result.shotFired = true
 			result.shootPreyHit, result.shootPredatorHit = state.episode.shootForwardContact()
+			result.attackReach = flatlandShootReach
+			result.attackEnergyCredit = flatlandShootPreyEnergyCredit
 		} else {
 			state.episode.energy -= 1
 		}
@@ -581,6 +602,7 @@ func (p *FlatlandPublicProcess) tick(ctx context.Context) (Trace, error) {
 			return nil, err
 		}
 		_, _, _, _, reason := state.episode.step(control.move)
+		p.runtime.resolvePublicAgentContact(id, 0, 0)
 		if reason != "" {
 			state.terminated = true
 			terminated++

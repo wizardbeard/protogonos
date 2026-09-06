@@ -601,6 +601,111 @@ func TestFlatlandPublicProcessShootCommandHitsForwardPredator(t *testing.T) {
 	}
 }
 
+func TestFlatlandPublicProcessMoveTracksPublicAgentCollision(t *testing.T) {
+	process := NewFlatlandPublicProcess()
+	ctx := context.Background()
+
+	if response := process.Call(ctx, FlatlandPublicStartMessage{}); response.Err != nil || !response.OK {
+		t.Fatalf("start response=%+v", response)
+	}
+	t.Cleanup(func() {
+		_ = process.Call(context.Background(), FlatlandPublicStopMessage{Reason: "normal"}).Err
+	})
+	for _, id := range []string{"mover", "blocker"} {
+		if response := process.Call(ctx, FlatlandPublicEnterMessage{Agent: FlatlandPublicAgent{ID: id}}); response.Err != nil || !response.OK {
+			t.Fatalf("enter %s response=%+v", id, response)
+		}
+	}
+
+	process.runtime.mu.Lock()
+	mover := process.runtime.agents["mover"]
+	blocker := process.runtime.agents["blocker"]
+	mover.episode.position = 0
+	mover.episode.heading = 1
+	mover.episode.food = nil
+	mover.episode.poison = nil
+	mover.episode.prey = nil
+	mover.episode.predators = nil
+	blocker.episode.position = 1
+	blocker.episode.heading = -1
+	process.runtime.mu.Unlock()
+
+	response := process.Call(ctx, FlatlandPublicActMessage{
+		AgentID:      "mover",
+		ActuatorName: protoio.FlatlandMoveActuatorName,
+		Output:       []float64{1},
+	})
+	if response.Err != nil || !response.OK {
+		t.Fatalf("move response=%+v", response)
+	}
+	if collision, _ := response.Trace["public_agent_collision"].(bool); !collision {
+		t.Fatalf("expected public_agent_collision=true, trace=%+v", response.Trace)
+	}
+	if collisions, _ := response.Trace["public_agent_collisions"].(int); collisions != 1 {
+		t.Fatalf("expected mover public_agent_collisions=1, trace=%+v", response.Trace)
+	}
+	if mover.episode.publicAgentCollisions != 1 || blocker.episode.publicAgentCollisions != 1 {
+		t.Fatalf("expected collision count on both agents, mover=%d blocker=%d", mover.episode.publicAgentCollisions, blocker.episode.publicAgentCollisions)
+	}
+	if mover.terminated || blocker.terminated {
+		t.Fatalf("expected same-position public collision to remain non-terminal")
+	}
+}
+
+func TestFlatlandPublicProcessSpearCanTerminateForwardPublicAgent(t *testing.T) {
+	process := NewFlatlandPublicProcess()
+	ctx := context.Background()
+
+	if response := process.Call(ctx, FlatlandPublicStartMessage{}); response.Err != nil || !response.OK {
+		t.Fatalf("start response=%+v", response)
+	}
+	t.Cleanup(func() {
+		_ = process.Call(context.Background(), FlatlandPublicStopMessage{Reason: "normal"}).Err
+	})
+	for _, id := range []string{"hunter", "target"} {
+		if response := process.Call(ctx, FlatlandPublicEnterMessage{Agent: FlatlandPublicAgent{ID: id}}); response.Err != nil || !response.OK {
+			t.Fatalf("enter %s response=%+v", id, response)
+		}
+	}
+
+	process.runtime.mu.Lock()
+	hunter := process.runtime.agents["hunter"]
+	target := process.runtime.agents["target"]
+	hunter.episode.energy = 150
+	hunter.episode.position = 0
+	hunter.episode.heading = 1
+	hunter.episode.food = nil
+	hunter.episode.poison = nil
+	hunter.episode.prey = nil
+	hunter.episode.predators = nil
+	target.episode.position = flatlandSpearReach
+	process.runtime.mu.Unlock()
+
+	response := process.Call(ctx, FlatlandPublicActMessage{
+		AgentID:      "hunter",
+		ActuatorName: protoio.FlatlandSpearActuatorName,
+		Output:       []float64{1},
+	})
+	if response.Err != nil || !response.OK {
+		t.Fatalf("spear response=%+v", response)
+	}
+	if targetID, _ := response.Trace["public_agent_target_id"].(string); targetID != "target" {
+		t.Fatalf("expected public target id=target, trace=%+v", response.Trace)
+	}
+	if terminated, _ := response.Trace["public_agent_target_terminated"].(bool); !terminated {
+		t.Fatalf("expected public target termination, trace=%+v", response.Trace)
+	}
+	if kills, _ := response.Trace["public_agent_kills"].(int); kills != 1 {
+		t.Fatalf("expected public_agent_kills=1, trace=%+v", response.Trace)
+	}
+	if !target.terminated {
+		t.Fatalf("expected target state to be terminated")
+	}
+	if deaths := target.episode.publicAgentDeaths; deaths != 1 {
+		t.Fatalf("expected target public_agent_deaths=1, got=%d", deaths)
+	}
+}
+
 func TestFlatlandPublicProcessCreateOffspringCommandReportsGrantState(t *testing.T) {
 	process := NewFlatlandPublicProcess()
 	ctx := context.Background()
