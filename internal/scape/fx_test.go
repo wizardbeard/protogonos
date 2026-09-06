@@ -783,6 +783,92 @@ func TestFXSimulatorStateIncludesContextSeriesMetadata(t *testing.T) {
 	}
 }
 
+func TestFXMaxProfitOracleUsesFlipSignalsAndStateMetadata(t *testing.T) {
+	ResetFXSeriesSource()
+	t.Cleanup(ResetFXSeriesSource)
+
+	fxSeriesSourceMu.Lock()
+	fxSeriesSource = fxSeries{
+		name:       "fx.test.oracle",
+		sourceKind: "builtin",
+		values: []float64{
+			1.00, 1.02, 1.04, 1.03, 1.01, 1.00, 1.03, 1.06,
+		},
+	}
+	fxSeriesSourceMu.Unlock()
+
+	report, err := FXMaxProfitOracle(context.Background(), "gt")
+	if err != nil {
+		t.Fatalf("max profit oracle: %v", err)
+	}
+	if report.SeriesName != "fx.test.oracle" || report.SeriesPoints != 8 {
+		t.Fatalf("expected oracle source metadata, got %+v", report)
+	}
+	if report.Table.Name != report.SeriesName || report.Table.Rows != 8 {
+		t.Fatalf("expected oracle table metadata, got %+v", report.Table)
+	}
+	if report.Fitness <= fxInitialBalance || report.NetAssetValue <= fxInitialBalance {
+		t.Fatalf("expected oracle to improve NAV, got %+v", report)
+	}
+	if report.MarginCall {
+		t.Fatalf("did not expect margin call for oracle run, got %+v", report)
+	}
+	if report.ExecutedTrades != len(report.Signals) || report.Steps != len(report.Signals) {
+		t.Fatalf("expected signal count to match executed trades, got %+v", report)
+	}
+	if !containsFXSignal(report.Signals, 1) || !containsFXSignal(report.Signals, -1) {
+		t.Fatalf("expected oracle to emit both long and short signals, got %v", report.Signals)
+	}
+	if report.OrdersOpened == 0 || report.OrdersClosed == 0 {
+		t.Fatalf("expected oracle to open and close orders, got %+v", report)
+	}
+}
+
+func TestFXMaxProfitOracleHonorsContextSeries(t *testing.T) {
+	ResetFXSeriesSource()
+	t.Cleanup(ResetFXSeriesSource)
+
+	path := filepath.Join(t.TempDir(), "fx_oracle_context.csv")
+	var builder strings.Builder
+	builder.WriteString("t,close\n")
+	for i := 0; i < 320; i++ {
+		value := 1.20 + 0.01*math.Sin(float64(i)*0.15)
+		fmt.Fprintf(&builder, "%d,%0.6f\n", i, value)
+	}
+	if err := os.WriteFile(path, []byte(builder.String()), 0o644); err != nil {
+		t.Fatalf("write fx oracle csv: %v", err)
+	}
+	ctx, err := WithDataSources(context.Background(), DataSources{
+		FX: FXDataSource{CSVPath: path},
+	})
+	if err != nil {
+		t.Fatalf("configure fx oracle data source: %v", err)
+	}
+
+	report, err := FXMaxProfitOracle(ctx, "validation")
+	if err != nil {
+		t.Fatalf("max profit oracle with context source: %v", err)
+	}
+	if !strings.Contains(report.SeriesName, "fx_oracle_context.csv") || report.Table.SourceKind != "csv" {
+		t.Fatalf("expected context csv source metadata, got %+v", report)
+	}
+	if report.Table.Mode != "validation" || report.Table.IndexStart != 128 || report.Table.IndexEnd != 175 {
+		t.Fatalf("expected validation table bounds, got %+v", report.Table)
+	}
+	if report.Fitness <= 0 || report.ExecutedTrades == 0 {
+		t.Fatalf("expected executable oracle report, got %+v", report)
+	}
+}
+
+func containsFXSignal(signals []float64, target float64) bool {
+	for _, signal := range signals {
+		if signal == target {
+			return true
+		}
+	}
+	return false
+}
+
 func TestFXScapeLoadSeriesCSVRejectsInvalidPrice(t *testing.T) {
 	ResetFXSeriesSource()
 	t.Cleanup(ResetFXSeriesSource)

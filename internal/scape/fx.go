@@ -89,6 +89,23 @@ type FXTableMetadata struct {
 	LastClose         float64
 }
 
+type FXMaxProfitReport struct {
+	Mode             string
+	SeriesName       string
+	SeriesPoints     int
+	Table            FXTableMetadata
+	Fitness          Fitness
+	NetAssetValue    float64
+	Signals          []float64
+	Steps            int
+	OrdersOpened     int
+	OrdersClosed     int
+	ExecutedTrades   int
+	DirectionChanges int
+	Turnover         float64
+	MarginCall       bool
+}
+
 var (
 	fxSeriesSourceMu sync.RWMutex
 	fxSeriesSource   = defaultFXSeries()
@@ -318,6 +335,54 @@ func (s *FXSimulator) State() FXSimulatorState {
 		Turnover:             s.turnover,
 		MarginCall:           s.marginCall,
 	}
+}
+
+func FXMaxProfitOracle(ctx context.Context, mode string) (FXMaxProfitReport, error) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	sim, err := NewFXSimulator(ctx, mode)
+	if err != nil {
+		return FXMaxProfitReport{}, err
+	}
+	signals := make([]float64, 0, sim.cfg.steps)
+	for !sim.halted {
+		if err := ctx.Err(); err != nil {
+			return FXMaxProfitReport{}, err
+		}
+		step := sim.step
+		close := fxPrice(sim.series, step)
+		flipIndex, flipClose := fxFindNextFlip(sim.series, step, sim.cfg.startStep+sim.cfg.steps-1)
+		signal := fxOracleTradeSignal(close, flipClose)
+		for {
+			stepBeforeTrade := sim.step
+			_, _, err := sim.Trade(ctx, signal)
+			if err != nil {
+				return FXMaxProfitReport{}, err
+			}
+			signals = append(signals, signal)
+			if sim.halted || stepBeforeTrade >= flipIndex {
+				break
+			}
+		}
+	}
+	state := sim.State()
+	return FXMaxProfitReport{
+		Mode:             state.Mode,
+		SeriesName:       state.SeriesName,
+		SeriesPoints:     state.SeriesPoints,
+		Table:            state.Table,
+		Fitness:          state.LastFitness,
+		NetAssetValue:    state.NetAssetValue,
+		Signals:          append([]float64(nil), signals...),
+		Steps:            state.ExecutedTrades,
+		OrdersOpened:     state.OrdersOpened,
+		OrdersClosed:     state.OrdersClosed,
+		ExecutedTrades:   state.ExecutedTrades,
+		DirectionChanges: state.DirectionChanges,
+		Turnover:         state.Turnover,
+		MarginCall:       state.MarginCall,
+	}, nil
 }
 
 func evaluateFXWithStep(ctx context.Context, runner StepAgent, cfg fxModeConfig) (Fitness, Trace, error) {
@@ -1013,6 +1078,46 @@ func fxTableMetadata(series fxSeries, cfg fxModeConfig) FXTableMetadata {
 		EffectiveIndexEnd: effectiveEnd,
 		FirstClose:        firstClose,
 		LastClose:         lastClose,
+	}
+}
+
+func fxFindNextFlip(series fxSeries, index, endIndex int) (int, float64) {
+	if endIndex < index {
+		return index, fxPrice(series, index)
+	}
+	close := fxPrice(series, index)
+	if index >= endIndex {
+		return endIndex, close
+	}
+	nextClose := fxPrice(series, index+1)
+	if nextClose > close {
+		return fxFindNextFlipDirection(series, index, close, endIndex, 1)
+	}
+	return fxFindNextFlipDirection(series, index, close, endIndex, -1)
+}
+
+func fxFindNextFlipDirection(series fxSeries, index int, close float64, endIndex int, direction int) (int, float64) {
+	if index >= endIndex {
+		return endIndex, close
+	}
+	nextIndex := index + 1
+	nextClose := fxPrice(series, nextIndex)
+	delta := nextClose - close
+	if (direction > 0 && delta > 0) || (direction < 0 && delta < 0) {
+		return fxFindNextFlipDirection(series, nextIndex, nextClose, endIndex, direction)
+	}
+	return index, close
+}
+
+func fxOracleTradeSignal(close, flipClose float64) float64 {
+	spreadThreshold := fxSpread * close
+	switch {
+	case flipClose > close+spreadThreshold:
+		return 1
+	case flipClose < close-spreadThreshold:
+		return -1
+	default:
+		return 0
 	}
 }
 
