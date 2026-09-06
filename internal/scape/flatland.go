@@ -45,6 +45,40 @@ type flatlandPublicRuntime struct {
 	tick           int
 	agents         map[string]*flatlandPublicAgentState
 	lastStopReason string
+	lastUpdate     FlatlandPublicUpdateSummary
+}
+
+type FlatlandPublicUpdateSummary struct {
+	Requested       int
+	Previous        int
+	Created         int
+	Preserved       int
+	Revived         int
+	Removed         int
+	RemovedIDs      []string
+	DeadBefore      int
+	ActiveAfter     int
+	TerminatedAfter int
+}
+
+func (s FlatlandPublicUpdateSummary) clone() FlatlandPublicUpdateSummary {
+	s.RemovedIDs = append([]string(nil), s.RemovedIDs...)
+	return s
+}
+
+func (s FlatlandPublicUpdateSummary) trace() Trace {
+	return Trace{
+		"requested_agents":        s.Requested,
+		"previous_agents":         s.Previous,
+		"created_agents":          s.Created,
+		"preserved_agents":        s.Preserved,
+		"revived_agents":          s.Revived,
+		"removed_agents":          s.Removed,
+		"removed_agent_ids":       append([]string(nil), s.RemovedIDs...),
+		"dead_agents_before":      s.DeadBefore,
+		"active_agents_after":     s.ActiveAfter,
+		"terminated_agents_after": s.TerminatedAfter,
+	}
 }
 
 type FlatlandPublicAvatarSnapshot struct {
@@ -126,6 +160,7 @@ func (FlatlandScape) Start(_ context.Context) error {
 	flatlandPublicWorld.tick = 0
 	flatlandPublicWorld.agents = make(map[string]*flatlandPublicAgentState)
 	flatlandPublicWorld.lastStopReason = ""
+	flatlandPublicWorld.lastUpdate = FlatlandPublicUpdateSummary{}
 	return nil
 }
 
@@ -146,6 +181,7 @@ func (FlatlandScape) StopWithReason(_ context.Context, reason string) error {
 	flatlandPublicWorld.tick = 0
 	flatlandPublicWorld.agents = make(map[string]*flatlandPublicAgentState)
 	flatlandPublicWorld.lastStopReason = reason
+	flatlandPublicWorld.lastUpdate = FlatlandPublicUpdateSummary{}
 	return nil
 }
 
@@ -245,6 +281,15 @@ func (FlatlandScape) PublicAvatarSnapshots() ([]FlatlandPublicAvatarSnapshot, er
 	return flatlandPublicWorld.avatarSnapshots(), nil
 }
 
+func (FlatlandScape) LastPublicUpdateSummary() (FlatlandPublicUpdateSummary, error) {
+	flatlandPublicWorld.mu.RLock()
+	defer flatlandPublicWorld.mu.RUnlock()
+	if !flatlandPublicWorld.started {
+		return FlatlandPublicUpdateSummary{}, fmt.Errorf("flatland public world is not started")
+	}
+	return flatlandPublicWorld.lastUpdate.clone(), nil
+}
+
 func (FlatlandScape) SensePublicAgent(ctx context.Context, agentID string) ([]float64, Trace, error) {
 	agentID = strings.TrimSpace(agentID)
 	if agentID == "" {
@@ -298,38 +343,60 @@ func (FlatlandScape) UpdatePublicAgents(agents []FlatlandPublicAgent) error {
 	if !flatlandPublicWorld.started {
 		return fmt.Errorf("flatland public world is not started")
 	}
+	_, err := flatlandPublicWorld.updateAgentsLocked(agents)
+	return err
+}
+
+func (r *flatlandPublicRuntime) updateAgentsLocked(agents []FlatlandPublicAgent) (FlatlandPublicUpdateSummary, error) {
+	summary := FlatlandPublicUpdateSummary{
+		Requested: len(agents),
+		Previous:  len(r.agents),
+	}
+	requestedIDs := make(map[string]struct{}, len(agents))
+	for id, state := range r.agents {
+		if state != nil && state.terminated {
+			summary.DeadBefore++
+		}
+		requestedIDs[id] = struct{}{}
+	}
 
 	next := make(map[string]*flatlandPublicAgentState, len(agents))
 	for _, agent := range agents {
 		agentID := strings.TrimSpace(agent.ID)
 		if agentID == "" {
-			return fmt.Errorf("flatland public agent id is required")
+			return FlatlandPublicUpdateSummary{}, fmt.Errorf("flatland public agent id is required")
 		}
 		if _, exists := next[agentID]; exists {
-			return fmt.Errorf("duplicate public agent update for id: %s", agentID)
+			return FlatlandPublicUpdateSummary{}, fmt.Errorf("duplicate public agent update for id: %s", agentID)
 		}
+		delete(requestedIDs, agentID)
 
-		existing, hasExisting := flatlandPublicWorld.agents[agentID]
+		existing, hasExisting := r.agents[agentID]
 		if hasExisting {
 			mode := existing.mode
 			if mode == "" {
-				mode = flatlandPublicWorld.config.mode
+				mode = r.config.mode
 			}
 			modeCfg, err := flatlandConfigForMode(mode)
 			if err != nil {
-				return err
+				return FlatlandPublicUpdateSummary{}, err
 			}
 			if strings.TrimSpace(agent.Mode) != "" {
 				modeCfg, err = flatlandConfigForMode(agent.Mode)
 				if err != nil {
-					return err
+					return FlatlandPublicUpdateSummary{}, err
 				}
 				mode = modeCfg.mode
 			}
 			if mode != existing.mode || existing.terminated {
+				if existing.terminated {
+					summary.Revived++
+				}
 				existing.mode = mode
 				existing.episode = newFlatlandEpisodeForAgent(modeCfg, agentID)
 				existing.terminated = false
+			} else {
+				summary.Preserved++
 			}
 			existing.neuronCount = max(agent.NeuronCount, 0)
 			existing.decide = agent.Decide
@@ -337,12 +404,13 @@ func (FlatlandScape) UpdatePublicAgents(agents []FlatlandPublicAgent) error {
 			continue
 		}
 
-		cfg := flatlandPublicWorld.config
+		summary.Created++
+		cfg := r.config
 		mode := cfg.mode
 		if strings.TrimSpace(agent.Mode) != "" {
 			modeCfg, err := flatlandConfigForMode(agent.Mode)
 			if err != nil {
-				return err
+				return FlatlandPublicUpdateSummary{}, err
 			}
 			cfg = modeCfg
 			mode = modeCfg.mode
@@ -356,8 +424,20 @@ func (FlatlandScape) UpdatePublicAgents(agents []FlatlandPublicAgent) error {
 		}
 	}
 
-	flatlandPublicWorld.agents = next
-	return nil
+	for id := range requestedIDs {
+		summary.RemovedIDs = append(summary.RemovedIDs, id)
+	}
+	sort.Strings(summary.RemovedIDs)
+	summary.Removed = len(summary.RemovedIDs)
+	for _, state := range next {
+		if state != nil && state.terminated {
+			summary.TerminatedAfter++
+		}
+	}
+	summary.ActiveAfter = len(next) - summary.TerminatedAfter
+	r.agents = next
+	r.lastUpdate = summary.clone()
+	return summary, nil
 }
 
 func (FlatlandScape) LeavePublicAgent(agentID string) error {

@@ -105,6 +105,12 @@ func TestFlatlandPublicProcessCommandWrapper(t *testing.T) {
 	if update.Err != nil || !update.OK {
 		t.Fatalf("update response=%+v", update)
 	}
+	if update.Update.Created != 1 || update.Update.Preserved != 1 || update.Update.ActiveAfter != 2 {
+		t.Fatalf("unexpected update summary: %+v", update.Update)
+	}
+	if len(update.Avatars) != 2 {
+		t.Fatalf("expected two post-update avatars, response=%+v", update)
+	}
 	tick := process.Call(ctx, FlatlandPublicTickMessage{})
 	if tick.Err != nil || !tick.OK {
 		t.Fatalf("tick response=%+v", tick)
@@ -1040,6 +1046,13 @@ func TestFlatlandScapePublicUpdateAndListAgents(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("update public agents: %v", err)
 	}
+	summary, err := scape.LastPublicUpdateSummary()
+	if err != nil {
+		t.Fatalf("last public update summary: %v", err)
+	}
+	if summary.Previous != 1 || summary.Requested != 2 || summary.Preserved != 1 || summary.Created != 1 || summary.ActiveAfter != 2 {
+		t.Fatalf("unexpected add update summary: %+v", summary)
+	}
 
 	trace, err := scape.TickPublic(context.Background())
 	if err != nil {
@@ -1062,6 +1075,21 @@ func TestFlatlandScapePublicUpdateAndListAgents(t *testing.T) {
 
 	if err := scape.UpdatePublicAgents([]FlatlandPublicAgent{{ID: "bench", Mode: "benchmark"}}); err != nil {
 		t.Fatalf("update public agents remove seed: %v", err)
+	}
+	summary, err = scape.LastPublicUpdateSummary()
+	if err != nil {
+		t.Fatalf("last public update summary after remove: %v", err)
+	}
+	if summary.Removed != 1 || !reflect.DeepEqual(summary.RemovedIDs, []string{"seed"}) || summary.Preserved != 1 || summary.ActiveAfter != 1 {
+		t.Fatalf("unexpected removal update summary: %+v", summary)
+	}
+	summary.RemovedIDs[0] = "mutated"
+	copied, err := scape.LastPublicUpdateSummary()
+	if err != nil {
+		t.Fatalf("copied public update summary: %v", err)
+	}
+	if copied.RemovedIDs[0] != "seed" {
+		t.Fatalf("expected summary removed ids to be copy-safe, got %+v", copied)
 	}
 	trace, err = scape.TickPublic(context.Background())
 	if err != nil {
@@ -1104,6 +1132,13 @@ func TestFlatlandScapePublicUpdateRevivesTerminatedAgent(t *testing.T) {
 
 	if err := scape.UpdatePublicAgents([]FlatlandPublicAgent{{ID: "seed"}}); err != nil {
 		t.Fatalf("update public agents: %v", err)
+	}
+	summary, err := scape.LastPublicUpdateSummary()
+	if err != nil {
+		t.Fatalf("last public update summary: %v", err)
+	}
+	if summary.DeadBefore != 1 || summary.Revived != 1 || summary.ActiveAfter != 1 || summary.TerminatedAfter != 0 {
+		t.Fatalf("unexpected revive update summary: %+v", summary)
 	}
 
 	flatlandPublicWorld.mu.RLock()
