@@ -3,6 +3,7 @@ package scape
 import (
 	"context"
 	"encoding/csv"
+	"encoding/json"
 	"fmt"
 	"io"
 	"math"
@@ -111,6 +112,31 @@ type FXCandle struct {
 	Close float64
 	High  float64
 	Low   float64
+}
+
+type FXTableCatalog struct {
+	Tables []FXTableCatalogEntry
+}
+
+type FXTableCatalogEntry struct {
+	Name       string
+	SourceKind string
+	SourcePath string
+	Rows       int
+	FirstClose float64
+	LastClose  float64
+}
+
+type fxTablesArtifact struct {
+	Version int                     `json:"version"`
+	Tables  []fxTablesArtifactTable `json:"tables"`
+}
+
+type fxTablesArtifactTable struct {
+	Name       string    `json:"name"`
+	SourceKind string    `json:"source_kind"`
+	SourcePath string    `json:"source_path,omitempty"`
+	Values     []float64 `json:"values"`
 }
 
 var (
@@ -964,6 +990,62 @@ func ResetFXSeriesSource() {
 	fxSeriesSource = defaultFXSeries()
 }
 
+// ResetFXTables restores the active FX table catalog to the built-in series.
+func ResetFXTables() {
+	ResetFXSeriesSource()
+}
+
+// FXTablesCatalog lists the active FX table catalog. The Go runtime currently
+// keeps one active price series, matching the selected table used by simulation.
+func FXTablesCatalog(ctx context.Context) FXTableCatalog {
+	series := currentFXSeries(ctx)
+	return FXTableCatalog{
+		Tables: []FXTableCatalogEntry{fxTableCatalogEntry(series)},
+	}
+}
+
+// BackupFXTablesJSON writes the active FX table catalog to a JSON artifact.
+func BackupFXTablesJSON(path string) error {
+	path = strings.TrimSpace(path)
+	if path == "" {
+		return fmt.Errorf("fx table backup path is required")
+	}
+	fxSeriesSourceMu.RLock()
+	series := fxSeriesSource
+	fxSeriesSourceMu.RUnlock()
+	artifact := fxTablesArtifact{
+		Version: 1,
+		Tables: []fxTablesArtifactTable{
+			{
+				Name:       series.name,
+				SourceKind: normalizedFXSourceKind(series),
+				SourcePath: series.sourcePath,
+				Values:     append([]float64(nil), series.values...),
+			},
+		},
+	}
+	data, err := json.MarshalIndent(artifact, "", "  ")
+	if err != nil {
+		return fmt.Errorf("marshal fx table artifact: %w", err)
+	}
+	if err := os.WriteFile(path, data, 0o644); err != nil {
+		return fmt.Errorf("write fx table artifact %s: %w", path, err)
+	}
+	return nil
+}
+
+// LoadFXTablesJSON loads a JSON table artifact and makes its first table active.
+func LoadFXTablesJSON(path string) error {
+	series, err := loadFXTablesJSON(path)
+	if err != nil {
+		return err
+	}
+	fxSeriesSourceMu.Lock()
+	defer fxSeriesSourceMu.Unlock()
+	fxSeriesSource = series
+	return nil
+}
+
 // LoadFXSeriesCSV loads price points from CSV and makes the series active.
 // The last non-empty column per row is interpreted as the price.
 func LoadFXSeriesCSV(path string) error {
@@ -1037,6 +1119,54 @@ func loadFXSeriesCSV(path string) (fxSeries, error) {
 	}, nil
 }
 
+func loadFXTablesJSON(path string) (fxSeries, error) {
+	path = strings.TrimSpace(path)
+	if path == "" {
+		return fxSeries{}, fmt.Errorf("fx table artifact path is required")
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return fxSeries{}, fmt.Errorf("read fx table artifact %s: %w", path, err)
+	}
+	var artifact fxTablesArtifact
+	if err := json.Unmarshal(data, &artifact); err != nil {
+		return fxSeries{}, fmt.Errorf("decode fx table artifact %s: %w", path, err)
+	}
+	if artifact.Version != 1 {
+		return fxSeries{}, fmt.Errorf("unsupported fx table artifact version: %d", artifact.Version)
+	}
+	if len(artifact.Tables) == 0 {
+		return fxSeries{}, fmt.Errorf("fx table artifact requires at least one table")
+	}
+	table := artifact.Tables[0]
+	name := strings.TrimSpace(table.Name)
+	if name == "" {
+		return fxSeries{}, fmt.Errorf("fx table artifact first table requires name")
+	}
+	if len(table.Values) < 8 {
+		return fxSeries{}, fmt.Errorf("fx table artifact %s requires at least 8 price rows, got %d", name, len(table.Values))
+	}
+	values := append([]float64(nil), table.Values...)
+	for i, value := range values {
+		if value <= 0 || math.IsNaN(value) || math.IsInf(value, 0) {
+			return fxSeries{}, fmt.Errorf("invalid fx table artifact price row %d: %f", i+1, value)
+		}
+	}
+	sourcePath := strings.TrimSpace(table.SourcePath)
+	if sourcePath == "" {
+		sourcePath = path
+	}
+	if abs, err := filepath.Abs(sourcePath); err == nil {
+		sourcePath = abs
+	}
+	return fxSeries{
+		name:       name,
+		sourceKind: "artifact",
+		sourcePath: sourcePath,
+		values:     values,
+	}, nil
+}
+
 func fxCSVValueField(record []string) (string, bool) {
 	for i := len(record) - 1; i >= 0; i-- {
 		field := strings.TrimSpace(record[i])
@@ -1088,10 +1218,7 @@ func fxTableMetadata(series fxSeries, cfg fxModeConfig) FXTableMetadata {
 		firstClose = series.values[0]
 		lastClose = series.values[rows-1]
 	}
-	sourceKind := strings.TrimSpace(series.sourceKind)
-	if sourceKind == "" {
-		sourceKind = "builtin"
-	}
+	sourceKind := normalizedFXSourceKind(series)
 	indexEnd := cfg.startStep + cfg.steps - 1
 	effectiveEnd := indexEnd
 	if rows > 0 && effectiveEnd >= rows {
@@ -1112,6 +1239,32 @@ func fxTableMetadata(series fxSeries, cfg fxModeConfig) FXTableMetadata {
 		FirstClose:        firstClose,
 		LastClose:         lastClose,
 	}
+}
+
+func fxTableCatalogEntry(series fxSeries) FXTableCatalogEntry {
+	rows := len(series.values)
+	firstClose := 0.0
+	lastClose := 0.0
+	if rows > 0 {
+		firstClose = series.values[0]
+		lastClose = series.values[rows-1]
+	}
+	return FXTableCatalogEntry{
+		Name:       series.name,
+		SourceKind: normalizedFXSourceKind(series),
+		SourcePath: series.sourcePath,
+		Rows:       rows,
+		FirstClose: firstClose,
+		LastClose:  lastClose,
+	}
+}
+
+func normalizedFXSourceKind(series fxSeries) string {
+	sourceKind := strings.TrimSpace(series.sourceKind)
+	if sourceKind == "" {
+		return "builtin"
+	}
+	return sourceKind
 }
 
 func fxFindNextFlip(series fxSeries, index, endIndex int) (int, float64) {

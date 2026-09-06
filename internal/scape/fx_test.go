@@ -838,6 +838,93 @@ func TestFXScapeLoadSeriesCSV(t *testing.T) {
 	}
 }
 
+func TestFXTablesCatalogBackupLoadAndReset(t *testing.T) {
+	ResetFXTables()
+	t.Cleanup(ResetFXTables)
+
+	path := filepath.Join(t.TempDir(), "fx_table_source.csv")
+	var builder strings.Builder
+	builder.WriteString("t,close\n")
+	for i := 0; i < 64; i++ {
+		fmt.Fprintf(&builder, "%d,%0.6f\n", i, 1.30+0.0007*float64(i))
+	}
+	if err := os.WriteFile(path, []byte(builder.String()), 0o644); err != nil {
+		t.Fatalf("write fx table source csv: %v", err)
+	}
+	if err := LoadFXSeriesCSV(path); err != nil {
+		t.Fatalf("load fx csv: %v", err)
+	}
+
+	catalog := FXTablesCatalog(context.Background())
+	if len(catalog.Tables) != 1 {
+		t.Fatalf("expected one active FX table, got %+v", catalog)
+	}
+	before := catalog.Tables[0]
+	if before.SourceKind != "csv" || before.Rows != 64 || !strings.Contains(before.Name, "fx_table_source.csv") {
+		t.Fatalf("unexpected active FX catalog entry: %+v", before)
+	}
+	if before.FirstClose <= 0 || before.LastClose <= before.FirstClose {
+		t.Fatalf("unexpected active FX catalog close metadata: %+v", before)
+	}
+
+	artifactPath := filepath.Join(t.TempDir(), "fx_tables.json")
+	if err := BackupFXTablesJSON(artifactPath); err != nil {
+		t.Fatalf("backup fx tables: %v", err)
+	}
+	ResetFXTables()
+	resetCatalog := FXTablesCatalog(context.Background())
+	if resetCatalog.Tables[0].Name != "fx.synthetic.v2" || resetCatalog.Tables[0].SourceKind != "builtin" {
+		t.Fatalf("expected reset to restore builtin catalog, got %+v", resetCatalog)
+	}
+
+	if err := LoadFXTablesJSON(artifactPath); err != nil {
+		t.Fatalf("load fx table artifact: %v", err)
+	}
+	loaded := FXTablesCatalog(context.Background()).Tables[0]
+	if loaded.Name != before.Name || loaded.Rows != before.Rows {
+		t.Fatalf("expected loaded catalog to match backup, before=%+v loaded=%+v", before, loaded)
+	}
+	if loaded.SourceKind != "artifact" || !strings.Contains(loaded.SourcePath, "fx_table_source.csv") {
+		t.Fatalf("expected artifact source metadata after load, got %+v", loaded)
+	}
+
+	sim, err := NewFXSimulator(context.Background(), "gt")
+	if err != nil {
+		t.Fatalf("new fx simulator from artifact: %v", err)
+	}
+	state := sim.State()
+	if state.Table.Name != before.Name || state.Table.Rows != before.Rows || state.Table.SourceKind != "artifact" {
+		t.Fatalf("expected simulator state to use artifact table, got %+v", state.Table)
+	}
+}
+
+func TestLoadFXTablesJSONRejectsInvalidArtifacts(t *testing.T) {
+	ResetFXTables()
+	t.Cleanup(ResetFXTables)
+
+	dir := t.TempDir()
+	badVersion := filepath.Join(dir, "bad_version.json")
+	if err := os.WriteFile(badVersion, []byte(`{"version":2,"tables":[]}`), 0o644); err != nil {
+		t.Fatalf("write bad version artifact: %v", err)
+	}
+	if err := LoadFXTablesJSON(badVersion); err == nil {
+		t.Fatal("expected unsupported artifact version error")
+	}
+
+	badPrice := filepath.Join(dir, "bad_price.json")
+	if err := os.WriteFile(badPrice, []byte(`{"version":1,"tables":[{"name":"bad","values":[1,1,1,1,1,1,1,-1]}]}`), 0o644); err != nil {
+		t.Fatalf("write bad price artifact: %v", err)
+	}
+	if err := LoadFXTablesJSON(badPrice); err == nil {
+		t.Fatal("expected invalid price artifact error")
+	}
+
+	catalog := FXTablesCatalog(context.Background())
+	if catalog.Tables[0].Name != "fx.synthetic.v2" {
+		t.Fatalf("expected invalid artifacts to preserve current catalog, got %+v", catalog)
+	}
+}
+
 func TestFXSimulatorStateIncludesContextSeriesMetadata(t *testing.T) {
 	ResetFXSeriesSource()
 	t.Cleanup(ResetFXSeriesSource)
