@@ -94,6 +94,9 @@ func TestFlatlandPublicProcessCommandWrapper(t *testing.T) {
 	if agents.Err != nil || !agents.OK || len(agents.Agents) != 1 {
 		t.Fatalf("get_all response=%+v", agents)
 	}
+	if len(agents.Avatars) != 1 || agents.Avatars[0].ID != "agent-1" {
+		t.Fatalf("expected typed avatar snapshot for agent-1, response=%+v", agents)
+	}
 
 	update := process.Call(ctx, FlatlandPublicUpdateAgentsMessage{Agents: []FlatlandPublicAgent{
 		{ID: "agent-1"},
@@ -839,7 +842,7 @@ func TestFlatlandPublicProcessInstancesAreIsolated(t *testing.T) {
 	}
 
 	firstAgents := first.Call(ctx, FlatlandPublicGetAllMessage{})
-	if firstAgents.Err != nil || !firstAgents.OK || len(firstAgents.Agents) != 1 {
+	if firstAgents.Err != nil || !firstAgents.OK || len(firstAgents.Agents) != 1 || len(firstAgents.Avatars) != 1 {
 		t.Fatalf("get first agents response=%+v", firstAgents)
 	}
 	if id, _ := firstAgents.Agents[0]["id"].(string); id != "first-agent" {
@@ -847,7 +850,7 @@ func TestFlatlandPublicProcessInstancesAreIsolated(t *testing.T) {
 	}
 
 	secondAgents := second.Call(ctx, FlatlandPublicGetAllMessage{})
-	if secondAgents.Err != nil || !secondAgents.OK || len(secondAgents.Agents) != 1 {
+	if secondAgents.Err != nil || !secondAgents.OK || len(secondAgents.Agents) != 1 || len(secondAgents.Avatars) != 1 {
 		t.Fatalf("get second agents response=%+v", secondAgents)
 	}
 	if id, _ := secondAgents.Agents[0]["id"].(string); id != "second-agent" {
@@ -924,6 +927,86 @@ func TestFlatlandScapePublicLifecycleAndTick(t *testing.T) {
 	}
 	if err := scape.LeavePublicAgent("forager"); err == nil {
 		t.Fatal("expected missing public agent leave to fail")
+	}
+}
+
+func TestFlatlandScapePublicAvatarSnapshotsExposeReferenceFields(t *testing.T) {
+	scape := FlatlandScape{}
+	if err := scape.Start(context.Background()); err != nil {
+		t.Fatalf("start: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = scape.Stop(context.Background())
+	})
+	if err := scape.EnterPublicAgent(FlatlandPublicAgent{ID: "avatar", Mode: "benchmark", NeuronCount: 4}); err != nil {
+		t.Fatalf("enter avatar: %v", err)
+	}
+
+	flatlandPublicWorld.mu.Lock()
+	state := flatlandPublicWorld.agents["avatar"]
+	state.sound = 0.25
+	state.gestalt = []float64{0.1, 0.2}
+	state.spear = true
+	state.offspringRequested = true
+	state.offspringParentID = "avatar"
+	state.episode.position = 7
+	state.episode.heading = -1
+	state.episode.age = 3
+	state.episode.energy = 1.5
+	state.episode.foodCollected = 2
+	state.episode.publicAgentKills = 1
+	state.episode.publicAgentCollisions = 1
+	state.episode.shootKills = 1
+	flatlandPublicWorld.mu.Unlock()
+
+	snapshots, err := scape.PublicAvatarSnapshots()
+	if err != nil {
+		t.Fatalf("public avatar snapshots: %v", err)
+	}
+	if len(snapshots) != 1 {
+		t.Fatalf("expected one public avatar snapshot, got=%d", len(snapshots))
+	}
+	snapshot := snapshots[0]
+	if snapshot.ID != "avatar" || snapshot.Type != "prey" || snapshot.Specie != "benchmark" {
+		t.Fatalf("unexpected avatar identity fields: %+v", snapshot)
+	}
+	if snapshot.Position != 7 || snapshot.Heading != -1 || snapshot.Age != 3 || snapshot.NeuronCount != 4 {
+		t.Fatalf("unexpected avatar runtime fields: %+v", snapshot)
+	}
+	if math.Abs(snapshot.Energy-1.5) > 1e-12 || snapshot.EnergyNorm <= 0 {
+		t.Fatalf("unexpected avatar energy fields: %+v", snapshot)
+	}
+	if snapshot.Kills != 4 {
+		t.Fatalf("expected reference kill total=4, got %+v", snapshot)
+	}
+	if snapshot.Sound != 0.25 || !reflect.DeepEqual(snapshot.Gestalt, []float64{0.1, 0.2}) || !snapshot.Spear {
+		t.Fatalf("unexpected avatar communication/weapon fields: %+v", snapshot)
+	}
+	if !snapshot.OffspringRequested || snapshot.OffspringParentID != "avatar" {
+		t.Fatalf("unexpected offspring fields: %+v", snapshot)
+	}
+	if snapshot.PublicAgentKills != 1 || snapshot.PublicAgentCollisions != 1 || snapshot.ShootKills != 1 {
+		t.Fatalf("unexpected interaction counters: %+v", snapshot)
+	}
+
+	snapshots[0].Gestalt[0] = 99
+	again, err := scape.PublicAvatarSnapshots()
+	if err != nil {
+		t.Fatalf("public avatar snapshots again: %v", err)
+	}
+	if again[0].Gestalt[0] == 99 {
+		t.Fatalf("expected snapshot gestalt to be copy-safe, got %+v", again[0])
+	}
+
+	flatlandPublicWorld.mu.Lock()
+	flatlandPublicWorld.agents["avatar"].terminated = true
+	flatlandPublicWorld.mu.Unlock()
+	destroyed, err := scape.PublicAvatarSnapshots()
+	if err != nil {
+		t.Fatalf("public avatar snapshots destroyed: %v", err)
+	}
+	if destroyed[0].State != "destroyed" || !destroyed[0].Terminated {
+		t.Fatalf("expected destroyed snapshot state, got %+v", destroyed[0])
 	}
 }
 

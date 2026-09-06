@@ -47,6 +47,60 @@ type flatlandPublicRuntime struct {
 	lastStopReason string
 }
 
+type FlatlandPublicAvatarSnapshot struct {
+	ID                      string
+	Mode                    string
+	Type                    string
+	Specie                  string
+	Position                int
+	Heading                 int
+	InitialHeading          int
+	Age                     int
+	MaxAge                  int
+	Energy                  float64
+	EnergyNorm              float64
+	Radius                  float64
+	State                   string
+	NeuronCount             int
+	Kills                   int
+	FoodCollected           int
+	PreyCollected           int
+	PredatorHits            int
+	PreyHunted              int
+	PredatorFeeds           int
+	PredatorPressureEvents  int
+	PublicAgentCollisions   int
+	PublicAgentKills        int
+	PublicAgentDeaths       int
+	SpearKills              int
+	SpearPreyKills          int
+	SpearPredatorKills      int
+	ShootKills              int
+	ShootPreyKills          int
+	ShootPredatorKills      int
+	Sound                   float64
+	Gestalt                 []float64
+	Spear                   bool
+	OffspringRequested      bool
+	OffspringGranted        bool
+	OffspringCost           float64
+	OffspringParentID       string
+	Terminated              bool
+	ActiveFood              int
+	ActivePoison            int
+	ActivePrey              int
+	ActivePredators         int
+	WallCollisions          int
+	ResourceRespawns        int
+	Reward                  float64
+	LayoutVariant           int
+	LayoutShift             int
+	LayoutForced            bool
+	ScannerProfile          string
+	ScannerDensity          int
+	ScannerDensityEffective int
+}
+
 func newFlatlandPublicRuntime() *flatlandPublicRuntime {
 	return &flatlandPublicRuntime{
 		agents: make(map[string]*flatlandPublicAgentState),
@@ -180,6 +234,15 @@ func (FlatlandScape) PublicAgents() ([]Trace, error) {
 		out = append(out, flatlandPublicAgentTrace(flatlandPublicWorld.agents[id]))
 	}
 	return out, nil
+}
+
+func (FlatlandScape) PublicAvatarSnapshots() ([]FlatlandPublicAvatarSnapshot, error) {
+	flatlandPublicWorld.mu.RLock()
+	defer flatlandPublicWorld.mu.RUnlock()
+	if !flatlandPublicWorld.started {
+		return nil, fmt.Errorf("flatland public world is not started")
+	}
+	return flatlandPublicWorld.avatarSnapshots(), nil
 }
 
 func (FlatlandScape) SensePublicAgent(ctx context.Context, agentID string) ([]float64, Trace, error) {
@@ -512,6 +575,84 @@ func flatlandPublicAgentTrace(state *flatlandPublicAgentState) Trace {
 		"offspring_parent_id":      state.offspringParentID,
 		"terminated":               state.terminated,
 	}
+}
+
+func (r *flatlandPublicRuntime) avatarSnapshots() []FlatlandPublicAvatarSnapshot {
+	ids := make([]string, 0, len(r.agents))
+	for id := range r.agents {
+		ids = append(ids, id)
+	}
+	sort.Strings(ids)
+
+	out := make([]FlatlandPublicAvatarSnapshot, 0, len(ids))
+	for _, id := range ids {
+		out = append(out, flatlandPublicAvatarSnapshot(r.agents[id]))
+	}
+	return out
+}
+
+func flatlandPublicAvatarSnapshot(state *flatlandPublicAgentState) FlatlandPublicAvatarSnapshot {
+	if state == nil || state.episode == nil {
+		return FlatlandPublicAvatarSnapshot{}
+	}
+	episode := state.episode
+	snapshot := FlatlandPublicAvatarSnapshot{
+		ID:                      state.id,
+		Mode:                    state.mode,
+		Type:                    "prey",
+		Specie:                  state.mode,
+		Position:                episode.position,
+		Heading:                 episode.heading,
+		InitialHeading:          episode.initialHeading,
+		Age:                     episode.age,
+		MaxAge:                  episode.maxAge,
+		Energy:                  episode.energy,
+		EnergyNorm:              episode.normalizedEnergy(),
+		Radius:                  1,
+		State:                   "entered",
+		NeuronCount:             state.neuronCount,
+		Kills:                   flatlandReferenceKills(episode),
+		FoodCollected:           episode.foodCollected,
+		PreyCollected:           episode.preyCollected,
+		PredatorHits:            episode.predatorHits,
+		PreyHunted:              episode.preyHunted,
+		PredatorFeeds:           episode.predatorFeeds,
+		PredatorPressureEvents:  episode.predatorPressureEvents,
+		PublicAgentCollisions:   episode.publicAgentCollisions,
+		PublicAgentKills:        episode.publicAgentKills,
+		PublicAgentDeaths:       episode.publicAgentDeaths,
+		SpearKills:              episode.spearKills,
+		SpearPreyKills:          episode.spearPreyKills,
+		SpearPredatorKills:      episode.spearPredatorKills,
+		ShootKills:              episode.shootKills,
+		ShootPreyKills:          episode.shootPreyKills,
+		ShootPredatorKills:      episode.shootPredatorKills,
+		Sound:                   state.sound,
+		Gestalt:                 append([]float64(nil), state.gestalt...),
+		Spear:                   state.spear,
+		OffspringRequested:      state.offspringRequested,
+		OffspringGranted:        state.offspringGranted,
+		OffspringCost:           state.offspringCost,
+		OffspringParentID:       state.offspringParentID,
+		Terminated:              state.terminated,
+		ActiveFood:              episode.activeResources(episode.food),
+		ActivePoison:            episode.activeResources(episode.poison),
+		ActivePrey:              episode.activeResources(episode.prey),
+		ActivePredators:         episode.activeResources(episode.predators),
+		WallCollisions:          episode.wallCollisions,
+		ResourceRespawns:        episode.resourceRespawns,
+		Reward:                  episode.rewardAcc,
+		LayoutVariant:           episode.layoutVariant,
+		LayoutShift:             episode.layoutShift,
+		LayoutForced:            episode.layoutForced,
+		ScannerProfile:          episode.scannerProfile,
+		ScannerDensity:          flatlandScannerDensity,
+		ScannerDensityEffective: countActiveFlatlandScannerWeights(episode.scannerWeights),
+	}
+	if state.terminated {
+		snapshot.State = "destroyed"
+	}
+	return snapshot
 }
 
 func flatlandReferenceKills(episode *flatlandEpisode) int {

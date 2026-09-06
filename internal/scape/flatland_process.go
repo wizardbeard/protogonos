@@ -78,6 +78,7 @@ type FlatlandPublicResponse struct {
 	End        bool
 	Trace      Trace
 	Agents     []Trace
+	Avatars    []FlatlandPublicAvatarSnapshot
 	StopReason string
 	Err        error
 }
@@ -124,8 +125,8 @@ func (p *FlatlandPublicProcess) Call(ctx context.Context, message FlatlandPublic
 		err := p.updateAgents(msg.Agents)
 		return FlatlandPublicResponse{OK: err == nil, Err: err}
 	case FlatlandPublicGetAllMessage:
-		agents, err := p.agents()
-		return FlatlandPublicResponse{OK: err == nil, Agents: agents, Err: err}
+		agents, avatars, err := p.agents()
+		return FlatlandPublicResponse{OK: err == nil, Agents: agents, Avatars: avatars, Err: err}
 	case FlatlandPublicTickMessage:
 		trace, err := p.tick(ctx)
 		return FlatlandPublicResponse{OK: err == nil, Trace: trace, Err: err}
@@ -297,11 +298,11 @@ func (p *FlatlandPublicProcess) leave(agentID string) error {
 	return nil
 }
 
-func (p *FlatlandPublicProcess) agents() ([]Trace, error) {
+func (p *FlatlandPublicProcess) agents() ([]Trace, []FlatlandPublicAvatarSnapshot, error) {
 	p.runtime.mu.RLock()
 	defer p.runtime.mu.RUnlock()
 	if !p.runtime.started {
-		return nil, fmt.Errorf("flatland public world is not started")
+		return nil, nil, fmt.Errorf("flatland public world is not started")
 	}
 
 	ids := make([]string, 0, len(p.runtime.agents))
@@ -314,7 +315,7 @@ func (p *FlatlandPublicProcess) agents() ([]Trace, error) {
 	for _, id := range ids {
 		out = append(out, flatlandPublicAgentTrace(p.runtime.agents[id]))
 	}
-	return out, nil
+	return out, p.runtime.avatarSnapshots(), nil
 }
 
 func (p *FlatlandPublicProcess) sense(ctx context.Context, agentID string) ([]float64, Trace, error) {
