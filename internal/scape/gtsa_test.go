@@ -764,10 +764,108 @@ func TestGTSAScapeLoadTableCSV(t *testing.T) {
 	if !ok || !strings.Contains(tableName, "gtsa_custom.csv") {
 		t.Fatalf("expected loaded csv table in trace, got %+v", trace)
 	}
+	table, ok := trace["table"].(GTSATableMetadata)
+	if !ok {
+		t.Fatalf("trace missing GTSA table metadata: %+v", trace)
+	}
+	if table.SourceKind != "csv" || table.Rows != 96 || table.TrainEnd != 24 || table.ValidationEnd != 48 || table.TestEnd != 96 {
+		t.Fatalf("unexpected GTSA table metadata: %+v", table)
+	}
 	start, sok := trace["index_start"].(int)
 	end, eok := trace["index_end"].(int)
 	if !sok || !eok || start != 49 || end != 96 {
 		t.Fatalf("expected csv bounds in trace start=49 end=96, got %+v", trace)
+	}
+}
+
+func TestGTSATablesCatalogBackupLoadAndReset(t *testing.T) {
+	ResetGTSATables()
+	t.Cleanup(ResetGTSATables)
+
+	path := filepath.Join(t.TempDir(), "gtsa_table_source.csv")
+	var builder strings.Builder
+	builder.WriteString("t,value\n")
+	for i := 0; i < 80; i++ {
+		fmt.Fprintf(&builder, "%d,%0.8f\n", i, gtsaSeries(i)+0.05)
+	}
+	if err := os.WriteFile(path, []byte(builder.String()), 0o644); err != nil {
+		t.Fatalf("write gtsa table source csv: %v", err)
+	}
+	if err := LoadGTSATableCSV(path, GTSATableBounds{
+		TrainEnd:      20,
+		ValidationEnd: 50,
+		TestEnd:       80,
+	}); err != nil {
+		t.Fatalf("load gtsa csv: %v", err)
+	}
+
+	catalog := GTSATablesCatalog(context.Background())
+	if len(catalog.Tables) != 1 {
+		t.Fatalf("expected one active GTSA table, got %+v", catalog)
+	}
+	before := catalog.Tables[0]
+	if before.SourceKind != "csv" || before.Rows != 80 || before.TrainEnd != 20 || before.ValidationEnd != 50 || before.TestEnd != 80 {
+		t.Fatalf("unexpected active GTSA catalog entry: %+v", before)
+	}
+	if !strings.Contains(before.Name, "gtsa_table_source.csv") || before.FirstValue == before.LastValue {
+		t.Fatalf("unexpected active GTSA catalog metadata: %+v", before)
+	}
+
+	artifactPath := filepath.Join(t.TempDir(), "gtsa_tables.json")
+	if err := BackupGTSATablesJSON(artifactPath); err != nil {
+		t.Fatalf("backup gtsa tables: %v", err)
+	}
+	ResetGTSATables()
+	resetCatalog := GTSATablesCatalog(context.Background())
+	if resetCatalog.Tables[0].Name != "gtsa.synthetic.v2" || resetCatalog.Tables[0].SourceKind != "builtin" {
+		t.Fatalf("expected reset to restore builtin catalog, got %+v", resetCatalog)
+	}
+
+	if err := LoadGTSATablesJSON(artifactPath); err != nil {
+		t.Fatalf("load gtsa table artifact: %v", err)
+	}
+	loaded := GTSATablesCatalog(context.Background()).Tables[0]
+	if loaded.Name != before.Name || loaded.Rows != before.Rows || loaded.TrainEnd != before.TrainEnd {
+		t.Fatalf("expected loaded catalog to match backup, before=%+v loaded=%+v", before, loaded)
+	}
+	if loaded.SourceKind != "artifact" || !strings.Contains(loaded.SourcePath, "gtsa_table_source.csv") {
+		t.Fatalf("expected artifact source metadata after load, got %+v", loaded)
+	}
+
+	sim, err := NewGTSASimulator(context.Background(), "validation")
+	if err != nil {
+		t.Fatalf("new gtsa simulator from artifact: %v", err)
+	}
+	state := sim.State()
+	if state.Table.Name != before.Name || state.Table.Rows != before.Rows || state.Table.SourceKind != "artifact" {
+		t.Fatalf("expected simulator state to use artifact table, got %+v", state.Table)
+	}
+}
+
+func TestLoadGTSATablesJSONRejectsInvalidArtifacts(t *testing.T) {
+	ResetGTSATables()
+	t.Cleanup(ResetGTSATables)
+
+	dir := t.TempDir()
+	badVersion := filepath.Join(dir, "bad_version.json")
+	if err := os.WriteFile(badVersion, []byte(`{"version":2,"tables":[]}`), 0o644); err != nil {
+		t.Fatalf("write bad version artifact: %v", err)
+	}
+	if err := LoadGTSATablesJSON(badVersion); err == nil {
+		t.Fatal("expected unsupported artifact version error")
+	}
+
+	badBounds := filepath.Join(dir, "bad_bounds.json")
+	if err := os.WriteFile(badBounds, []byte(`{"version":1,"tables":[{"name":"bad","train_end":4,"validation_end":3,"test_end":5,"values":[1,2,3,4,5]}]}`), 0o644); err != nil {
+		t.Fatalf("write bad bounds artifact: %v", err)
+	}
+	if err := LoadGTSATablesJSON(badBounds); err == nil {
+		t.Fatal("expected invalid bounds artifact error")
+	}
+
+	catalog := GTSATablesCatalog(context.Background())
+	if catalog.Tables[0].Name != "gtsa.synthetic.v2" {
+		t.Fatalf("expected invalid artifacts to preserve current catalog, got %+v", catalog)
 	}
 }
 

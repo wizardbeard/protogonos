@@ -3,6 +3,7 @@ package scape
 import (
 	"context"
 	"encoding/csv"
+	"encoding/json"
 	"fmt"
 	"io"
 	"math"
@@ -38,6 +39,7 @@ type GTSASimulator struct {
 type GTSASimulatorState struct {
 	Mode              string
 	TableName         string
+	Table             GTSATableMetadata
 	IndexStart        int
 	IndexCurrent      int
 	IndexEnd          int
@@ -59,6 +61,55 @@ type GTSASimulatorState struct {
 	DirectionAccuracy float64
 	LastCurrent       float64
 	LastHadCurrent    bool
+}
+
+type GTSATableMetadata struct {
+	Name          string
+	SourceKind    string
+	SourcePath    string
+	Rows          int
+	InputVL       int
+	OutputVL      int
+	TrainEnd      int
+	ValidationEnd int
+	TestEnd       int
+	FirstValue    float64
+	LastValue     float64
+}
+
+type GTSATableCatalog struct {
+	Tables []GTSATableCatalogEntry
+}
+
+type GTSATableCatalogEntry struct {
+	Name          string
+	SourceKind    string
+	SourcePath    string
+	Rows          int
+	InputVL       int
+	OutputVL      int
+	TrainEnd      int
+	ValidationEnd int
+	TestEnd       int
+	FirstValue    float64
+	LastValue     float64
+}
+
+type gtsaTablesArtifact struct {
+	Version int                       `json:"version"`
+	Tables  []gtsaTablesArtifactTable `json:"tables"`
+}
+
+type gtsaTablesArtifactTable struct {
+	Name          string    `json:"name"`
+	SourceKind    string    `json:"source_kind"`
+	SourcePath    string    `json:"source_path,omitempty"`
+	InputVL       int       `json:"input_vl"`
+	OutputVL      int       `json:"output_vl"`
+	TrainEnd      int       `json:"train_end"`
+	ValidationEnd int       `json:"validation_end"`
+	TestEnd       int       `json:"test_end"`
+	Values        []float64 `json:"values"`
 }
 
 var (
@@ -209,6 +260,7 @@ func (s *GTSASimulator) State() GTSASimulatorState {
 	return GTSASimulatorState{
 		Mode:              s.cfg.mode,
 		TableName:         s.state.info.name,
+		Table:             gtsaTableMetadata(s.table),
 		IndexStart:        s.state.indexStart,
 		IndexCurrent:      s.state.indexCurrent,
 		IndexEnd:          s.state.indexEnd,
@@ -361,6 +413,7 @@ func evaluateGTSA(
 			"window_rows":        state.totRows,
 			"feature_width":      state.windowLength,
 			"table_name":         state.info.name,
+			"table":              gtsaTableMetadata(table),
 			"index_start":        state.indexStart,
 			"index_current":      state.indexCurrent,
 			"index_end":          state.indexEnd,
@@ -437,6 +490,7 @@ func evaluateGTSA(
 			"window_rows":        state.totRows,
 			"feature_width":      state.windowLength,
 			"table_name":         state.info.name,
+			"table":              gtsaTableMetadata(table),
 			"index_start":        state.indexStart,
 			"index_current":      state.indexCurrent,
 			"index_end":          state.indexEnd,
@@ -477,6 +531,7 @@ func evaluateGTSA(
 		"window_rows":        state.totRows,
 		"feature_width":      state.windowLength,
 		"table_name":         state.info.name,
+		"table":              gtsaTableMetadata(table),
 		"index_start":        state.indexStart,
 		"index_current":      state.indexCurrent,
 		"index_end":          state.indexEnd,
@@ -640,6 +695,67 @@ func ResetGTSATableSource() {
 	gtsaTableSource = defaultGTSATable()
 }
 
+// ResetGTSATables restores the active GTSA table catalog to the built-in table.
+func ResetGTSATables() {
+	ResetGTSATableSource()
+}
+
+// GTSATablesCatalog lists the active GTSA table catalog. The Go runtime keeps
+// one active table, matching the selected table used by simulator sessions.
+func GTSATablesCatalog(ctx context.Context) GTSATableCatalog {
+	table := currentGTSATable(ctx)
+	return GTSATableCatalog{
+		Tables: []GTSATableCatalogEntry{gtsaTableCatalogEntry(table)},
+	}
+}
+
+// BackupGTSATablesJSON writes the active GTSA table catalog to a JSON artifact.
+func BackupGTSATablesJSON(path string) error {
+	path = strings.TrimSpace(path)
+	if path == "" {
+		return fmt.Errorf("gtsa table backup path is required")
+	}
+	gtsaTableSourceMu.RLock()
+	table := gtsaTableSource
+	gtsaTableSourceMu.RUnlock()
+	artifact := gtsaTablesArtifact{
+		Version: 1,
+		Tables: []gtsaTablesArtifactTable{
+			{
+				Name:          table.info.name,
+				SourceKind:    normalizedGTSASourceKind(table),
+				SourcePath:    table.sourcePath,
+				InputVL:       table.info.ivl,
+				OutputVL:      table.info.ovl,
+				TrainEnd:      table.info.trnEnd,
+				ValidationEnd: table.info.valEnd,
+				TestEnd:       table.info.tstEnd,
+				Values:        append([]float64(nil), gtsaSeriesValues(table)...),
+			},
+		},
+	}
+	data, err := json.MarshalIndent(artifact, "", "  ")
+	if err != nil {
+		return fmt.Errorf("marshal gtsa table artifact: %w", err)
+	}
+	if err := os.WriteFile(path, data, 0o644); err != nil {
+		return fmt.Errorf("write gtsa table artifact %s: %w", path, err)
+	}
+	return nil
+}
+
+// LoadGTSATablesJSON loads a JSON table artifact and makes its first table active.
+func LoadGTSATablesJSON(path string) error {
+	table, err := loadGTSATablesJSON(path)
+	if err != nil {
+		return err
+	}
+	gtsaTableSourceMu.Lock()
+	defer gtsaTableSourceMu.Unlock()
+	gtsaTableSource = table
+	return nil
+}
+
 // LoadGTSATableCSV loads GTSA values from CSV and makes the table active.
 // The last non-empty column per row is interpreted as the series value.
 func LoadGTSATableCSV(path string, bounds GTSATableBounds) error {
@@ -658,6 +774,10 @@ func loadGTSATableCSV(path string, bounds GTSATableBounds) (gtsaTable, error) {
 	path = strings.TrimSpace(path)
 	if path == "" {
 		return gtsaTable{}, fmt.Errorf("gtsa csv path is required")
+	}
+	sourcePath := path
+	if abs, err := filepath.Abs(path); err == nil {
+		sourcePath = abs
 	}
 
 	f, err := os.Open(path)
@@ -697,7 +817,60 @@ func loadGTSATableCSV(path string, bounds GTSATableBounds) (gtsaTable, error) {
 	}
 
 	name := fmt.Sprintf("gtsa.csv.%s", filepath.Base(path))
-	return buildGTSATable(name, values, bounds)
+	table, err := buildGTSATable(name, values, bounds)
+	if err != nil {
+		return gtsaTable{}, err
+	}
+	table.sourceKind = "csv"
+	table.sourcePath = sourcePath
+	return table, nil
+}
+
+func loadGTSATablesJSON(path string) (gtsaTable, error) {
+	path = strings.TrimSpace(path)
+	if path == "" {
+		return gtsaTable{}, fmt.Errorf("gtsa table artifact path is required")
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return gtsaTable{}, fmt.Errorf("read gtsa table artifact %s: %w", path, err)
+	}
+	var artifact gtsaTablesArtifact
+	if err := json.Unmarshal(data, &artifact); err != nil {
+		return gtsaTable{}, fmt.Errorf("decode gtsa table artifact %s: %w", path, err)
+	}
+	if artifact.Version != 1 {
+		return gtsaTable{}, fmt.Errorf("unsupported gtsa table artifact version: %d", artifact.Version)
+	}
+	if len(artifact.Tables) == 0 {
+		return gtsaTable{}, fmt.Errorf("gtsa table artifact requires at least one table")
+	}
+	src := artifact.Tables[0]
+	bounds := GTSATableBounds{
+		TrainEnd:      src.TrainEnd,
+		ValidationEnd: src.ValidationEnd,
+		TestEnd:       src.TestEnd,
+	}
+	table, err := buildGTSATable(src.Name, append([]float64(nil), src.Values...), bounds)
+	if err != nil {
+		return gtsaTable{}, err
+	}
+	if src.InputVL > 0 {
+		table.info.ivl = src.InputVL
+	}
+	if src.OutputVL > 0 {
+		table.info.ovl = src.OutputVL
+	}
+	sourcePath := strings.TrimSpace(src.SourcePath)
+	if sourcePath == "" {
+		sourcePath = path
+	}
+	if abs, err := filepath.Abs(sourcePath); err == nil {
+		sourcePath = abs
+	}
+	table.sourceKind = "artifact"
+	table.sourcePath = sourcePath
+	return table, nil
 }
 
 func gtsaCSVValueField(record []string) (string, bool) {
@@ -795,8 +968,10 @@ type gtsaInfo struct {
 }
 
 type gtsaTable struct {
-	info   gtsaInfo
-	values []float64
+	info       gtsaInfo
+	values     []float64
+	sourceKind string
+	sourcePath string
 }
 
 func defaultGTSATable() gtsaTable {
@@ -813,7 +988,50 @@ func defaultGTSATable() gtsaTable {
 	for idx := 1; idx <= info.tstEnd; idx++ {
 		values[idx] = gtsaSeries(idx - 1)
 	}
-	return gtsaTable{info: info, values: values}
+	return gtsaTable{info: info, values: values, sourceKind: "builtin"}
+}
+
+func gtsaTableMetadata(table gtsaTable) GTSATableMetadata {
+	entry := gtsaTableCatalogEntry(table)
+	return GTSATableMetadata(entry)
+}
+
+func gtsaTableCatalogEntry(table gtsaTable) GTSATableCatalogEntry {
+	rows := maxGTSA(0, len(table.values)-1)
+	firstValue := 0.0
+	lastValue := 0.0
+	if rows > 0 {
+		firstValue = table.values[1]
+		lastValue = table.values[rows]
+	}
+	return GTSATableCatalogEntry{
+		Name:          table.info.name,
+		SourceKind:    normalizedGTSASourceKind(table),
+		SourcePath:    table.sourcePath,
+		Rows:          rows,
+		InputVL:       table.info.ivl,
+		OutputVL:      table.info.ovl,
+		TrainEnd:      table.info.trnEnd,
+		ValidationEnd: table.info.valEnd,
+		TestEnd:       table.info.tstEnd,
+		FirstValue:    firstValue,
+		LastValue:     lastValue,
+	}
+}
+
+func gtsaSeriesValues(table gtsaTable) []float64 {
+	if len(table.values) <= 1 {
+		return nil
+	}
+	return append([]float64(nil), table.values[1:]...)
+}
+
+func normalizedGTSASourceKind(table gtsaTable) string {
+	sourceKind := strings.TrimSpace(table.sourceKind)
+	if sourceKind == "" {
+		return "builtin"
+	}
+	return sourceKind
 }
 
 type gtsaWindowState struct {
