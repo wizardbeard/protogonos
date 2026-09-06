@@ -696,6 +696,98 @@ func TestFXProcessCommandWrapper(t *testing.T) {
 	}
 }
 
+func TestFXSimulatorListAndGraphSensors(t *testing.T) {
+	ResetFXSeriesSource()
+	t.Cleanup(ResetFXSeriesSource)
+
+	fxSeriesSourceMu.Lock()
+	fxSeriesSource = fxSeries{
+		name:       "fx.test.graph",
+		sourceKind: "builtin",
+		values: []float64{
+			1.00, 1.04, 1.02, 1.08, 1.06, 1.10, 1.05, 1.12,
+		},
+	}
+	fxSeriesSourceMu.Unlock()
+
+	sim, err := NewFXSimulator(context.Background(), "gt")
+	if err != nil {
+		t.Fatalf("new fx simulator: %v", err)
+	}
+	for i := 0; i < 4; i++ {
+		if _, _, err := sim.Trade(context.Background(), 0); err != nil {
+			t.Fatalf("advance simulator: %v", err)
+		}
+	}
+
+	list, err := sim.SenseList(context.Background(), 4)
+	if err != nil {
+		t.Fatalf("sense list: %v", err)
+	}
+	if len(list) != 4 {
+		t.Fatalf("expected list width 4, got %v", list)
+	}
+	if want := []float64{1.04, 1.02, 1.08, 1.06}; !sameFloatSlice(list, want) {
+		t.Fatalf("unexpected list sensor output got=%v want=%v", list, want)
+	}
+
+	graph, err := sim.SenseGraph(context.Background(), 4, 3)
+	if err != nil {
+		t.Fatalf("sense graph: %v", err)
+	}
+	if len(graph) != 12 {
+		t.Fatalf("expected graph width 12, got %d (%v)", len(graph), graph)
+	}
+	if !containsFXSignal(graph, 1) || !containsFXSignal(graph, -1) {
+		t.Fatalf("expected graph raster to contain body and empty cells, got %v", graph)
+	}
+	for _, value := range graph {
+		if value != -1 && value != 0 && value != 1 {
+			t.Fatalf("expected graph value in {-1,0,1}, got %v in %v", value, graph)
+		}
+	}
+	if _, err := sim.SenseGraph(context.Background(), 0, 3); err == nil {
+		t.Fatal("expected invalid hres to fail")
+	}
+	if _, err := sim.SenseGraph(context.Background(), 4, 0); err == nil {
+		t.Fatal("expected invalid vres to fail")
+	}
+}
+
+func TestFXProcessGraphSensorMessage(t *testing.T) {
+	process := NewFXProcess()
+	ctx := context.Background()
+	if start := process.Call(ctx, FXStartMessage{Mode: "gt"}); start.Err != nil || !start.OK {
+		t.Fatalf("start response=%+v", start)
+	}
+
+	list := process.Call(ctx, FXSenseMessage{HRes: 5, Encoding: "list_sensor"})
+	if list.Err != nil || !list.OK {
+		t.Fatalf("list response=%+v", list)
+	}
+	if len(list.Percept) != 5 {
+		t.Fatalf("expected list percept width 5, got %+v", list)
+	}
+
+	graph := process.Call(ctx, FXSenseMessage{HRes: 5, VRes: 4, Encoding: "graph_sensor"})
+	if graph.Err != nil || !graph.OK {
+		t.Fatalf("graph response=%+v", graph)
+	}
+	if len(graph.Percept) != 20 {
+		t.Fatalf("expected graph percept width 20, got %+v", graph)
+	}
+	for _, value := range graph.Percept {
+		if value != -1 && value != 0 && value != 1 {
+			t.Fatalf("expected graph value in {-1,0,1}, got %v in %v", value, graph.Percept)
+		}
+	}
+
+	bad := process.Call(ctx, FXSenseMessage{HRes: 5, VRes: 4, Encoding: "unknown"})
+	if bad.Err == nil {
+		t.Fatalf("expected unsupported encoding error, got %+v", bad)
+	}
+}
+
 func TestFXScapeLoadSeriesCSV(t *testing.T) {
 	ResetFXSeriesSource()
 	t.Cleanup(ResetFXSeriesSource)
@@ -867,6 +959,18 @@ func containsFXSignal(signals []float64, target float64) bool {
 		}
 	}
 	return false
+}
+
+func sameFloatSlice(a, b []float64) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
 }
 
 func TestFXScapeLoadSeriesCSVRejectsInvalidPrice(t *testing.T) {

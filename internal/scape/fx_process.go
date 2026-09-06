@@ -26,7 +26,11 @@ type FXRestartMessage struct{}
 
 func (FXRestartMessage) isFXMessage() {}
 
-type FXSenseMessage struct{}
+type FXSenseMessage struct {
+	HRes     int
+	VRes     int
+	Encoding string
+}
 
 func (FXSenseMessage) isFXMessage() {}
 
@@ -84,7 +88,7 @@ func (p *FXProcess) Call(ctx context.Context, message FXMessage) FXResponse {
 	case FXRestartMessage:
 		return p.restart(ctx)
 	case FXSenseMessage:
-		return p.sense(ctx)
+		return p.sense(ctx, msg)
 	case FXInternalsMessage:
 		return p.internals(ctx)
 	case FXTradeMessage:
@@ -133,15 +137,31 @@ func (p *FXProcess) restart(ctx context.Context) FXResponse {
 	return FXResponse{OK: true, State: p.sim.State()}
 }
 
-func (p *FXProcess) sense(ctx context.Context) FXResponse {
+func (p *FXProcess) sense(ctx context.Context, msg FXSenseMessage) FXResponse {
 	if p.sim == nil {
 		return FXResponse{Err: fmt.Errorf("fx process is not started")}
 	}
-	percept, err := p.sim.Sense(ctx)
+	percept, err := p.sensePercept(ctx, msg)
 	if err != nil {
 		return FXResponse{Err: err}
 	}
 	return FXResponse{OK: true, Percept: percept, State: p.sim.State()}
+}
+
+func (p *FXProcess) sensePercept(ctx context.Context, msg FXSenseMessage) ([]float64, error) {
+	if p == nil || p.sim == nil {
+		return nil, fmt.Errorf("fx process is not started")
+	}
+	switch strings.TrimSpace(strings.ToLower(msg.Encoding)) {
+	case "":
+		return p.sim.Sense(ctx)
+	case "list_sensor", "list":
+		return p.sim.SenseList(ctx, msg.HRes)
+	case "graph_sensor", "graph":
+		return p.sim.SenseGraph(ctx, msg.HRes, msg.VRes)
+	default:
+		return nil, fmt.Errorf("unsupported fx sense encoding: %s", msg.Encoding)
+	}
 }
 
 func (p *FXProcess) internals(ctx context.Context) FXResponse {

@@ -106,6 +106,13 @@ type FXMaxProfitReport struct {
 	MarginCall       bool
 }
 
+type FXCandle struct {
+	Open  float64
+	Close float64
+	High  float64
+	Low   float64
+}
+
 var (
 	fxSeriesSourceMu sync.RWMutex
 	fxSeriesSource   = defaultFXSeries()
@@ -184,6 +191,32 @@ func (s *FXSimulator) Sense(ctx context.Context) ([]float64, error) {
 	}
 	volatility := math.Abs(momentum1 - momentum4)
 	return fxPerceptVector(quote, fxSignal(s.series, s.step), momentum1, momentum4, volatility, s.account, s.lastAction), nil
+}
+
+func (s *FXSimulator) SenseList(ctx context.Context, hres int) ([]float64, error) {
+	if s == nil {
+		return nil, fmt.Errorf("fx simulator is nil")
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	if s.halted {
+		return nil, fmt.Errorf("fx simulator halted")
+	}
+	return fxListSensor(s.series, s.step, hres)
+}
+
+func (s *FXSimulator) SenseGraph(ctx context.Context, hres, vres int) ([]float64, error) {
+	if s == nil {
+		return nil, fmt.Errorf("fx simulator is nil")
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	if s.halted {
+		return nil, fmt.Errorf("fx simulator halted")
+	}
+	return fxGraphSensor(s.series, s.step, hres, vres)
 }
 
 func (s *FXSimulator) Internals(ctx context.Context) ([]float64, error) {
@@ -1119,6 +1152,96 @@ func fxOracleTradeSignal(close, flipClose float64) float64 {
 	default:
 		return 0
 	}
+}
+
+func fxListSensor(series fxSeries, index, hres int) ([]float64, error) {
+	if hres <= 0 {
+		return nil, fmt.Errorf("fx list sensor hres must be positive")
+	}
+	window := fxCandleWindow(series, index, hres)
+	out := make([]float64, len(window))
+	for i, candle := range window {
+		out[i] = candle.Close
+	}
+	return out, nil
+}
+
+func fxGraphSensor(series fxSeries, index, hres, vres int) ([]float64, error) {
+	if hres <= 0 {
+		return nil, fmt.Errorf("fx graph sensor hres must be positive")
+	}
+	if vres <= 0 {
+		return nil, fmt.Errorf("fx graph sensor vres must be positive")
+	}
+	window := fxCandleWindow(series, index, hres)
+	if len(window) == 0 {
+		return nil, fmt.Errorf("fx graph sensor has no price rows")
+	}
+	high := window[0].High
+	low := window[0].Low
+	for _, candle := range window[1:] {
+		if candle.High > high {
+			high = candle.High
+		}
+		if candle.Low < low {
+			low = candle.Low
+		}
+	}
+	padding := math.Abs(high-low) / 20
+	levelMax := high + padding
+	levelMin := low - padding
+	vstep := (levelMax - levelMin) / float64(vres)
+	if vstep == 0 {
+		vstep = math.Max(math.Abs(levelMax), 1) / float64(vres)
+	}
+	vpos := levelMin + vstep/2
+
+	out := make([]float64, 0, hres*vres)
+	for row := 0; row < vres; row++ {
+		for _, candle := range window {
+			bodyHigh := math.Max(candle.Open, candle.Close)
+			bodyLow := math.Min(candle.Open, candle.Close)
+			switch {
+			case vpos+vstep/2 > bodyLow && vpos-vstep/2 <= bodyHigh:
+				out = append(out, 1)
+			case vpos+vstep/2 > candle.Low && vpos-vstep/2 <= candle.High:
+				out = append(out, 0)
+			default:
+				out = append(out, -1)
+			}
+		}
+		vpos += vstep
+	}
+	return out, nil
+}
+
+func fxCandleWindow(series fxSeries, index, hres int) []FXCandle {
+	if hres <= 0 {
+		return nil
+	}
+	start := index - hres + 1
+	if start < 0 {
+		start = 0
+	}
+	window := make([]FXCandle, 0, hres)
+	for len(window) < hres {
+		step := start + len(window)
+		if step > index {
+			step = index
+		}
+		close := fxPrice(series, step)
+		open := close
+		if step > 0 {
+			open = fxPrice(series, step-1)
+		}
+		window = append(window, FXCandle{
+			Open:  open,
+			Close: close,
+			High:  math.Max(open, close),
+			Low:   math.Min(open, close),
+		})
+	}
+	return window
 }
 
 func fxSyntheticPrice(step int) float64 {
