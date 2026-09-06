@@ -5,15 +5,12 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+
+	protoio "protogonos/internal/io"
 )
 
 const (
-	flatlandSpeakActuatorName     = "speak"
-	flatlandGestaltActuatorName   = "gestalt_output"
-	flatlandSpearActuatorName     = "spear"
-	flatlandShootActuatorName     = "shoot"
-	flatlandOffspringActuatorName = "create_offspring"
-	flatlandNeuralCost            = 100.0
+	flatlandNeuralCost = 100.0
 )
 
 type FlatlandPublicMessage interface {
@@ -441,18 +438,18 @@ func flatlandApplyStateActuator(state *flatlandPublicAgentState, actuatorName st
 	if state == nil {
 		return false, ""
 	}
-	switch strings.TrimSpace(strings.ToLower(actuatorName)) {
-	case flatlandSpeakActuatorName:
+	switch protoio.CanonicalActuatorName(actuatorName) {
+	case protoio.FlatlandSpeakActuatorName:
 		if len(output) == 0 {
 			state.sound = 0
 			return true, ""
 		}
 		state.sound = output[0]
 		return true, ""
-	case flatlandGestaltActuatorName:
+	case protoio.FlatlandGestaltActuatorName:
 		state.gestalt = append([]float64(nil), output...)
 		return true, ""
-	case flatlandSpearActuatorName:
+	case protoio.FlatlandSpearActuatorName:
 		if len(output) == 0 || output[0] <= 0 {
 			state.spear = false
 			return true, ""
@@ -469,7 +466,7 @@ func flatlandApplyStateActuator(state *flatlandPublicAgentState, actuatorName st
 			return true, "depleted"
 		}
 		return true, ""
-	case flatlandShootActuatorName:
+	case protoio.FlatlandShootActuatorName:
 		if len(output) == 0 || output[0] <= 0 {
 			return true, ""
 		}
@@ -483,7 +480,7 @@ func flatlandApplyStateActuator(state *flatlandPublicAgentState, actuatorName st
 			return true, "depleted"
 		}
 		return true, ""
-	case flatlandOffspringActuatorName:
+	case protoio.FlatlandCreateOffspringActuatorName:
 		state.offspringRequested = false
 		state.offspringGranted = false
 		state.offspringCost = 0

@@ -155,12 +155,27 @@ func NewFlatlandProcessIO(mode string, sensorIDs, actuatorIDs []string) (map[str
 	actuators := make(map[string]protoio.Actuator, len(actuatorIDs))
 	for _, actuatorID := range actuatorIDs {
 		canonical := protoio.CanonicalActuatorName(actuatorID)
-		if canonical != protoio.FlatlandMoveActuatorName && canonical != protoio.FlatlandTwoWheelsActuatorName {
+		if !flatlandProcessActuatorSupported(canonical) {
 			return nil, nil, fmt.Errorf("unsupported flatland process actuator: %s", actuatorID)
 		}
 		actuators[actuatorID] = &flatlandProcessIOActuator{state: state, name: actuatorID}
 	}
 	return sensors, actuators, nil
+}
+
+func flatlandProcessActuatorSupported(canonical string) bool {
+	switch canonical {
+	case protoio.FlatlandMoveActuatorName,
+		protoio.FlatlandTwoWheelsActuatorName,
+		protoio.FlatlandSpeakActuatorName,
+		protoio.FlatlandGestaltActuatorName,
+		protoio.FlatlandSpearActuatorName,
+		protoio.FlatlandShootActuatorName,
+		protoio.FlatlandCreateOffspringActuatorName:
+		return true
+	default:
+		return false
+	}
 }
 
 func flatlandProcessSensorIndex(sensorID string) (int, string, error) {

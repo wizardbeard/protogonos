@@ -98,3 +98,17 @@ func TestFlatlandScannerMorphologySurface(t *testing.T) {
 		t.Fatalf("validate scanner profile components: %v", err)
 	}
 }
+
+func TestFlatlandPublicCommandActuatorsAreRegistered(t *testing.T) {
+	for _, actuatorName := range FlatlandPublicCommandActuators() {
+		if _, err := protoio.ResolveActuator(actuatorName, "flatland"); err != nil {
+			t.Fatalf("resolve flatland command actuator %s: %v", actuatorName, err)
+		}
+		if !protoio.ActuatorCompatibleWithScape(actuatorName, "flatland") {
+			t.Fatalf("expected flatland command actuator %s to be compatible with flatland", actuatorName)
+		}
+		if protoio.ActuatorCompatibleWithScape(actuatorName, "xor") {
+			t.Fatalf("expected flatland command actuator %s to be incompatible with xor", actuatorName)
+		}
+	}
+}

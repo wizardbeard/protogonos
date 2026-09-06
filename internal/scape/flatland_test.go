@@ -179,6 +179,37 @@ func TestFlatlandProcessIOAdapters(t *testing.T) {
 	}
 }
 
+func TestFlatlandProcessIOAcceptsPublicCommandActuators(t *testing.T) {
+	sensors, actuators, err := NewFlatlandProcessIO(
+		"gt",
+		[]string{protoio.DistanceScannerSensorAliasName},
+		[]string{
+			protoio.FlatlandSpeakActuatorAliasName,
+			protoio.FlatlandGestaltActuatorName,
+			protoio.FlatlandSpearActuatorName,
+			protoio.FlatlandShootActuatorName,
+			protoio.FlatlandCreateOffspringActuatorName,
+		},
+	)
+	if err != nil {
+		t.Fatalf("new flatland command process io: %v", err)
+	}
+	if len(sensors) != 1 {
+		t.Fatalf("expected one process sensor, got=%v", sensors)
+	}
+	for _, actuatorName := range []string{
+		protoio.FlatlandSpeakActuatorAliasName,
+		protoio.FlatlandGestaltActuatorName,
+		protoio.FlatlandSpearActuatorName,
+		protoio.FlatlandShootActuatorName,
+		protoio.FlatlandCreateOffspringActuatorName,
+	} {
+		if _, ok := actuators[actuatorName].(protoio.ActuatorProcessWriter); !ok {
+			t.Fatalf("expected flatland command actuator %s to expose process writer", actuatorName)
+		}
+	}
+}
+
 func TestFlatlandTwoWheelsControlUsesReferenceSpeedAndTurn(t *testing.T) {
 	control, err := flatlandControlFromActuatorOutput(protoio.FlatlandTwoWheelsActuatorName, []float64{1, -1})
 	if err != nil {
@@ -217,7 +248,7 @@ func TestFlatlandPublicProcessStateActuatorCommands(t *testing.T) {
 
 	speak := process.Call(ctx, FlatlandPublicActMessage{
 		AgentID:      "speaker",
-		ActuatorName: flatlandSpeakActuatorName,
+		ActuatorName: protoio.FlatlandSpeakActuatorName,
 		Output:       []float64{0.75},
 	})
 	if speak.Err != nil || !speak.OK {
@@ -235,7 +266,7 @@ func TestFlatlandPublicProcessStateActuatorCommands(t *testing.T) {
 
 	gestalt := process.Call(ctx, FlatlandPublicActMessage{
 		AgentID:      "speaker",
-		ActuatorName: flatlandGestaltActuatorName,
+		ActuatorName: protoio.FlatlandGestaltActuatorName,
 		Output:       []float64{0.1, 0.2, 0.3},
 	})
 	if gestalt.Err != nil || !gestalt.OK {
@@ -266,7 +297,7 @@ func TestFlatlandPublicProcessSpearCommandUsesReferenceEnergyGate(t *testing.T) 
 
 	low := process.Call(ctx, FlatlandPublicActMessage{
 		AgentID:      "hunter",
-		ActuatorName: flatlandSpearActuatorName,
+		ActuatorName: protoio.FlatlandSpearActuatorName,
 		Output:       []float64{1},
 	})
 	if low.Err != nil || !low.OK {
@@ -290,7 +321,7 @@ func TestFlatlandPublicProcessSpearCommandUsesReferenceEnergyGate(t *testing.T) 
 
 	high := process.Call(ctx, FlatlandPublicActMessage{
 		AgentID:      "hunter",
-		ActuatorName: flatlandSpearActuatorName,
+		ActuatorName: protoio.FlatlandSpearActuatorName,
 		Output:       []float64{1},
 	})
 	if high.Err != nil || !high.OK {
@@ -320,7 +351,7 @@ func TestFlatlandPublicProcessShootCommandUsesReferenceEnergyGate(t *testing.T) 
 
 	noOp := process.Call(ctx, FlatlandPublicActMessage{
 		AgentID:      "shooter",
-		ActuatorName: flatlandShootActuatorName,
+		ActuatorName: protoio.FlatlandShootActuatorAliasName,
 		Output:       []float64{0},
 	})
 	if noOp.Err != nil || !noOp.OK {
@@ -332,7 +363,7 @@ func TestFlatlandPublicProcessShootCommandUsesReferenceEnergyGate(t *testing.T) 
 
 	low := process.Call(ctx, FlatlandPublicActMessage{
 		AgentID:      "shooter",
-		ActuatorName: flatlandShootActuatorName,
+		ActuatorName: protoio.FlatlandShootActuatorName,
 		Output:       []float64{1},
 	})
 	if low.Err != nil || !low.OK {
@@ -353,7 +384,7 @@ func TestFlatlandPublicProcessShootCommandUsesReferenceEnergyGate(t *testing.T) 
 
 	high := process.Call(ctx, FlatlandPublicActMessage{
 		AgentID:      "shooter",
-		ActuatorName: flatlandShootActuatorName,
+		ActuatorName: protoio.FlatlandShootActuatorAliasName,
 		Output:       []float64{1},
 	})
 	if high.Err != nil || !high.OK {
@@ -383,7 +414,7 @@ func TestFlatlandPublicProcessCreateOffspringCommandReportsGrantState(t *testing
 
 	noOp := process.Call(ctx, FlatlandPublicActMessage{
 		AgentID:      "parent",
-		ActuatorName: flatlandOffspringActuatorName,
+		ActuatorName: protoio.FlatlandCreateOffspringActuatorAliasName,
 		Output:       []float64{0},
 	})
 	if noOp.Err != nil || !noOp.OK {
@@ -403,7 +434,7 @@ func TestFlatlandPublicProcessCreateOffspringCommandReportsGrantState(t *testing
 
 	denied := process.Call(ctx, FlatlandPublicActMessage{
 		AgentID:      "parent",
-		ActuatorName: flatlandOffspringActuatorName,
+		ActuatorName: protoio.FlatlandCreateOffspringActuatorName,
 		Output:       []float64{1},
 	})
 	if denied.Err != nil || !denied.OK {
@@ -429,7 +460,7 @@ func TestFlatlandPublicProcessCreateOffspringCommandReportsGrantState(t *testing
 
 	granted := process.Call(ctx, FlatlandPublicActMessage{
 		AgentID:      "parent",
-		ActuatorName: flatlandOffspringActuatorName,
+		ActuatorName: protoio.FlatlandCreateOffspringActuatorAliasName,
 		Output:       []float64{1},
 	})
 	if granted.Err != nil || !granted.OK {

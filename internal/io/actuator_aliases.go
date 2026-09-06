@@ -8,6 +8,11 @@ const (
 	PBSendOutputActuatorAliasName            = "pb_SendOutput"
 	DTMSendOutputActuatorAliasName           = "dtm_SendOutput"
 	TwoWheelsActuatorAliasName               = "two_wheels"
+	FlatlandSpeakActuatorAliasName           = "speak"
+	FlatlandGestaltActuatorAliasName         = "gestalt_output"
+	FlatlandSpearActuatorAliasName           = "spear"
+	FlatlandShootActuatorAliasName           = "shoot"
+	FlatlandCreateOffspringActuatorAliasName = "create_offspring"
 	FXTradeActuatorAliasName                 = "fx_Trade"
 	ABCPredActuatorAliasName                 = "abc_pred"
 	GeneralPredictorActuatorAliasName        = "general_predictor"
@@ -20,6 +25,11 @@ var actuatorAliasToCanonical = map[string]string{
 	strings.ToLower(PBSendOutputActuatorAliasName):            Pole2PushActuatorName,
 	strings.ToLower(DTMSendOutputActuatorAliasName):           DTMMoveActuatorName,
 	strings.ToLower(TwoWheelsActuatorAliasName):               FlatlandTwoWheelsActuatorName,
+	strings.ToLower(FlatlandSpeakActuatorAliasName):           FlatlandSpeakActuatorName,
+	strings.ToLower(FlatlandGestaltActuatorAliasName):         FlatlandGestaltActuatorName,
+	strings.ToLower(FlatlandSpearActuatorAliasName):           FlatlandSpearActuatorName,
+	strings.ToLower(FlatlandShootActuatorAliasName):           FlatlandShootActuatorName,
+	strings.ToLower(FlatlandCreateOffspringActuatorAliasName): FlatlandCreateOffspringActuatorName,
 	strings.ToLower(FXTradeActuatorAliasName):                 FXTradeActuatorName,
 	strings.ToLower(ABCPredActuatorAliasName):                 EpitopesResponseActuatorName,
 	strings.ToLower(GeneralPredictorActuatorAliasName):        GTSAPredictActuatorName,

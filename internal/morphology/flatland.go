@@ -39,6 +39,16 @@ func (FlatlandScannerMorphology) Compatible(scape string) bool {
 	return scape == "flatland"
 }
 
+func FlatlandPublicCommandActuators() []string {
+	return []string{
+		protoio.FlatlandSpeakActuatorName,
+		protoio.FlatlandGestaltActuatorName,
+		protoio.FlatlandSpearActuatorName,
+		protoio.FlatlandShootActuatorName,
+		protoio.FlatlandCreateOffspringActuatorName,
+	}
+}
+
 func flatlandExtendedSensors() []string {
 	base := []string{
 		protoio.FlatlandDistanceSensorName,

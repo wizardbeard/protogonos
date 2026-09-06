@@ -59,6 +59,11 @@ const (
 	FlatlandEnergyScan4SensorName       = "flatland_energy_scan_4"
 	FlatlandMoveActuatorName            = "flatland_move"
 	FlatlandTwoWheelsActuatorName       = "flatland_two_wheels"
+	FlatlandSpeakActuatorName           = "flatland_speak"
+	FlatlandGestaltActuatorName         = "flatland_gestalt_output"
+	FlatlandSpearActuatorName           = "flatland_spear"
+	FlatlandShootActuatorName           = "flatland_shoot"
+	FlatlandCreateOffspringActuatorName = "flatland_create_offspring"
 	DTMRangeLeftSensorName              = "dtm_range_left"
 	DTMRangeFrontSensorName             = "dtm_range_front"
 	DTMRangeRightSensorName             = "dtm_range_right"
@@ -1334,6 +1339,29 @@ func initializeDefaultComponents() {
 	})
 	if err != nil {
 		panic(err)
+	}
+	for _, name := range []string{
+		FlatlandSpeakActuatorName,
+		FlatlandGestaltActuatorName,
+		FlatlandSpearActuatorName,
+		FlatlandShootActuatorName,
+		FlatlandCreateOffspringActuatorName,
+	} {
+		err = RegisterActuatorWithSpec(ActuatorSpec{
+			Name:          name,
+			Factory:       func() Actuator { return NewScalarOutputActuator() },
+			SchemaVersion: SupportedSchemaVersion,
+			CodecVersion:  SupportedCodecVersion,
+			Compatible: func(scape string) error {
+				if scape != "flatland" {
+					return fmt.Errorf("unsupported scape: %s", scape)
+				}
+				return nil
+			},
+		})
+		if err != nil {
+			panic(err)
+		}
 	}
 	err = RegisterActuatorWithSpec(ActuatorSpec{
 		Name:          DTMMoveActuatorName,
