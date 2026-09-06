@@ -524,6 +524,18 @@ func TestFXSimulatorSenseTradeInternalsAndRestart(t *testing.T) {
 	if initial.Mode != "test" || initial.CurrentStep != initial.StartStep || initial.Halted {
 		t.Fatalf("unexpected initial simulator state: %+v", initial)
 	}
+	if initial.Table.Name != initial.SeriesName || initial.Table.Rows != initial.SeriesPoints {
+		t.Fatalf("expected table metadata to mirror series state, got %+v", initial)
+	}
+	if initial.Table.SourceKind != "builtin" || initial.Table.Mode != "test" {
+		t.Fatalf("unexpected default table metadata: %+v", initial.Table)
+	}
+	if initial.Table.IndexStart != initial.StartStep || initial.Table.IndexEnd != initial.EndStep {
+		t.Fatalf("expected table bounds to mirror mode window, got state=%+v table=%+v", initial, initial.Table)
+	}
+	if initial.Table.FirstClose <= 0 || initial.Table.LastClose <= 0 {
+		t.Fatalf("expected positive close metadata, got %+v", initial.Table)
+	}
 
 	percept, err := sim.Sense(context.Background())
 	if err != nil {
@@ -616,6 +628,9 @@ func TestFXProcessCommandWrapper(t *testing.T) {
 	if start.State.Mode != "test" || start.State.Halted {
 		t.Fatalf("unexpected start state=%+v", start.State)
 	}
+	if start.State.Table.Name != start.State.SeriesName || start.State.Table.Mode != "test" {
+		t.Fatalf("expected process start to expose table metadata, got %+v", start.State)
+	}
 
 	sense := process.Call(ctx, FXSenseMessage{})
 	if sense.Err != nil || !sense.OK {
@@ -650,6 +665,9 @@ func TestFXProcessCommandWrapper(t *testing.T) {
 	state := process.Call(ctx, FXStateMessage{})
 	if state.Err != nil || !state.OK || state.State.OrdersOpened != 1 {
 		t.Fatalf("state response=%+v", state)
+	}
+	if state.State.Table.Rows <= 0 || state.State.Table.EffectiveIndexEnd < state.State.Table.IndexStart {
+		t.Fatalf("expected process state table bounds, got %+v", state.State.Table)
 	}
 
 	stop := process.Call(ctx, FXStopMessage{Reason: "normal"})
@@ -712,6 +730,56 @@ func TestFXScapeLoadSeriesCSV(t *testing.T) {
 	}
 	if points, ok := trace["series_points"].(int); !ok || points != 400 {
 		t.Fatalf("expected series_points=400, got %+v", trace)
+	}
+	table, ok := trace["table"].(FXTableMetadata)
+	if !ok {
+		t.Fatalf("trace missing FX table metadata: %+v", trace)
+	}
+	if table.SourceKind != "csv" || table.Rows != 400 || !strings.Contains(table.SourcePath, "fx_custom.csv") {
+		t.Fatalf("unexpected FX table metadata: %+v", table)
+	}
+	if table.Mode != "test" || table.IndexStart != 256 || table.EffectiveIndexEnd != 303 {
+		t.Fatalf("unexpected FX table bounds: %+v", table)
+	}
+	if table.FirstClose <= 0 || table.LastClose <= table.FirstClose {
+		t.Fatalf("unexpected FX close metadata: %+v", table)
+	}
+}
+
+func TestFXSimulatorStateIncludesContextSeriesMetadata(t *testing.T) {
+	ResetFXSeriesSource()
+	t.Cleanup(ResetFXSeriesSource)
+
+	path := filepath.Join(t.TempDir(), "fx_context.csv")
+	var builder strings.Builder
+	builder.WriteString("t,close\n")
+	for i := 0; i < 320; i++ {
+		fmt.Fprintf(&builder, "%d,%0.6f\n", i, 1.10+0.00025*float64(i))
+	}
+	if err := os.WriteFile(path, []byte(builder.String()), 0o644); err != nil {
+		t.Fatalf("write fx csv: %v", err)
+	}
+
+	ctx, err := WithDataSources(context.Background(), DataSources{
+		FX: FXDataSource{CSVPath: path},
+	})
+	if err != nil {
+		t.Fatalf("configure fx data source: %v", err)
+	}
+	sim, err := NewFXSimulator(ctx, "validation")
+	if err != nil {
+		t.Fatalf("new fx simulator: %v", err)
+	}
+
+	state := sim.State()
+	if state.SeriesPoints != 320 || !strings.Contains(state.SeriesName, "fx_context.csv") {
+		t.Fatalf("expected context-scoped csv series in state, got %+v", state)
+	}
+	if state.Table.SourceKind != "csv" || state.Table.Rows != 320 {
+		t.Fatalf("expected csv table metadata, got %+v", state.Table)
+	}
+	if state.Table.Mode != "validation" || state.Table.IndexStart != 128 || state.Table.IndexEnd != 175 {
+		t.Fatalf("unexpected validation table window, got %+v", state.Table)
 	}
 }
 

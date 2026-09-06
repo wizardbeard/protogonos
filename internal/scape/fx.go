@@ -18,8 +18,10 @@ import (
 type FXScape struct{}
 
 type fxSeries struct {
-	name   string
-	values []float64
+	name       string
+	sourceKind string
+	sourcePath string
+	values     []float64
 }
 
 type FXSimulator struct {
@@ -45,6 +47,7 @@ type FXSimulatorState struct {
 	Mode                 string
 	SeriesName           string
 	SeriesPoints         int
+	Table                FXTableMetadata
 	StartStep            int
 	CurrentStep          int
 	EndStep              int
@@ -71,6 +74,19 @@ type FXSimulatorState struct {
 	DirectionChanges     int
 	Turnover             float64
 	MarginCall           bool
+}
+
+type FXTableMetadata struct {
+	Name              string
+	SourceKind        string
+	SourcePath        string
+	Rows              int
+	Mode              string
+	IndexStart        int
+	IndexEnd          int
+	EffectiveIndexEnd int
+	FirstClose        float64
+	LastClose         float64
 }
 
 var (
@@ -274,6 +290,7 @@ func (s *FXSimulator) State() FXSimulatorState {
 		Mode:                 s.cfg.mode,
 		SeriesName:           s.series.name,
 		SeriesPoints:         len(s.series.values),
+		Table:                fxTableMetadata(s.series, s.cfg),
 		StartStep:            s.cfg.startStep,
 		CurrentStep:          s.step,
 		EndStep:              s.cfg.startStep + s.cfg.steps - 1,
@@ -511,6 +528,7 @@ func evaluateFX(
 		"start_step":             cfg.startStep,
 		"series_name":            series.name,
 		"series_points":          len(series.values),
+		"table":                  fxTableMetadata(series, cfg),
 		"balance":                account.balance,
 		"net_worth":              netWorth,
 		"realized_pl":            account.realizedPL,
@@ -866,6 +884,10 @@ func loadFXSeriesCSV(path string) (fxSeries, error) {
 	if path == "" {
 		return fxSeries{}, fmt.Errorf("fx csv path is required")
 	}
+	sourcePath := path
+	if abs, err := filepath.Abs(path); err == nil {
+		sourcePath = abs
+	}
 
 	f, err := os.Open(path)
 	if err != nil {
@@ -910,8 +932,10 @@ func loadFXSeriesCSV(path string) (fxSeries, error) {
 	}
 
 	return fxSeries{
-		name:   fmt.Sprintf("fx.csv.%s", filepath.Base(path)),
-		values: values,
+		name:       fmt.Sprintf("fx.csv.%s", filepath.Base(path)),
+		sourceKind: "csv",
+		sourcePath: sourcePath,
+		values:     values,
 	}, nil
 }
 
@@ -931,7 +955,7 @@ func defaultFXSeries() fxSeries {
 	for i := 0; i < total; i++ {
 		values[i] = fxSyntheticPrice(i)
 	}
-	return fxSeries{name: "fx.synthetic.v2", values: values}
+	return fxSeries{name: "fx.synthetic.v2", sourceKind: "builtin", values: values}
 }
 
 func currentFXSeries(ctx context.Context) fxSeries {
@@ -955,6 +979,40 @@ func fxConfigForMode(mode string) (fxModeConfig, error) {
 		return fxModeConfig{mode: "benchmark", steps: 48, startStep: 256}, nil
 	default:
 		return fxModeConfig{}, fmt.Errorf("unsupported fx mode: %s", mode)
+	}
+}
+
+func fxTableMetadata(series fxSeries, cfg fxModeConfig) FXTableMetadata {
+	rows := len(series.values)
+	firstClose := 0.0
+	lastClose := 0.0
+	if rows > 0 {
+		firstClose = series.values[0]
+		lastClose = series.values[rows-1]
+	}
+	sourceKind := strings.TrimSpace(series.sourceKind)
+	if sourceKind == "" {
+		sourceKind = "builtin"
+	}
+	indexEnd := cfg.startStep + cfg.steps - 1
+	effectiveEnd := indexEnd
+	if rows > 0 && effectiveEnd >= rows {
+		effectiveEnd = rows - 1
+	}
+	if effectiveEnd < cfg.startStep {
+		effectiveEnd = cfg.startStep
+	}
+	return FXTableMetadata{
+		Name:              series.name,
+		SourceKind:        sourceKind,
+		SourcePath:        series.sourcePath,
+		Rows:              rows,
+		Mode:              cfg.mode,
+		IndexStart:        cfg.startStep,
+		IndexEnd:          indexEnd,
+		EffectiveIndexEnd: effectiveEnd,
+		FirstClose:        firstClose,
+		LastClose:         lastClose,
 	}
 }
 
