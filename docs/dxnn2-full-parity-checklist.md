@@ -50,6 +50,7 @@ Status keys:
 ## Completed in latest iterations
 
 - Ran the 2026-09-07 repository-wide parity audit: `.ref/src` contains 33 active `.erl` modules and all 33 have documented rows; the checklist has no `partial` or `missing` module classifications, and the three `.erl.bak` backup files (`circuit`, `complex`, `scape_LLVMPhaseOrdering`) are not counted as active reference modules.
+- Added a done-check parity-doc gate that validates active `.ref/src` module counts, audit/checklist row coverage, duplicate-row absence, final status counts, audit summary-count text, and stale final-gap wording before running the slower test and benchmark checks.
 - Added reference-record descriptor helpers for `morphology.erl` current-scope `#sensor{}`/`#actuator{}` clauses, preserving reference names, canonical runtime IDs, scape kind/name, format, vector lengths, and parameters without changing existing Go runtime morphology lists.
 - Wired reference morphology descriptor `vl` values into genotype seed construction for reference morphology names: sensor `vl` now drives inbound weight arity and actuator `vl` drives output-neuron multiplicity, with explicit caller `ActuatorVectorLengths` still taking precedence.
 - Added Go-native coverage for the remaining non-scape exported `sensor.erl`/`actuator.erl` IO functions: `rng` now produces reference-width random vectors in `[0,1]`, and `pts` prints/stores actuator vectors with reference default/test feedback tuples.
@@ -544,6 +545,6 @@ Status keys:
 
 ## Highest-priority remaining gaps to reach strict parity
 
-1. Tighten done-check and golden smoke gates so completed module classifications are enforced automatically.
-2. Add a repeatable parity-summary command or test that checks `.ref/src` active module rows, status counts, and stale gap wording.
-3. Review release-readiness criteria for declaring full current-scope parity, including which non-goal/reference-TODO surfaces must remain explicitly excluded.
+1. Review release-readiness criteria for declaring full current-scope parity, including which non-goal/reference-TODO surfaces must remain explicitly excluded.
+2. Decide whether the parity-doc gate should remain shell-only in `done_check.sh` or move into a dedicated Go test for easier CI integration.
+3. Run the full done-check benchmark gate before tagging or announcing parity.

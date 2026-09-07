@@ -355,6 +355,7 @@ Status legend:
 - 2026-09-04: bridged `map2rec` sensor/actuator record conversions to the compact genome `IORecordSpec` shape with alias canonicalization, scape metadata extraction, format preservation, and parameter stringification.
 - 2026-09-04: made generalized genotype fingerprints and fingerprint-based speciation sensitive to stored reference IO descriptor metadata, preventing genomes with identical canonical IO IDs but different Erlang record metadata from collapsing into one fingerprint bucket.
 - 2026-09-07: ran the repository-wide parity audit against `.ref/src`: 33 active `.erl` modules are present and all 33 have documented rows, with no duplicate rows, no undocumented active modules, no `partial` rows, and no `missing` rows; the three `.erl.bak` backup files are documented as non-active reference files.
+- 2026-09-07: added a repeatable done-check parity-doc gate that validates active `.ref/src` module counts, audit/checklist module row coverage, duplicate-row absence, expected final status counts, summary-count text, and known stale final-gap wording.
 
 ## Summary
 
@@ -369,4 +370,4 @@ The 2026-09-07 verification pass found 33 active `.erl` modules in `.ref/src`, 3
 
 ## Recommended next parity increments
 
-1. Add or tighten done-check/golden smoke gates so completed module classifications are enforced by tests instead of relying only on manual audit notes.
+1. Review release-readiness criteria for declaring full current-scope parity, including which non-goal/reference-TODO surfaces must remain explicitly excluded.

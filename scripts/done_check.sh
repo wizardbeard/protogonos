@@ -4,6 +4,103 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT_DIR"
 
+check_parity_docs() {
+  local audit_doc="docs/dxnn2-src-module-audit.md"
+  local checklist_doc="docs/dxnn2-full-parity-checklist.md"
+
+  echo "[done-check] Checking DXNN2 parity summary docs"
+
+  local ref_modules
+  ref_modules="$(find .ref/src -maxdepth 1 -type f -name '*.erl' -printf '%f\n' | sort)"
+
+  local audit_modules
+  audit_modules="$(grep '^| `.*\.erl` |' "$audit_doc" | sed 's/^| `//; s/` |.*//' | sort)"
+
+  local checklist_modules
+  checklist_modules="$(grep '^| `.*\.erl` |' "$checklist_doc" | sed 's/^| `//; s/` |.*//' | sort)"
+
+  local ref_count audit_count checklist_count
+  ref_count="$(printf '%s\n' "$ref_modules" | grep -c '.erl$' || true)"
+  audit_count="$(printf '%s\n' "$audit_modules" | grep -c '.erl$' || true)"
+  checklist_count="$(printf '%s\n' "$checklist_modules" | grep -c '.erl$' || true)"
+
+  if [[ "$ref_count" != "33" ]]; then
+    echo "[done-check] ERROR: expected 33 active .ref/src Erlang modules, got $ref_count" >&2
+    exit 1
+  fi
+  if [[ "$audit_count" != "$ref_count" ]]; then
+    echo "[done-check] ERROR: audit row count $audit_count does not match reference module count $ref_count" >&2
+    exit 1
+  fi
+  if [[ "$checklist_count" != "$ref_count" ]]; then
+    echo "[done-check] ERROR: checklist row count $checklist_count does not match reference module count $ref_count" >&2
+    exit 1
+  fi
+
+  local missing_from_audit extra_in_audit missing_from_checklist extra_in_checklist
+  missing_from_audit="$(comm -23 <(printf '%s\n' "$ref_modules") <(printf '%s\n' "$audit_modules"))"
+  extra_in_audit="$(comm -13 <(printf '%s\n' "$ref_modules") <(printf '%s\n' "$audit_modules"))"
+  missing_from_checklist="$(comm -23 <(printf '%s\n' "$ref_modules") <(printf '%s\n' "$checklist_modules"))"
+  extra_in_checklist="$(comm -13 <(printf '%s\n' "$ref_modules") <(printf '%s\n' "$checklist_modules"))"
+
+  if [[ -n "$missing_from_audit" || -n "$extra_in_audit" ]]; then
+    echo "[done-check] ERROR: audit module rows do not match .ref/src" >&2
+    echo "[done-check] missing_from_audit: ${missing_from_audit:-none}" >&2
+    echo "[done-check] extra_in_audit: ${extra_in_audit:-none}" >&2
+    exit 1
+  fi
+  if [[ -n "$missing_from_checklist" || -n "$extra_in_checklist" ]]; then
+    echo "[done-check] ERROR: checklist module rows do not match .ref/src" >&2
+    echo "[done-check] missing_from_checklist: ${missing_from_checklist:-none}" >&2
+    echo "[done-check] extra_in_checklist: ${extra_in_checklist:-none}" >&2
+    exit 1
+  fi
+
+  local duplicate_audit duplicate_checklist
+  duplicate_audit="$(printf '%s\n' "$audit_modules" | uniq -d)"
+  duplicate_checklist="$(printf '%s\n' "$checklist_modules" | uniq -d)"
+  if [[ -n "$duplicate_audit" || -n "$duplicate_checklist" ]]; then
+    echo "[done-check] ERROR: duplicate module rows found" >&2
+    echo "[done-check] duplicate_audit: ${duplicate_audit:-none}" >&2
+    echo "[done-check] duplicate_checklist: ${duplicate_checklist:-none}" >&2
+    exit 1
+  fi
+
+  local implemented_count partial_count missing_count out_count done_count na_count
+  implemented_count="$(grep '^| `.*\.erl` |' "$audit_doc" | grep -F -c '| `implemented` |' || true)"
+  partial_count="$(grep '^| `.*\.erl` |' "$audit_doc" | grep -F -c '| `partial` |' || true)"
+  missing_count="$(grep '^| `.*\.erl` |' "$audit_doc" | grep -F -c '| `missing` |' || true)"
+  out_count="$(grep '^| `.*\.erl` |' "$audit_doc" | grep -F -c '| `out-of-scope-now` |' || true)"
+  done_count="$(grep '^| `.*\.erl` |' "$checklist_doc" | grep -F -c '| `done` |' || true)"
+  na_count="$(grep '^| `.*\.erl` |' "$checklist_doc" | grep -F -c '| `n/a` |' || true)"
+
+  if [[ "$implemented_count" != "31" || "$partial_count" != "0" || "$missing_count" != "0" || "$out_count" != "2" ]]; then
+    echo "[done-check] ERROR: unexpected audit status counts implemented=$implemented_count partial=$partial_count missing=$missing_count out-of-scope-now=$out_count" >&2
+    exit 1
+  fi
+  if [[ "$done_count" != "31" || "$na_count" != "2" ]]; then
+    echo "[done-check] ERROR: unexpected checklist status counts done=$done_count n/a=$na_count" >&2
+    exit 1
+  fi
+
+  grep -F -q -- '- `implemented`: 31' "$audit_doc"
+  grep -F -q -- '- `partial`: 0' "$audit_doc"
+  grep -F -q -- '- `missing`: 0' "$audit_doc"
+  grep -F -q -- '- `out-of-scope-now`: 2' "$audit_doc"
+
+  local stale_pattern
+  stale_pattern='remaining strict runtime-depth gaps|were still under review|partial`: 7|implemented`: 32|Run a final repository-wide parity audit|remaining strict-parity work is audit'
+  if grep -RniE "$stale_pattern" "$audit_doc" "$checklist_doc" >/dev/null; then
+    echo "[done-check] ERROR: stale parity gap wording found in parity docs" >&2
+    grep -RniE "$stale_pattern" "$audit_doc" "$checklist_doc" >&2
+    exit 1
+  fi
+
+  echo "[done-check] Parity docs summary: active_ref_modules=$ref_count implemented=$implemented_count partial=$partial_count missing=$missing_count out_of_scope=$out_count"
+}
+
+check_parity_docs
+
 echo "[done-check] Running default test suite"
 go test ./...
 

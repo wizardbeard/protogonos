@@ -16,12 +16,14 @@ This document defines the reproducible acceptance check for the AGENTS.md done c
 
 ## What this validates
 
-1. `go test ./...` passes.
-2. `go test -tags sqlite ./...` passes.
-3. End-to-end benchmark runs complete with sqlite backend for:
+1. The DXNN2 parity docs match `.ref/src` active module rows and expected status counts.
+2. The parity docs contain no known stale final-gap wording from earlier iterations.
+3. `go test ./...` passes.
+4. `go test -tags sqlite ./...` passes.
+5. End-to-end benchmark runs complete with sqlite backend for:
    - core acceptance scapes: `xor`, `regression-mimic`, `cart-pole-lite`
    - parity smoke scapes: `flatland`, `gtsa`, `fx`, `epitopes`, `dtm`, `pole2-balancing`, `llvm-phase-ordering`
-4. For each benchmark run, artifacts exist:
+6. For each benchmark run, artifacts exist:
    - `config.json`
    - `fitness_history.json`
    - `top_genomes.json`
@@ -29,9 +31,17 @@ This document defines the reproducible acceptance check for the AGENTS.md done c
    - `generation_diagnostics.json`
    - `species_history.json`
    - `benchmark_summary.json`
-5. `benchmark_summary.json` must have `"passed": true` for each run (both benchmark and export copies).
-6. `export --latest` succeeds for each benchmark run.
-7. Exported artifacts contain the same required files.
+7. `benchmark_summary.json` must have `"passed": true` for each run (both benchmark and export copies).
+8. `export --latest` succeeds for each benchmark run.
+9. Exported artifacts contain the same required files.
+
+## Parity doc gate
+
+- `.ref/src` must contain 33 active `.erl` modules.
+- `docs/dxnn2-src-module-audit.md` and `docs/dxnn2-full-parity-checklist.md` must each contain one row for every active `.erl` module.
+- Audit status counts must be `implemented=31`, `partial=0`, `missing=0`, and `out-of-scope-now=2`.
+- Checklist status counts must be `done=31` and `n/a=2`.
+- Known stale gap wording from earlier final-parity iterations fails the check.
 
 ## Acceptance thresholds
 
@@ -47,4 +57,4 @@ This document defines the reproducible acceptance check for the AGENTS.md done c
 - The script uses fixed seeds for reproducibility:
   - core: `xor=101`, `regression-mimic=202`, `cart-pole-lite=303`
   - smoke: `flatland=404`, `gtsa=405`, `fx=406`, `epitopes=407`, `dtm=408`, `pole2-balancing=409`, `llvm-phase-ordering=410`
-- The script validates benchmark artifact generation, benchmark summary pass/fail semantics, and exportability.
+- The script validates parity-doc consistency, benchmark artifact generation, benchmark summary pass/fail semantics, and exportability.
