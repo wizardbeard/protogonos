@@ -258,7 +258,7 @@ Status legend:
 - 2026-09-05: expanded Flatland `multi_agent, update_agents` parity with reconciliation summaries for created/preserved/revived/removed/dead/active counts, copy-safe removed IDs, post-update typed avatar snapshots on process responses, and direct last-update introspection.
 - 2026-09-05: expanded Flatland public `tick` parity with typed avatar snapshots on direct/process tick surfaces and aggregate public interaction totals for avatar collisions, public kills/deaths, spear kills, and shot kills.
 - 2026-09-05: reviewed remaining Flatland gaps against `.ref/src/flatland.erl`; core process protocol and public scape state surfaces are now covered, while exact 2D geometry/rendering/visor integration, sector/object fidelity, full autonomous predator/prey avatar processes, and bullet/turret behavior were still under review pending deeper helper parity.
-- 2026-09-05: reviewed remaining FX gaps against `.ref/src/fx.erl`; account/order lifecycle, `sense`/`trade`/`internals` protocol, mode windows, CSV series ingestion, and telemetry are covered while residual gaps remain exact ETS table management/backup/summon lifecycle, `graph_sensor` raster sensing, max-profit oracle helpers, metadata bootstrap, and full `fx_tables` file workflow.
+- 2026-09-05: reviewed remaining FX gaps against `.ref/src/fx.erl`; account/order lifecycle, `sense`/`trade`/`internals` protocol, mode windows, CSV series ingestion, and telemetry were covered, and the initially identified table lifecycle, graph/list sensing, max-profit oracle, metadata bootstrap, and `fx_tables` workflow gaps were later closed or reclassified through Go-native dataset binding and versioned table artifacts.
 - 2026-09-05: expanded FX metadata-bootstrap parity with typed table/catalog snapshots in simulator state, process state, and evaluation traces, including series source kind/path, row count, mode window bounds, effective clipped bounds, and first/last close values.
 - 2026-09-05: added FX `max_profit` oracle parity with `FXMaxProfitOracle`, which finds monotonic price-run flips, derives reference-style long/short/flat signals, replays them through the simulator account lifecycle, and returns signal/account/table diagnostics.
 - 2026-09-05: added FX `graph_sensor`/`list_sensor` parity by encoding recent price windows into close-list and raster vectors through simulator methods and process `sense` messages while preserving the existing scalar percept default.
@@ -355,15 +355,15 @@ Status legend:
 
 ## Summary
 
-- `implemented`: 24
-- `partial`: 7
+- `implemented`: 32
+- `partial`: 0
 - `missing`: 0
-- `out-of-scope-now`: 3
+- `out-of-scope-now`: 2
 
-Most core AGENTS responsibilities are present, with remaining `partial` modules concentrated in environment/runtime breadth. The largest parity gaps are:
+Core AGENTS responsibilities are represented across the audited module set. The remaining strict-parity work is audit and gate hardening rather than any module currently marked `partial` or `missing`.
 
-1. Full scape behavior depth for remaining complex reference environments (fx/gtsa/llvm family) beyond baseline parity surrogates.
+1. Run a final repository-wide pass against `.ref/src` to detect undocumented helper drift and stale narrative gap text.
 
 ## Recommended next parity increments
 
-1. Deepen scape behavior parity (`scape.erl`) and corresponding sensor/actuator/morphology semantics toward reference runtime depth.
+1. Add or tighten done-check/golden smoke gates so the completed module classifications are enforced by tests instead of relying only on manual audit notes.

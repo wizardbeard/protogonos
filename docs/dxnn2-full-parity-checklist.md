@@ -229,7 +229,7 @@ Status keys:
 - Added Flatland `multi_agent, update_agents` reconciliation depth with explicit created/preserved/revived/removed/dead/active accounting, copy-safe removed-agent IDs, post-update typed avatar snapshots on the process response, and direct `LastPublicUpdateSummary` introspection while retaining state-preserving ID reconciliation.
 - Added Flatland public `tick` state-depth parity: direct and process ticks now expose typed avatar snapshots alongside legacy trace maps and aggregate public interaction totals for avatar collisions, public kills/deaths, spear kills, and shot kills.
 - Reviewed final Flatland parity against `.ref/src/flatland.erl`: core process protocol, public command actuators, public-agent snapshots, update reconciliation, tick summaries, metabolics/resource cycles, scanner geometry helpers, wall barriers, social surrogate behavior, and standalone helper surfaces are now represented; exact GS canvas/visor rendering, full Erlang per-avatar autonomous process scheduling, upstream `void` sector registry stubs, command/obedience helper stubs, ETS-backed `epitopes` DB helper, and bullet/turret TODO stubs are classified as non-goal or reference-TODO surfaces rather than active parity gaps.
-- Reviewed FX parity against `.ref/src/fx.erl`: account/order lifecycle, `sense`/`trade`/`internals` process protocol, mode windows, CSV-backed series ingestion, and trace/account telemetry are represented; residual gaps are exact ETS table management/backup/summon lifecycle, `graph_sensor` raster sensing, max-profit oracle helpers, direct reference metadata bootstrap, and the full `fx_tables` file workflow.
+- Reviewed FX parity against `.ref/src/fx.erl`: account/order lifecycle, `sense`/`trade`/`internals` process protocol, mode windows, CSV-backed series ingestion, and trace/account telemetry are represented; initially identified gaps around table lifecycle, raster/list sensing, oracle helpers, and metadata bootstrap were later closed or reclassified through Go-native dataset binding and versioned table artifacts.
 - Expanded FX metadata-bootstrap parity by exposing typed table/catalog snapshots in simulator state, process state, and evaluation traces, including series source kind/path, row count, mode window bounds, effective clipped bounds, and first/last close values.
 - Added FX `max_profit` oracle parity with `FXMaxProfitOracle`, which finds monotonic price-run flips, derives reference-style long/short/flat signals, replays them through the simulator account lifecycle, and returns signal/account/table diagnostics.
 - Added FX `graph_sensor`/`list_sensor` parity by encoding recent price windows into close-list and raster vectors through simulator methods and process `sense` messages while preserving the existing scalar percept default.
@@ -543,6 +543,6 @@ Status keys:
 
 ## Highest-priority remaining gaps to reach strict parity
 
-1. Full scape behavior depth parity for remaining complex environment families (`gtsa`, `fx`, `pole2-balancing`, `dtm`, `llvm` workflows).
-2. Residual operator/policy breadth around substrate-runtime interaction helpers.
-3. Full substrate CPP/CEP behavioral parity beyond baseline scaffolding.
+1. Run a final repository-wide parity audit against `.ref/src` to catch undocumented helper drift before declaring strict parity.
+2. Tighten done-check and golden smoke gates so completed module classifications are enforced automatically.
+3. Review remaining narrative docs for stale gap text now that audited module rows no longer contain `partial` or `missing` classifications.
