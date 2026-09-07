@@ -1,6 +1,7 @@
 # DXNN2 Full Parity Checklist (Reference `.ref/src`)
 
 Snapshot date: 2026-02-27
+Latest readiness review: 2026-09-07
 
 Status keys:
 - `done`: implemented and covered by tests in current Go rewrite.
@@ -49,6 +50,7 @@ Status keys:
 
 ## Completed in latest iterations
 
+- Reviewed release-readiness criteria for full current-scope parity: the active target is the AGENTS core platform/evolution/agent/scapes/exoself/substrate surface, while OTP app boot, visor/UI drawing, exact Erlang process scheduling, and upstream TODO/stub helpers remain explicit exclusions.
 - Ran the 2026-09-07 repository-wide parity audit: `.ref/src` contains 33 active `.erl` modules and all 33 have documented rows; the checklist has no `partial` or `missing` module classifications, and the three `.erl.bak` backup files (`circuit`, `complex`, `scape_LLVMPhaseOrdering`) are not counted as active reference modules.
 - Added a done-check parity-doc gate that validates active `.ref/src` module counts, audit/checklist row coverage, duplicate-row absence, final status counts, audit summary-count text, and stale final-gap wording before running the slower test and benchmark checks.
 - Added reference-record descriptor helpers for `morphology.erl` current-scope `#sensor{}`/`#actuator{}` clauses, preserving reference names, canonical runtime IDs, scape kind/name, format, vector lengths, and parameters without changing existing Go runtime morphology lists.
@@ -543,8 +545,21 @@ Status keys:
 - Bridged `map2rec` sensor/actuator record conversions to the compact genome `IORecordSpec` shape with alias canonicalization, scape metadata extraction, format preservation, and parameter stringification.
 - Made generalized genotype fingerprints and fingerprint-based speciation sensitive to stored reference IO descriptor metadata, preventing genomes with identical canonical IO IDs but different Erlang record metadata from collapsing into one fingerprint bucket.
 
+## Current-scope parity declaration
+
+Current-scope DXNN2 parity is ready to declare when `./scripts/done_check.sh` passes from a clean working tree. That gate validates module-row coverage against `.ref/src`, final parity status counts, stale-gap wording, default and sqlite Go test suites, bounded benchmark runs across the core and richer scapes, required benchmark artifacts, and exportability.
+
+Included scope:
+- `polis` lifecycle over Go storage, population evolution, genotype/schema materialization, cortex/neuron/sensor/actuator execution, exoself tuning, substrate CPP/CEP runtime behavior, benchmark/data-extraction workflows, and the current scape set: `xor`, `regression-mimic`, `cart-pole-lite`, `pole2-balancing`, `dtm`, `flatland`, `gtsa`, `fx`, `epitopes`, and `llvm-phase-ordering`.
+
+Explicit exclusions:
+- `dxnn2_app.erl` OTP application boot is replaced by CLI/API lifecycle.
+- `visor.erl` visualization/UI drawing remains out of scope.
+- Exact Erlang process scheduling, mnesia/ETS ownership mechanics, GS canvas behavior, and reference TODO/stub helpers are not required for current-scope functional parity.
+- Reference delegate-only scapes absent from `.ref/src` and `mnist` morphology clauses are not active parity requirements for this phase.
+
 ## Highest-priority remaining gaps to reach strict parity
 
-1. Review release-readiness criteria for declaring full current-scope parity, including which non-goal/reference-TODO surfaces must remain explicitly excluded.
+1. Run `./scripts/done_check.sh` from a clean tree immediately before tagging or announcing full current-scope parity.
 2. Decide whether the parity-doc gate should remain shell-only in `done_check.sh` or move into a dedicated Go test for easier CI integration.
-3. Run the full done-check benchmark gate before tagging or announcing parity.
+3. Draft a release note that states the included scope and explicit exclusions above.

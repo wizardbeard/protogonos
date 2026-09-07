@@ -6,6 +6,7 @@ This audit is based on the local reference implementation at `.ref/src`.
 
 - Initial audit: 2026-02-27
 - Latest verification pass: 2026-09-07
+- Latest release-readiness review: 2026-09-07
 
 ## Verification source
 
@@ -356,6 +357,7 @@ Status legend:
 - 2026-09-04: made generalized genotype fingerprints and fingerprint-based speciation sensitive to stored reference IO descriptor metadata, preventing genomes with identical canonical IO IDs but different Erlang record metadata from collapsing into one fingerprint bucket.
 - 2026-09-07: ran the repository-wide parity audit against `.ref/src`: 33 active `.erl` modules are present and all 33 have documented rows, with no duplicate rows, no undocumented active modules, no `partial` rows, and no `missing` rows; the three `.erl.bak` backup files are documented as non-active reference files.
 - 2026-09-07: added a repeatable done-check parity-doc gate that validates active `.ref/src` module counts, audit/checklist module row coverage, duplicate-row absence, expected final status counts, summary-count text, and known stale final-gap wording.
+- 2026-09-07: reviewed release-readiness criteria for declaring full current-scope parity, limiting the declaration to the AGENTS core runtime/evolution/scapes/exoself/substrate/storage/benchmark/data-extraction scope and keeping OTP app boot, visor/UI drawing, exact Erlang scheduling, mnesia/ETS ownership mechanics, GS canvas behavior, absent delegate-only scapes, `mnist`, and upstream TODO/stub helpers as explicit exclusions.
 
 ## Summary
 
@@ -368,6 +370,8 @@ Core AGENTS responsibilities are represented across the audited module set. The 
 
 The 2026-09-07 verification pass found 33 active `.erl` modules in `.ref/src`, 33 documented audit rows, no undocumented active Erlang module rows, no duplicate module rows, no `partial` rows, and no `missing` rows. It also confirmed that 32 active modules use `-compile(export_all)`, so strict helper drift must continue to be guarded by targeted function-head audits and golden tests rather than explicit Erlang export lists alone.
 
+Full current-scope parity can be declared after `./scripts/done_check.sh` passes from a clean working tree. The declaration covers AGENTS.md core platform/evolution/agent/scapes/exoself/substrate/storage/benchmark/data-extraction behavior and excludes OTP app boot, visor/UI drawing, exact Erlang process scheduling, mnesia/ETS ownership mechanics, GS canvas behavior, absent delegate-only scapes, `mnist`, and upstream TODO/stub helper surfaces.
+
 ## Recommended next parity increments
 
-1. Review release-readiness criteria for declaring full current-scope parity, including which non-goal/reference-TODO surfaces must remain explicitly excluded.
+1. Run `./scripts/done_check.sh` from a clean tree immediately before tagging or announcing full current-scope parity.
