@@ -51,6 +51,7 @@ Status keys:
 ## Completed in latest iterations
 
 - Reviewed release-readiness criteria for full current-scope parity: the active target is the AGENTS core platform/evolution/agent/scapes/exoself/substrate surface, while OTP app boot, visor/UI drawing, exact Erlang process scheduling, and upstream TODO/stub helpers remain explicit exclusions.
+- Added the current-scope parity release note at `docs/release-current-scope-parity.md`, recording the clean-tree `./scripts/done_check.sh` pass, included scope, and explicit exclusions.
 - Ran the 2026-09-07 repository-wide parity audit: `.ref/src` contains 33 active `.erl` modules and all 33 have documented rows; the checklist has no `partial` or `missing` module classifications, and the three `.erl.bak` backup files (`circuit`, `complex`, `scape_LLVMPhaseOrdering`) are not counted as active reference modules.
 - Added a done-check parity-doc gate that validates active `.ref/src` module counts, audit/checklist row coverage, duplicate-row absence, final status counts, audit summary-count text, and stale final-gap wording before running the slower test and benchmark checks.
 - Added reference-record descriptor helpers for `morphology.erl` current-scope `#sensor{}`/`#actuator{}` clauses, preserving reference names, canonical runtime IDs, scape kind/name, format, vector lengths, and parameters without changing existing Go runtime morphology lists.
@@ -562,4 +563,4 @@ Explicit exclusions:
 
 1. Run `./scripts/done_check.sh` from a clean tree immediately before tagging or announcing full current-scope parity.
 2. Decide whether the parity-doc gate should remain shell-only in `done_check.sh` or move into a dedicated Go test for easier CI integration.
-3. Draft a release note that states the included scope and explicit exclusions above.
+3. If desired, tag a release after rerunning the clean-tree done-check gate.

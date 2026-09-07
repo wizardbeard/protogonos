@@ -358,6 +358,7 @@ Status legend:
 - 2026-09-07: ran the repository-wide parity audit against `.ref/src`: 33 active `.erl` modules are present and all 33 have documented rows, with no duplicate rows, no undocumented active modules, no `partial` rows, and no `missing` rows; the three `.erl.bak` backup files are documented as non-active reference files.
 - 2026-09-07: added a repeatable done-check parity-doc gate that validates active `.ref/src` module counts, audit/checklist module row coverage, duplicate-row absence, expected final status counts, summary-count text, and known stale final-gap wording.
 - 2026-09-07: reviewed release-readiness criteria for declaring full current-scope parity, limiting the declaration to the AGENTS core runtime/evolution/scapes/exoself/substrate/storage/benchmark/data-extraction scope and keeping OTP app boot, visor/UI drawing, exact Erlang scheduling, mnesia/ETS ownership mechanics, GS canvas behavior, absent delegate-only scapes, `mnist`, and upstream TODO/stub helpers as explicit exclusions.
+- 2026-09-07: added `docs/release-current-scope-parity.md` with the clean-tree done-check result, included parity scope, explicit exclusions, and pre-release rerun requirement.
 
 ## Summary
 
