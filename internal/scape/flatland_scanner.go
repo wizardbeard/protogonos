@@ -223,3 +223,30 @@ func FlatlandScannerColorValue(color string) float64 {
 		return FlatlandScannerColorVoid
 	}
 }
+
+func FlatlandScannerValueColor(value float64) string {
+	switch value {
+	case FlatlandScannerColorBlack:
+		return FlatlandColorBlack
+	case FlatlandScannerColorCyan:
+		return "cyan"
+	case FlatlandScannerColorGreen:
+		return FlatlandColorGreen
+	case FlatlandScannerColorYellow:
+		return "yellow"
+	case FlatlandScannerColorBlue:
+		return FlatlandColorBlue
+	case FlatlandScannerColorGrey:
+		return "grey"
+	case FlatlandScannerColorRed:
+		return FlatlandColorRed
+	case FlatlandScannerColorBrown:
+		return FlatlandColorBrown
+	default:
+		return FlatlandColorWhite
+	}
+}
+
+func FlatlandIsEven(value int) bool {
+	return value%2 == 0
+}

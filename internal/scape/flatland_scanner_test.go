@@ -82,6 +82,34 @@ func TestFlatlandScannerColorValueMirrorsReferenceMapping(t *testing.T) {
 	}
 }
 
+func TestFlatlandScannerValueColorMirrorsReferenceMapping(t *testing.T) {
+	cases := map[float64]string{
+		FlatlandScannerColorBlack:  FlatlandColorBlack,
+		FlatlandScannerColorCyan:   "cyan",
+		FlatlandScannerColorGreen:  FlatlandColorGreen,
+		FlatlandScannerColorYellow: "yellow",
+		FlatlandScannerColorBlue:   FlatlandColorBlue,
+		FlatlandScannerColorGrey:   "grey",
+		FlatlandScannerColorRed:    FlatlandColorRed,
+		FlatlandScannerColorBrown:  FlatlandColorBrown,
+		0.99:                       FlatlandColorWhite,
+	}
+	for value, want := range cases {
+		if got := FlatlandScannerValueColor(value); got != want {
+			t.Fatalf("value %f: expected %s, got %s", value, want, got)
+		}
+	}
+}
+
+func TestFlatlandIsEvenMirrorsReferenceHelper(t *testing.T) {
+	if !FlatlandIsEven(4) {
+		t.Fatal("expected 4 to be even")
+	}
+	if FlatlandIsEven(5) {
+		t.Fatal("expected 5 to be odd")
+	}
+}
+
 func TestFlatlandShortestDistanceMirrorsReferenceHelper(t *testing.T) {
 	operator := FlatlandAvatar{ID: "operator", Location: FlatlandPoint{X: 2, Y: 3}}
 	avatars := []FlatlandAvatar{
