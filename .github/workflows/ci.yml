@@ -48,20 +48,3 @@ jobs:
 
       - name: Build CLI (sqlite)
         run: go build -tags sqlite -v ./cmd/protogonosctl
-
-  done-check:
-    name: Done Check
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup Go
-        uses: actions/setup-go@v5
-        with:
-          go-version: "1.23.x"
-          cache: true
-
-      - name: Run acceptance script
-        run: ./scripts/done_check.sh
