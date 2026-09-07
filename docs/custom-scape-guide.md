@@ -315,7 +315,7 @@ protogonosctl benchmark \
 Export artifacts:
 
 ```bash
-protogonosctl export --store sqlite --db-path ./protogonos.db --latest
+protogonosctl export --latest
 ```
 
 ## Config File Example

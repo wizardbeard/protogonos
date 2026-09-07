@@ -549,6 +549,7 @@ Status keys:
 - Made generalized genotype fingerprints and fingerprint-based speciation sensitive to stored reference IO descriptor metadata, preventing genomes with identical canonical IO IDs but different Erlang record metadata from collapsing into one fingerprint bucket.
 - Added an executable custom-scape fixture (`internal/scape/custom_scape_example_test.go`) and linked it from the custom scape guide, giving downstream scape authors a live reference for goal definition, fixed input/output vectors, bounded fitness, and trace diagnostics.
 - Reran the full current-scope parity gate after the Flatland/custom-scape documentation and fixture updates; `./scripts/done_check.sh` passed with 33 active reference modules, 31 implemented rows, 0 partial rows, 0 missing rows, and 2 explicit out-of-scope rows.
+- Corrected Flatland and custom-scape guide export examples to use the current artifact-based CLI surface (`protogonosctl export --latest`) instead of unsupported store flags.
 
 ## Current-scope parity declaration
 

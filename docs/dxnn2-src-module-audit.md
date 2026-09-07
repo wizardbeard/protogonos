@@ -363,6 +363,7 @@ Status legend:
 - 2026-09-07: added `docs/custom-scape-guide.md` documenting the package touchpoints and minimum implementation path for adding a goal-driven scape with explicit sensors, actuators, fitness, API/CLI wiring, and tests.
 - 2026-09-07: added `internal/scape/custom_scape_example_test.go` as an executable custom-scape fixture and linked it from the guide, giving new scape work a live reference for fixed IO vectors, output validation, bounded goal scoring, and trace diagnostics.
 - 2026-09-07: reran `./scripts/done_check.sh` after the Flatland/custom-scape documentation and fixture updates; the full parity gate passed with 33 active reference modules, 31 implemented rows, 0 partial rows, 0 missing rows, and 2 explicit out-of-scope rows.
+- 2026-09-07: corrected Flatland and custom-scape guide export examples to use the current artifact-based CLI surface (`protogonosctl export --latest`) instead of unsupported store flags.
 
 ## Summary
 

@@ -53,7 +53,7 @@ protogonosctl benchmark \
 Export the latest run:
 
 ```bash
-protogonosctl export --store sqlite --db-path ./protogonos.db --latest
+protogonosctl export --latest
 ```
 
 ## Useful Flatland Options
@@ -344,7 +344,7 @@ protogonosctl run \
 Inspect generated artifacts:
 
 ```bash
-protogonosctl export --store sqlite --db-path ./protogonos.db --latest
+protogonosctl export --latest
 ```
 
 Run the full parity gate:
