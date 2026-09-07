@@ -552,6 +552,7 @@ Status keys:
 - Corrected Flatland and custom-scape guide export examples to use the current artifact-based CLI surface (`protogonosctl export --latest`) instead of unsupported store flags.
 - Removed the heavy `Done Check` GitHub Actions job while keeping `./scripts/done_check.sh` available as a local release/parity gate; CI now keeps normal Go formatting, test, and build coverage only.
 - Added a terse root `README.md` with dependency, build, test, run, benchmark, export, and internal documentation links for first-time users.
+- Added `docs/execution-model.md` to document the Go replacement for Erlang actor primitives: bounded worker pools, goroutine-backed actors, typed mailboxes, process-state wrappers, and direct fast paths.
 
 ## Current-scope parity declaration
 

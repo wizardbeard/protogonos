@@ -103,6 +103,7 @@ Artifacts are written under `benchmarks/` and `exports/`.
 
 - [Flatland implementation](docs/flatland-implementation.md)
 - [Custom scape guide](docs/custom-scape-guide.md)
+- [Execution model](docs/execution-model.md)
 - [Done check](docs/done-check.md)
 - [API stability](docs/api-stability.md)
 - [DXNN2 module mapping](docs/dxnn2-module-mapping.md)
