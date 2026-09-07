@@ -35,14 +35,8 @@ func TestFlatlandCollisionDetectionDestroyOmitsTargetAndCountsKill(t *testing.T)
 
 func TestFlatlandCollisionDetectionPlantRespawnAccumulatesEnergyAndKill(t *testing.T) {
 	operator := FlatlandAvatar{Type: FlatlandObjectPrey, ID: "prey", Location: FlatlandPoint{}, Radius: 3, Energy: 9000}
-	plant := FlatlandAvatar{
-		Type:     FlatlandObjectPlant,
-		ID:       "plant",
-		Location: FlatlandPoint{X: 1},
-		Radius:   3,
-		Energy:   500,
-		State:    FlatlandStateRespawn,
-	}
+	energy := 500.0
+	plant := FlatlandCreatePlantAvatar("plant", FlatlandPoint{X: 1}, &energy, FlatlandStateRespawn, FlatlandMetabolicStatic)
 
 	result := FlatlandCollisionDetection(operator, []FlatlandAvatar{operator, plant})
 	got, ok := findFlatlandAvatar(result.Avatars, "prey")
@@ -58,6 +52,8 @@ func TestFlatlandCollisionDetectionPlantRespawnAccumulatesEnergyAndKill(t *testi
 	}
 	assertClose(t, "operator energy", got.Energy, 9500)
 	assertClose(t, "respawned plant energy", respawned.Energy, 500)
+	assertClose(t, "respawned plant x", respawned.Location.X, 1)
+	assertClose(t, "respawned plant y", respawned.Location.Y, 1)
 	if respawned.State != FlatlandStateRespawn || respawned.Objects[0].Color != FlatlandColorGreen {
 		t.Fatalf("unexpected respawned plant: %+v", respawned)
 	}
@@ -131,6 +127,50 @@ func TestFlatlandCollisionDetectionSaturatesOperatorEnergy(t *testing.T) {
 		t.Fatalf("operator missing from avatar list: %+v", result.Avatars)
 	}
 	assertClose(t, "operator energy", got.Energy, FlatlandMaxEnergy)
+}
+
+func TestFlatlandRespawnAvatarWithCandidatesSkipsObstacleCollisions(t *testing.T) {
+	plant := FlatlandCreatePlantAvatar("plant", FlatlandPoint{X: 50, Y: 50}, nil, FlatlandStateRespawn, FlatlandMetabolicStatic)
+	rock := FlatlandAvatar{
+		Type:     FlatlandObjectRock,
+		ID:       "rock",
+		Location: FlatlandPoint{X: 10, Y: 10},
+		Radius:   5,
+	}
+
+	respawned := FlatlandRespawnAvatarWithCandidates([]FlatlandAvatar{rock}, plant, []FlatlandPoint{
+		{X: 10, Y: 10},
+		{X: 20, Y: 10},
+	})
+	assertClose(t, "respawned x", respawned.Location.X, 20)
+	assertClose(t, "respawned y", respawned.Location.Y, 10)
+	assertClose(t, "respawned energy", respawned.Energy, 500)
+	if respawned.Objects[0].Color != FlatlandColorGreen {
+		t.Fatalf("unexpected plant color: %+v", respawned.Objects[0])
+	}
+}
+
+func TestFlatlandReturnValidOnlyFiltersReferenceObstacleTypes(t *testing.T) {
+	prey := FlatlandAvatar{
+		Type:     FlatlandObjectPrey,
+		ID:       "prey",
+		Location: FlatlandPoint{X: 10, Y: 10},
+		Radius:   50,
+	}
+	firePit := FlatlandAvatar{
+		Type:     FlatlandObjectFirePit,
+		ID:       "fire",
+		Location: FlatlandPoint{X: 20, Y: 20},
+		Radius:   5,
+	}
+
+	loc := FlatlandReturnValidFromCandidates([]FlatlandAvatar{prey, firePit}, []FlatlandPoint{
+		{X: 10, Y: 10},
+		{X: 20, Y: 20},
+		{X: 30, Y: 20},
+	})
+	assertClose(t, "valid x", loc.X, 10)
+	assertClose(t, "valid y", loc.Y, 10)
 }
 
 func findFlatlandAvatar(avatars []FlatlandAvatar, id string) (FlatlandAvatar, bool) {
