@@ -3,10 +3,15 @@ package scape
 import "math"
 
 const (
-	FlatlandObjectRock    = "rock"
-	FlatlandObjectWall    = "wall"
-	FlatlandObjectFirePit = "fire_pit"
-	FlatlandObjectBeacon  = "beacon"
+	FlatlandObjectPrey      = "prey"
+	FlatlandObjectPredator  = "predator"
+	FlatlandObjectAutomaton = "automaton"
+	FlatlandObjectPlant     = "plant"
+	FlatlandObjectPoison    = "poison"
+	FlatlandObjectRock      = "rock"
+	FlatlandObjectWall      = "wall"
+	FlatlandObjectFirePit   = "fire_pit"
+	FlatlandObjectBeacon    = "beacon"
 )
 
 const (

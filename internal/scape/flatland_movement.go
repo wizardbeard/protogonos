@@ -15,16 +15,26 @@ type FlatlandObject struct {
 	Color     string
 	Pivot     FlatlandPoint
 	Coords    []FlatlandPoint
+	Radius    float64
 	Parameter string
 }
 
 type FlatlandAvatar struct {
 	Type      string
+	ID        string
+	Specie    string
 	Location  FlatlandPoint
 	Direction FlatlandPoint
 	Radius    float64
+	Mass      float64
 	Energy    float64
 	Age       int
+	Food      float64
+	Health    float64
+	State     string
+	Actuators string
+	Sensors   string
+	Stats     int
 	Objects   []FlatlandObject
 }
 
