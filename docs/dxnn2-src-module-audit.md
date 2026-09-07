@@ -360,6 +360,7 @@ Status legend:
 - 2026-09-07: reviewed release-readiness criteria for declaring full current-scope parity, limiting the declaration to the AGENTS core runtime/evolution/scapes/exoself/substrate/storage/benchmark/data-extraction scope and keeping OTP app boot, visor/UI drawing, exact Erlang scheduling, mnesia/ETS ownership mechanics, GS canvas behavior, absent delegate-only scapes, `mnist`, and upstream TODO/stub helpers as explicit exclusions.
 - 2026-09-07: added `docs/release-current-scope-parity.md` with the clean-tree done-check result, included parity scope, explicit exclusions, and pre-release rerun requirement.
 - 2026-09-07: added `docs/flatland-implementation.md` documenting the Go Flatland implementation, CLI examples, sensor/actuator surfaces, fitness signals, reference/current behavior around goals, and custom-scape design guidance.
+- 2026-09-07: added `docs/custom-scape-guide.md` documenting the package touchpoints and minimum implementation path for adding a goal-driven scape with explicit sensors, actuators, fitness, API/CLI wiring, and tests.
 
 ## Summary
 
