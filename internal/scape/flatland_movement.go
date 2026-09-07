@@ -22,6 +22,7 @@ type FlatlandAvatar struct {
 	Type      string
 	Location  FlatlandPoint
 	Direction FlatlandPoint
+	Radius    float64
 	Energy    float64
 	Age       int
 	Objects   []FlatlandObject
