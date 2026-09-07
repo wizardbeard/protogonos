@@ -28,6 +28,7 @@ type FlatlandAvatar struct {
 	Radius             float64
 	Mass               float64
 	Energy             float64
+	Kills              int
 	Age                int
 	Food               float64
 	Health             float64
