@@ -12,6 +12,8 @@ The final pre-declaration gate passed from a clean working tree:
 ./scripts/done_check.sh
 ```
 
+The gate was rerun after the Flatland/custom-scape documentation updates and the executable custom-scape fixture were added. It passed again on 2026-09-07.
+
 ## Gate Result
 
 - Active reference modules in `.ref/src`: 33
@@ -25,6 +27,23 @@ The final pre-declaration gate passed from a clean working tree:
 - SQLite-tagged Go test suite: passed
 - Core benchmark/export checks: passed
 - Richer scape smoke benchmark/export checks: passed
+
+## Latest Verification
+
+Command:
+
+```bash
+./scripts/done_check.sh
+```
+
+Result:
+
+- Parity docs summary: `active_ref_modules=33 implemented=31 partial=0 missing=0 out_of_scope=2`
+- Default Go test suite: passed
+- SQLite-tagged Go test suite: passed
+- Benchmark/export checks: passed for `xor`, `regression-mimic`, and `cart-pole-lite`
+- Richer scape benchmark/export checks: passed for `flatland`, `gtsa`, `fx`, `epitopes`, `dtm`, `pole2-balancing`, and `llvm-phase-ordering`
+- Final gate result: `PASS`
 
 ## Included Scope
 
