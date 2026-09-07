@@ -50,6 +50,7 @@ Status keys:
 
 ## Completed in latest iterations
 
+- Added `docs/flatland-implementation.md` with a simplified technical overview of the Go Flatland implementation, CLI usage examples, fitness/goal semantics, and guidance for creating custom scapes.
 - Reviewed release-readiness criteria for full current-scope parity: the active target is the AGENTS core platform/evolution/agent/scapes/exoself/substrate surface, while OTP app boot, visor/UI drawing, exact Erlang process scheduling, and upstream TODO/stub helpers remain explicit exclusions.
 - Added the current-scope parity release note at `docs/release-current-scope-parity.md`, recording the clean-tree `./scripts/done_check.sh` pass, included scope, and explicit exclusions.
 - Ran the 2026-09-07 repository-wide parity audit: `.ref/src` contains 33 active `.erl` modules and all 33 have documented rows; the checklist has no `partial` or `missing` module classifications, and the three `.erl.bak` backup files (`circuit`, `complex`, `scape_LLVMPhaseOrdering`) are not counted as active reference modules.

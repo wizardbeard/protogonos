@@ -359,6 +359,7 @@ Status legend:
 - 2026-09-07: added a repeatable done-check parity-doc gate that validates active `.ref/src` module counts, audit/checklist module row coverage, duplicate-row absence, expected final status counts, summary-count text, and known stale final-gap wording.
 - 2026-09-07: reviewed release-readiness criteria for declaring full current-scope parity, limiting the declaration to the AGENTS core runtime/evolution/scapes/exoself/substrate/storage/benchmark/data-extraction scope and keeping OTP app boot, visor/UI drawing, exact Erlang scheduling, mnesia/ETS ownership mechanics, GS canvas behavior, absent delegate-only scapes, `mnist`, and upstream TODO/stub helpers as explicit exclusions.
 - 2026-09-07: added `docs/release-current-scope-parity.md` with the clean-tree done-check result, included parity scope, explicit exclusions, and pre-release rerun requirement.
+- 2026-09-07: added `docs/flatland-implementation.md` documenting the Go Flatland implementation, CLI examples, sensor/actuator surfaces, fitness signals, reference/current behavior around goals, and custom-scape design guidance.
 
 ## Summary
 
