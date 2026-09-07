@@ -14,18 +14,19 @@ const (
 	FlatlandScannerColorVoid   = 1
 )
 
-type flatlandRayHit struct {
-	distance float64
-	color    string
-	energy   float64
+type FlatlandRayHit struct {
+	Distance   float64
+	Color      string
+	ColorValue float64
+	Energy     float64
 }
 
 func FlatlandDistanceScanner(density int, spread float64, loc, direction FlatlandPoint, avatars []FlatlandAvatar) []float64 {
 	rays := FlatlandCreateUnitRays(direction, density, spread)
 	out := make([]float64, 0, len(rays))
 	for _, ray := range rays {
-		hit := flatlandShortestIntersection(loc, ray, avatars)
-		out = append(out, flatlandScannerDistance(hit.distance))
+		hit := FlatlandShortestIntrLine(loc, ray, avatars)
+		out = append(out, hit.Distance)
 	}
 	return out
 }
@@ -34,8 +35,8 @@ func FlatlandColorScanner(density int, spread float64, loc, direction FlatlandPo
 	rays := FlatlandCreateUnitRays(direction, density, spread)
 	out := make([]float64, 0, len(rays))
 	for _, ray := range rays {
-		hit := flatlandShortestIntersection(loc, ray, avatars)
-		out = append(out, flatlandScannerColor(hit.distance, hit.color))
+		hit := FlatlandShortestIntrLine(loc, ray, avatars)
+		out = append(out, hit.ColorValue)
 	}
 	return out
 }
@@ -44,12 +45,12 @@ func FlatlandEnergyScaner(density int, spread float64, loc, direction FlatlandPo
 	rays := FlatlandCreateUnitRays(direction, density, spread)
 	out := make([]float64, 0, len(rays))
 	for _, ray := range rays {
-		hit := flatlandShortestIntersection(loc, ray, avatars)
-		if hit.distance == math.Inf(1) || hit.distance == 0 {
+		hit := FlatlandShortestIntrLine(loc, ray, avatars)
+		if hit.Distance == -1 {
 			out = append(out, 0)
 			continue
 		}
-		out = append(out, hit.energy/100)
+		out = append(out, hit.Energy/100)
 	}
 	return out
 }
@@ -75,22 +76,56 @@ func FlatlandCreateUnitRays(direction FlatlandPoint, density int, spread float64
 	return rays
 }
 
-func flatlandShortestIntersection(loc, ray FlatlandPoint, avatars []FlatlandAvatar) flatlandRayHit {
-	hit := flatlandRayHit{distance: math.Inf(1), color: "void"}
+func FlatlandShortestDistance(operator FlatlandAvatar, avatars []FlatlandAvatar) float64 {
+	return FlatlandShortestDistanceFrom(operator.Location, avatars)
+}
+
+func FlatlandShortestDistanceFrom(loc FlatlandPoint, avatars []FlatlandAvatar) float64 {
+	shortest := math.Inf(1)
 	for _, avatar := range avatars {
-		next := flatlandAvatarIntersection(loc, ray, avatar, hit)
-		if next.distance != hit.distance {
-			next.energy = avatar.Energy
+		distance := math.Hypot(loc.X-avatar.Location.X, loc.Y-avatar.Location.Y)
+		if distance < shortest {
+			shortest = distance
+		}
+	}
+	if shortest == math.Inf(1) {
+		return -1
+	}
+	return shortest
+}
+
+func FlatlandShortestIntrLine(loc, ray FlatlandPoint, avatars []FlatlandAvatar) FlatlandRayHit {
+	hit := flatlandShortestIntersectionRaw(loc, ray, avatars)
+	rawDistance := hit.Distance
+	hit.Distance = flatlandScannerDistance(rawDistance)
+	hit.ColorValue = flatlandScannerColor(rawDistance, hit.Color)
+	if hit.Distance == -1 {
+		hit.Energy = 0
+	}
+	return hit
+}
+
+func FlatlandIntr(loc, ray FlatlandPoint, objects []FlatlandObject, minDistance float64, minColor string) FlatlandRayHit {
+	hit := FlatlandRayHit{Distance: minDistance, Color: minColor, ColorValue: FlatlandScannerColorValue(minColor)}
+	return flatlandObjectsIntersection(loc, ray, objects, hit)
+}
+
+func flatlandShortestIntersectionRaw(loc, ray FlatlandPoint, avatars []FlatlandAvatar) FlatlandRayHit {
+	hit := FlatlandRayHit{Distance: math.Inf(1), Color: "void", ColorValue: FlatlandScannerColorVoid}
+	for _, avatar := range avatars {
+		next := flatlandObjectsIntersection(loc, ray, avatar.Objects, hit)
+		if next.Distance != hit.Distance {
+			next.Energy = avatar.Energy
 		} else {
-			next.energy = hit.energy
+			next.Energy = hit.Energy
 		}
 		hit = next
 	}
 	return hit
 }
 
-func flatlandAvatarIntersection(loc, ray FlatlandPoint, avatar FlatlandAvatar, hit flatlandRayHit) flatlandRayHit {
-	for _, object := range avatar.Objects {
+func flatlandObjectsIntersection(loc, ray FlatlandPoint, objects []FlatlandObject, hit FlatlandRayHit) FlatlandRayHit {
+	for _, object := range objects {
 		switch object.Name {
 		case "circle":
 			hit = flatlandCircleIntersection(loc, ray, object, hit)
@@ -101,7 +136,7 @@ func flatlandAvatarIntersection(loc, ray FlatlandPoint, avatar FlatlandAvatar, h
 	return hit
 }
 
-func flatlandCircleIntersection(loc, ray FlatlandPoint, object FlatlandObject, hit flatlandRayHit) flatlandRayHit {
+func flatlandCircleIntersection(loc, ray FlatlandPoint, object FlatlandObject, hit FlatlandRayHit) FlatlandRayHit {
 	if len(object.Coords) == 0 {
 		return hit
 	}
@@ -120,14 +155,15 @@ func flatlandCircleIntersection(loc, ray FlatlandPoint, object FlatlandObject, h
 		return hit
 	}
 	result := math.Min(i1, i2)
-	if result < hit.distance {
-		hit.distance = result
-		hit.color = object.Color
+	if result < hit.Distance {
+		hit.Distance = result
+		hit.Color = object.Color
+		hit.ColorValue = FlatlandScannerColorValue(object.Color)
 	}
 	return hit
 }
 
-func flatlandLineIntersection(loc, ray FlatlandPoint, object FlatlandObject, hit flatlandRayHit) flatlandRayHit {
+func flatlandLineIntersection(loc, ray FlatlandPoint, object FlatlandObject, hit FlatlandRayHit) FlatlandRayHit {
 	if len(object.Coords) < 2 {
 		return hit
 	}
@@ -143,9 +179,10 @@ func flatlandLineIntersection(loc, ray FlatlandPoint, object FlatlandObject, hit
 	}
 	rayLength := (perpXD1*(a.X-loc.X) + perpYD1*(a.Y-loc.Y)) / denom
 	t := (perpXD0*(a.X-loc.X) + perpYD0*(a.Y-loc.Y)) / denom
-	if rayLength >= 0 && t >= 0 && t <= 1 && rayLength < hit.distance {
-		hit.distance = rayLength
-		hit.color = object.Color
+	if rayLength >= 0 && t >= 0 && t <= 1 && rayLength < hit.Distance {
+		hit.Distance = rayLength
+		hit.Color = object.Color
+		hit.ColorValue = FlatlandScannerColorValue(object.Color)
 	}
 	return hit
 }

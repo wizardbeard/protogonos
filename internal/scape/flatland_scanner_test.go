@@ -81,3 +81,47 @@ func TestFlatlandScannerColorValueMirrorsReferenceMapping(t *testing.T) {
 		assertClose(t, color, FlatlandScannerColorValue(color), want)
 	}
 }
+
+func TestFlatlandShortestDistanceMirrorsReferenceHelper(t *testing.T) {
+	operator := FlatlandAvatar{ID: "operator", Location: FlatlandPoint{X: 2, Y: 3}}
+	avatars := []FlatlandAvatar{
+		{ID: "far", Location: FlatlandPoint{X: 12, Y: 3}},
+		{ID: "near", Location: FlatlandPoint{X: 5, Y: 7}},
+	}
+
+	assertClose(t, "shortest distance", FlatlandShortestDistance(operator, avatars), 5)
+	assertClose(t, "empty shortest distance", FlatlandShortestDistance(operator, nil), -1)
+}
+
+func TestFlatlandShortestIntrLineReturnsFormattedReferenceHit(t *testing.T) {
+	plant := FlatlandCreatePlantAvatar("plant", FlatlandPoint{X: 10}, nil, FlatlandStateNoRespawn, FlatlandMetabolicStatic)
+	poison := FlatlandCreatePoisonAvatar("poison", FlatlandPoint{X: 5}, nil, FlatlandStateNoRespawn, FlatlandMetabolicStatic)
+
+	hit := FlatlandShortestIntrLine(FlatlandPoint{}, FlatlandPoint{X: 1}, []FlatlandAvatar{plant, poison})
+	assertClose(t, "distance", hit.Distance, 2)
+	assertClose(t, "color value", hit.ColorValue, FlatlandScannerColorBlack)
+	assertClose(t, "energy", hit.Energy, -2000)
+	if hit.Color != FlatlandColorBlack {
+		t.Fatalf("expected black hit color, got %+v", hit)
+	}
+
+	miss := FlatlandShortestIntrLine(FlatlandPoint{}, FlatlandPoint{X: -1}, []FlatlandAvatar{plant, poison})
+	assertClose(t, "miss distance", miss.Distance, -1)
+	assertClose(t, "miss color", miss.ColorValue, FlatlandScannerColorVoid)
+	assertClose(t, "miss energy", miss.Energy, 0)
+}
+
+func TestFlatlandIntrReturnsRawObjectIntersection(t *testing.T) {
+	object := flatlandCircle(FlatlandColorRed, FlatlandPoint{X: 10}, 3)
+
+	hit := FlatlandIntr(FlatlandPoint{}, FlatlandPoint{X: 1}, []FlatlandObject{object}, math.Inf(1), "void")
+	assertClose(t, "raw distance", hit.Distance, 7)
+	assertClose(t, "raw color value", hit.ColorValue, FlatlandScannerColorRed)
+	if hit.Color != FlatlandColorRed {
+		t.Fatalf("expected red raw hit color, got %+v", hit)
+	}
+
+	blocked := FlatlandIntr(FlatlandPoint{}, FlatlandPoint{X: 1}, []FlatlandObject{object}, 5, FlatlandColorBrown)
+	assertClose(t, "blocked min distance", blocked.Distance, 5)
+	assertClose(t, "blocked color value", blocked.ColorValue, FlatlandScannerColorBrown)
+}
