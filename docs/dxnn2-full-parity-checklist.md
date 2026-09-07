@@ -547,6 +547,7 @@ Status keys:
 - Added direct export/replay artifact coverage for stored reference IO descriptor metadata in top-genome and trace-acc champion genome payloads, confirming run artifacts and exported directories preserve `reference_sensors` / `reference_actuators`.
 - Bridged `map2rec` sensor/actuator record conversions to the compact genome `IORecordSpec` shape with alias canonicalization, scape metadata extraction, format preservation, and parameter stringification.
 - Made generalized genotype fingerprints and fingerprint-based speciation sensitive to stored reference IO descriptor metadata, preventing genomes with identical canonical IO IDs but different Erlang record metadata from collapsing into one fingerprint bucket.
+- Added an executable custom-scape fixture (`internal/scape/custom_scape_example_test.go`) and linked it from the custom scape guide, giving downstream scape authors a live reference for goal definition, fixed input/output vectors, bounded fitness, and trace diagnostics.
 
 ## Current-scope parity declaration
 

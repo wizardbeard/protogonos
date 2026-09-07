@@ -53,6 +53,20 @@ type ModeAwareScape interface {
 }
 ```
 
+## Live Test Fixture
+
+A small executable reference lives in `internal/scape/custom_scape_example_test.go`.
+
+It is intentionally test-only. It shows the minimum shape for a custom scape without adding a new built-in CLI scape:
+
+- `exampleTargetNavScape.Name` gives the scape a stable ID.
+- `exampleTargetNavScape.Evaluate` checks for `StepAgent`.
+- The input vector is fixed: distance to target and normalized step index.
+- The output vector is fixed: one movement value.
+- The output is clamped before it changes state.
+- The fitness function rewards progress, fast completion, and goal completion.
+- The trace exposes the score inputs: steps, position, distance, reached goal, and fitness.
+
 ## Step 1: Define The Goal
 
 Write the goal first.
@@ -333,6 +347,7 @@ Before treating a custom scape as stable:
 
 - Run `go test ./...`.
 - Run `go test -tags sqlite ./...`.
+- Read `internal/scape/custom_scape_example_test.go` for a compact live example.
 - Add at least one direct scape unit test.
 - Add at least one morphology compatibility test.
 - Add at least one seed construction width test.
