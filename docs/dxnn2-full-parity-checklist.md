@@ -551,6 +551,7 @@ Status keys:
 - Reran the full current-scope parity gate after the Flatland/custom-scape documentation and fixture updates; `./scripts/done_check.sh` passed with 33 active reference modules, 31 implemented rows, 0 partial rows, 0 missing rows, and 2 explicit out-of-scope rows.
 - Corrected Flatland and custom-scape guide export examples to use the current artifact-based CLI surface (`protogonosctl export --latest`) instead of unsupported store flags.
 - Removed the heavy `Done Check` GitHub Actions job while keeping `./scripts/done_check.sh` available as a local release/parity gate; CI now keeps normal Go formatting, test, and build coverage only.
+- Added a terse root `README.md` with dependency, build, test, run, benchmark, export, and internal documentation links for first-time users.
 
 ## Current-scope parity declaration
 
