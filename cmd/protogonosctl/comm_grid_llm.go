@@ -877,7 +877,73 @@ func writeCommGridLLMArtifact(baseDir string, artifact commGridLLMArtifact) (str
 	if err := os.WriteFile(path, append(data, '\n'), 0o644); err != nil {
 		return "", err
 	}
+	transcriptPath := filepath.Join(runDir, "comm_grid_llm_transcript.md")
+	transcript := renderCommGridLLMTranscript(artifact)
+	if err := os.WriteFile(transcriptPath, []byte(transcript), 0o644); err != nil {
+		return "", err
+	}
 	return filepath.Clean(runDir), nil
+}
+
+func renderCommGridLLMTranscript(artifact commGridLLMArtifact) string {
+	var b strings.Builder
+	fmt.Fprintf(&b, "# Comm Grid LLM Transcript\n\n")
+	fmt.Fprintf(&b, "- run_id: `%s`\n", artifact.RunID)
+	fmt.Fprintf(&b, "- provider: `%s`\n", artifact.Provider)
+	fmt.Fprintf(&b, "- plan: `%s`\n", artifact.Plan)
+	fmt.Fprintf(&b, "- completed: `%t`\n", artifact.Completed)
+	fmt.Fprintf(&b, "- fitness: `%.6f`\n", artifact.Fitness)
+	fmt.Fprintf(&b, "- replay: `protogonosctl comm-grid-llm --replay-run-id %s`\n\n", artifact.RunID)
+
+	task := normalizeCommGridLLMTask(artifact.Task)
+	fmt.Fprintf(&b, "## Task\n\n")
+	fmt.Fprintf(&b, "- grid: `%dx%d`\n", task.Width, task.Height)
+	fmt.Fprintf(&b, "- key: `(%d,%d)`\n", task.Key.X, task.Key.Y)
+	fmt.Fprintf(&b, "- goal: `(%d,%d)`\n", task.Goal.X, task.Goal.Y)
+	fmt.Fprintf(&b, "- agents: `%s`\n", commGridLLMAgentSummary(task.Agents))
+	fmt.Fprintf(&b, "- turn_order: `%s`\n", strings.Join(task.TurnOrder, ","))
+	fmt.Fprintf(&b, "- message_limit: `%d`\n\n", task.MessageLimit)
+
+	for _, step := range artifact.Steps {
+		renderCommGridLLMTranscriptStep(&b, step)
+	}
+
+	fmt.Fprintf(&b, "## Final Trace\n\n")
+	fmt.Fprintf(&b, "```text\n%v\n```\n", artifact.Trace)
+	return b.String()
+}
+
+func renderCommGridLLMTranscriptStep(b *strings.Builder, step commGridLLMArtifactStep) {
+	fmt.Fprintf(b, "## Step %d: %s\n\n", step.Step, step.Result.ActorID)
+	fmt.Fprintf(b, "- action: `%s`\n", step.Result.Action)
+	fmt.Fprintf(b, "- invalid: `%t`\n", step.Result.InvalidAction)
+	fmt.Fprintf(b, "- done: `%t`\n", step.Result.Done)
+	fmt.Fprintf(b, "- fitness: `%.6f`\n", step.Result.Fitness)
+	if step.ErrorKind != "" {
+		fmt.Fprintf(b, "- error_kind: `%s`\n", step.ErrorKind)
+		fmt.Fprintf(b, "- error: `%s`\n", step.Error)
+	}
+	fmt.Fprintf(b, "- message: `%s`\n", step.Result.Message)
+	fmt.Fprintf(b, "- to: `%s`\n\n", step.Result.To)
+
+	fmt.Fprintf(b, "### System Prompt\n\n")
+	fmt.Fprintf(b, "```text\n%s\n```\n\n", step.Request.SystemPrompt)
+	fmt.Fprintf(b, "### User Prompt\n\n")
+	userPrompt := ""
+	if len(step.Request.Messages) > 0 {
+		userPrompt = step.Request.Messages[len(step.Request.Messages)-1].Content
+	}
+	fmt.Fprintf(b, "```text\n%s\n```\n\n", userPrompt)
+	fmt.Fprintf(b, "### Response Payload\n\n")
+	fmt.Fprintf(b, "```json\n%s\n```\n\n", step.Payload)
+	fmt.Fprintf(b, "### Parsed Action\n\n")
+	fmt.Fprintf(b, "```text\nagent=%s action=%s message=%q to=%q tokens=%d\n```\n\n",
+		step.Parsed.AgentID,
+		step.Parsed.Action,
+		step.Parsed.Message,
+		step.Parsed.To,
+		step.Parsed.Tokens,
+	)
 }
 
 func readCommGridLLMArtifact(baseDir, runID string) (commGridLLMArtifact, error) {

@@ -440,6 +440,8 @@ protogonosctl comm-grid-llm \
   --plan solve
 ```
 
+It also writes `benchmarks/<run-id>/comm_grid_llm_transcript.md` for quick inspection.
+
 Disable artifact writes for quick console checks:
 
 ```bash
@@ -529,6 +531,16 @@ The artifact file stores:
 - token counts,
 - final fitness and trace.
 
+The transcript file stores:
+
+- replay command,
+- task summary,
+- each actor prompt,
+- provider response payload,
+- parsed action,
+- step fitness,
+- final trace.
+
 ## First Implementation Slice
 
 A small first slice should avoid provider lock-in:
@@ -553,6 +565,7 @@ A small first slice should avoid provider lock-in:
 - add configurable `comm-grid-llm` task geometry, key, goal, agent ID, agent start, and message limit, persisted in artifacts and reused on replay,
 - add multi-agent `comm-grid-llm` fixture runs with fixed sequential turns, shared message history, per-step actor IDs, artifact persistence, and replay reuse,
 - add per-agent role and system-prompt controls for `comm-grid-llm`, persisted in artifacts and reused on replay,
+- write `comm_grid_llm_transcript.md` beside the JSON artifact for quick provider-turn inspection,
 - add tests for deterministic replay, invalid output handling, timeout handling, and token-cost fitness.
 
 This gives the system a useful LLM integration path without making evolution depend on unbounded free-form text.

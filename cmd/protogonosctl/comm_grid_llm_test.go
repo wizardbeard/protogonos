@@ -227,6 +227,26 @@ func TestCommGridLLMCommandWritesArtifacts(t *testing.T) {
 	if tokens, ok := first.Result.ProviderTrace["tokens"].(float64); !ok || tokens != 8 {
 		t.Fatalf("expected provider token trace, got %+v", first.Result.ProviderTrace)
 	}
+
+	transcriptPath := filepath.Join(workdir, "benchmarks", "fixture-artifact-run", "comm_grid_llm_transcript.md")
+	transcript, err := os.ReadFile(transcriptPath)
+	if err != nil {
+		t.Fatalf("read transcript: %v", err)
+	}
+	transcriptText := string(transcript)
+	for _, want := range []string{
+		"# Comm Grid LLM Transcript",
+		"- replay: `protogonosctl comm-grid-llm --replay-run-id fixture-artifact-run`",
+		"## Step 1: agent-1",
+		"### System Prompt",
+		"### Response Payload",
+		"agent=agent-1 action=east",
+		"## Final Trace",
+	} {
+		if !strings.Contains(transcriptText, want) {
+			t.Fatalf("expected transcript to contain %q, got %s", want, transcriptText)
+		}
+	}
 }
 
 func TestCommGridLLMCommandWritesCustomTaskArtifactAndReplays(t *testing.T) {
@@ -402,6 +422,15 @@ func TestCommGridLLMCommandWritesAgentRolesAndPrompts(t *testing.T) {
 	}
 	if artifact.Steps[1].Request.SystemPrompt != "Return JSON only. Wait unless asked." {
 		t.Fatalf("expected explicit prompt for agent-b, got %q", artifact.Steps[1].Request.SystemPrompt)
+	}
+	transcriptPath := filepath.Join(workdir, "benchmarks", "role-prompt-run", "comm_grid_llm_transcript.md")
+	transcript, err := os.ReadFile(transcriptPath)
+	if err != nil {
+		t.Fatalf("read role transcript: %v", err)
+	}
+	transcriptText := string(transcript)
+	if !strings.Contains(transcriptText, "Return JSON only.\nRole: carrier") || !strings.Contains(transcriptText, "Return JSON only. Wait unless asked.") {
+		t.Fatalf("expected transcript prompts, got %s", transcriptText)
 	}
 
 	out, err := captureStdoutForCommGridLLM(func() error {
