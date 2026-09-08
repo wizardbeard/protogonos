@@ -378,6 +378,7 @@ Status legend:
 - 2026-09-07: added explicit OpenAI-compatible provider flags to `protogonosctl comm-grid-llm` (`--provider openai-compatible`, `--base-url`, `--model`, `--api-key-env`, `--json-mode`, `--tools`) with fake-server test coverage and fixture mode as the default.
 - 2026-09-07: added `comm-grid-llm` artifact capture under `benchmarks/<run-id>/comm_grid_llm.json`, storing provider mode, prompt request, provider response, parsed action, message history, token counts, final fitness, and final trace.
 - 2026-09-07: added `comm-grid-llm` artifact replay via `--replay-run-id`, feeding stored provider responses through the fixture provider and reporting final-trace match status.
+- 2026-09-07: added bounded `comm-grid-llm` failure-step handling for malformed output, provider errors, and provider timeouts, with artifact and replay coverage.
 
 ## Summary
 

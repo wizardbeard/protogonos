@@ -462,7 +462,9 @@ Fixture plans:
 
 - `solve`: uses assistant message JSON and completes the key-delivery task,
 - `tool`: uses tool-call argument JSON and completes the same task,
-- `invalid`: starts with one invalid wall move, then recovers.
+- `invalid`: starts with one invalid wall move, then recovers,
+- `malformed`: returns unsupported JSON actions and records bounded failure steps,
+- `provider-error`: simulates provider errors or timeouts and records bounded failure steps.
 
 The same command can use a live OpenAI-compatible endpoint when requested:
 
@@ -483,6 +485,7 @@ The artifact file stores:
 - prompt request,
 - provider response,
 - parsed bounded action,
+- bounded failure text and kind,
 - message history,
 - token counts,
 - final fitness and trace.
@@ -507,6 +510,7 @@ A small first slice should avoid provider lock-in:
 - add explicit `openai-compatible` provider flags to `protogonosctl comm-grid-llm`, covered by fake-server tests,
 - write `comm_grid_llm.json` artifacts with request, response, parsed action, messages, token counts, and final trace,
 - replay `comm_grid_llm.json` artifacts with stored provider responses and report final-trace match status,
+- convert malformed output, provider errors, and provider timeouts into bounded failed steps that remain artifact-backed and replayable,
 - add tests for deterministic replay, invalid output handling, timeout handling, and token-cost fitness.
 
 This gives the system a useful LLM integration path without making evolution depend on unbounded free-form text.

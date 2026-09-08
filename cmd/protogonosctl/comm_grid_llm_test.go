@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestCommGridLLMCommandRunsFixturePlan(t *testing.T) {
@@ -140,6 +141,40 @@ func TestCommGridLLMCommandRunsOpenAICompatibleProvider(t *testing.T) {
 	}
 }
 
+func TestCommGridLLMCommandConvertsProviderTimeoutToFailureStep(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		time.Sleep(25 * time.Millisecond)
+		_, _ = w.Write([]byte(`{"choices":[{"message":{"content":"{\"action\":\"east\"}"}}]}`))
+	}))
+	defer server.Close()
+
+	out, err := captureStdoutForCommGridLLM(func() error {
+		return run(context.Background(), []string{
+			"comm-grid-llm",
+			"--provider", "openai-compatible",
+			"--base-url", server.URL + "/v1",
+			"--model", "slow-model",
+			"--timeout-ms", "1",
+			"--steps", "1",
+			"--json",
+			"--artifacts=false",
+		})
+	})
+	if err != nil {
+		t.Fatalf("comm-grid-llm timeout command: %v", err)
+	}
+	var summary commGridLLMCommandSummary
+	if err := json.Unmarshal([]byte(out), &summary); err != nil {
+		t.Fatalf("decode timeout json: %v\n%s", err, out)
+	}
+	if len(summary.Steps) != 1 || summary.Steps[0].ErrorKind != "llm_failure" {
+		t.Fatalf("expected timeout failure step, summary=%+v", summary)
+	}
+	if !strings.Contains(summary.Steps[0].Error, "llm failure") {
+		t.Fatalf("expected failure message, step=%+v", summary.Steps[0])
+	}
+}
+
 func TestCommGridLLMCommandWritesArtifacts(t *testing.T) {
 	origWD, err := os.Getwd()
 	if err != nil {
@@ -191,6 +226,99 @@ func TestCommGridLLMCommandWritesArtifacts(t *testing.T) {
 	}
 	if tokens, ok := first.Result.ProviderTrace["tokens"].(float64); !ok || tokens != 8 {
 		t.Fatalf("expected provider token trace, got %+v", first.Result.ProviderTrace)
+	}
+}
+
+func TestCommGridLLMCommandWritesMalformedFailureArtifact(t *testing.T) {
+	origWD, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("getwd: %v", err)
+	}
+	workdir := t.TempDir()
+	if err := os.Chdir(workdir); err != nil {
+		t.Fatalf("chdir tempdir: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = os.Chdir(origWD)
+	})
+
+	out, err := captureStdoutForCommGridLLM(func() error {
+		return run(context.Background(), []string{
+			"comm-grid-llm",
+			"--run-id", "malformed-artifact-run",
+			"--plan", "malformed",
+			"--steps", "2",
+		})
+	})
+	if err != nil {
+		t.Fatalf("comm-grid-llm malformed command: %v", err)
+	}
+	if !strings.Contains(out, "completed=false") || !strings.Contains(out, "action=llm_failure") {
+		t.Fatalf("expected bounded failure output, got %s", out)
+	}
+
+	artifact := readCommGridLLMTestArtifact(t, workdir, "malformed-artifact-run")
+	if artifact.Completed || len(artifact.Steps) != 2 {
+		t.Fatalf("unexpected artifact summary: %+v", artifact)
+	}
+	first := artifact.Steps[0]
+	if first.ErrorKind != "llm_failure" || !strings.Contains(first.Error, "unsupported comm-grid action") {
+		t.Fatalf("expected malformed action failure, step=%+v", first)
+	}
+	if first.Response.Message == "" || first.Payload == "" {
+		t.Fatalf("expected response payload to be stored, step=%+v", first)
+	}
+}
+
+func TestCommGridLLMCommandWritesProviderFailureArtifactAndReplays(t *testing.T) {
+	origWD, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("getwd: %v", err)
+	}
+	workdir := t.TempDir()
+	if err := os.Chdir(workdir); err != nil {
+		t.Fatalf("chdir tempdir: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = os.Chdir(origWD)
+	})
+
+	if err := run(context.Background(), []string{
+		"comm-grid-llm",
+		"--run-id", "provider-error-artifact-run",
+		"--plan", "provider-error",
+		"--steps", "2",
+	}); err != nil {
+		t.Fatalf("comm-grid-llm provider error command: %v", err)
+	}
+	artifact := readCommGridLLMTestArtifact(t, workdir, "provider-error-artifact-run")
+	if artifact.Completed || len(artifact.Steps) != 2 {
+		t.Fatalf("unexpected artifact summary: %+v", artifact)
+	}
+	first := artifact.Steps[0]
+	if first.ErrorKind != "llm_failure" || !strings.Contains(first.Error, "fixture provider failure") {
+		t.Fatalf("expected provider failure, step=%+v", first)
+	}
+	if first.Response.Message != "" || len(first.Response.ToolCalls) != 0 {
+		t.Fatalf("expected empty provider response on provider failure, step=%+v", first)
+	}
+
+	out, err := captureStdoutForCommGridLLM(func() error {
+		return run(context.Background(), []string{
+			"comm-grid-llm",
+			"--replay-run-id", "provider-error-artifact-run",
+			"--json",
+		})
+	})
+	if err != nil {
+		t.Fatalf("replay provider failure artifact: %v", err)
+	}
+	var summary commGridLLMCommandSummary
+	if err := json.Unmarshal([]byte(out), &summary); err != nil {
+		t.Fatalf("decode replay json: %v\n%s", err, out)
+	}
+	if summary.Replay == nil || !summary.Replay.Matched {
+		t.Fatalf("expected matched replay, summary=%+v", summary)
 	}
 }
 
@@ -257,16 +385,9 @@ func TestCommGridLLMCommandReplayDetectsTraceMismatch(t *testing.T) {
 		t.Fatalf("write artifact command: %v", err)
 	}
 	path := filepath.Join(workdir, "benchmarks", "fixture-mismatch-run", "comm_grid_llm.json")
-	data, err := os.ReadFile(path)
-	if err != nil {
-		t.Fatalf("read artifact: %v", err)
-	}
-	var artifact commGridLLMArtifact
-	if err := json.Unmarshal(data, &artifact); err != nil {
-		t.Fatalf("decode artifact: %v", err)
-	}
+	artifact := readCommGridLLMTestArtifact(t, workdir, "fixture-mismatch-run")
 	artifact.Trace["completed"] = false
-	data, err = json.MarshalIndent(artifact, "", "  ")
+	data, err := json.MarshalIndent(artifact, "", "  ")
 	if err != nil {
 		t.Fatalf("marshal tampered artifact: %v", err)
 	}
@@ -338,4 +459,18 @@ func captureStdoutForCommGridLLM(fn func() error) (string, error) {
 func strconvQuoteForTest(s string) string {
 	data, _ := json.Marshal(s)
 	return string(data)
+}
+
+func readCommGridLLMTestArtifact(t *testing.T, workdir, runID string) commGridLLMArtifact {
+	t.Helper()
+	path := filepath.Join(workdir, "benchmarks", runID, "comm_grid_llm.json")
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read artifact: %v", err)
+	}
+	var artifact commGridLLMArtifact
+	if err := json.Unmarshal(data, &artifact); err != nil {
+		t.Fatalf("decode artifact: %v", err)
+	}
+	return artifact
 }

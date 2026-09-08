@@ -20,6 +20,8 @@ type commGridLLMCommandStep struct {
 	Action        string                  `json:"action"`
 	Message       string                  `json:"message,omitempty"`
 	To            string                  `json:"to,omitempty"`
+	Error         string                  `json:"error,omitempty"`
+	ErrorKind     string                  `json:"error_kind,omitempty"`
 	InvalidAction bool                    `json:"invalid_action"`
 	Done          bool                    `json:"done"`
 	Completed     bool                    `json:"completed"`
@@ -61,12 +63,32 @@ type commGridLLMReplayResult struct {
 }
 
 type commGridLLMArtifactStep struct {
-	Step     int                     `json:"step"`
-	Request  llm.Request             `json:"request"`
-	Response llm.Response            `json:"response"`
-	Payload  string                  `json:"payload"`
-	Parsed   scape.CommGridStepInput `json:"parsed_action"`
-	Result   commGridLLMCommandStep  `json:"result"`
+	Step      int                     `json:"step"`
+	Request   llm.Request             `json:"request"`
+	Response  llm.Response            `json:"response"`
+	Payload   string                  `json:"payload"`
+	Parsed    scape.CommGridStepInput `json:"parsed_action"`
+	Error     string                  `json:"error,omitempty"`
+	ErrorKind string                  `json:"error_kind,omitempty"`
+	Result    commGridLLMCommandStep  `json:"result"`
+}
+
+type commGridLLMReplayProvider struct {
+	steps []commGridLLMArtifactStep
+	index int
+}
+
+func (p *commGridLLMReplayProvider) Complete(_ context.Context, _ llm.Request) (llm.Response, error) {
+	if p == nil || len(p.steps) == 0 {
+		return llm.Response{}, llm.ErrNoFixtureResponses
+	}
+	if p.index >= len(p.steps) {
+		last := p.steps[len(p.steps)-1]
+		return last.Response, commGridLLMReplayStepError(last)
+	}
+	step := p.steps[p.index]
+	p.index++
+	return step.Response, commGridLLMReplayStepError(step)
 }
 
 func runCommGridLLM(ctx context.Context, args []string) error {
@@ -191,14 +213,12 @@ func runCommGridLLMReplay(ctx context.Context, runID string, jsonOut bool) error
 	if len(artifact.Steps) == 0 {
 		return fmt.Errorf("comm-grid llm artifact has no steps: %s", runID)
 	}
-	responses := make([]llm.Response, 0, len(artifact.Steps))
 	useTools := false
 	model := "fixture-comm-grid"
 	maxTokens := 64
 	temperature := 0.0
 	seed := int64(1)
 	for _, step := range artifact.Steps {
-		responses = append(responses, step.Response)
 		if len(step.Response.ToolCalls) > 0 {
 			useTools = true
 		}
@@ -219,7 +239,7 @@ func runCommGridLLMReplay(ctx context.Context, runID string, jsonOut bool) error
 	maxSteps := commGridTraceInt(artifact.Trace, "max_steps", len(artifact.Steps))
 	summary, _, err := executeCommGridLLM(ctx, commGridLLMExecutionConfig{
 		RunID:           runID,
-		Provider:        llm.NewFixtureProvider(responses),
+		Provider:        &commGridLLMReplayProvider{steps: artifact.Steps},
 		ActorModel:      model,
 		SummaryProvider: "fixture-replay",
 		SummaryPlan:     strings.TrimSpace(artifact.Plan),
@@ -297,14 +317,22 @@ func executeCommGridLLM(ctx context.Context, cfg commGridLLMExecutionConfig) (co
 	for !sim.Done() && len(summary.Steps) < cfg.MaxSteps {
 		result, trace, err := actor.Step(ctx, sim)
 		if err != nil {
-			return commGridLLMCommandSummary{}, nil, err
+			result, trace = commGridLLMFailedStep(ctx, sim, len(summary.Steps)+1, trace, err)
 		}
 		state, _ := sim.AgentState("agent-1")
+		errText := ""
+		errKind := ""
+		if result.InvalidAction && trace.StepInput.Action == scape.CommGridAction("llm_failure") {
+			errText = trace.StepInput.Message
+			errKind = "llm_failure"
+		}
 		step := commGridLLMCommandStep{
 			Step:          len(summary.Steps) + 1,
 			Action:        string(trace.ParsedAction),
 			Message:       trace.StepInput.Message,
 			To:            trace.StepInput.To,
+			Error:         errText,
+			ErrorKind:     errKind,
 			InvalidAction: result.InvalidAction,
 			Done:          result.Done,
 			Completed:     result.Completed,
@@ -326,18 +354,87 @@ func executeCommGridLLM(ctx context.Context, cfg commGridLLMExecutionConfig) (co
 		}
 		summary.Steps = append(summary.Steps, step)
 		artifactSteps = append(artifactSteps, commGridLLMArtifactStep{
-			Step:     step.Step,
-			Request:  trace.Request,
-			Response: trace.Response,
-			Payload:  trace.Payload,
-			Parsed:   trace.StepInput,
-			Result:   step,
+			Step:      step.Step,
+			Request:   trace.Request,
+			Response:  trace.Response,
+			Payload:   trace.Payload,
+			Parsed:    trace.StepInput,
+			Error:     errText,
+			ErrorKind: errKind,
+			Result:    step,
 		})
 	}
 	summary.Completed = sim.Done() && sim.Trace()["completed"] == true
 	summary.Fitness = float64(sim.Fitness())
 	summary.Trace = map[string]any(sim.Trace())
 	return summary, artifactSteps, nil
+}
+
+func commGridLLMReplayStepError(step commGridLLMArtifactStep) error {
+	if step.ErrorKind == "" || commGridLLMResponseHasPayload(step.Response) {
+		return nil
+	}
+	message := strings.TrimSpace(step.Error)
+	message = strings.TrimPrefix(message, "llm failure: ")
+	if message == "" {
+		message = "stored llm failure"
+	}
+	return errors.New(message)
+}
+
+func commGridLLMResponseHasPayload(res llm.Response) bool {
+	return strings.TrimSpace(res.Message) != "" || len(res.ToolCalls) > 0
+}
+
+func commGridLLMFailedStep(ctx context.Context, sim *scape.CommGridSimulator, step int, trace scape.CommGridLLMStepTrace, cause error) (scape.CommGridStepResult, scape.CommGridLLMStepTrace) {
+	message := commGridLLMFailureMessage(cause)
+	input := scape.CommGridStepInput{
+		AgentID: "agent-1",
+		Action:  scape.CommGridAction("llm_failure"),
+		Message: message,
+		To:      "system",
+	}
+	result, err := sim.Step(ctx, input)
+	if err != nil {
+		result = scape.CommGridStepResult{
+			Done:          sim.Done(),
+			Completed:     false,
+			InvalidAction: true,
+			Fitness:       sim.Fitness(),
+			Trace:         sim.Trace(),
+		}
+		result.Trace["llm_failure_step_error"] = err.Error()
+	}
+	trace.StepInput = input
+	trace.ParsedAction = input.Action
+	if trace.AgentID == "" {
+		trace.AgentID = "agent-1"
+	}
+	if trace.Payload == "" {
+		trace.Payload = message
+	}
+	if result.Trace == nil {
+		result.Trace = map[string]any{}
+	}
+	result.Trace["llm_failure"] = true
+	result.Trace["llm_failure_step"] = step
+	result.Trace["llm_failure_error"] = message
+	result.Trace["llm_action"] = string(input.Action)
+	return result, trace
+}
+
+func commGridLLMFailureMessage(err error) string {
+	if err == nil {
+		return "llm failure"
+	}
+	text := strings.TrimSpace(err.Error())
+	if text == "" {
+		return "llm failure"
+	}
+	if len(text) > 120 {
+		text = text[:120]
+	}
+	return "llm failure: " + text
 }
 
 func writeCommGridLLMArtifact(baseDir string, artifact commGridLLMArtifact) (string, error) {
@@ -454,6 +551,9 @@ func commGridLLMProviderFromFlags(flags commGridLLMProviderFlags) (llm.Provider,
 	providerName := strings.TrimSpace(strings.ToLower(flags.Provider))
 	switch providerName {
 	case "", "fixture":
+		if strings.TrimSpace(strings.ToLower(flags.Plan)) == "provider-error" {
+			return llm.NewFixtureProviderWithError(errors.New("fixture provider failure")), "fixture-comm-grid", false, "fixture", "provider-error", nil
+		}
 		responses, useTools, err := commGridLLMFixturePlan(flags.Plan)
 		if err != nil {
 			return nil, "", false, "", "", err
@@ -510,6 +610,10 @@ func commGridLLMFixturePlan(plan string) ([]llm.Response, bool, error) {
 		return []llm.Response{
 			commGridLLMFixtureContent(`{"action":"west","message":"bad wall move","to":"all","tokens":3}`, 8),
 			commGridLLMFixtureContent(`{"action":"east","message":"recover","to":"all","tokens":1}`, 6),
+		}, false, nil
+	case "malformed":
+		return []llm.Response{
+			commGridLLMFixtureContent(`{"action":"teleport","message":"bad action","to":"all","tokens":2}`, 6),
 		}, false, nil
 	default:
 		return nil, false, fmt.Errorf("unsupported comm-grid llm fixture plan: %s", plan)
