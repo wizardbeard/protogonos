@@ -88,6 +88,8 @@ func run(ctx context.Context, args []string) error {
 		return runDataExtract(ctx, args[1:])
 	case "comm-grid-llm":
 		return runCommGridLLM(ctx, args[1:])
+	case "comm-grid-llm-suite":
+		return runCommGridLLMSuite(ctx, args[1:])
 	case "comm-grid-llm-runs":
 		return runCommGridLLMRuns(ctx, args[1:])
 	default:

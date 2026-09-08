@@ -576,6 +576,7 @@ Status keys:
 - Added `protogonosctl comm-grid-llm-runs --compare` to group indexed runs by task shape, provider, and plan.
 - Added CSV output for `protogonosctl comm-grid-llm-runs` and `protogonosctl comm-grid-llm-runs --compare`.
 - Added token and duration summaries to the `comm-grid-llm` run index and compare output.
+- Added `protogonosctl comm-grid-llm-suite` to run plan and prompt-variant batches through the normal artifact and run-index path.
 
 ## Current-scope parity declaration
 

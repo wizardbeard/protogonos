@@ -476,6 +476,16 @@ protogonosctl comm-grid-llm-runs --compare --json
 protogonosctl comm-grid-llm-runs --compare --csv
 ```
 
+Run a small suite of plans or prompt variants:
+
+```bash
+protogonosctl comm-grid-llm-suite \
+  --suite-id comm-grid-suite-001 \
+  --plans solve,tool,invalid \
+  --prompt 'strict=Return JSON only.' \
+  --repeats 2
+```
+
 Disable artifact writes for quick console checks:
 
 ```bash
@@ -634,6 +644,7 @@ A small first slice should avoid provider lock-in:
 - add `protogonosctl comm-grid-llm-runs --compare` to group runs by task shape, provider, and plan,
 - add CSV output for `protogonosctl comm-grid-llm-runs` and `protogonosctl comm-grid-llm-runs --compare`,
 - add token and duration summaries to the run index and compare output,
+- add `protogonosctl comm-grid-llm-suite` to run plan and prompt-variant batches through the normal artifact/index path,
 - add tests for deterministic replay, invalid output handling, timeout handling, and token-cost fitness.
 
 This gives the system a useful LLM integration path without making evolution depend on unbounded free-form text.

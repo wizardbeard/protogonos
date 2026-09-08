@@ -149,6 +149,59 @@ type commGridLLMRunComparison struct {
 	BestRunID            string  `json:"best_run_id"`
 }
 
+type commGridLLMSuiteResult struct {
+	SuiteID   string                   `json:"suite_id"`
+	RunCount  int                      `json:"run_count"`
+	Completed int                      `json:"completed"`
+	Runs      []commGridLLMSuiteRunRow `json:"runs"`
+}
+
+type commGridLLMSuiteRunRow struct {
+	RunID                string  `json:"run_id"`
+	Provider             string  `json:"provider"`
+	Plan                 string  `json:"plan"`
+	Prompt               string  `json:"prompt"`
+	Completed            bool    `json:"completed"`
+	Fitness              float64 `json:"fitness"`
+	Steps                int     `json:"steps"`
+	TotalTokens          int     `json:"total_tokens"`
+	AverageTokensPerStep float64 `json:"average_tokens_per_step"`
+	DurationMS           int64   `json:"duration_ms"`
+	ArtifactsDir         string  `json:"artifacts_dir,omitempty"`
+}
+
+type commGridLLMPromptVariant struct {
+	Name         string
+	SystemPrompt string
+}
+
+type commGridLLMPromptFlag []commGridLLMPromptVariant
+
+func (f *commGridLLMPromptFlag) String() string {
+	if f == nil || len(*f) == 0 {
+		return ""
+	}
+	parts := make([]string, 0, len(*f))
+	for _, variant := range *f {
+		parts = append(parts, variant.Name+"="+variant.SystemPrompt)
+	}
+	return strings.Join(parts, ",")
+}
+
+func (f *commGridLLMPromptFlag) Set(raw string) error {
+	name, prompt, ok := strings.Cut(raw, "=")
+	if !ok {
+		return fmt.Errorf("prompt variant must use name=text: %s", raw)
+	}
+	name = strings.TrimSpace(name)
+	prompt = strings.TrimSpace(prompt)
+	if name == "" {
+		return fmt.Errorf("prompt variant name must not be empty: %s", raw)
+	}
+	*f = append(*f, commGridLLMPromptVariant{Name: name, SystemPrompt: prompt})
+	return nil
+}
+
 type commGridLLMAttempt struct {
 	Attempt      int    `json:"attempt"`
 	Success      bool   `json:"success"`
@@ -164,6 +217,23 @@ type commGridLLMRetryProvider struct {
 	retries   int
 	backoffMS int
 	attempts  [][]commGridLLMAttempt
+}
+
+type commGridLLMSingleRunConfig struct {
+	RunID           string
+	Provider        llm.Provider
+	ActorModel      string
+	SummaryProvider string
+	SummaryPlan     string
+	MaxSteps        int
+	Task            commGridLLMTaskConfig
+	ProviderRetries int
+	RetryBackoffMS  int
+	MaxTokens       int
+	Temperature     float64
+	Seed            int64
+	UseTools        bool
+	WriteArtifacts  bool
 }
 
 func (p *commGridLLMRetryProvider) Complete(ctx context.Context, req llm.Request) (llm.Response, error) {
@@ -327,15 +397,11 @@ func runCommGridLLM(ctx context.Context, args []string) error {
 		return err
 	}
 
-	startedAt := time.Now().UTC()
 	id := strings.TrimSpace(*runID)
 	if id == "" {
-		id = fmt.Sprintf("comm-grid-llm-%s-%d", summaryProvider, startedAt.UnixNano())
+		id = fmt.Sprintf("comm-grid-llm-%s-%d", summaryProvider, time.Now().UTC().UnixNano())
 	}
-	if err := validateCommGridLLMRunID(id); err != nil {
-		return err
-	}
-	summary, artifactSteps, err := executeCommGridLLM(ctx, commGridLLMExecutionConfig{
+	summary, _, err := runCommGridLLMSingle(ctx, commGridLLMSingleRunConfig{
 		RunID:           id,
 		Provider:        provider,
 		ActorModel:      actorModel,
@@ -349,33 +415,10 @@ func runCommGridLLM(ctx context.Context, args []string) error {
 		Temperature:     *temperature,
 		Seed:            *seed,
 		UseTools:        useTools,
+		WriteArtifacts:  *writeArtifacts,
 	})
 	if err != nil {
 		return err
-	}
-	durationMS := commGridLLMDurationMillis(time.Since(startedAt))
-	totalTokens := commGridLLMTotalTokens(artifactSteps)
-	artifact := commGridLLMArtifact{
-		RunID:                id,
-		Provider:             summaryProvider,
-		Plan:                 summaryPlan,
-		CreatedAt:            startedAt.Format(time.RFC3339Nano),
-		DurationMS:           durationMS,
-		Task:                 task,
-		Steps:                artifactSteps,
-		Completed:            summary.Completed,
-		Fitness:              summary.Fitness,
-		TotalTokens:          totalTokens,
-		AverageTokensPerStep: commGridLLMAverageTokensPerStep(totalTokens, len(artifactSteps)),
-		Trace:                summary.Trace,
-	}
-
-	if *writeArtifacts {
-		artifactDir, err := writeCommGridLLMArtifact(benchmarksDir, artifact)
-		if err != nil {
-			return err
-		}
-		summary.ArtifactsDir = artifactDir
 	}
 
 	if *jsonOut {
@@ -415,6 +458,208 @@ func runCommGridLLM(ctx context.Context, args []string) error {
 	if summary.ArtifactsDir != "" {
 		fmt.Printf("artifacts_dir=%s\n", filepath.Clean(summary.ArtifactsDir))
 	}
+	return nil
+}
+
+func runCommGridLLMSingle(ctx context.Context, cfg commGridLLMSingleRunConfig) (commGridLLMCommandSummary, commGridLLMArtifact, error) {
+	if err := validateCommGridLLMRunID(cfg.RunID); err != nil {
+		return commGridLLMCommandSummary{}, commGridLLMArtifact{}, err
+	}
+	startedAt := time.Now().UTC()
+	summary, artifactSteps, err := executeCommGridLLM(ctx, commGridLLMExecutionConfig{
+		RunID:           cfg.RunID,
+		Provider:        cfg.Provider,
+		ActorModel:      cfg.ActorModel,
+		SummaryProvider: cfg.SummaryProvider,
+		SummaryPlan:     cfg.SummaryPlan,
+		MaxSteps:        cfg.MaxSteps,
+		Task:            cfg.Task,
+		ProviderRetries: cfg.ProviderRetries,
+		RetryBackoffMS:  cfg.RetryBackoffMS,
+		MaxTokens:       cfg.MaxTokens,
+		Temperature:     cfg.Temperature,
+		Seed:            cfg.Seed,
+		UseTools:        cfg.UseTools,
+	})
+	if err != nil {
+		return commGridLLMCommandSummary{}, commGridLLMArtifact{}, err
+	}
+	durationMS := commGridLLMDurationMillis(time.Since(startedAt))
+	totalTokens := commGridLLMTotalTokens(artifactSteps)
+	artifact := commGridLLMArtifact{
+		RunID:                cfg.RunID,
+		Provider:             cfg.SummaryProvider,
+		Plan:                 cfg.SummaryPlan,
+		CreatedAt:            startedAt.Format(time.RFC3339Nano),
+		DurationMS:           durationMS,
+		Task:                 cfg.Task,
+		Steps:                artifactSteps,
+		Completed:            summary.Completed,
+		Fitness:              summary.Fitness,
+		TotalTokens:          totalTokens,
+		AverageTokensPerStep: commGridLLMAverageTokensPerStep(totalTokens, len(artifactSteps)),
+		Trace:                summary.Trace,
+	}
+	if cfg.WriteArtifacts {
+		artifactDir, err := writeCommGridLLMArtifact(benchmarksDir, artifact)
+		if err != nil {
+			return commGridLLMCommandSummary{}, commGridLLMArtifact{}, err
+		}
+		summary.ArtifactsDir = artifactDir
+	}
+	return summary, artifact, nil
+}
+
+func runCommGridLLMSuite(ctx context.Context, args []string) error {
+	fs := flag.NewFlagSet("comm-grid-llm-suite", flag.ContinueOnError)
+	suiteID := fs.String("suite-id", "", "suite id used as the run id prefix")
+	plansRaw := fs.String("plans", "solve,tool,invalid", "comma-separated fixture plans")
+	repeats := fs.Int("repeats", 1, "runs per plan and prompt variant")
+	providerName := fs.String("provider", "fixture", "provider: fixture|openai-compatible")
+	steps := fs.Int("steps", 8, "maximum LLM decisions per run")
+	width := fs.Int("width", 3, "comm-grid width")
+	height := fs.Int("height", 3, "comm-grid height")
+	key := fs.String("key", "1,0", "comm-grid key position as x,y")
+	goal := fs.String("goal", "2,0", "comm-grid goal position as x,y")
+	agentID := fs.String("agent", "agent-1", "comm-grid agent id")
+	agentPos := fs.String("agent-pos", "0,0", "comm-grid agent start position as x,y")
+	agents := fs.String("agents", "", "comm-grid agents as id@x,y:id@x,y")
+	turnOrder := fs.String("turn-order", "", "comm-grid turn order as comma-separated agent ids")
+	systemPrompt := fs.String("system-prompt", "", "default comm-grid LLM system prompt")
+	agentRoles := fs.String("agent-roles", "", "comm-grid agent roles as id=role:id=role")
+	agentPrompts := fs.String("agent-prompts", "", "comm-grid agent system prompts as id=prompt:id=prompt")
+	messageLimit := fs.Int("message-limit", 80, "maximum stored message characters")
+	baseURL := fs.String("base-url", "", "OpenAI-compatible base URL ending in /v1")
+	apiKeyEnv := fs.String("api-key-env", "PROTOGONOS_LLM_API_KEY", "environment variable containing provider API key")
+	model := fs.String("model", "", "provider model id")
+	timeoutMS := fs.Int("timeout-ms", 30000, "provider request timeout in milliseconds")
+	providerRetries := fs.Int("provider-retries", 0, "provider retries after a failed request")
+	retryBackoffMS := fs.Int("retry-backoff-ms", 250, "provider retry backoff in milliseconds")
+	maxTokens := fs.Int("max-tokens", 64, "maximum completion tokens per decision")
+	temperature := fs.Float64("temperature", 0, "provider temperature")
+	seed := fs.Int64("seed", 1, "provider seed when supported")
+	jsonMode := fs.Bool("json-mode", true, "request OpenAI-compatible JSON mode")
+	tools := fs.Bool("tools", false, "request tool-call action output when supported")
+	writeArtifacts := fs.Bool("artifacts", true, "write comm-grid LLM artifacts under benchmarks/<run-id>")
+	jsonOut := fs.Bool("json", false, "emit suite summary as JSON")
+	var promptFlags commGridLLMPromptFlag
+	fs.Var(&promptFlags, "prompt", "prompt variant as name=text; may be repeated")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	if *steps <= 0 {
+		return errors.New("steps must be > 0")
+	}
+	if *repeats <= 0 {
+		return errors.New("repeats must be > 0")
+	}
+	if *providerRetries < 0 {
+		return errors.New("provider-retries must be >= 0")
+	}
+	if *retryBackoffMS < 0 {
+		return errors.New("retry-backoff-ms must be >= 0")
+	}
+	plans, err := parseCommGridLLMNameList(*plansRaw)
+	if err != nil {
+		return err
+	}
+	prompts := commGridLLMPromptVariants(promptFlags, *systemPrompt)
+	if err := validateCommGridLLMPromptVariants(prompts); err != nil {
+		return err
+	}
+	task, err := commGridLLMTaskFromFlags(commGridLLMTaskFlagValues{
+		Width:        *width,
+		Height:       *height,
+		Key:          *key,
+		Goal:         *goal,
+		AgentID:      *agentID,
+		Agent:        *agentPos,
+		Agents:       *agents,
+		TurnOrder:    *turnOrder,
+		SystemPrompt: strings.TrimSpace(*systemPrompt),
+		AgentRoles:   *agentRoles,
+		AgentPrompts: *agentPrompts,
+		MessageLimit: *messageLimit,
+	})
+	if err != nil {
+		return err
+	}
+	id := strings.TrimSpace(*suiteID)
+	if id == "" {
+		id = fmt.Sprintf("comm-grid-llm-suite-%d", time.Now().UTC().UnixNano())
+	}
+	if err := validateCommGridLLMRunID(id); err != nil {
+		return err
+	}
+
+	result := commGridLLMSuiteResult{SuiteID: id}
+	for _, plan := range plans {
+		for _, prompt := range prompts {
+			for repeat := 1; repeat <= *repeats; repeat++ {
+				runTask := task
+				runTask.SystemPrompt = prompt.SystemPrompt
+				runID := fmt.Sprintf("%s-%s-%s-r%d", id, commGridLLMSafeIDPart(plan), commGridLLMSafeIDPart(prompt.Name), repeat)
+				provider, actorModel, useTools, summaryProvider, summaryPlan, err := commGridLLMProviderFromFlags(commGridLLMProviderFlags{
+					Provider:    *providerName,
+					Plan:        plan,
+					BaseURL:     *baseURL,
+					APIKeyEnv:   *apiKeyEnv,
+					Model:       *model,
+					TimeoutMS:   *timeoutMS,
+					MaxTokens:   *maxTokens,
+					Temperature: *temperature,
+					Seed:        *seed,
+					JSONMode:    *jsonMode,
+					Tools:       *tools,
+				})
+				if err != nil {
+					return err
+				}
+				summary, artifact, err := runCommGridLLMSingle(ctx, commGridLLMSingleRunConfig{
+					RunID:           runID,
+					Provider:        provider,
+					ActorModel:      actorModel,
+					SummaryProvider: summaryProvider,
+					SummaryPlan:     summaryPlan,
+					MaxSteps:        *steps,
+					Task:            runTask,
+					ProviderRetries: *providerRetries,
+					RetryBackoffMS:  *retryBackoffMS,
+					MaxTokens:       *maxTokens,
+					Temperature:     *temperature,
+					Seed:            *seed,
+					UseTools:        useTools,
+					WriteArtifacts:  *writeArtifacts,
+				})
+				if err != nil {
+					return err
+				}
+				if summary.Completed {
+					result.Completed++
+				}
+				result.Runs = append(result.Runs, commGridLLMSuiteRunRow{
+					RunID:                summary.RunID,
+					Provider:             summary.Provider,
+					Plan:                 summary.Plan,
+					Prompt:               prompt.Name,
+					Completed:            summary.Completed,
+					Fitness:              summary.Fitness,
+					Steps:                len(summary.Steps),
+					TotalTokens:          artifact.TotalTokens,
+					AverageTokensPerStep: artifact.AverageTokensPerStep,
+					DurationMS:           artifact.DurationMS,
+					ArtifactsDir:         summary.ArtifactsDir,
+				})
+			}
+		}
+	}
+	result.RunCount = len(result.Runs)
+	if *jsonOut {
+		enc := json.NewEncoder(os.Stdout)
+		enc.SetIndent("", "  ")
+		return enc.Encode(result)
+	}
+	printCommGridLLMSuiteTable(result)
 	return nil
 }
 
@@ -1470,6 +1715,99 @@ func validateCommGridLLMTranscriptPath(raw string) (string, error) {
 		return "", err
 	}
 	return filepath.Join(parts[0], parts[1], parts[2]), nil
+}
+
+func parseCommGridLLMNameList(raw string) ([]string, error) {
+	parts := strings.Split(raw, ",")
+	out := make([]string, 0, len(parts))
+	seen := map[string]bool{}
+	for _, part := range parts {
+		name := strings.TrimSpace(strings.ToLower(part))
+		if name == "" {
+			continue
+		}
+		if seen[name] {
+			return nil, fmt.Errorf("duplicate comm-grid llm suite name: %s", name)
+		}
+		seen[name] = true
+		out = append(out, name)
+	}
+	if len(out) == 0 {
+		return nil, errors.New("plans must include at least one name")
+	}
+	return out, nil
+}
+
+func commGridLLMPromptVariants(flags commGridLLMPromptFlag, defaultPrompt string) []commGridLLMPromptVariant {
+	if len(flags) > 0 {
+		out := make([]commGridLLMPromptVariant, len(flags))
+		copy(out, flags)
+		return out
+	}
+	return []commGridLLMPromptVariant{{
+		Name:         "default",
+		SystemPrompt: strings.TrimSpace(defaultPrompt),
+	}}
+}
+
+func validateCommGridLLMPromptVariants(prompts []commGridLLMPromptVariant) error {
+	seen := map[string]bool{}
+	for _, prompt := range prompts {
+		idPart := commGridLLMSafeIDPart(prompt.Name)
+		if seen[idPart] {
+			return fmt.Errorf("duplicate comm-grid llm prompt variant id: %s", idPart)
+		}
+		seen[idPart] = true
+	}
+	return nil
+}
+
+func commGridLLMSafeIDPart(raw string) string {
+	raw = strings.TrimSpace(strings.ToLower(raw))
+	var b strings.Builder
+	lastDash := false
+	for _, r := range raw {
+		allowed := (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') || r == '_' || r == '.'
+		if allowed {
+			b.WriteRune(r)
+			lastDash = false
+			continue
+		}
+		if !lastDash {
+			b.WriteByte('-')
+			lastDash = true
+		}
+	}
+	out := strings.Trim(b.String(), "-")
+	if out == "" {
+		return "default"
+	}
+	return out
+}
+
+func printCommGridLLMSuiteTable(result commGridLLMSuiteResult) {
+	fmt.Printf("SUITE\tRUNS\tCOMPLETED\n")
+	fmt.Printf("%s\t%d\t%d\n", result.SuiteID, result.RunCount, result.Completed)
+	fmt.Printf("RUN_ID\tPROVIDER\tPLAN\tPROMPT\tDONE\tFITNESS\tSTEPS\tTOKENS\tAVG_TOK\tMS\tARTIFACTS\n")
+	for _, row := range result.Runs {
+		artifactsDir := ""
+		if row.ArtifactsDir != "" {
+			artifactsDir = filepath.Clean(row.ArtifactsDir)
+		}
+		fmt.Printf("%s\t%s\t%s\t%s\t%t\t%.6f\t%d\t%d\t%.3f\t%d\t%s\n",
+			row.RunID,
+			row.Provider,
+			row.Plan,
+			row.Prompt,
+			row.Completed,
+			row.Fitness,
+			row.Steps,
+			row.TotalTokens,
+			row.AverageTokensPerStep,
+			row.DurationMS,
+			artifactsDir,
+		)
+	}
 }
 
 func parseOptionalBoolFlag(name, raw string) (bool, bool, error) {

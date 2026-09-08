@@ -993,6 +993,95 @@ func TestCommGridLLMRunsCommandRejectsConflictingOutputFormats(t *testing.T) {
 	}
 }
 
+func TestCommGridLLMSuiteCommandRunsPlansAndPromptVariants(t *testing.T) {
+	origWD, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("getwd: %v", err)
+	}
+	workdir := t.TempDir()
+	if err := os.Chdir(workdir); err != nil {
+		t.Fatalf("chdir tempdir: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = os.Chdir(origWD)
+	})
+
+	out, err := captureStdoutForCommGridLLM(func() error {
+		return run(context.Background(), []string{
+			"comm-grid-llm-suite",
+			"--suite-id", "suite-a",
+			"--plans", "solve,provider-error",
+			"--prompt", "strict=Return JSON only.",
+			"--repeats", "1",
+			"--provider-retries", "1",
+			"--retry-backoff-ms", "0",
+		})
+	})
+	if err != nil {
+		t.Fatalf("suite command: %v", err)
+	}
+	if !strings.Contains(out, "SUITE\tRUNS\tCOMPLETED") || !strings.Contains(out, "suite-a\t2\t1") {
+		t.Fatalf("expected suite summary, got %s", out)
+	}
+	if !strings.Contains(out, "suite-a-solve-strict-r1") || !strings.Contains(out, "suite-a-provider-error-strict-r1") {
+		t.Fatalf("expected deterministic suite run ids, got %s", out)
+	}
+
+	artifact := readCommGridLLMTestArtifact(t, workdir, "suite-a-solve-strict-r1")
+	if artifact.Task.SystemPrompt != "Return JSON only." || !artifact.Completed || artifact.TotalTokens != 30 {
+		t.Fatalf("unexpected suite artifact: %+v", artifact)
+	}
+	indexData, err := os.ReadFile(filepath.Join(workdir, "benchmarks", "comm_grid_llm_runs.jsonl"))
+	if err != nil {
+		t.Fatalf("read suite index: %v", err)
+	}
+	lines := strings.Split(strings.TrimSpace(string(indexData)), "\n")
+	if len(lines) != 2 {
+		t.Fatalf("expected two suite index rows, got %d: %s", len(lines), string(indexData))
+	}
+}
+
+func TestCommGridLLMSuiteCommandEmitsJSON(t *testing.T) {
+	origWD, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("getwd: %v", err)
+	}
+	workdir := t.TempDir()
+	if err := os.Chdir(workdir); err != nil {
+		t.Fatalf("chdir tempdir: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = os.Chdir(origWD)
+	})
+
+	out, err := captureStdoutForCommGridLLM(func() error {
+		return run(context.Background(), []string{
+			"comm-grid-llm-suite",
+			"--suite-id", "suite-json",
+			"--plans", "solve",
+			"--repeats", "2",
+			"--artifacts=false",
+			"--json",
+		})
+	})
+	if err != nil {
+		t.Fatalf("suite json command: %v", err)
+	}
+	var result commGridLLMSuiteResult
+	if err := json.Unmarshal([]byte(out), &result); err != nil {
+		t.Fatalf("decode suite json: %v\n%s", err, out)
+	}
+	if result.SuiteID != "suite-json" || result.RunCount != 2 || result.Completed != 2 {
+		t.Fatalf("unexpected suite json summary: %+v", result)
+	}
+	if result.Runs[0].RunID != "suite-json-solve-default-r1" || result.Runs[1].RunID != "suite-json-solve-default-r2" {
+		t.Fatalf("unexpected suite json run ids: %+v", result.Runs)
+	}
+	if result.Runs[0].ArtifactsDir != "" || result.Runs[0].TotalTokens != 30 {
+		t.Fatalf("unexpected suite json run row: %+v", result.Runs[0])
+	}
+}
+
 func TestCommGridLLMRunsCommandRejectsUnsafeTranscriptPath(t *testing.T) {
 	origWD, err := os.Getwd()
 	if err != nil {
