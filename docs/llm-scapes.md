@@ -446,6 +446,12 @@ Disable artifact writes for quick console checks:
 protogonosctl comm-grid-llm --plan solve --artifacts=false
 ```
 
+Replay a stored artifact through the fixture provider and compare the final trace:
+
+```bash
+protogonosctl comm-grid-llm --replay-run-id comm-grid-fixture-001
+```
+
 JSON output is available for trace inspection:
 
 ```bash
@@ -500,6 +506,7 @@ A small first slice should avoid provider lock-in:
 - expose `protogonosctl comm-grid-llm` for deterministic fixture demos without external provider calls,
 - add explicit `openai-compatible` provider flags to `protogonosctl comm-grid-llm`, covered by fake-server tests,
 - write `comm_grid_llm.json` artifacts with request, response, parsed action, messages, token counts, and final trace,
+- replay `comm_grid_llm.json` artifacts with stored provider responses and report final-trace match status,
 - add tests for deterministic replay, invalid output handling, timeout handling, and token-cost fitness.
 
 This gives the system a useful LLM integration path without making evolution depend on unbounded free-form text.

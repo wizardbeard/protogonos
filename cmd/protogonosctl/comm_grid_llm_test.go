@@ -194,6 +194,98 @@ func TestCommGridLLMCommandWritesArtifacts(t *testing.T) {
 	}
 }
 
+func TestCommGridLLMCommandReplaysArtifacts(t *testing.T) {
+	origWD, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("getwd: %v", err)
+	}
+	workdir := t.TempDir()
+	if err := os.Chdir(workdir); err != nil {
+		t.Fatalf("chdir tempdir: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = os.Chdir(origWD)
+	})
+
+	if err := run(context.Background(), []string{
+		"comm-grid-llm",
+		"--run-id", "fixture-replay-run",
+		"--plan", "tool",
+	}); err != nil {
+		t.Fatalf("write artifact command: %v", err)
+	}
+	out, err := captureStdoutForCommGridLLM(func() error {
+		return run(context.Background(), []string{
+			"comm-grid-llm",
+			"--replay-run-id", "fixture-replay-run",
+			"--json",
+		})
+	})
+	if err != nil {
+		t.Fatalf("replay artifact command: %v", err)
+	}
+	var summary commGridLLMCommandSummary
+	if err := json.Unmarshal([]byte(out), &summary); err != nil {
+		t.Fatalf("decode replay json: %v\n%s", err, out)
+	}
+	if summary.Replay == nil || !summary.Replay.Matched {
+		t.Fatalf("expected matched replay, summary=%+v", summary)
+	}
+	if summary.Provider != "fixture-replay" || !summary.Completed {
+		t.Fatalf("unexpected replay summary: %+v", summary)
+	}
+}
+
+func TestCommGridLLMCommandReplayDetectsTraceMismatch(t *testing.T) {
+	origWD, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("getwd: %v", err)
+	}
+	workdir := t.TempDir()
+	if err := os.Chdir(workdir); err != nil {
+		t.Fatalf("chdir tempdir: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = os.Chdir(origWD)
+	})
+
+	if err := run(context.Background(), []string{
+		"comm-grid-llm",
+		"--run-id", "fixture-mismatch-run",
+		"--plan", "solve",
+	}); err != nil {
+		t.Fatalf("write artifact command: %v", err)
+	}
+	path := filepath.Join(workdir, "benchmarks", "fixture-mismatch-run", "comm_grid_llm.json")
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read artifact: %v", err)
+	}
+	var artifact commGridLLMArtifact
+	if err := json.Unmarshal(data, &artifact); err != nil {
+		t.Fatalf("decode artifact: %v", err)
+	}
+	artifact.Trace["completed"] = false
+	data, err = json.MarshalIndent(artifact, "", "  ")
+	if err != nil {
+		t.Fatalf("marshal tampered artifact: %v", err)
+	}
+	if err := os.WriteFile(path, append(data, '\n'), 0o644); err != nil {
+		t.Fatalf("write tampered artifact: %v", err)
+	}
+
+	err = run(context.Background(), []string{
+		"comm-grid-llm",
+		"--replay-run-id", "fixture-mismatch-run",
+	})
+	if err == nil {
+		t.Fatal("expected replay mismatch error")
+	}
+	if !strings.Contains(err.Error(), "replay trace mismatch") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
 func TestCommGridLLMCommandRejectsPathLikeRunID(t *testing.T) {
 	err := run(context.Background(), []string{
 		"comm-grid-llm",

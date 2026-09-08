@@ -563,6 +563,7 @@ Status keys:
 - Added `protogonosctl comm-grid-llm` as a deterministic fixture demo for `comm-grid` LLM actors, with text and JSON trace output and no external provider calls.
 - Added explicit OpenAI-compatible provider flags to `protogonosctl comm-grid-llm` (`--provider openai-compatible`, `--base-url`, `--model`, `--api-key-env`, `--json-mode`, `--tools`) with fake-server test coverage and fixture mode as the default.
 - Added `comm-grid-llm` artifact capture under `benchmarks/<run-id>/comm_grid_llm.json`, storing provider mode, prompt request, provider response, parsed action, message history, token counts, final fitness, and final trace.
+- Added `comm-grid-llm` artifact replay via `--replay-run-id`, feeding stored provider responses through the fixture provider and reporting final-trace match status.
 
 ## Current-scope parity declaration
 
