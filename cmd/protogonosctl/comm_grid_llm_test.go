@@ -1083,6 +1083,86 @@ func TestCommGridLLMSuiteCommandEmitsJSON(t *testing.T) {
 	}
 }
 
+func TestCommGridLLMSuiteCommandFailsFastByDefault(t *testing.T) {
+	err := run(context.Background(), []string{
+		"comm-grid-llm-suite",
+		"--suite-id", "fail-fast-suite",
+		"--plans", "solve,missing",
+		"--artifacts=false",
+	})
+	if err == nil {
+		t.Fatal("expected fail-fast suite error")
+	}
+	if !strings.Contains(err.Error(), "unsupported comm-grid llm fixture plan") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestCommGridLLMSuiteCommandCanContinueAfterRowError(t *testing.T) {
+	origWD, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("getwd: %v", err)
+	}
+	workdir := t.TempDir()
+	if err := os.Chdir(workdir); err != nil {
+		t.Fatalf("chdir tempdir: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = os.Chdir(origWD)
+	})
+
+	out, err := captureStdoutForCommGridLLM(func() error {
+		return run(context.Background(), []string{
+			"comm-grid-llm-suite",
+			"--suite-id", "continue-suite",
+			"--plans", "solve,missing,tool",
+			"--fail-fast=false",
+			"--artifacts=false",
+		})
+	})
+	if err != nil {
+		t.Fatalf("continue suite command: %v", err)
+	}
+	if !strings.Contains(out, "SUITE\tRUNS\tCOMPLETED\tERRORS") || !strings.Contains(out, "continue-suite\t3\t2\t1") {
+		t.Fatalf("expected continue summary, got %s", out)
+	}
+	if !strings.Contains(out, "continue-suite-missing-default-r1") || !strings.Contains(out, "unsupported comm-grid llm fixture plan") {
+		t.Fatalf("expected row-level error, got %s", out)
+	}
+	if _, err := os.Stat(filepath.Join(workdir, "benchmarks")); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("artifacts=false should not create benchmarks, err=%v", err)
+	}
+}
+
+func TestCommGridLLMSuiteCommandContinueAfterRowErrorAsJSON(t *testing.T) {
+	out, err := captureStdoutForCommGridLLM(func() error {
+		return run(context.Background(), []string{
+			"comm-grid-llm-suite",
+			"--suite-id", "continue-json",
+			"--plans", "missing,solve",
+			"--fail-fast=false",
+			"--artifacts=false",
+			"--json",
+		})
+	})
+	if err != nil {
+		t.Fatalf("continue json suite command: %v", err)
+	}
+	var result commGridLLMSuiteResult
+	if err := json.Unmarshal([]byte(out), &result); err != nil {
+		t.Fatalf("decode continue json: %v\n%s", err, out)
+	}
+	if result.RunCount != 2 || result.Completed != 1 || result.Errors != 1 {
+		t.Fatalf("unexpected continue json summary: %+v", result)
+	}
+	if result.Runs[0].RunID != "continue-json-missing-default-r1" || !strings.Contains(result.Runs[0].Error, "unsupported comm-grid llm fixture plan") {
+		t.Fatalf("unexpected continue json error row: %+v", result.Runs)
+	}
+	if result.Runs[1].RunID != "continue-json-solve-default-r1" || !result.Runs[1].Completed {
+		t.Fatalf("unexpected continue json success row: %+v", result.Runs)
+	}
+}
+
 func TestCommGridLLMSuiteCommandDryRunPrintsMatrix(t *testing.T) {
 	origWD, err := os.Getwd()
 	if err != nil {

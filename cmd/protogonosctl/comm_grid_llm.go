@@ -153,6 +153,7 @@ type commGridLLMSuiteResult struct {
 	SuiteID   string                   `json:"suite_id"`
 	RunCount  int                      `json:"run_count"`
 	Completed int                      `json:"completed"`
+	Errors    int                      `json:"errors"`
 	Runs      []commGridLLMSuiteRunRow `json:"runs"`
 }
 
@@ -168,6 +169,7 @@ type commGridLLMSuiteRunRow struct {
 	AverageTokensPerStep float64 `json:"average_tokens_per_step"`
 	DurationMS           int64   `json:"duration_ms"`
 	ArtifactsDir         string  `json:"artifacts_dir,omitempty"`
+	Error                string  `json:"error,omitempty"`
 }
 
 type commGridLLMSuiteDryRunResult struct {
@@ -246,6 +248,7 @@ type commGridLLMSuiteManifest struct {
 	JSONMode        *bool                      `json:"json_mode,omitempty"`
 	Tools           *bool                      `json:"tools,omitempty"`
 	WriteArtifacts  *bool                      `json:"artifacts,omitempty"`
+	FailFast        *bool                      `json:"fail_fast,omitempty"`
 	PromptVariants  []commGridLLMPromptVariant `json:"prompts,omitempty"`
 }
 
@@ -279,6 +282,7 @@ type commGridLLMSuiteManifestTargets struct {
 	JSONMode        *bool
 	Tools           *bool
 	WriteArtifacts  *bool
+	FailFast        *bool
 	PromptFlags     *commGridLLMPromptFlag
 }
 
@@ -312,6 +316,7 @@ type commGridLLMSuiteManifestValues struct {
 	JSONMode        bool
 	Tools           bool
 	WriteArtifacts  bool
+	FailFast        bool
 	Prompts         []commGridLLMPromptVariant
 }
 
@@ -657,6 +662,7 @@ func runCommGridLLMSuite(ctx context.Context, args []string) error {
 	jsonMode := fs.Bool("json-mode", true, "request OpenAI-compatible JSON mode")
 	tools := fs.Bool("tools", false, "request tool-call action output when supported")
 	writeArtifacts := fs.Bool("artifacts", true, "write comm-grid LLM artifacts under benchmarks/<run-id>")
+	failFast := fs.Bool("fail-fast", true, "stop suite at the first row error")
 	jsonOut := fs.Bool("json", false, "emit suite summary as JSON")
 	var promptFlags commGridLLMPromptFlag
 	fs.Var(&promptFlags, "prompt", "prompt variant as name=text; may be repeated")
@@ -702,6 +708,7 @@ func runCommGridLLMSuite(ctx context.Context, args []string) error {
 			JSONMode:        jsonMode,
 			Tools:           tools,
 			WriteArtifacts:  writeArtifacts,
+			FailFast:        failFast,
 			PromptFlags:     &promptFlags,
 		})
 	}
@@ -756,6 +763,7 @@ func runCommGridLLMSuite(ctx context.Context, args []string) error {
 			JSONMode:        *jsonMode,
 			Tools:           *tools,
 			WriteArtifacts:  *writeArtifacts,
+			FailFast:        *failFast,
 			Prompts:         prompts,
 		})
 		enc := json.NewEncoder(os.Stdout)
@@ -818,7 +826,17 @@ func runCommGridLLMSuite(ctx context.Context, args []string) error {
 					Tools:       *tools,
 				})
 				if err != nil {
-					return err
+					if *failFast {
+						return err
+					}
+					result.Errors++
+					result.Runs = append(result.Runs, commGridLLMSuiteRunRow{
+						RunID:  runID,
+						Plan:   plan,
+						Prompt: prompt.Name,
+						Error:  strings.TrimSpace(err.Error()),
+					})
+					continue
 				}
 				summary, artifact, err := runCommGridLLMSingle(ctx, commGridLLMSingleRunConfig{
 					RunID:           runID,
@@ -837,7 +855,18 @@ func runCommGridLLMSuite(ctx context.Context, args []string) error {
 					WriteArtifacts:  *writeArtifacts,
 				})
 				if err != nil {
-					return err
+					if *failFast {
+						return err
+					}
+					result.Errors++
+					result.Runs = append(result.Runs, commGridLLMSuiteRunRow{
+						RunID:    runID,
+						Provider: summaryProvider,
+						Plan:     summaryPlan,
+						Prompt:   prompt.Name,
+						Error:    strings.TrimSpace(err.Error()),
+					})
+					continue
 				}
 				if summary.Completed {
 					result.Completed++
@@ -1965,6 +1994,7 @@ func buildCommGridLLMSuiteManifest(values commGridLLMSuiteManifestValues) commGr
 		JSONMode:        commGridLLMBoolPtr(values.JSONMode),
 		Tools:           commGridLLMBoolPtr(values.Tools),
 		WriteArtifacts:  commGridLLMBoolPtr(values.WriteArtifacts),
+		FailFast:        commGridLLMBoolPtr(values.FailFast),
 		PromptVariants:  append([]commGridLLMPromptVariant(nil), values.Prompts...),
 	}
 }
@@ -2026,6 +2056,9 @@ func applyCommGridLLMSuiteManifest(manifest commGridLLMSuiteManifest, setFlags m
 	}
 	if manifest.WriteArtifacts != nil && !setFlags["artifacts"] {
 		*target.WriteArtifacts = *manifest.WriteArtifacts
+	}
+	if manifest.FailFast != nil && !setFlags["fail-fast"] {
+		*target.FailFast = *manifest.FailFast
 	}
 	if len(manifest.PromptVariants) > 0 && !setFlags["prompt"] {
 		*target.PromptFlags = append((*target.PromptFlags)[:0], manifest.PromptVariants...)
@@ -2120,15 +2153,15 @@ func commGridLLMSuiteRunID(suiteID, plan, prompt string, repeat int) string {
 }
 
 func printCommGridLLMSuiteTable(result commGridLLMSuiteResult) {
-	fmt.Printf("SUITE\tRUNS\tCOMPLETED\n")
-	fmt.Printf("%s\t%d\t%d\n", result.SuiteID, result.RunCount, result.Completed)
-	fmt.Printf("RUN_ID\tPROVIDER\tPLAN\tPROMPT\tDONE\tFITNESS\tSTEPS\tTOKENS\tAVG_TOK\tMS\tARTIFACTS\n")
+	fmt.Printf("SUITE\tRUNS\tCOMPLETED\tERRORS\n")
+	fmt.Printf("%s\t%d\t%d\t%d\n", result.SuiteID, result.RunCount, result.Completed, result.Errors)
+	fmt.Printf("RUN_ID\tPROVIDER\tPLAN\tPROMPT\tDONE\tFITNESS\tSTEPS\tTOKENS\tAVG_TOK\tMS\tARTIFACTS\tERROR\n")
 	for _, row := range result.Runs {
 		artifactsDir := ""
 		if row.ArtifactsDir != "" {
 			artifactsDir = filepath.Clean(row.ArtifactsDir)
 		}
-		fmt.Printf("%s\t%s\t%s\t%s\t%t\t%.6f\t%d\t%d\t%.3f\t%d\t%s\n",
+		fmt.Printf("%s\t%s\t%s\t%s\t%t\t%.6f\t%d\t%d\t%.3f\t%d\t%s\t%s\n",
 			row.RunID,
 			row.Provider,
 			row.Plan,
@@ -2140,6 +2173,7 @@ func printCommGridLLMSuiteTable(result commGridLLMSuiteResult) {
 			row.AverageTokensPerStep,
 			row.DurationMS,
 			artifactsDir,
+			row.Error,
 		)
 	}
 }

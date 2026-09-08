@@ -581,6 +581,7 @@ Status keys:
 - Added `testdata/fixtures/comm_grid_llm_suite_manifest.json` as a known-good fixture suite.
 - Added `protogonosctl comm-grid-llm-suite --emit-manifest` to print the effective suite manifest without running the suite.
 - Added `protogonosctl comm-grid-llm-suite --dry-run` to preview the run matrix without provider calls or artifacts.
+- Added `protogonosctl comm-grid-llm-suite --fail-fast=false` to continue after row-level suite errors.
 
 ## Current-scope parity declaration
 
