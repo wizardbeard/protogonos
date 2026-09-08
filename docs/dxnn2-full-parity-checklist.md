@@ -559,6 +559,7 @@ Status keys:
 - Added the dependency-light `internal/llm` foundation with generic provider types, a deterministic fixture provider, an OpenAI-compatible raw HTTP provider, and fake-server tests for non-streaming chat completions.
 - Added the experimental deterministic `comm-grid` scape foundation with bounded actions, message records, delivery fitness, trace output, and non-LLM simulator/evaluator tests before any provider calls are wired into scape execution.
 - Added `comm-grid` language IO names and structured language-action decoding so future LLM output can map to bounded simulator actions and messages without provider-specific scape logic.
+- Added a fixture-backed `comm-grid` LLM actor adapter that requests structured JSON through `internal/llm.Provider`, prefers tool-call argument payloads when present, applies decoded bounded actions to the simulator, and records provider/action trace data without real provider calls in tests.
 
 ## Current-scope parity declaration
 

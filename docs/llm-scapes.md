@@ -438,6 +438,8 @@ A small first slice should avoid provider lock-in:
 - add `comm-grid` as an experimental scape,
 - keep all actions bounded and parseable,
 - add trace artifacts for messages and parsed actions,
+- add a fixture-backed LLM actor adapter for `comm-grid` that requests structured JSON from `internal/llm.Provider`,
+- prefer tool-call argument JSON when available, with plain message JSON as the fallback,
 - add tests for deterministic replay, invalid output handling, timeout handling, and token-cost fitness.
 
 This gives the system a useful LLM integration path without making evolution depend on unbounded free-form text.
