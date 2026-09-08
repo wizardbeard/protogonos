@@ -70,6 +70,122 @@ type LLMProvider interface {
 
 This keeps scapes independent from any single model provider.
 
+## Provider Strategy
+
+Prefer an OpenAI-compatible HTTP surface, but do not bind core code to OpenAI, LM Studio, Ollama, or any other vendor.
+
+The first provider should use raw HTTP and JSON from the Go standard library:
+
+- `net/http`,
+- `encoding/json`,
+- `context`,
+- `time`.
+
+Do not add SDK dependencies for the core path.
+
+Core provider types should stay generic:
+
+```go
+type LLMProvider interface {
+	Complete(ctx context.Context, req LLMRequest) (LLMResponse, error)
+}
+
+type LLMProviderConfig struct {
+	BaseURL      string
+	APIKeyEnv    string
+	Model        string
+	TimeoutMS    int
+	MaxTokens    int
+	Temperature  float64
+	Seed         int64
+	Capabilities LLMCapabilities
+}
+
+type LLMCapabilities struct {
+	ChatCompletions bool
+	JSONMode        bool
+	Tools           bool
+	Seed            bool
+	UsageTokens     bool
+}
+```
+
+The first real adapter should target the common subset:
+
+- `GET /v1/models`,
+- `POST /v1/chat/completions`.
+
+Use only common request fields at first:
+
+- `model`,
+- `messages`,
+- `temperature`,
+- `max_tokens`,
+- `seed` when the provider supports it,
+- `response_format` when JSON mode is enabled,
+- `tools` only after basic structured output works.
+
+Use only common response fields at first:
+
+- `choices[0].message.content`,
+- `choices[0].message.tool_calls`,
+- `choices[0].finish_reason`,
+- `usage.prompt_tokens`,
+- `usage.completion_tokens`,
+- `usage.total_tokens`.
+
+Provider-specific fields can be stored in raw trace metadata, but scapes should not depend on them.
+
+## Provider Config
+
+Config should allow local or remote OpenAI-compatible endpoints.
+
+Example:
+
+```json
+{
+  "llm": {
+    "provider": "openai-compatible",
+    "base_url": "http://192.168.1.50:1234/v1",
+    "api_key_env": "PROTOGONOS_LLM_API_KEY",
+    "model": "local-model",
+    "timeout_ms": 30000,
+    "max_tokens": 256,
+    "temperature": 0.2,
+    "seed": 1
+  }
+}
+```
+
+For LM Studio on a LAN host, `base_url` can point at that host. The API key can be a placeholder if the server does not require one, but the config should still support real keys.
+
+For hosted services, read the key from the named environment variable. Do not store keys in run artifacts.
+
+## Provider Risks
+
+OpenAI-compatible does not mean identical behavior.
+
+Expected differences:
+
+- tool calling quality varies by model,
+- JSON mode support varies,
+- `seed` support varies,
+- token usage fields may be absent or approximate,
+- local servers may return model-loading errors,
+- LAN calls can fail or time out,
+- model IDs and loaded-model behavior differ by server.
+
+The scape must handle these cases:
+
+- timeout,
+- connection error,
+- malformed JSON,
+- missing usage data,
+- unsupported tool calls,
+- invalid action output.
+
+Each failure should map to a bounded evaluation result. The run should not panic.
+
 ## IO Surfaces
 
 LLM scapes need language-aware sensors and actuators.
@@ -245,11 +361,14 @@ If exact provider replay is not possible, support fixture replay from stored res
 A small first slice should avoid provider lock-in:
 
 - add language message structs,
-- add an `LLMProvider` interface,
+- add the `LLMProvider` interface,
+- add `LLMProviderConfig` and `LLMCapabilities`,
 - add a deterministic fixture provider for tests,
+- add an OpenAI-compatible provider with raw `net/http`,
+- add fake HTTP server tests for provider behavior,
 - add `comm-grid` as an experimental scape,
 - keep all actions bounded and parseable,
 - add trace artifacts for messages and parsed actions,
-- add tests for deterministic replay, invalid output handling, and token-cost fitness.
+- add tests for deterministic replay, invalid output handling, timeout handling, and token-cost fitness.
 
 This gives the system a useful LLM integration path without making evolution depend on unbounded free-form text.

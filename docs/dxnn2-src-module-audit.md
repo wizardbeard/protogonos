@@ -368,6 +368,7 @@ Status legend:
 - 2026-09-07: added a terse root `README.md` with dependency, build, test, run, benchmark, export, and internal documentation links for first-time users.
 - 2026-09-07: added `docs/execution-model.md` to document the Go replacement for Erlang actor primitives: bounded worker pools, goroutine-backed actors, typed mailboxes, process-state wrappers, and direct fast paths.
 - 2026-09-07: added `docs/llm-scapes.md` as a concept note for a possible `v0.2.x` feature line covering LLM-backed scapes, language IO surfaces, bounded action decoding, replay requirements, and a `comm-grid` prototype.
+- 2026-09-07: expanded the LLM scapes concept with a vendor-neutral provider strategy: OpenAI-compatible raw HTTP, light core dependencies, generic config, capability flags, provider-risk handling, and fake-server test requirements.
 
 ## Summary
 
