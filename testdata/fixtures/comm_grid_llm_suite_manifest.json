@@ -1,0 +1,23 @@
+{
+  "suite_id": "comm-grid-fixture-suite",
+  "plans": ["solve", "tool", "invalid"],
+  "repeats": 1,
+  "provider": "fixture",
+  "steps": 8,
+  "width": 3,
+  "height": 3,
+  "key": "1,0",
+  "goal": "2,0",
+  "agent": "agent-1",
+  "agent_pos": "0,0",
+  "message_limit": 80,
+  "provider_retries": 0,
+  "retry_backoff_ms": 0,
+  "artifacts": true,
+  "prompts": [
+    {
+      "name": "strict",
+      "system_prompt": "Return one compact JSON object with fields action, message, to, and tokens. Use only bounded comm-grid actions."
+    }
+  ]
+}

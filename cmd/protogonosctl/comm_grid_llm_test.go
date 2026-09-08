@@ -1123,6 +1123,49 @@ func TestCommGridLLMSuiteCommandReadsManifest(t *testing.T) {
 	}
 }
 
+func TestCommGridLLMSuiteCommandRunsFixtureManifest(t *testing.T) {
+	origWD, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("getwd: %v", err)
+	}
+	manifestPath := filepath.Join(origWD, "..", "..", "testdata", "fixtures", "comm_grid_llm_suite_manifest.json")
+	workdir := t.TempDir()
+	if err := os.Chdir(workdir); err != nil {
+		t.Fatalf("chdir tempdir: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = os.Chdir(origWD)
+	})
+
+	out, err := captureStdoutForCommGridLLM(func() error {
+		return run(context.Background(), []string{"comm-grid-llm-suite", "--manifest", manifestPath})
+	})
+	if err != nil {
+		t.Fatalf("fixture manifest command: %v", err)
+	}
+	if !strings.Contains(out, "comm-grid-fixture-suite\t3\t2") {
+		t.Fatalf("expected fixture manifest summary, got %s", out)
+	}
+	for _, runID := range []string{
+		"comm-grid-fixture-suite-solve-strict-r1",
+		"comm-grid-fixture-suite-tool-strict-r1",
+		"comm-grid-fixture-suite-invalid-strict-r1",
+	} {
+		if !strings.Contains(out, runID) {
+			t.Fatalf("expected fixture manifest run %s, got %s", runID, out)
+		}
+		_ = readCommGridLLMTestArtifact(t, workdir, runID)
+	}
+	indexData, err := os.ReadFile(filepath.Join(workdir, "benchmarks", "comm_grid_llm_runs.jsonl"))
+	if err != nil {
+		t.Fatalf("read fixture manifest index: %v", err)
+	}
+	lines := strings.Split(strings.TrimSpace(string(indexData)), "\n")
+	if len(lines) != 3 {
+		t.Fatalf("expected three fixture manifest index rows, got %d: %s", len(lines), string(indexData))
+	}
+}
+
 func TestCommGridLLMSuiteCommandManifestAllowsCLIOverrides(t *testing.T) {
 	origWD, err := os.Getwd()
 	if err != nil {

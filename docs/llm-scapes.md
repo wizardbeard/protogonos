@@ -506,6 +506,13 @@ Run the same suite from a JSON manifest:
 protogonosctl comm-grid-llm-suite --manifest suite.json
 ```
 
+Run the checked-in fixture manifest:
+
+```bash
+protogonosctl comm-grid-llm-suite \
+  --manifest testdata/fixtures/comm_grid_llm_suite_manifest.json
+```
+
 Disable artifact writes for quick console checks:
 
 ```bash
@@ -666,6 +673,7 @@ A small first slice should avoid provider lock-in:
 - add token and duration summaries to the run index and compare output,
 - add `protogonosctl comm-grid-llm-suite` to run plan and prompt-variant batches through the normal artifact/index path,
 - add JSON manifest input for `protogonosctl comm-grid-llm-suite`, with explicit CLI flags taking precedence,
+- add `testdata/fixtures/comm_grid_llm_suite_manifest.json` as a known-good fixture suite,
 - add tests for deterministic replay, invalid output handling, timeout handling, and token-cost fitness.
 
 This gives the system a useful LLM integration path without making evolution depend on unbounded free-form text.

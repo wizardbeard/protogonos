@@ -578,6 +578,7 @@ Status keys:
 - Added token and duration summaries to the `comm-grid-llm` run index and compare output.
 - Added `protogonosctl comm-grid-llm-suite` to run plan and prompt-variant batches through the normal artifact and run-index path.
 - Added JSON manifest input for `protogonosctl comm-grid-llm-suite`, with explicit CLI flags taking precedence.
+- Added `testdata/fixtures/comm_grid_llm_suite_manifest.json` as a known-good fixture suite.
 
 ## Current-scope parity declaration
 
