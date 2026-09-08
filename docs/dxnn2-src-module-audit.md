@@ -385,6 +385,7 @@ Status legend:
 - 2026-09-08: added `comm_grid_llm_transcript.md` beside the JSON artifact for quick provider-turn inspection.
 - 2026-09-08: added provider retry/backoff controls for `comm-grid-llm`, with stored retry attempts in JSON artifacts and transcripts.
 - 2026-09-08: added `benchmarks/comm_grid_llm_runs.jsonl` append-only summary records for easier LLM run comparison.
+- 2026-09-08: added read-only `protogonosctl comm-grid-llm-runs` table and JSON views over the JSONL run index.
 
 ## Summary
 

@@ -443,6 +443,19 @@ protogonosctl comm-grid-llm \
 It also writes `benchmarks/<run-id>/comm_grid_llm_transcript.md` for quick inspection.
 Each artifact write appends one summary line to `benchmarks/comm_grid_llm_runs.jsonl`.
 
+List indexed runs:
+
+```bash
+protogonosctl comm-grid-llm-runs
+```
+
+Filter or emit JSON:
+
+```bash
+protogonosctl comm-grid-llm-runs --completed false
+protogonosctl comm-grid-llm-runs --provider fixture --plan solve --json
+```
+
 Disable artifact writes for quick console checks:
 
 ```bash
@@ -593,6 +606,7 @@ A small first slice should avoid provider lock-in:
 - write `comm_grid_llm_transcript.md` beside the JSON artifact for quick provider-turn inspection,
 - add provider retry/backoff controls with stored attempts in JSON artifacts and transcripts,
 - append `benchmarks/comm_grid_llm_runs.jsonl` summary records for easier run comparison,
+- add read-only `protogonosctl comm-grid-llm-runs` table and JSON views over the JSONL run index,
 - add tests for deterministic replay, invalid output handling, timeout handling, and token-cost fitness.
 
 This gives the system a useful LLM integration path without making evolution depend on unbounded free-form text.

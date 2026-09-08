@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"context"
 	"encoding/json"
 	"errors"
@@ -112,6 +113,14 @@ type commGridLLMRunIndexEntry struct {
 	RetryCount     int                   `json:"retry_count"`
 	ArtifactPath   string                `json:"artifact_path"`
 	TranscriptPath string                `json:"transcript_path"`
+}
+
+type commGridLLMRunIndexFilter struct {
+	Limit           int
+	Provider        string
+	Plan            string
+	FilterCompleted bool
+	Completed       bool
 }
 
 type commGridLLMAttempt struct {
@@ -375,6 +384,46 @@ func runCommGridLLM(ctx context.Context, args []string) error {
 	if summary.ArtifactsDir != "" {
 		fmt.Printf("artifacts_dir=%s\n", filepath.Clean(summary.ArtifactsDir))
 	}
+	return nil
+}
+
+func runCommGridLLMRuns(ctx context.Context, args []string) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	fs := flag.NewFlagSet("comm-grid-llm-runs", flag.ContinueOnError)
+	jsonOut := fs.Bool("json", false, "emit run index as JSON")
+	limit := fs.Int("limit", 0, "maximum rows to print, 0 means all")
+	provider := fs.String("provider", "", "filter by provider")
+	plan := fs.String("plan", "", "filter by plan")
+	completed := fs.String("completed", "", "filter by completion status: true|false")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	if *limit < 0 {
+		return errors.New("limit must be >= 0")
+	}
+	completedFilter, filterCompleted, err := parseOptionalBoolFlag("completed", *completed)
+	if err != nil {
+		return err
+	}
+	entries, err := readCommGridLLMRunIndex(benchmarksDir)
+	if err != nil {
+		return err
+	}
+	entries = filterCommGridLLMRunIndex(entries, commGridLLMRunIndexFilter{
+		Limit:           *limit,
+		Provider:        *provider,
+		Plan:            *plan,
+		FilterCompleted: filterCompleted,
+		Completed:       completedFilter,
+	})
+	if *jsonOut {
+		enc := json.NewEncoder(os.Stdout)
+		enc.SetIndent("", "  ")
+		return enc.Encode(entries)
+	}
+	printCommGridLLMRunIndexTable(entries)
 	return nil
 }
 
@@ -1033,6 +1082,93 @@ func appendCommGridLLMRunIndex(baseDir string, artifact commGridLLMArtifact, art
 		return err
 	}
 	return nil
+}
+
+func readCommGridLLMRunIndex(baseDir string) ([]commGridLLMRunIndexEntry, error) {
+	path := filepath.Join(baseDir, "comm_grid_llm_runs.jsonl")
+	file, err := os.Open(path)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	defer file.Close()
+
+	var entries []commGridLLMRunIndexEntry
+	scanner := bufio.NewScanner(file)
+	lineNumber := 0
+	for scanner.Scan() {
+		lineNumber++
+		line := strings.TrimSpace(scanner.Text())
+		if line == "" {
+			continue
+		}
+		var entry commGridLLMRunIndexEntry
+		if err := json.Unmarshal([]byte(line), &entry); err != nil {
+			return nil, fmt.Errorf("decode comm-grid llm run index line %d: %w", lineNumber, err)
+		}
+		entry.Task = normalizeCommGridLLMTask(entry.Task)
+		entries = append(entries, entry)
+	}
+	if err := scanner.Err(); err != nil {
+		return nil, err
+	}
+	return entries, nil
+}
+
+func filterCommGridLLMRunIndex(entries []commGridLLMRunIndexEntry, filter commGridLLMRunIndexFilter) []commGridLLMRunIndexEntry {
+	provider := strings.TrimSpace(strings.ToLower(filter.Provider))
+	plan := strings.TrimSpace(strings.ToLower(filter.Plan))
+	out := make([]commGridLLMRunIndexEntry, 0, len(entries))
+	for _, entry := range entries {
+		if provider != "" && strings.ToLower(entry.Provider) != provider {
+			continue
+		}
+		if plan != "" && strings.ToLower(entry.Plan) != plan {
+			continue
+		}
+		if filter.FilterCompleted && entry.Completed != filter.Completed {
+			continue
+		}
+		out = append(out, entry)
+	}
+	if filter.Limit > 0 && len(out) > filter.Limit {
+		out = out[len(out)-filter.Limit:]
+	}
+	return out
+}
+
+func printCommGridLLMRunIndexTable(entries []commGridLLMRunIndexEntry) {
+	fmt.Printf("RUN_ID\tPROVIDER\tPLAN\tSTEPS\tDONE\tFITNESS\tFAIL\tRETRY\tARTIFACT\n")
+	for _, entry := range entries {
+		fmt.Printf("%s\t%s\t%s\t%d\t%t\t%.6f\t%d\t%d\t%s\n",
+			entry.RunID,
+			entry.Provider,
+			entry.Plan,
+			entry.Steps,
+			entry.Completed,
+			entry.Fitness,
+			entry.FailureCount,
+			entry.RetryCount,
+			entry.ArtifactPath,
+		)
+	}
+}
+
+func parseOptionalBoolFlag(name, raw string) (bool, bool, error) {
+	value := strings.TrimSpace(strings.ToLower(raw))
+	if value == "" {
+		return false, false, nil
+	}
+	switch value {
+	case "true", "t", "1", "yes", "y":
+		return true, true, nil
+	case "false", "f", "0", "no", "n":
+		return false, true, nil
+	default:
+		return false, false, fmt.Errorf("%s must be true or false", name)
+	}
 }
 
 func commGridLLMFailureCount(steps []commGridLLMArtifactStep) int {

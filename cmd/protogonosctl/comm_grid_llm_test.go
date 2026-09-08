@@ -734,6 +734,134 @@ func TestCommGridLLMCommandAppendsRunIndex(t *testing.T) {
 	}
 }
 
+func TestCommGridLLMRunsCommandPrintsTableAndFilters(t *testing.T) {
+	origWD, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("getwd: %v", err)
+	}
+	workdir := t.TempDir()
+	if err := os.Chdir(workdir); err != nil {
+		t.Fatalf("chdir tempdir: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = os.Chdir(origWD)
+	})
+
+	if err := run(context.Background(), []string{"comm-grid-llm", "--run-id", "runs-good", "--plan", "solve"}); err != nil {
+		t.Fatalf("write good run: %v", err)
+	}
+	if err := run(context.Background(), []string{"comm-grid-llm", "--run-id", "runs-bad", "--plan", "provider-error", "--steps", "1"}); err != nil {
+		t.Fatalf("write failed run: %v", err)
+	}
+
+	out, err := captureStdoutForCommGridLLM(func() error {
+		return run(context.Background(), []string{"comm-grid-llm-runs"})
+	})
+	if err != nil {
+		t.Fatalf("list run index: %v", err)
+	}
+	if !strings.Contains(out, "RUN_ID\tPROVIDER\tPLAN\tSTEPS\tDONE\tFITNESS\tFAIL\tRETRY\tARTIFACT") {
+		t.Fatalf("expected table header, got %s", out)
+	}
+	if !strings.Contains(out, "runs-good") || !strings.Contains(out, "runs-bad") {
+		t.Fatalf("expected both runs, got %s", out)
+	}
+
+	filtered, err := captureStdoutForCommGridLLM(func() error {
+		return run(context.Background(), []string{"comm-grid-llm-runs", "--completed", "false"})
+	})
+	if err != nil {
+		t.Fatalf("filter run index: %v", err)
+	}
+	if strings.Contains(filtered, "runs-good") || !strings.Contains(filtered, "runs-bad") {
+		t.Fatalf("expected only failed run, got %s", filtered)
+	}
+}
+
+func TestCommGridLLMRunsCommandEmitsJSONWithLimit(t *testing.T) {
+	origWD, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("getwd: %v", err)
+	}
+	workdir := t.TempDir()
+	if err := os.Chdir(workdir); err != nil {
+		t.Fatalf("chdir tempdir: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = os.Chdir(origWD)
+	})
+
+	for _, runID := range []string{"json-index-a", "json-index-b"} {
+		if err := run(context.Background(), []string{"comm-grid-llm", "--run-id", runID, "--plan", "solve"}); err != nil {
+			t.Fatalf("write indexed run %s: %v", runID, err)
+		}
+	}
+	out, err := captureStdoutForCommGridLLM(func() error {
+		return run(context.Background(), []string{"comm-grid-llm-runs", "--json", "--limit", "1"})
+	})
+	if err != nil {
+		t.Fatalf("json run index: %v", err)
+	}
+	var entries []commGridLLMRunIndexEntry
+	if err := json.Unmarshal([]byte(out), &entries); err != nil {
+		t.Fatalf("decode run index json: %v\n%s", err, out)
+	}
+	if len(entries) != 1 || entries[0].RunID != "json-index-b" {
+		t.Fatalf("expected latest indexed run, got %+v", entries)
+	}
+}
+
+func TestCommGridLLMRunsCommandHandlesMissingIndex(t *testing.T) {
+	origWD, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("getwd: %v", err)
+	}
+	workdir := t.TempDir()
+	if err := os.Chdir(workdir); err != nil {
+		t.Fatalf("chdir tempdir: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = os.Chdir(origWD)
+	})
+
+	out, err := captureStdoutForCommGridLLM(func() error {
+		return run(context.Background(), []string{"comm-grid-llm-runs"})
+	})
+	if err != nil {
+		t.Fatalf("missing run index: %v", err)
+	}
+	if strings.TrimSpace(out) != "RUN_ID\tPROVIDER\tPLAN\tSTEPS\tDONE\tFITNESS\tFAIL\tRETRY\tARTIFACT" {
+		t.Fatalf("expected header only, got %q", out)
+	}
+}
+
+func TestCommGridLLMRunsCommandRejectsMalformedIndex(t *testing.T) {
+	origWD, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("getwd: %v", err)
+	}
+	workdir := t.TempDir()
+	if err := os.Chdir(workdir); err != nil {
+		t.Fatalf("chdir tempdir: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = os.Chdir(origWD)
+	})
+	if err := os.MkdirAll("benchmarks", 0o755); err != nil {
+		t.Fatalf("mkdir benchmarks: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join("benchmarks", "comm_grid_llm_runs.jsonl"), []byte("{bad json}\n"), 0o644); err != nil {
+		t.Fatalf("write malformed index: %v", err)
+	}
+	err = run(context.Background(), []string{"comm-grid-llm-runs"})
+	if err == nil {
+		t.Fatal("expected malformed index error")
+	}
+	if !strings.Contains(err.Error(), "decode comm-grid llm run index line 1") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
 func TestCommGridLLMCommandReplaysArtifacts(t *testing.T) {
 	origWD, err := os.Getwd()
 	if err != nil {
