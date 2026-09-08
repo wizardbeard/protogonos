@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/csv"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -1079,6 +1080,108 @@ func TestCommGridLLMSuiteCommandEmitsJSON(t *testing.T) {
 	}
 	if result.Runs[0].ArtifactsDir != "" || result.Runs[0].TotalTokens != 30 {
 		t.Fatalf("unexpected suite json run row: %+v", result.Runs[0])
+	}
+}
+
+func TestCommGridLLMSuiteCommandEmitsManifest(t *testing.T) {
+	origWD, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("getwd: %v", err)
+	}
+	workdir := t.TempDir()
+	if err := os.Chdir(workdir); err != nil {
+		t.Fatalf("chdir tempdir: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = os.Chdir(origWD)
+	})
+
+	out, err := captureStdoutForCommGridLLM(func() error {
+		return run(context.Background(), []string{
+			"comm-grid-llm-suite",
+			"--emit-manifest",
+			"--suite-id", "emit-suite",
+			"--plans", "solve,tool",
+			"--repeats", "2",
+			"--prompt", "strict=Return JSON only.",
+			"--retry-backoff-ms", "0",
+			"--artifacts=false",
+		})
+	})
+	if err != nil {
+		t.Fatalf("emit manifest command: %v", err)
+	}
+	var manifest commGridLLMSuiteManifest
+	if err := json.Unmarshal([]byte(out), &manifest); err != nil {
+		t.Fatalf("decode emitted manifest: %v\n%s", err, out)
+	}
+	if manifest.SuiteID != "emit-suite" || strings.Join(manifest.Plans, ",") != "solve,tool" {
+		t.Fatalf("unexpected emitted manifest ids: %+v", manifest)
+	}
+	if manifest.Repeats == nil || *manifest.Repeats != 2 || manifest.RetryBackoffMS == nil || *manifest.RetryBackoffMS != 0 {
+		t.Fatalf("unexpected emitted manifest integers: %+v", manifest)
+	}
+	if manifest.WriteArtifacts == nil || *manifest.WriteArtifacts {
+		t.Fatalf("expected emitted artifacts=false, got %+v", manifest.WriteArtifacts)
+	}
+	if len(manifest.PromptVariants) != 1 || manifest.PromptVariants[0].Name != "strict" {
+		t.Fatalf("unexpected emitted prompts: %+v", manifest.PromptVariants)
+	}
+	if _, err := os.Stat(filepath.Join(workdir, "benchmarks")); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("emit-manifest should not create benchmarks, err=%v", err)
+	}
+}
+
+func TestCommGridLLMSuiteCommandEmitsEffectiveManifestWithOverrides(t *testing.T) {
+	origWD, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("getwd: %v", err)
+	}
+	workdir := t.TempDir()
+	if err := os.Chdir(workdir); err != nil {
+		t.Fatalf("chdir tempdir: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = os.Chdir(origWD)
+	})
+	manifestText := `{
+		"suite_id": "emit-base",
+		"plans": ["provider-error"],
+		"repeats": 3,
+		"retry_backoff_ms": 0,
+		"prompts": [
+			{"name": "loose", "system_prompt": "Use JSON."}
+		]
+	}`
+	if err := os.WriteFile("suite.json", []byte(manifestText), 0o644); err != nil {
+		t.Fatalf("write manifest: %v", err)
+	}
+
+	out, err := captureStdoutForCommGridLLM(func() error {
+		return run(context.Background(), []string{
+			"comm-grid-llm-suite",
+			"--manifest", "suite.json",
+			"--emit-manifest",
+			"--suite-id", "emit-override",
+			"--plans", "solve",
+			"--prompt", "strict=Return JSON only.",
+		})
+	})
+	if err != nil {
+		t.Fatalf("emit effective manifest command: %v", err)
+	}
+	var manifest commGridLLMSuiteManifest
+	if err := json.Unmarshal([]byte(out), &manifest); err != nil {
+		t.Fatalf("decode emitted effective manifest: %v\n%s", err, out)
+	}
+	if manifest.SuiteID != "emit-override" || strings.Join(manifest.Plans, ",") != "solve" {
+		t.Fatalf("expected CLI id and plan overrides, got %+v", manifest)
+	}
+	if manifest.Repeats == nil || *manifest.Repeats != 3 || manifest.RetryBackoffMS == nil || *manifest.RetryBackoffMS != 0 {
+		t.Fatalf("expected manifest integer values to remain, got %+v", manifest)
+	}
+	if len(manifest.PromptVariants) != 1 || manifest.PromptVariants[0].Name != "strict" {
+		t.Fatalf("expected CLI prompt override, got %+v", manifest.PromptVariants)
 	}
 }
 

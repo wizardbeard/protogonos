@@ -579,6 +579,7 @@ Status keys:
 - Added `protogonosctl comm-grid-llm-suite` to run plan and prompt-variant batches through the normal artifact and run-index path.
 - Added JSON manifest input for `protogonosctl comm-grid-llm-suite`, with explicit CLI flags taking precedence.
 - Added `testdata/fixtures/comm_grid_llm_suite_manifest.json` as a known-good fixture suite.
+- Added `protogonosctl comm-grid-llm-suite --emit-manifest` to print the effective suite manifest without running the suite.
 
 ## Current-scope parity declaration
 

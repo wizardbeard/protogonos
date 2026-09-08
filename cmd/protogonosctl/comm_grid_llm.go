@@ -268,6 +268,39 @@ type commGridLLMSuiteManifestTargets struct {
 	PromptFlags     *commGridLLMPromptFlag
 }
 
+type commGridLLMSuiteManifestValues struct {
+	SuiteID         string
+	Plans           []string
+	Repeats         int
+	Provider        string
+	Steps           int
+	Width           int
+	Height          int
+	Key             string
+	Goal            string
+	AgentID         string
+	AgentPos        string
+	Agents          string
+	TurnOrder       string
+	SystemPrompt    string
+	AgentRoles      string
+	AgentPrompts    string
+	MessageLimit    int
+	BaseURL         string
+	APIKeyEnv       string
+	Model           string
+	TimeoutMS       int
+	ProviderRetries int
+	RetryBackoffMS  int
+	MaxTokens       int
+	Temperature     float64
+	Seed            int64
+	JSONMode        bool
+	Tools           bool
+	WriteArtifacts  bool
+	Prompts         []commGridLLMPromptVariant
+}
+
 type commGridLLMAttempt struct {
 	Attempt      int    `json:"attempt"`
 	Success      bool   `json:"success"`
@@ -579,6 +612,7 @@ func runCommGridLLMSingle(ctx context.Context, cfg commGridLLMSingleRunConfig) (
 func runCommGridLLMSuite(ctx context.Context, args []string) error {
 	fs := flag.NewFlagSet("comm-grid-llm-suite", flag.ContinueOnError)
 	manifestPath := fs.String("manifest", "", "optional suite manifest JSON path")
+	emitManifest := fs.Bool("emit-manifest", false, "print effective suite manifest JSON and exit")
 	suiteID := fs.String("suite-id", "", "suite id used as the run id prefix")
 	plansRaw := fs.String("plans", "solve,tool,invalid", "comma-separated fixture plans")
 	repeats := fs.Int("repeats", 1, "runs per plan and prompt variant")
@@ -675,6 +709,43 @@ func runCommGridLLMSuite(ctx context.Context, args []string) error {
 	prompts := commGridLLMPromptVariants(promptFlags, *systemPrompt)
 	if err := validateCommGridLLMPromptVariants(prompts); err != nil {
 		return err
+	}
+	if *emitManifest {
+		manifest := buildCommGridLLMSuiteManifest(commGridLLMSuiteManifestValues{
+			SuiteID:         *suiteID,
+			Plans:           plans,
+			Repeats:         *repeats,
+			Provider:        *providerName,
+			Steps:           *steps,
+			Width:           *width,
+			Height:          *height,
+			Key:             *key,
+			Goal:            *goal,
+			AgentID:         *agentID,
+			AgentPos:        *agentPos,
+			Agents:          *agents,
+			TurnOrder:       *turnOrder,
+			SystemPrompt:    *systemPrompt,
+			AgentRoles:      *agentRoles,
+			AgentPrompts:    *agentPrompts,
+			MessageLimit:    *messageLimit,
+			BaseURL:         *baseURL,
+			APIKeyEnv:       *apiKeyEnv,
+			Model:           *model,
+			TimeoutMS:       *timeoutMS,
+			ProviderRetries: *providerRetries,
+			RetryBackoffMS:  *retryBackoffMS,
+			MaxTokens:       *maxTokens,
+			Temperature:     *temperature,
+			Seed:            *seed,
+			JSONMode:        *jsonMode,
+			Tools:           *tools,
+			WriteArtifacts:  *writeArtifacts,
+			Prompts:         prompts,
+		})
+		enc := json.NewEncoder(os.Stdout)
+		enc.SetIndent("", "  ")
+		return enc.Encode(manifest)
 	}
 	task, err := commGridLLMTaskFromFlags(commGridLLMTaskFlagValues{
 		Width:        *width,
@@ -1836,6 +1907,57 @@ func readCommGridLLMSuiteManifest(path string) (commGridLLMSuiteManifest, error)
 		return commGridLLMSuiteManifest{}, fmt.Errorf("decode comm-grid llm suite manifest: %w", err)
 	}
 	return manifest, nil
+}
+
+func buildCommGridLLMSuiteManifest(values commGridLLMSuiteManifestValues) commGridLLMSuiteManifest {
+	return commGridLLMSuiteManifest{
+		SuiteID:         strings.TrimSpace(values.SuiteID),
+		Plans:           append([]string(nil), values.Plans...),
+		Repeats:         commGridLLMIntPtr(values.Repeats),
+		Provider:        strings.TrimSpace(values.Provider),
+		Steps:           commGridLLMIntPtr(values.Steps),
+		Width:           commGridLLMIntPtr(values.Width),
+		Height:          commGridLLMIntPtr(values.Height),
+		Key:             strings.TrimSpace(values.Key),
+		Goal:            strings.TrimSpace(values.Goal),
+		AgentID:         strings.TrimSpace(values.AgentID),
+		AgentPos:        strings.TrimSpace(values.AgentPos),
+		Agents:          strings.TrimSpace(values.Agents),
+		TurnOrder:       strings.TrimSpace(values.TurnOrder),
+		SystemPrompt:    strings.TrimSpace(values.SystemPrompt),
+		AgentRoles:      strings.TrimSpace(values.AgentRoles),
+		AgentPrompts:    strings.TrimSpace(values.AgentPrompts),
+		MessageLimit:    commGridLLMIntPtr(values.MessageLimit),
+		BaseURL:         strings.TrimSpace(values.BaseURL),
+		APIKeyEnv:       strings.TrimSpace(values.APIKeyEnv),
+		Model:           strings.TrimSpace(values.Model),
+		TimeoutMS:       commGridLLMIntPtr(values.TimeoutMS),
+		ProviderRetries: commGridLLMIntPtr(values.ProviderRetries),
+		RetryBackoffMS:  commGridLLMIntPtr(values.RetryBackoffMS),
+		MaxTokens:       commGridLLMIntPtr(values.MaxTokens),
+		Temperature:     commGridLLMFloat64Ptr(values.Temperature),
+		Seed:            commGridLLMInt64Ptr(values.Seed),
+		JSONMode:        commGridLLMBoolPtr(values.JSONMode),
+		Tools:           commGridLLMBoolPtr(values.Tools),
+		WriteArtifacts:  commGridLLMBoolPtr(values.WriteArtifacts),
+		PromptVariants:  append([]commGridLLMPromptVariant(nil), values.Prompts...),
+	}
+}
+
+func commGridLLMIntPtr(value int) *int {
+	return &value
+}
+
+func commGridLLMInt64Ptr(value int64) *int64 {
+	return &value
+}
+
+func commGridLLMFloat64Ptr(value float64) *float64 {
+	return &value
+}
+
+func commGridLLMBoolPtr(value bool) *bool {
+	return &value
 }
 
 func applyCommGridLLMSuiteManifest(manifest commGridLLMSuiteManifest, setFlags map[string]bool, target commGridLLMSuiteManifestTargets) {
