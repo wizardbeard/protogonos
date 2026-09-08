@@ -694,6 +694,30 @@ func TestScalarComponentsRegistered(t *testing.T) {
 	if llvmPhase.Name() != ScalarOutputActuatorName {
 		t.Fatalf("unexpected llvm phase actuator name: %s", llvmPhase.Name())
 	}
+	commGridInbox, err := ResolveSensor(CommGridLanguageInboxSensorName, "comm-grid")
+	if err != nil {
+		t.Fatalf("resolve comm-grid language inbox sensor: %v", err)
+	}
+	if commGridInbox.Name() != VectorInputSensorName {
+		t.Fatalf("unexpected comm-grid language inbox sensor name: %s", commGridInbox.Name())
+	}
+	commGridClaimScore, err := ResolveSensor(CommGridClaimScoreSensorName, "comm-grid")
+	if err != nil {
+		t.Fatalf("resolve comm-grid claim score sensor: %v", err)
+	}
+	if commGridClaimScore.Name() != ScalarInputSensorName {
+		t.Fatalf("unexpected comm-grid claim score sensor name: %s", commGridClaimScore.Name())
+	}
+	commGridMove, err := ResolveActuator(CommGridMoveActuatorName, "comm-grid")
+	if err != nil {
+		t.Fatalf("resolve comm-grid move actuator: %v", err)
+	}
+	if commGridMove.Name() != VectorOutputActuatorName {
+		t.Fatalf("unexpected comm-grid move actuator name: %s", commGridMove.Name())
+	}
+	if SensorCompatibleWithScape(CommGridLanguageInboxSensorName, "flatland") {
+		t.Fatal("expected comm-grid language inbox to be incompatible with flatland")
+	}
 
 	if _, err := ResolveSensor(Pole2CartPositionSensorName, "pb_sim"); err != nil {
 		t.Fatalf("resolve pole2 alias sensor pb_sim: %v", err)

@@ -289,6 +289,8 @@ For LLM agents, the scape can pass text directly and decode the response into bo
 
 The first implementation slice is deterministic and does not call an LLM. It defines the world, actions, messages, bounded scoring, and trace shape first. LLM actors can be added after this core loop is stable.
 
+The second slice adds language IO names and structured language-action decoding. The decoder maps JSON fields such as `action`, `message`, `to`, and `tokens` into bounded simulator inputs. This keeps provider output parseable before any real provider is wired into the scape.
+
 World:
 
 - small grid,

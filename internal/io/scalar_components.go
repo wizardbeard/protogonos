@@ -101,6 +101,13 @@ const (
 	LLVMDiversitySensorName             = "llvm_diversity"
 	LLVMRuntimeGainSensorName           = "llvm_runtime_gain"
 	LLVMPhaseActuatorName               = "llvm_phase"
+	CommGridTaskBriefSensorName         = "comm_grid_task_brief"
+	CommGridLanguageInboxSensorName     = "comm_grid_language_inbox"
+	CommGridPublicChatSensorName        = "comm_grid_public_chat"
+	CommGridClaimScoreSensorName        = "comm_grid_claim_score"
+	CommGridMoveActuatorName            = "comm_grid_move"
+	CommGridLanguageSendActuatorName    = "comm_grid_language_send"
+	CommGridToolChoiceActuatorName      = "comm_grid_tool_choice"
 )
 
 type ScalarInputSensor struct {
@@ -1225,6 +1232,42 @@ func initializeDefaultComponents() {
 	if err != nil {
 		panic(err)
 	}
+	for _, name := range []string{
+		CommGridTaskBriefSensorName,
+		CommGridLanguageInboxSensorName,
+		CommGridPublicChatSensorName,
+	} {
+		err = RegisterSensorWithSpec(SensorSpec{
+			Name:          name,
+			Factory:       func() Sensor { return NewVectorInputSensor(nil) },
+			SchemaVersion: SupportedSchemaVersion,
+			CodecVersion:  SupportedCodecVersion,
+			Compatible: func(scape string) error {
+				if scape != "comm-grid" {
+					return fmt.Errorf("unsupported scape: %s", scape)
+				}
+				return nil
+			},
+		})
+		if err != nil {
+			panic(err)
+		}
+	}
+	err = RegisterSensorWithSpec(SensorSpec{
+		Name:          CommGridClaimScoreSensorName,
+		Factory:       func() Sensor { return NewScalarInputSensor(0) },
+		SchemaVersion: SupportedSchemaVersion,
+		CodecVersion:  SupportedCodecVersion,
+		Compatible: func(scape string) error {
+			if scape != "comm-grid" {
+				return fmt.Errorf("unsupported scape: %s", scape)
+			}
+			return nil
+		},
+	})
+	if err != nil {
+		panic(err)
+	}
 
 	err = RegisterActuatorWithSpec(ActuatorSpec{
 		Name:          ScalarOutputActuatorName,
@@ -1437,5 +1480,26 @@ func initializeDefaultComponents() {
 	})
 	if err != nil {
 		panic(err)
+	}
+	for _, name := range []string{
+		CommGridMoveActuatorName,
+		CommGridLanguageSendActuatorName,
+		CommGridToolChoiceActuatorName,
+	} {
+		err = RegisterActuatorWithSpec(ActuatorSpec{
+			Name:          name,
+			Factory:       func() Actuator { return NewVectorOutputActuator() },
+			SchemaVersion: SupportedSchemaVersion,
+			CodecVersion:  SupportedCodecVersion,
+			Compatible: func(scape string) error {
+				if scape != "comm-grid" {
+					return fmt.Errorf("unsupported scape: %s", scape)
+				}
+				return nil
+			},
+		})
+		if err != nil {
+			panic(err)
+		}
 	}
 }

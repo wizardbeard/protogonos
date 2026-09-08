@@ -134,3 +134,60 @@ func TestDecodeCommGridActionValidatesOutputWidth(t *testing.T) {
 		t.Fatal("expected width error")
 	}
 }
+
+func TestDecodeCommGridLanguageActionMapsStructuredMessage(t *testing.T) {
+	input, err := DecodeCommGridLanguageAction(" agent-1 ", []byte(`{
+		"action": "move-east",
+		"message": "key is east",
+		"to": "agent-2"
+	}`))
+	if err != nil {
+		t.Fatalf("DecodeCommGridLanguageAction: %v", err)
+	}
+	if input.AgentID != "agent-1" || input.Action != CommGridEast || input.To != "agent-2" {
+		t.Fatalf("unexpected decoded input: %+v", input)
+	}
+	if input.Message != "key is east" || input.Tokens != 3 {
+		t.Fatalf("unexpected decoded message: %+v", input)
+	}
+}
+
+func TestDecodeCommGridLanguageActionRejectsInvalidAction(t *testing.T) {
+	if _, err := DecodeCommGridLanguageAction("agent-1", []byte(`{"action":"teleport"}`)); err == nil {
+		t.Fatal("expected invalid action error")
+	}
+}
+
+func TestCommGridSimulatorRecordsDecodedLanguageAction(t *testing.T) {
+	sim := NewCommGridSimulator(CommGridConfig{
+		Width:    3,
+		Height:   3,
+		MaxSteps: 8,
+		Key:      CommGridPoint{X: 1, Y: 0},
+		Goal:     CommGridPoint{X: 2, Y: 0},
+		Agents: []CommGridAgentState{{
+			ID:       "agent-1",
+			Position: CommGridPoint{},
+		}},
+	})
+	input, err := DecodeCommGridLanguageAction("agent-1", []byte(`{
+		"action": "move_east",
+		"message": "moving to key",
+		"to": "all",
+		"tokens": 8
+	}`))
+	if err != nil {
+		t.Fatalf("DecodeCommGridLanguageAction: %v", err)
+	}
+	result, err := sim.Step(context.Background(), input)
+	if err != nil {
+		t.Fatalf("Step: %v", err)
+	}
+	if result.InvalidAction {
+		t.Fatalf("expected decoded move to be valid, result=%+v", result)
+	}
+	messages := sim.Messages()
+	if len(messages) != 1 || messages[0].Text != "moving to key" || messages[0].Tokens != 8 {
+		t.Fatalf("unexpected messages: %+v", messages)
+	}
+}

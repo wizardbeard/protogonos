@@ -2,6 +2,7 @@ package scape
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"math"
 	"strings"
@@ -58,6 +59,13 @@ type CommGridStepInput struct {
 	Message string
 	To      string
 	Tokens  int
+}
+
+type CommGridLanguageAction struct {
+	Action  string `json:"action"`
+	Message string `json:"message,omitempty"`
+	To      string `json:"to,omitempty"`
+	Tokens  int    `json:"tokens,omitempty"`
 }
 
 type CommGridStepResult struct {
@@ -337,6 +345,55 @@ func DecodeCommGridAction(output []float64) (CommGridAction, error) {
 		return CommGridSouth, nil
 	}
 	return CommGridNorth, nil
+}
+
+func DecodeCommGridLanguageAction(agentID string, payload []byte) (CommGridStepInput, error) {
+	var decoded CommGridLanguageAction
+	if err := json.Unmarshal(payload, &decoded); err != nil {
+		return CommGridStepInput{}, err
+	}
+	action, err := ParseCommGridAction(decoded.Action)
+	if err != nil {
+		return CommGridStepInput{}, err
+	}
+	tokens := decoded.Tokens
+	if tokens < 0 {
+		tokens = 0
+	}
+	if tokens == 0 && strings.TrimSpace(decoded.Message) != "" {
+		tokens = len(strings.Fields(decoded.Message))
+	}
+	return CommGridStepInput{
+		AgentID: strings.TrimSpace(agentID),
+		Action:  action,
+		Message: strings.TrimSpace(decoded.Message),
+		To:      strings.TrimSpace(decoded.To),
+		Tokens:  tokens,
+	}, nil
+}
+
+func ParseCommGridAction(action string) (CommGridAction, error) {
+	normalized := strings.TrimSpace(strings.ToLower(action))
+	normalized = strings.ReplaceAll(normalized, "-", "_")
+	normalized = strings.TrimPrefix(normalized, "move_")
+	switch normalized {
+	case "", "stay", "wait", "none":
+		return CommGridStay, nil
+	case "north", "up", "n":
+		return CommGridNorth, nil
+	case "south", "down", "s":
+		return CommGridSouth, nil
+	case "east", "right", "e":
+		return CommGridEast, nil
+	case "west", "left", "w":
+		return CommGridWest, nil
+	case "pick", "pickup", "pick_up":
+		return CommGridPick, nil
+	case "drop", "deliver":
+		return CommGridDrop, nil
+	default:
+		return "", fmt.Errorf("unsupported comm-grid action: %s", action)
+	}
 }
 
 func commGridStepVector(sim *CommGridSimulator, agent CommGridAgentState) []float64 {
