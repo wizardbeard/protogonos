@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"encoding/csv"
 	"encoding/json"
@@ -2004,10 +2005,101 @@ func readCommGridLLMSuiteManifest(path string) (commGridLLMSuiteManifest, error)
 		return commGridLLMSuiteManifest{}, err
 	}
 	var manifest commGridLLMSuiteManifest
-	if err := json.Unmarshal(data, &manifest); err != nil {
+	dec := json.NewDecoder(bytes.NewReader(data))
+	dec.DisallowUnknownFields()
+	if err := dec.Decode(&manifest); err != nil {
 		return commGridLLMSuiteManifest{}, fmt.Errorf("decode comm-grid llm suite manifest: %w", err)
 	}
+	if err := validateCommGridLLMSuiteManifest(manifest); err != nil {
+		return commGridLLMSuiteManifest{}, err
+	}
 	return manifest, nil
+}
+
+func validateCommGridLLMSuiteManifest(manifest commGridLLMSuiteManifest) error {
+	if strings.TrimSpace(manifest.SuiteID) != "" {
+		if err := validateCommGridLLMRunID(manifest.SuiteID); err != nil {
+			return fmt.Errorf("suite_id: %w", err)
+		}
+	}
+	if len(manifest.Plans) > 0 {
+		if _, err := parseCommGridLLMNameList(strings.Join(manifest.Plans, ",")); err != nil {
+			return fmt.Errorf("plans: %w", err)
+		}
+	}
+	if err := validateOptionalPositiveInt("repeats", manifest.Repeats); err != nil {
+		return err
+	}
+	if err := validateOptionalPositiveInt("steps", manifest.Steps); err != nil {
+		return err
+	}
+	if err := validateOptionalPositiveInt("width", manifest.Width); err != nil {
+		return err
+	}
+	if err := validateOptionalPositiveInt("height", manifest.Height); err != nil {
+		return err
+	}
+	if strings.TrimSpace(manifest.Key) != "" {
+		if _, err := parseCommGridLLMPoint("key", manifest.Key); err != nil {
+			return fmt.Errorf("key: %w", err)
+		}
+	}
+	if strings.TrimSpace(manifest.Goal) != "" {
+		if _, err := parseCommGridLLMPoint("goal", manifest.Goal); err != nil {
+			return fmt.Errorf("goal: %w", err)
+		}
+	}
+	if strings.TrimSpace(manifest.AgentPos) != "" {
+		if _, err := parseCommGridLLMPoint("agent_pos", manifest.AgentPos); err != nil {
+			return fmt.Errorf("agent_pos: %w", err)
+		}
+	}
+	if strings.TrimSpace(manifest.Agents) != "" {
+		if _, err := parseCommGridLLMAgents(manifest.Agents); err != nil {
+			return fmt.Errorf("agents: %w", err)
+		}
+	}
+	if err := validateOptionalPositiveInt("message_limit", manifest.MessageLimit); err != nil {
+		return err
+	}
+	if err := validateOptionalPositiveInt("timeout_ms", manifest.TimeoutMS); err != nil {
+		return err
+	}
+	if err := validateOptionalNonNegativeInt("provider_retries", manifest.ProviderRetries); err != nil {
+		return err
+	}
+	if err := validateOptionalNonNegativeInt("retry_backoff_ms", manifest.RetryBackoffMS); err != nil {
+		return err
+	}
+	if err := validateOptionalPositiveInt("max_tokens", manifest.MaxTokens); err != nil {
+		return err
+	}
+	if manifest.Temperature != nil && *manifest.Temperature < 0 {
+		return errors.New("temperature must be >= 0")
+	}
+	if strings.TrimSpace(strings.ToLower(manifest.Provider)) == "openai-compatible" && strings.TrimSpace(manifest.Model) == "" {
+		return errors.New("model required when provider is openai-compatible")
+	}
+	if len(manifest.PromptVariants) > 0 {
+		if err := validateCommGridLLMPromptVariants(manifest.PromptVariants); err != nil {
+			return fmt.Errorf("prompts: %w", err)
+		}
+	}
+	return nil
+}
+
+func validateOptionalPositiveInt(name string, value *int) error {
+	if value != nil && *value <= 0 {
+		return fmt.Errorf("%s must be > 0", name)
+	}
+	return nil
+}
+
+func validateOptionalNonNegativeInt(name string, value *int) error {
+	if value != nil && *value < 0 {
+		return fmt.Errorf("%s must be >= 0", name)
+	}
+	return nil
 }
 
 func buildCommGridLLMSuiteManifest(values commGridLLMSuiteManifestValues) commGridLLMSuiteManifest {

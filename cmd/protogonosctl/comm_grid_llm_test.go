@@ -1675,6 +1675,130 @@ func TestCommGridLLMSuiteCommandManifestAllowsCLIOverrides(t *testing.T) {
 	}
 }
 
+func TestCommGridLLMSuiteCommandRejectsManifestUnknownField(t *testing.T) {
+	origWD, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("getwd: %v", err)
+	}
+	workdir := t.TempDir()
+	if err := os.Chdir(workdir); err != nil {
+		t.Fatalf("chdir tempdir: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = os.Chdir(origWD)
+	})
+	manifest := `{
+		"suite_id": "bad-manifest",
+		"unknown": true
+	}`
+	if err := os.WriteFile("suite.json", []byte(manifest), 0o644); err != nil {
+		t.Fatalf("write manifest: %v", err)
+	}
+
+	_, err = captureStdoutForCommGridLLM(func() error {
+		return run(context.Background(), []string{"comm-grid-llm-suite", "--manifest", "suite.json"})
+	})
+	if err == nil {
+		t.Fatal("expected unknown field error")
+	}
+	if !strings.Contains(err.Error(), "decode comm-grid llm suite manifest") || !strings.Contains(err.Error(), `unknown field "unknown"`) {
+		t.Fatalf("expected unknown field detail, got %v", err)
+	}
+}
+
+func TestCommGridLLMSuiteCommandRejectsManifestFieldValidation(t *testing.T) {
+	origWD, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("getwd: %v", err)
+	}
+	workdir := t.TempDir()
+	if err := os.Chdir(workdir); err != nil {
+		t.Fatalf("chdir tempdir: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = os.Chdir(origWD)
+	})
+	manifest := `{
+		"suite_id": "bad-manifest",
+		"steps": 0
+	}`
+	if err := os.WriteFile("suite.json", []byte(manifest), 0o644); err != nil {
+		t.Fatalf("write manifest: %v", err)
+	}
+
+	_, err = captureStdoutForCommGridLLM(func() error {
+		return run(context.Background(), []string{"comm-grid-llm-suite", "--manifest", "suite.json"})
+	})
+	if err == nil {
+		t.Fatal("expected field validation error")
+	}
+	if !strings.Contains(err.Error(), "steps must be > 0") {
+		t.Fatalf("expected steps validation detail, got %v", err)
+	}
+}
+
+func TestCommGridLLMSuiteCommandRejectsManifestProviderWithoutModel(t *testing.T) {
+	origWD, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("getwd: %v", err)
+	}
+	workdir := t.TempDir()
+	if err := os.Chdir(workdir); err != nil {
+		t.Fatalf("chdir tempdir: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = os.Chdir(origWD)
+	})
+	manifest := `{
+		"suite_id": "bad-manifest",
+		"provider": "openai-compatible"
+	}`
+	if err := os.WriteFile("suite.json", []byte(manifest), 0o644); err != nil {
+		t.Fatalf("write manifest: %v", err)
+	}
+
+	_, err = captureStdoutForCommGridLLM(func() error {
+		return run(context.Background(), []string{"comm-grid-llm-suite", "--manifest", "suite.json"})
+	})
+	if err == nil {
+		t.Fatal("expected provider validation error")
+	}
+	if !strings.Contains(err.Error(), "model required when provider is openai-compatible") {
+		t.Fatalf("expected provider validation detail, got %v", err)
+	}
+}
+
+func TestCommGridLLMSuiteCommandRejectsManifestPointValidation(t *testing.T) {
+	origWD, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("getwd: %v", err)
+	}
+	workdir := t.TempDir()
+	if err := os.Chdir(workdir); err != nil {
+		t.Fatalf("chdir tempdir: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = os.Chdir(origWD)
+	})
+	manifest := `{
+		"suite_id": "bad-manifest",
+		"key": "bad"
+	}`
+	if err := os.WriteFile("suite.json", []byte(manifest), 0o644); err != nil {
+		t.Fatalf("write manifest: %v", err)
+	}
+
+	_, err = captureStdoutForCommGridLLM(func() error {
+		return run(context.Background(), []string{"comm-grid-llm-suite", "--manifest", "suite.json"})
+	})
+	if err == nil {
+		t.Fatal("expected point validation error")
+	}
+	if !strings.Contains(err.Error(), "key:") || !strings.Contains(err.Error(), "must use x,y") {
+		t.Fatalf("expected point validation detail, got %v", err)
+	}
+}
+
 func TestCommGridLLMRunsCommandRejectsUnsafeTranscriptPath(t *testing.T) {
 	origWD, err := os.Getwd()
 	if err != nil {

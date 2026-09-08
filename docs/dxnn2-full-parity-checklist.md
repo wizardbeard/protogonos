@@ -578,6 +578,7 @@ Status keys:
 - Added token and duration summaries to the `comm-grid-llm` run index and compare output.
 - Added `protogonosctl comm-grid-llm-suite` to run plan and prompt-variant batches through the normal artifact and run-index path.
 - Added JSON manifest input for `protogonosctl comm-grid-llm-suite`, with explicit CLI flags taking precedence.
+- Added pre-execution validation for `comm-grid-llm-suite` manifests, including unknown-field rejection and field-specific errors.
 - Added `testdata/fixtures/comm_grid_llm_suite_manifest.json` as a known-good fixture suite.
 - Added `protogonosctl comm-grid-llm-suite --emit-manifest` to print the effective suite manifest without running the suite.
 - Added `protogonosctl comm-grid-llm-suite --dry-run` to preview the run matrix without provider calls or artifacts.

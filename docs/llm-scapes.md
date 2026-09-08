@@ -506,6 +506,8 @@ Run the same suite from a JSON manifest:
 protogonosctl comm-grid-llm-suite --manifest suite.json
 ```
 
+Manifest files are validated before any suite row runs. Unknown fields fail. Invalid ranges fail with field names.
+
 Run the checked-in fixture manifest:
 
 ```bash
@@ -718,6 +720,7 @@ A small first slice should avoid provider lock-in:
 - add token and duration summaries to the run index and compare output,
 - add `protogonosctl comm-grid-llm-suite` to run plan and prompt-variant batches through the normal artifact/index path,
 - add JSON manifest input for `protogonosctl comm-grid-llm-suite`, with explicit CLI flags taking precedence,
+- validate `protogonosctl comm-grid-llm-suite` manifests before execution, including unknown-field rejection and field-specific errors,
 - add `testdata/fixtures/comm_grid_llm_suite_manifest.json` as a known-good fixture suite,
 - add `protogonosctl comm-grid-llm-suite --emit-manifest` to print the effective suite manifest without running the suite,
 - add `protogonosctl comm-grid-llm-suite --dry-run` to preview the run matrix without provider calls or artifacts,
