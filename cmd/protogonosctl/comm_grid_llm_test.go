@@ -23,9 +23,9 @@ func TestCommGridLLMCommandRunsFixturePlan(t *testing.T) {
 	}
 	for _, want := range []string{
 		"comm_grid_llm run_id=comm-grid-llm-fixture-",
-		"provider=fixture plan=solve grid=3x3 key=(1,0) goal=(2,0) agent=agent-1@(0,0) steps=4 completed=true",
-		"step=1 action=east",
-		"step=4 action=drop",
+		"provider=fixture plan=solve grid=3x3 key=(1,0) goal=(2,0) agents=agent-1@(0,0) turn_order=agent-1 steps=4 completed=true",
+		"step=1 actor=agent-1 action=east",
+		"step=4 actor=agent-1 action=drop",
 	} {
 		if !strings.Contains(out, want) {
 			t.Fatalf("expected output to contain %q, got %s", want, out)
@@ -259,7 +259,7 @@ func TestCommGridLLMCommandWritesCustomTaskArtifactAndReplays(t *testing.T) {
 	if err != nil {
 		t.Fatalf("custom task command: %v", err)
 	}
-	if !strings.Contains(out, "grid=4x2") || !strings.Contains(out, "agent=worker-a@(0,0)") {
+	if !strings.Contains(out, "grid=4x2") || !strings.Contains(out, "agents=worker-a@(0,0)") {
 		t.Fatalf("expected custom task output, got %s", out)
 	}
 
@@ -293,6 +293,71 @@ func TestCommGridLLMCommandWritesCustomTaskArtifactAndReplays(t *testing.T) {
 	}
 	if summary.Replay == nil || !summary.Replay.Matched || summary.Task.AgentID != "worker-a" {
 		t.Fatalf("expected matched custom replay, summary=%+v", summary)
+	}
+}
+
+func TestCommGridLLMCommandWritesMultiAgentTurnsAndReplays(t *testing.T) {
+	origWD, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("getwd: %v", err)
+	}
+	workdir := t.TempDir()
+	if err := os.Chdir(workdir); err != nil {
+		t.Fatalf("chdir tempdir: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = os.Chdir(origWD)
+	})
+
+	out, err := captureStdoutForCommGridLLM(func() error {
+		return run(context.Background(), []string{
+			"comm-grid-llm",
+			"--run-id", "multi-agent-run",
+			"--plan", "multi-solve",
+			"--agents", "agent-a@0,0:agent-b@0,1",
+			"--turn-order", "agent-a,agent-b",
+		})
+	})
+	if err != nil {
+		t.Fatalf("multi-agent command: %v", err)
+	}
+	if !strings.Contains(out, "agents=agent-a@(0,0),agent-b@(0,1)") || !strings.Contains(out, "turn_order=agent-a,agent-b") {
+		t.Fatalf("expected multi-agent output, got %s", out)
+	}
+	if !strings.Contains(out, "step=2 actor=agent-b action=stay") || !strings.Contains(out, "step=7 actor=agent-a action=drop") {
+		t.Fatalf("expected alternating actor output, got %s", out)
+	}
+
+	artifact := readCommGridLLMTestArtifact(t, workdir, "multi-agent-run")
+	if !artifact.Completed || len(artifact.Steps) != 7 {
+		t.Fatalf("unexpected multi-agent artifact summary: %+v", artifact)
+	}
+	if len(artifact.Task.Agents) != 2 || strings.Join(artifact.Task.TurnOrder, ",") != "agent-a,agent-b" {
+		t.Fatalf("unexpected stored multi-agent task: %+v", artifact.Task)
+	}
+	if artifact.Steps[0].Result.ActorID != "agent-a" || artifact.Steps[1].Result.ActorID != "agent-b" || artifact.Steps[6].Result.ActorID != "agent-a" {
+		t.Fatalf("unexpected stored actor order: %+v", artifact.Steps)
+	}
+	if artifact.Steps[1].Parsed.AgentID != "agent-b" {
+		t.Fatalf("expected parsed action to use scheduled actor, step=%+v", artifact.Steps[1])
+	}
+
+	replayOut, err := captureStdoutForCommGridLLM(func() error {
+		return run(context.Background(), []string{
+			"comm-grid-llm",
+			"--replay-run-id", "multi-agent-run",
+			"--json",
+		})
+	})
+	if err != nil {
+		t.Fatalf("replay multi-agent command: %v", err)
+	}
+	var summary commGridLLMCommandSummary
+	if err := json.Unmarshal([]byte(replayOut), &summary); err != nil {
+		t.Fatalf("decode multi-agent replay json: %v\n%s", err, replayOut)
+	}
+	if summary.Replay == nil || !summary.Replay.Matched || len(summary.Task.Agents) != 2 {
+		t.Fatalf("expected matched multi-agent replay, summary=%+v", summary)
 	}
 }
 

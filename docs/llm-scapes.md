@@ -472,13 +472,24 @@ protogonosctl comm-grid-llm \
   --message-limit 40
 ```
 
+Run a simple multi-agent fixture with fixed sequential turns:
+
+```bash
+protogonosctl comm-grid-llm \
+  --run-id comm-grid-multi-001 \
+  --plan multi-solve \
+  --agents 'agent-a@0,0:agent-b@0,1' \
+  --turn-order agent-a,agent-b
+```
+
 Fixture plans:
 
 - `solve`: uses assistant message JSON and completes the key-delivery task,
 - `tool`: uses tool-call argument JSON and completes the same task,
 - `invalid`: starts with one invalid wall move, then recovers,
 - `malformed`: returns unsupported JSON actions and records bounded failure steps,
-- `provider-error`: simulates provider errors or timeouts and records bounded failure steps.
+- `provider-error`: simulates provider errors or timeouts and records bounded failure steps,
+- `multi-solve`: alternates two agents over shared message history and completes the key-delivery task.
 
 The same command can use a live OpenAI-compatible endpoint when requested:
 
@@ -496,7 +507,7 @@ Fixture mode remains the default. Live provider mode is explicit so local tests 
 The artifact file stores:
 
 - provider mode and run ID,
-- task geometry, key, goal, agent start, and message limit,
+- task geometry, key, goal, agents, turn order, and message limit,
 - prompt request,
 - provider response,
 - parsed bounded action,
@@ -527,6 +538,7 @@ A small first slice should avoid provider lock-in:
 - replay `comm_grid_llm.json` artifacts with stored provider responses and report final-trace match status,
 - convert malformed output, provider errors, and provider timeouts into bounded failed steps that remain artifact-backed and replayable,
 - add configurable `comm-grid-llm` task geometry, key, goal, agent ID, agent start, and message limit, persisted in artifacts and reused on replay,
+- add multi-agent `comm-grid-llm` fixture runs with fixed sequential turns, shared message history, per-step actor IDs, artifact persistence, and replay reuse,
 - add tests for deterministic replay, invalid output handling, timeout handling, and token-cost fitness.
 
 This gives the system a useful LLM integration path without making evolution depend on unbounded free-form text.

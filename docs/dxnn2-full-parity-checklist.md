@@ -566,6 +566,7 @@ Status keys:
 - Added `comm-grid-llm` artifact replay via `--replay-run-id`, feeding stored provider responses through the fixture provider and reporting final-trace match status.
 - Added bounded `comm-grid-llm` failure-step handling for malformed output, provider errors, and provider timeouts, with artifact and replay coverage.
 - Added configurable `comm-grid-llm` task geometry, key, goal, agent ID, agent start, and message limit, with artifact persistence and replay reuse.
+- Added multi-agent `comm-grid-llm` fixture runs with fixed sequential turns, shared message history, per-step actor IDs, artifact persistence, and replay reuse.
 
 ## Current-scope parity declaration
 

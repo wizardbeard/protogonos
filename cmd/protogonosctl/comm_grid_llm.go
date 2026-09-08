@@ -18,6 +18,7 @@ import (
 
 type commGridLLMCommandStep struct {
 	Step          int                     `json:"step"`
+	ActorID       string                  `json:"actor_id"`
 	Action        string                  `json:"action"`
 	Message       string                  `json:"message,omitempty"`
 	To            string                  `json:"to,omitempty"`
@@ -65,7 +66,14 @@ type commGridLLMTaskConfig struct {
 	Goal         scape.CommGridPoint `json:"goal"`
 	AgentID      string              `json:"agent_id"`
 	Agent        scape.CommGridPoint `json:"agent"`
+	Agents       []commGridLLMAgent  `json:"agents,omitempty"`
+	TurnOrder    []string            `json:"turn_order,omitempty"`
 	MessageLimit int                 `json:"message_limit"`
+}
+
+type commGridLLMAgent struct {
+	ID       string              `json:"id"`
+	Position scape.CommGridPoint `json:"position"`
 }
 
 type commGridLLMReplayResult struct {
@@ -117,6 +125,8 @@ func runCommGridLLM(ctx context.Context, args []string) error {
 	goal := fs.String("goal", "2,0", "comm-grid goal position as x,y")
 	agentID := fs.String("agent", "agent-1", "comm-grid agent id")
 	agentPos := fs.String("agent-pos", "0,0", "comm-grid agent start position as x,y")
+	agents := fs.String("agents", "", "comm-grid agents as id@x,y:id@x,y")
+	turnOrder := fs.String("turn-order", "", "comm-grid turn order as comma-separated agent ids")
 	messageLimit := fs.Int("message-limit", 80, "maximum stored message characters")
 	baseURL := fs.String("base-url", "", "OpenAI-compatible base URL ending in /v1")
 	apiKeyEnv := fs.String("api-key-env", "PROTOGONOS_LLM_API_KEY", "environment variable containing provider API key")
@@ -142,6 +152,8 @@ func runCommGridLLM(ctx context.Context, args []string) error {
 		Goal:         *goal,
 		AgentID:      *agentID,
 		Agent:        *agentPos,
+		Agents:       *agents,
+		TurnOrder:    *turnOrder,
 		MessageLimit: *messageLimit,
 	})
 	if err != nil {
@@ -217,7 +229,7 @@ func runCommGridLLM(ctx context.Context, args []string) error {
 		enc.SetIndent("", "  ")
 		return enc.Encode(summary)
 	}
-	fmt.Printf("comm_grid_llm run_id=%s provider=%s plan=%s grid=%dx%d key=(%d,%d) goal=(%d,%d) agent=%s@(%d,%d) steps=%d completed=%t fitness=%.6f\n",
+	fmt.Printf("comm_grid_llm run_id=%s provider=%s plan=%s grid=%dx%d key=(%d,%d) goal=(%d,%d) agents=%s turn_order=%s steps=%d completed=%t fitness=%.6f\n",
 		summary.RunID,
 		summary.Provider,
 		summary.Plan,
@@ -227,16 +239,16 @@ func runCommGridLLM(ctx context.Context, args []string) error {
 		summary.Task.Key.Y,
 		summary.Task.Goal.X,
 		summary.Task.Goal.Y,
-		summary.Task.AgentID,
-		summary.Task.Agent.X,
-		summary.Task.Agent.Y,
+		commGridLLMAgentSummary(summary.Task.Agents),
+		strings.Join(summary.Task.TurnOrder, ","),
 		len(summary.Steps),
 		summary.Completed,
 		summary.Fitness,
 	)
 	for _, step := range summary.Steps {
-		fmt.Printf("step=%d action=%s invalid=%t done=%t fitness=%.6f message=%q to=%q\n",
+		fmt.Printf("step=%d actor=%s action=%s invalid=%t done=%t fitness=%.6f message=%q to=%q\n",
 			step.Step,
+			step.ActorID,
 			step.Action,
 			step.InvalidAction,
 			step.Done,
@@ -291,6 +303,7 @@ func runCommGridLLMReplay(ctx context.Context, runID string, jsonOut bool) error
 	if task.Width == 0 || task.Height == 0 || strings.TrimSpace(task.AgentID) == "" {
 		task = defaultCommGridLLMTaskConfig()
 	}
+	task = normalizeCommGridLLMTask(task)
 	summary, _, err := executeCommGridLLM(ctx, commGridLLMExecutionConfig{
 		RunID:           runID,
 		Provider:        &commGridLLMReplayProvider{steps: artifact.Steps},
@@ -347,6 +360,7 @@ func executeCommGridLLM(ctx context.Context, cfg commGridLLMExecutionConfig) (co
 	if task.Width == 0 || task.Height == 0 || strings.TrimSpace(task.AgentID) == "" {
 		task = defaultCommGridLLMTaskConfig()
 	}
+	task = normalizeCommGridLLMTask(task)
 	sim := scape.NewCommGridSimulator(scape.CommGridConfig{
 		Width:        task.Width,
 		Height:       task.Height,
@@ -354,20 +368,8 @@ func executeCommGridLLM(ctx context.Context, cfg commGridLLMExecutionConfig) (co
 		MessageLimit: task.MessageLimit,
 		Key:          task.Key,
 		Goal:         task.Goal,
-		Agents: []scape.CommGridAgentState{{
-			ID:       task.AgentID,
-			Position: task.Agent,
-		}},
+		Agents:       commGridLLMScapeAgents(task),
 	})
-	actor := scape.CommGridLLMActor{
-		AgentID:       task.AgentID,
-		Provider:      cfg.Provider,
-		Model:         cfg.ActorModel,
-		MaxTokens:     cfg.MaxTokens,
-		Temperature:   cfg.Temperature,
-		Seed:          cfg.Seed,
-		ResponseTools: cfg.UseTools,
-	}
 
 	summary := commGridLLMCommandSummary{
 		RunID:    cfg.RunID,
@@ -377,11 +379,21 @@ func executeCommGridLLM(ctx context.Context, cfg commGridLLMExecutionConfig) (co
 	}
 	artifactSteps := make([]commGridLLMArtifactStep, 0, cfg.MaxSteps)
 	for !sim.Done() && len(summary.Steps) < cfg.MaxSteps {
+		actorID := task.TurnOrder[len(summary.Steps)%len(task.TurnOrder)]
+		actor := scape.CommGridLLMActor{
+			AgentID:       actorID,
+			Provider:      cfg.Provider,
+			Model:         cfg.ActorModel,
+			MaxTokens:     cfg.MaxTokens,
+			Temperature:   cfg.Temperature,
+			Seed:          cfg.Seed,
+			ResponseTools: cfg.UseTools,
+		}
 		result, trace, err := actor.Step(ctx, sim)
 		if err != nil {
-			result, trace = commGridLLMFailedStep(ctx, sim, task.AgentID, len(summary.Steps)+1, trace, err)
+			result, trace = commGridLLMFailedStep(ctx, sim, actorID, len(summary.Steps)+1, trace, err)
 		}
-		state, _ := sim.AgentState(task.AgentID)
+		state, _ := sim.AgentState(actorID)
 		errText := ""
 		errKind := ""
 		if result.InvalidAction && trace.StepInput.Action == scape.CommGridAction("llm_failure") {
@@ -390,6 +402,7 @@ func executeCommGridLLM(ctx context.Context, cfg commGridLLMExecutionConfig) (co
 		}
 		step := commGridLLMCommandStep{
 			Step:          len(summary.Steps) + 1,
+			ActorID:       actorID,
 			Action:        string(trace.ParsedAction),
 			Message:       trace.StepInput.Message,
 			To:            trace.StepInput.To,
@@ -492,6 +505,8 @@ type commGridLLMTaskFlagValues struct {
 	Goal         string
 	AgentID      string
 	Agent        string
+	Agents       string
+	TurnOrder    string
 	MessageLimit int
 }
 
@@ -521,6 +536,18 @@ func commGridLLMTaskFromFlags(flags commGridLLMTaskFlagValues) (commGridLLMTaskC
 	if err != nil {
 		return commGridLLMTaskConfig{}, err
 	}
+	agents := []commGridLLMAgent{{
+		ID:       agentID,
+		Position: agent,
+	}}
+	if strings.TrimSpace(flags.Agents) != "" {
+		agents, err = parseCommGridLLMAgents(flags.Agents)
+		if err != nil {
+			return commGridLLMTaskConfig{}, err
+		}
+		agentID = agents[0].ID
+		agent = agents[0].Position
+	}
 	if !commGridLLMPointInBounds(key, flags.Width, flags.Height) {
 		return commGridLLMTaskConfig{}, fmt.Errorf("key out of bounds: %d,%d", key.X, key.Y)
 	}
@@ -530,6 +557,15 @@ func commGridLLMTaskFromFlags(flags commGridLLMTaskFlagValues) (commGridLLMTaskC
 	if !commGridLLMPointInBounds(agent, flags.Width, flags.Height) {
 		return commGridLLMTaskConfig{}, fmt.Errorf("agent-pos out of bounds: %d,%d", agent.X, agent.Y)
 	}
+	for _, configured := range agents {
+		if !commGridLLMPointInBounds(configured.Position, flags.Width, flags.Height) {
+			return commGridLLMTaskConfig{}, fmt.Errorf("agent out of bounds: %s@%d,%d", configured.ID, configured.Position.X, configured.Position.Y)
+		}
+	}
+	order, err := commGridLLMTurnOrder(flags.TurnOrder, agents)
+	if err != nil {
+		return commGridLLMTaskConfig{}, err
+	}
 	return commGridLLMTaskConfig{
 		Width:        flags.Width,
 		Height:       flags.Height,
@@ -537,20 +573,147 @@ func commGridLLMTaskFromFlags(flags commGridLLMTaskFlagValues) (commGridLLMTaskC
 		Goal:         goal,
 		AgentID:      agentID,
 		Agent:        agent,
+		Agents:       agents,
+		TurnOrder:    order,
 		MessageLimit: flags.MessageLimit,
 	}, nil
 }
 
 func defaultCommGridLLMTaskConfig() commGridLLMTaskConfig {
 	return commGridLLMTaskConfig{
-		Width:        3,
-		Height:       3,
-		Key:          scape.CommGridPoint{X: 1, Y: 0},
-		Goal:         scape.CommGridPoint{X: 2, Y: 0},
-		AgentID:      "agent-1",
-		Agent:        scape.CommGridPoint{},
+		Width:   3,
+		Height:  3,
+		Key:     scape.CommGridPoint{X: 1, Y: 0},
+		Goal:    scape.CommGridPoint{X: 2, Y: 0},
+		AgentID: "agent-1",
+		Agent:   scape.CommGridPoint{},
+		Agents: []commGridLLMAgent{{
+			ID:       "agent-1",
+			Position: scape.CommGridPoint{},
+		}},
+		TurnOrder:    []string{"agent-1"},
 		MessageLimit: 80,
 	}
+}
+
+func normalizeCommGridLLMTask(task commGridLLMTaskConfig) commGridLLMTaskConfig {
+	task.AgentID = strings.TrimSpace(task.AgentID)
+	if len(task.Agents) == 0 {
+		task.Agents = []commGridLLMAgent{{
+			ID:       task.AgentID,
+			Position: task.Agent,
+		}}
+	}
+	for i := range task.Agents {
+		task.Agents[i].ID = strings.TrimSpace(task.Agents[i].ID)
+	}
+	if task.AgentID == "" && len(task.Agents) > 0 {
+		task.AgentID = task.Agents[0].ID
+		task.Agent = task.Agents[0].Position
+	}
+	if len(task.TurnOrder) == 0 {
+		task.TurnOrder = make([]string, 0, len(task.Agents))
+		for _, agent := range task.Agents {
+			if agent.ID != "" {
+				task.TurnOrder = append(task.TurnOrder, agent.ID)
+			}
+		}
+	}
+	if len(task.TurnOrder) == 0 && task.AgentID != "" {
+		task.TurnOrder = []string{task.AgentID}
+	}
+	return task
+}
+
+func parseCommGridLLMAgents(raw string) ([]commGridLLMAgent, error) {
+	parts := strings.Split(strings.TrimSpace(raw), ":")
+	agents := make([]commGridLLMAgent, 0, len(parts))
+	seen := map[string]bool{}
+	for _, part := range parts {
+		part = strings.TrimSpace(part)
+		if part == "" {
+			continue
+		}
+		id, pointText, ok := strings.Cut(part, "@")
+		if !ok {
+			return nil, fmt.Errorf("agent entry must use id@x,y: %s", part)
+		}
+		id = strings.TrimSpace(id)
+		if id == "" {
+			return nil, fmt.Errorf("agent entry must use non-empty id: %s", part)
+		}
+		if seen[id] {
+			return nil, fmt.Errorf("duplicate comm-grid agent id: %s", id)
+		}
+		point, err := parseCommGridLLMPoint("agent", pointText)
+		if err != nil {
+			return nil, err
+		}
+		seen[id] = true
+		agents = append(agents, commGridLLMAgent{ID: id, Position: point})
+	}
+	if len(agents) == 0 {
+		return nil, errors.New("agents must include at least one id@x,y entry")
+	}
+	return agents, nil
+}
+
+func commGridLLMTurnOrder(raw string, agents []commGridLLMAgent) ([]string, error) {
+	known := map[string]bool{}
+	for _, agent := range agents {
+		known[agent.ID] = true
+	}
+	if strings.TrimSpace(raw) == "" {
+		order := make([]string, 0, len(agents))
+		for _, agent := range agents {
+			order = append(order, agent.ID)
+		}
+		return order, nil
+	}
+	parts := strings.Split(raw, ",")
+	order := make([]string, 0, len(parts))
+	for _, part := range parts {
+		id := strings.TrimSpace(part)
+		if id == "" {
+			continue
+		}
+		if !known[id] {
+			return nil, fmt.Errorf("turn-order references unknown agent: %s", id)
+		}
+		order = append(order, id)
+	}
+	if len(order) == 0 {
+		return nil, errors.New("turn-order must include at least one agent id")
+	}
+	return order, nil
+}
+
+func commGridLLMScapeAgents(task commGridLLMTaskConfig) []scape.CommGridAgentState {
+	if len(task.Agents) == 0 {
+		return []scape.CommGridAgentState{{
+			ID:       task.AgentID,
+			Position: task.Agent,
+		}}
+	}
+	agents := make([]scape.CommGridAgentState, 0, len(task.Agents))
+	for _, agent := range task.Agents {
+		agents = append(agents, scape.CommGridAgentState{
+			ID:       agent.ID,
+			Position: agent.Position,
+		})
+	}
+	return agents
+}
+
+func commGridLLMAgentSummary(agents []commGridLLMAgent) string {
+	if len(agents) == 0 {
+		return "none"
+	}
+	parts := make([]string, 0, len(agents))
+	for _, agent := range agents {
+		parts = append(parts, fmt.Sprintf("%s@(%d,%d)", agent.ID, agent.Position.X, agent.Position.Y))
+	}
+	return strings.Join(parts, ",")
 }
 
 func parseCommGridLLMPoint(name, raw string) (scape.CommGridPoint, error) {
@@ -775,6 +938,16 @@ func commGridLLMFixturePlan(plan string) ([]llm.Response, bool, error) {
 	case "malformed":
 		return []llm.Response{
 			commGridLLMFixtureContent(`{"action":"teleport","message":"bad action","to":"all","tokens":2}`, 6),
+		}, false, nil
+	case "multi-solve":
+		return []llm.Response{
+			commGridLLMFixtureContent(`{"action":"east","message":"a moves to key","to":"all","tokens":4}`, 8),
+			commGridLLMFixtureContent(`{"action":"stay","message":"b waits","to":"all","tokens":2}`, 6),
+			commGridLLMFixtureContent(`{"action":"pick","message":"a picked key","to":"all","tokens":3}`, 7),
+			commGridLLMFixtureContent(`{"action":"stay","message":"b still waits","to":"all","tokens":3}`, 6),
+			commGridLLMFixtureContent(`{"action":"east","message":"a moves to goal","to":"all","tokens":4}`, 8),
+			commGridLLMFixtureContent(`{"action":"stay","message":"b guards","to":"all","tokens":2}`, 6),
+			commGridLLMFixtureContent(`{"action":"drop","message":"a delivered key","to":"all","tokens":3}`, 7),
 		}, false, nil
 	default:
 		return nil, false, fmt.Errorf("unsupported comm-grid llm fixture plan: %s", plan)
