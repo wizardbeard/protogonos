@@ -367,6 +367,7 @@ Status legend:
 - 2026-09-07: removed the heavy `Done Check` GitHub Actions job while keeping `./scripts/done_check.sh` as a local release/parity gate; CI now keeps normal Go formatting, test, and build coverage only.
 - 2026-09-07: added a terse root `README.md` with dependency, build, test, run, benchmark, export, and internal documentation links for first-time users.
 - 2026-09-07: added `docs/execution-model.md` to document the Go replacement for Erlang actor primitives: bounded worker pools, goroutine-backed actors, typed mailboxes, process-state wrappers, and direct fast paths.
+- 2026-09-07: added `docs/llm-scapes.md` as a concept note for a possible `v0.2.x` feature line covering LLM-backed scapes, language IO surfaces, bounded action decoding, replay requirements, and a `comm-grid` prototype.
 
 ## Summary
 
