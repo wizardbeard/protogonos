@@ -170,6 +170,20 @@ type commGridLLMSuiteRunRow struct {
 	ArtifactsDir         string  `json:"artifacts_dir,omitempty"`
 }
 
+type commGridLLMSuiteDryRunResult struct {
+	SuiteID   string                      `json:"suite_id"`
+	RunCount  int                         `json:"run_count"`
+	TaskShape string                      `json:"task_shape"`
+	Runs      []commGridLLMSuiteDryRunRow `json:"runs"`
+}
+
+type commGridLLMSuiteDryRunRow struct {
+	RunID  string `json:"run_id"`
+	Plan   string `json:"plan"`
+	Prompt string `json:"prompt"`
+	Repeat int    `json:"repeat"`
+}
+
 type commGridLLMPromptVariant struct {
 	Name         string `json:"name"`
 	SystemPrompt string `json:"system_prompt"`
@@ -613,6 +627,7 @@ func runCommGridLLMSuite(ctx context.Context, args []string) error {
 	fs := flag.NewFlagSet("comm-grid-llm-suite", flag.ContinueOnError)
 	manifestPath := fs.String("manifest", "", "optional suite manifest JSON path")
 	emitManifest := fs.Bool("emit-manifest", false, "print effective suite manifest JSON and exit")
+	dryRun := fs.Bool("dry-run", false, "print planned suite runs and exit")
 	suiteID := fs.String("suite-id", "", "suite id used as the run id prefix")
 	plansRaw := fs.String("plans", "solve,tool,invalid", "comma-separated fixture plans")
 	repeats := fs.Int("repeats", 1, "runs per plan and prompt variant")
@@ -771,6 +786,16 @@ func runCommGridLLMSuite(ctx context.Context, args []string) error {
 	if err := validateCommGridLLMRunID(id); err != nil {
 		return err
 	}
+	if *dryRun {
+		result := buildCommGridLLMSuiteDryRun(id, plans, prompts, *repeats, task)
+		if *jsonOut {
+			enc := json.NewEncoder(os.Stdout)
+			enc.SetIndent("", "  ")
+			return enc.Encode(result)
+		}
+		printCommGridLLMSuiteDryRunTable(result)
+		return nil
+	}
 
 	result := commGridLLMSuiteResult{SuiteID: id}
 	for _, plan := range plans {
@@ -778,7 +803,7 @@ func runCommGridLLMSuite(ctx context.Context, args []string) error {
 			for repeat := 1; repeat <= *repeats; repeat++ {
 				runTask := task
 				runTask.SystemPrompt = prompt.SystemPrompt
-				runID := fmt.Sprintf("%s-%s-%s-r%d", id, commGridLLMSafeIDPart(plan), commGridLLMSafeIDPart(prompt.Name), repeat)
+				runID := commGridLLMSuiteRunID(id, plan, prompt.Name, repeat)
 				provider, actorModel, useTools, summaryProvider, summaryPlan, err := commGridLLMProviderFromFlags(commGridLLMProviderFlags{
 					Provider:    *providerName,
 					Plan:        plan,
@@ -2090,6 +2115,10 @@ func commGridLLMSafeIDPart(raw string) string {
 	return out
 }
 
+func commGridLLMSuiteRunID(suiteID, plan, prompt string, repeat int) string {
+	return fmt.Sprintf("%s-%s-%s-r%d", suiteID, commGridLLMSafeIDPart(plan), commGridLLMSafeIDPart(prompt), repeat)
+}
+
 func printCommGridLLMSuiteTable(result commGridLLMSuiteResult) {
 	fmt.Printf("SUITE\tRUNS\tCOMPLETED\n")
 	fmt.Printf("%s\t%d\t%d\n", result.SuiteID, result.RunCount, result.Completed)
@@ -2111,6 +2140,41 @@ func printCommGridLLMSuiteTable(result commGridLLMSuiteResult) {
 			row.AverageTokensPerStep,
 			row.DurationMS,
 			artifactsDir,
+		)
+	}
+}
+
+func buildCommGridLLMSuiteDryRun(suiteID string, plans []string, prompts []commGridLLMPromptVariant, repeats int, task commGridLLMTaskConfig) commGridLLMSuiteDryRunResult {
+	result := commGridLLMSuiteDryRunResult{
+		SuiteID:   suiteID,
+		TaskShape: commGridLLMTaskShape(task),
+	}
+	for _, plan := range plans {
+		for _, prompt := range prompts {
+			for repeat := 1; repeat <= repeats; repeat++ {
+				result.Runs = append(result.Runs, commGridLLMSuiteDryRunRow{
+					RunID:  commGridLLMSuiteRunID(suiteID, plan, prompt.Name, repeat),
+					Plan:   plan,
+					Prompt: prompt.Name,
+					Repeat: repeat,
+				})
+			}
+		}
+	}
+	result.RunCount = len(result.Runs)
+	return result
+}
+
+func printCommGridLLMSuiteDryRunTable(result commGridLLMSuiteDryRunResult) {
+	fmt.Printf("SUITE\tRUNS\tTASK\n")
+	fmt.Printf("%s\t%d\t%s\n", result.SuiteID, result.RunCount, result.TaskShape)
+	fmt.Printf("RUN_ID\tPLAN\tPROMPT\tREPEAT\n")
+	for _, row := range result.Runs {
+		fmt.Printf("%s\t%s\t%s\t%d\n",
+			row.RunID,
+			row.Plan,
+			row.Prompt,
+			row.Repeat,
 		)
 	}
 }

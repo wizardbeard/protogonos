@@ -1083,6 +1083,88 @@ func TestCommGridLLMSuiteCommandEmitsJSON(t *testing.T) {
 	}
 }
 
+func TestCommGridLLMSuiteCommandDryRunPrintsMatrix(t *testing.T) {
+	origWD, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("getwd: %v", err)
+	}
+	workdir := t.TempDir()
+	if err := os.Chdir(workdir); err != nil {
+		t.Fatalf("chdir tempdir: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = os.Chdir(origWD)
+	})
+
+	out, err := captureStdoutForCommGridLLM(func() error {
+		return run(context.Background(), []string{
+			"comm-grid-llm-suite",
+			"--suite-id", "dry-suite",
+			"--plans", "solve,tool",
+			"--prompt", "strict=Return JSON only.",
+			"--repeats", "2",
+			"--dry-run",
+		})
+	})
+	if err != nil {
+		t.Fatalf("dry-run suite command: %v", err)
+	}
+	if !strings.Contains(out, "SUITE\tRUNS\tTASK") || !strings.Contains(out, "dry-suite\t4\t3x3:key(1,0):goal(2,0):agents1:turns[agent-1]:limit80") {
+		t.Fatalf("expected dry-run summary, got %s", out)
+	}
+	for _, runID := range []string{
+		"dry-suite-solve-strict-r1",
+		"dry-suite-solve-strict-r2",
+		"dry-suite-tool-strict-r1",
+		"dry-suite-tool-strict-r2",
+	} {
+		if !strings.Contains(out, runID) {
+			t.Fatalf("expected dry-run run id %s, got %s", runID, out)
+		}
+	}
+	if _, err := os.Stat(filepath.Join(workdir, "benchmarks")); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("dry-run should not create benchmarks, err=%v", err)
+	}
+}
+
+func TestCommGridLLMSuiteCommandDryRunEmitsJSON(t *testing.T) {
+	origWD, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("getwd: %v", err)
+	}
+	workdir := t.TempDir()
+	if err := os.Chdir(workdir); err != nil {
+		t.Fatalf("chdir tempdir: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = os.Chdir(origWD)
+	})
+
+	out, err := captureStdoutForCommGridLLM(func() error {
+		return run(context.Background(), []string{
+			"comm-grid-llm-suite",
+			"--suite-id", "dry-json",
+			"--plans", "solve",
+			"--repeats", "2",
+			"--dry-run",
+			"--json",
+		})
+	})
+	if err != nil {
+		t.Fatalf("dry-run json suite command: %v", err)
+	}
+	var result commGridLLMSuiteDryRunResult
+	if err := json.Unmarshal([]byte(out), &result); err != nil {
+		t.Fatalf("decode dry-run json: %v\n%s", err, out)
+	}
+	if result.SuiteID != "dry-json" || result.RunCount != 2 || result.TaskShape == "" {
+		t.Fatalf("unexpected dry-run result: %+v", result)
+	}
+	if result.Runs[0].RunID != "dry-json-solve-default-r1" || result.Runs[1].RunID != "dry-json-solve-default-r2" {
+		t.Fatalf("unexpected dry-run rows: %+v", result.Runs)
+	}
+}
+
 func TestCommGridLLMSuiteCommandEmitsManifest(t *testing.T) {
 	origWD, err := os.Getwd()
 	if err != nil {

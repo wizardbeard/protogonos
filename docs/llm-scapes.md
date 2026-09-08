@@ -523,6 +523,14 @@ protogonosctl comm-grid-llm-suite \
   --emit-manifest
 ```
 
+Preview a suite without provider calls or artifacts:
+
+```bash
+protogonosctl comm-grid-llm-suite \
+  --manifest testdata/fixtures/comm_grid_llm_suite_manifest.json \
+  --dry-run
+```
+
 Disable artifact writes for quick console checks:
 
 ```bash
@@ -685,6 +693,7 @@ A small first slice should avoid provider lock-in:
 - add JSON manifest input for `protogonosctl comm-grid-llm-suite`, with explicit CLI flags taking precedence,
 - add `testdata/fixtures/comm_grid_llm_suite_manifest.json` as a known-good fixture suite,
 - add `protogonosctl comm-grid-llm-suite --emit-manifest` to print the effective suite manifest without running the suite,
+- add `protogonosctl comm-grid-llm-suite --dry-run` to preview the run matrix without provider calls or artifacts,
 - add tests for deterministic replay, invalid output handling, timeout handling, and token-cost fitness.
 
 This gives the system a useful LLM integration path without making evolution depend on unbounded free-form text.

@@ -580,6 +580,7 @@ Status keys:
 - Added JSON manifest input for `protogonosctl comm-grid-llm-suite`, with explicit CLI flags taking precedence.
 - Added `testdata/fixtures/comm_grid_llm_suite_manifest.json` as a known-good fixture suite.
 - Added `protogonosctl comm-grid-llm-suite --emit-manifest` to print the effective suite manifest without running the suite.
+- Added `protogonosctl comm-grid-llm-suite --dry-run` to preview the run matrix without provider calls or artifacts.
 
 ## Current-scope parity declaration
 

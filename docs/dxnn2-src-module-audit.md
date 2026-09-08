@@ -394,6 +394,7 @@ Status legend:
 - 2026-09-08: added JSON manifest input for `protogonosctl comm-grid-llm-suite`, with explicit CLI flags taking precedence.
 - 2026-09-08: added `testdata/fixtures/comm_grid_llm_suite_manifest.json` as a known-good fixture suite.
 - 2026-09-08: added `protogonosctl comm-grid-llm-suite --emit-manifest` to print the effective suite manifest without running the suite.
+- 2026-09-08: added `protogonosctl comm-grid-llm-suite --dry-run` to preview the run matrix without provider calls or artifacts.
 
 ## Summary
 
