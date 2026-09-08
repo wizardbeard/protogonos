@@ -103,6 +103,9 @@ type LLMProviderConfig struct {
 
 type LLMCapabilities struct {
 	ChatCompletions bool
+	Streaming       bool
+	StreamingUsage  bool
+	StreamingTools  bool
 	JSONMode        bool
 	Tools           bool
 	Seed            bool
@@ -135,6 +138,65 @@ Use only common response fields at first:
 - `usage.total_tokens`.
 
 Provider-specific fields can be stored in raw trace metadata, but scapes should not depend on them.
+
+## Streaming Policy
+
+Do not require streaming in the first implementation.
+
+The first code path should use non-streaming `POST /v1/chat/completions`. This is simpler to test, easier to replay, and enough for `comm-grid` turn decisions.
+
+Streaming should be optional through a second interface:
+
+```go
+type LLMStreamingProvider interface {
+	Stream(ctx context.Context, req LLMRequest) (LLMStream, error)
+}
+
+type LLMStream interface {
+	Next(ctx context.Context) (LLMStreamEvent, error)
+	Close() error
+}
+
+type LLMStreamEvent struct {
+	Type         LLMStreamEventType
+	Delta        string
+	ToolCallID   string
+	ToolName     string
+	ToolArgsJSON string
+	FinishReason string
+	Usage        LLMUsage
+	Raw          map[string]any
+}
+```
+
+OpenAI-compatible streaming should use server-sent events from `/v1/chat/completions` with `stream: true`.
+
+The stream parser should:
+
+- read `data:` lines from the response body,
+- emit `delta` events for partial content,
+- emit `done` on `data: [DONE]`,
+- collect tool-call argument fragments before execution,
+- close the response body on `Close`,
+- honor context cancellation,
+- enforce max byte and max event limits.
+
+For now, scapes should not depend on streaming. Add it only when a scenario needs partial output timing or mid-message reaction.
+
+## Conversation State
+
+The provider should not own conversation state.
+
+The scape should:
+
+- build the message list,
+- call the provider,
+- append assistant output,
+- execute allowed tool calls if needed,
+- append tool results,
+- call the provider again if the scenario allows another turn.
+
+This keeps replay simple. The run artifact can store the full request and response sequence.
 
 ## Provider Config
 
@@ -171,6 +233,7 @@ Expected differences:
 - JSON mode support varies,
 - `seed` support varies,
 - token usage fields may be absent or approximate,
+- streaming chunks may have provider-specific gaps,
 - local servers may return model-loading errors,
 - LAN calls can fail or time out,
 - model IDs and loaded-model behavior differ by server.
@@ -180,6 +243,7 @@ The scape must handle these cases:
 - timeout,
 - connection error,
 - malformed JSON,
+- malformed stream chunks,
 - missing usage data,
 - unsupported tool calls,
 - invalid action output.
@@ -366,6 +430,7 @@ A small first slice should avoid provider lock-in:
 - add a deterministic fixture provider for tests,
 - add an OpenAI-compatible provider with raw `net/http`,
 - add fake HTTP server tests for provider behavior,
+- define optional streaming interfaces, but do not wire scapes to streaming yet,
 - add `comm-grid` as an experimental scape,
 - keep all actions bounded and parseable,
 - add trace artifacts for messages and parsed actions,
