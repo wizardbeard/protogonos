@@ -458,6 +458,20 @@ JSON output is available for trace inspection:
 protogonosctl comm-grid-llm --plan tool --json
 ```
 
+Set the task geometry and message bound when a run needs a different grid:
+
+```bash
+protogonosctl comm-grid-llm \
+  --run-id comm-grid-custom-001 \
+  --width 4 \
+  --height 2 \
+  --key 1,0 \
+  --goal 2,0 \
+  --agent worker-a \
+  --agent-pos 0,0 \
+  --message-limit 40
+```
+
 Fixture plans:
 
 - `solve`: uses assistant message JSON and completes the key-delivery task,
@@ -482,6 +496,7 @@ Fixture mode remains the default. Live provider mode is explicit so local tests 
 The artifact file stores:
 
 - provider mode and run ID,
+- task geometry, key, goal, agent start, and message limit,
 - prompt request,
 - provider response,
 - parsed bounded action,
@@ -511,6 +526,7 @@ A small first slice should avoid provider lock-in:
 - write `comm_grid_llm.json` artifacts with request, response, parsed action, messages, token counts, and final trace,
 - replay `comm_grid_llm.json` artifacts with stored provider responses and report final-trace match status,
 - convert malformed output, provider errors, and provider timeouts into bounded failed steps that remain artifact-backed and replayable,
+- add configurable `comm-grid-llm` task geometry, key, goal, agent ID, agent start, and message limit, persisted in artifacts and reused on replay,
 - add tests for deterministic replay, invalid output handling, timeout handling, and token-cost fitness.
 
 This gives the system a useful LLM integration path without making evolution depend on unbounded free-form text.

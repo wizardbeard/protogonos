@@ -565,6 +565,7 @@ Status keys:
 - Added `comm-grid-llm` artifact capture under `benchmarks/<run-id>/comm_grid_llm.json`, storing provider mode, prompt request, provider response, parsed action, message history, token counts, final fitness, and final trace.
 - Added `comm-grid-llm` artifact replay via `--replay-run-id`, feeding stored provider responses through the fixture provider and reporting final-trace match status.
 - Added bounded `comm-grid-llm` failure-step handling for malformed output, provider errors, and provider timeouts, with artifact and replay coverage.
+- Added configurable `comm-grid-llm` task geometry, key, goal, agent ID, agent start, and message limit, with artifact persistence and replay reuse.
 
 ## Current-scope parity declaration
 

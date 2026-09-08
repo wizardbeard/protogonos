@@ -23,7 +23,7 @@ func TestCommGridLLMCommandRunsFixturePlan(t *testing.T) {
 	}
 	for _, want := range []string{
 		"comm_grid_llm run_id=comm-grid-llm-fixture-",
-		"provider=fixture plan=solve steps=4 completed=true",
+		"provider=fixture plan=solve grid=3x3 key=(1,0) goal=(2,0) agent=agent-1@(0,0) steps=4 completed=true",
 		"step=1 action=east",
 		"step=4 action=drop",
 	} {
@@ -226,6 +226,89 @@ func TestCommGridLLMCommandWritesArtifacts(t *testing.T) {
 	}
 	if tokens, ok := first.Result.ProviderTrace["tokens"].(float64); !ok || tokens != 8 {
 		t.Fatalf("expected provider token trace, got %+v", first.Result.ProviderTrace)
+	}
+}
+
+func TestCommGridLLMCommandWritesCustomTaskArtifactAndReplays(t *testing.T) {
+	origWD, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("getwd: %v", err)
+	}
+	workdir := t.TempDir()
+	if err := os.Chdir(workdir); err != nil {
+		t.Fatalf("chdir tempdir: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = os.Chdir(origWD)
+	})
+
+	out, err := captureStdoutForCommGridLLM(func() error {
+		return run(context.Background(), []string{
+			"comm-grid-llm",
+			"--run-id", "custom-task-run",
+			"--plan", "solve",
+			"--width", "4",
+			"--height", "2",
+			"--key", "1,0",
+			"--goal", "2,0",
+			"--agent", "worker-a",
+			"--agent-pos", "0,0",
+			"--message-limit", "12",
+		})
+	})
+	if err != nil {
+		t.Fatalf("custom task command: %v", err)
+	}
+	if !strings.Contains(out, "grid=4x2") || !strings.Contains(out, "agent=worker-a@(0,0)") {
+		t.Fatalf("expected custom task output, got %s", out)
+	}
+
+	artifact := readCommGridLLMTestArtifact(t, workdir, "custom-task-run")
+	if artifact.Task.Width != 4 || artifact.Task.Height != 2 || artifact.Task.AgentID != "worker-a" || artifact.Task.MessageLimit != 12 {
+		t.Fatalf("unexpected stored task: %+v", artifact.Task)
+	}
+	if artifact.Steps[0].Request.Messages[0].Content == "" {
+		t.Fatalf("expected stored LLM prompt, step=%+v", artifact.Steps[0])
+	}
+	if !strings.Contains(artifact.Steps[0].Request.Messages[0].Content, "agent_id=worker-a") {
+		t.Fatalf("expected prompt to use custom agent, got %s", artifact.Steps[0].Request.Messages[0].Content)
+	}
+	if len(artifact.Steps[0].Result.Messages) != 1 || artifact.Steps[0].Result.Messages[0].Text != "move to key" {
+		t.Fatalf("expected message limit to truncate stored text, step=%+v", artifact.Steps[0])
+	}
+
+	replayOut, err := captureStdoutForCommGridLLM(func() error {
+		return run(context.Background(), []string{
+			"comm-grid-llm",
+			"--replay-run-id", "custom-task-run",
+			"--json",
+		})
+	})
+	if err != nil {
+		t.Fatalf("replay custom task command: %v", err)
+	}
+	var summary commGridLLMCommandSummary
+	if err := json.Unmarshal([]byte(replayOut), &summary); err != nil {
+		t.Fatalf("decode replay json: %v\n%s", err, replayOut)
+	}
+	if summary.Replay == nil || !summary.Replay.Matched || summary.Task.AgentID != "worker-a" {
+		t.Fatalf("expected matched custom replay, summary=%+v", summary)
+	}
+}
+
+func TestCommGridLLMCommandRejectsOutOfBoundsCustomTask(t *testing.T) {
+	err := run(context.Background(), []string{
+		"comm-grid-llm",
+		"--width", "2",
+		"--height", "2",
+		"--goal", "2,0",
+		"--artifacts=false",
+	})
+	if err == nil {
+		t.Fatal("expected out-of-bounds goal error")
+	}
+	if !strings.Contains(err.Error(), "goal out of bounds") {
+		t.Fatalf("unexpected error: %v", err)
 	}
 }
 

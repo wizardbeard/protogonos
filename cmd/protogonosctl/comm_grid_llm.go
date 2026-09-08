@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -38,6 +39,7 @@ type commGridLLMCommandSummary struct {
 	Replay       *commGridLLMReplayResult `json:"replay,omitempty"`
 	Provider     string                   `json:"provider"`
 	Plan         string                   `json:"plan"`
+	Task         commGridLLMTaskConfig    `json:"task"`
 	Steps        []commGridLLMCommandStep `json:"steps"`
 	Completed    bool                     `json:"completed"`
 	Fitness      float64                  `json:"fitness"`
@@ -49,10 +51,21 @@ type commGridLLMArtifact struct {
 	Provider  string                    `json:"provider"`
 	Plan      string                    `json:"plan"`
 	CreatedAt string                    `json:"created_at_utc"`
+	Task      commGridLLMTaskConfig     `json:"task"`
 	Steps     []commGridLLMArtifactStep `json:"steps"`
 	Completed bool                      `json:"completed"`
 	Fitness   float64                   `json:"fitness"`
 	Trace     map[string]any            `json:"trace"`
+}
+
+type commGridLLMTaskConfig struct {
+	Width        int                 `json:"width"`
+	Height       int                 `json:"height"`
+	Key          scape.CommGridPoint `json:"key"`
+	Goal         scape.CommGridPoint `json:"goal"`
+	AgentID      string              `json:"agent_id"`
+	Agent        scape.CommGridPoint `json:"agent"`
+	MessageLimit int                 `json:"message_limit"`
 }
 
 type commGridLLMReplayResult struct {
@@ -98,6 +111,13 @@ func runCommGridLLM(ctx context.Context, args []string) error {
 	providerName := fs.String("provider", "fixture", "provider: fixture|openai-compatible")
 	plan := fs.String("plan", "solve", "fixture plan: solve|tool|invalid")
 	steps := fs.Int("steps", 8, "maximum fixture LLM decisions")
+	width := fs.Int("width", 3, "comm-grid width")
+	height := fs.Int("height", 3, "comm-grid height")
+	key := fs.String("key", "1,0", "comm-grid key position as x,y")
+	goal := fs.String("goal", "2,0", "comm-grid goal position as x,y")
+	agentID := fs.String("agent", "agent-1", "comm-grid agent id")
+	agentPos := fs.String("agent-pos", "0,0", "comm-grid agent start position as x,y")
+	messageLimit := fs.Int("message-limit", 80, "maximum stored message characters")
 	baseURL := fs.String("base-url", "", "OpenAI-compatible base URL ending in /v1")
 	apiKeyEnv := fs.String("api-key-env", "PROTOGONOS_LLM_API_KEY", "environment variable containing provider API key")
 	model := fs.String("model", "", "provider model id")
@@ -114,6 +134,18 @@ func runCommGridLLM(ctx context.Context, args []string) error {
 	}
 	if *steps <= 0 {
 		return errors.New("steps must be > 0")
+	}
+	task, err := commGridLLMTaskFromFlags(commGridLLMTaskFlagValues{
+		Width:        *width,
+		Height:       *height,
+		Key:          *key,
+		Goal:         *goal,
+		AgentID:      *agentID,
+		Agent:        *agentPos,
+		MessageLimit: *messageLimit,
+	})
+	if err != nil {
+		return err
 	}
 	if strings.TrimSpace(*replayRunID) != "" {
 		return runCommGridLLMReplay(ctx, strings.TrimSpace(*replayRunID), *jsonOut)
@@ -151,6 +183,7 @@ func runCommGridLLM(ctx context.Context, args []string) error {
 		SummaryProvider: summaryProvider,
 		SummaryPlan:     summaryPlan,
 		MaxSteps:        *steps,
+		Task:            task,
 		MaxTokens:       *maxTokens,
 		Temperature:     *temperature,
 		Seed:            *seed,
@@ -164,6 +197,7 @@ func runCommGridLLM(ctx context.Context, args []string) error {
 		Provider:  summaryProvider,
 		Plan:      summaryPlan,
 		CreatedAt: now.Format(time.RFC3339Nano),
+		Task:      task,
 		Steps:     artifactSteps,
 		Completed: summary.Completed,
 		Fitness:   summary.Fitness,
@@ -183,7 +217,23 @@ func runCommGridLLM(ctx context.Context, args []string) error {
 		enc.SetIndent("", "  ")
 		return enc.Encode(summary)
 	}
-	fmt.Printf("comm_grid_llm run_id=%s provider=%s plan=%s steps=%d completed=%t fitness=%.6f\n", summary.RunID, summary.Provider, summary.Plan, len(summary.Steps), summary.Completed, summary.Fitness)
+	fmt.Printf("comm_grid_llm run_id=%s provider=%s plan=%s grid=%dx%d key=(%d,%d) goal=(%d,%d) agent=%s@(%d,%d) steps=%d completed=%t fitness=%.6f\n",
+		summary.RunID,
+		summary.Provider,
+		summary.Plan,
+		summary.Task.Width,
+		summary.Task.Height,
+		summary.Task.Key.X,
+		summary.Task.Key.Y,
+		summary.Task.Goal.X,
+		summary.Task.Goal.Y,
+		summary.Task.AgentID,
+		summary.Task.Agent.X,
+		summary.Task.Agent.Y,
+		len(summary.Steps),
+		summary.Completed,
+		summary.Fitness,
+	)
 	for _, step := range summary.Steps {
 		fmt.Printf("step=%d action=%s invalid=%t done=%t fitness=%.6f message=%q to=%q\n",
 			step.Step,
@@ -237,6 +287,10 @@ func runCommGridLLMReplay(ctx context.Context, runID string, jsonOut bool) error
 	}
 
 	maxSteps := commGridTraceInt(artifact.Trace, "max_steps", len(artifact.Steps))
+	task := artifact.Task
+	if task.Width == 0 || task.Height == 0 || strings.TrimSpace(task.AgentID) == "" {
+		task = defaultCommGridLLMTaskConfig()
+	}
 	summary, _, err := executeCommGridLLM(ctx, commGridLLMExecutionConfig{
 		RunID:           runID,
 		Provider:        &commGridLLMReplayProvider{steps: artifact.Steps},
@@ -244,6 +298,7 @@ func runCommGridLLMReplay(ctx context.Context, runID string, jsonOut bool) error
 		SummaryProvider: "fixture-replay",
 		SummaryPlan:     strings.TrimSpace(artifact.Plan),
 		MaxSteps:        maxSteps,
+		Task:            task,
 		MaxTokens:       maxTokens,
 		Temperature:     temperature,
 		Seed:            seed,
@@ -280,6 +335,7 @@ type commGridLLMExecutionConfig struct {
 	SummaryProvider string
 	SummaryPlan     string
 	MaxSteps        int
+	Task            commGridLLMTaskConfig
 	MaxTokens       int
 	Temperature     float64
 	Seed            int64
@@ -287,19 +343,24 @@ type commGridLLMExecutionConfig struct {
 }
 
 func executeCommGridLLM(ctx context.Context, cfg commGridLLMExecutionConfig) (commGridLLMCommandSummary, []commGridLLMArtifactStep, error) {
+	task := cfg.Task
+	if task.Width == 0 || task.Height == 0 || strings.TrimSpace(task.AgentID) == "" {
+		task = defaultCommGridLLMTaskConfig()
+	}
 	sim := scape.NewCommGridSimulator(scape.CommGridConfig{
-		Width:    3,
-		Height:   3,
-		MaxSteps: cfg.MaxSteps,
-		Key:      scape.CommGridPoint{X: 1, Y: 0},
-		Goal:     scape.CommGridPoint{X: 2, Y: 0},
+		Width:        task.Width,
+		Height:       task.Height,
+		MaxSteps:     cfg.MaxSteps,
+		MessageLimit: task.MessageLimit,
+		Key:          task.Key,
+		Goal:         task.Goal,
 		Agents: []scape.CommGridAgentState{{
-			ID:       "agent-1",
-			Position: scape.CommGridPoint{},
+			ID:       task.AgentID,
+			Position: task.Agent,
 		}},
 	})
 	actor := scape.CommGridLLMActor{
-		AgentID:       "agent-1",
+		AgentID:       task.AgentID,
 		Provider:      cfg.Provider,
 		Model:         cfg.ActorModel,
 		MaxTokens:     cfg.MaxTokens,
@@ -312,14 +373,15 @@ func executeCommGridLLM(ctx context.Context, cfg commGridLLMExecutionConfig) (co
 		RunID:    cfg.RunID,
 		Provider: cfg.SummaryProvider,
 		Plan:     cfg.SummaryPlan,
+		Task:     task,
 	}
 	artifactSteps := make([]commGridLLMArtifactStep, 0, cfg.MaxSteps)
 	for !sim.Done() && len(summary.Steps) < cfg.MaxSteps {
 		result, trace, err := actor.Step(ctx, sim)
 		if err != nil {
-			result, trace = commGridLLMFailedStep(ctx, sim, len(summary.Steps)+1, trace, err)
+			result, trace = commGridLLMFailedStep(ctx, sim, task.AgentID, len(summary.Steps)+1, trace, err)
 		}
-		state, _ := sim.AgentState("agent-1")
+		state, _ := sim.AgentState(task.AgentID)
 		errText := ""
 		errKind := ""
 		if result.InvalidAction && trace.StepInput.Action == scape.CommGridAction("llm_failure") {
@@ -386,10 +448,10 @@ func commGridLLMResponseHasPayload(res llm.Response) bool {
 	return strings.TrimSpace(res.Message) != "" || len(res.ToolCalls) > 0
 }
 
-func commGridLLMFailedStep(ctx context.Context, sim *scape.CommGridSimulator, step int, trace scape.CommGridLLMStepTrace, cause error) (scape.CommGridStepResult, scape.CommGridLLMStepTrace) {
+func commGridLLMFailedStep(ctx context.Context, sim *scape.CommGridSimulator, agentID string, step int, trace scape.CommGridLLMStepTrace, cause error) (scape.CommGridStepResult, scape.CommGridLLMStepTrace) {
 	message := commGridLLMFailureMessage(cause)
 	input := scape.CommGridStepInput{
-		AgentID: "agent-1",
+		AgentID: agentID,
 		Action:  scape.CommGridAction("llm_failure"),
 		Message: message,
 		To:      "system",
@@ -408,7 +470,7 @@ func commGridLLMFailedStep(ctx context.Context, sim *scape.CommGridSimulator, st
 	trace.StepInput = input
 	trace.ParsedAction = input.Action
 	if trace.AgentID == "" {
-		trace.AgentID = "agent-1"
+		trace.AgentID = agentID
 	}
 	if trace.Payload == "" {
 		trace.Payload = message
@@ -421,6 +483,105 @@ func commGridLLMFailedStep(ctx context.Context, sim *scape.CommGridSimulator, st
 	result.Trace["llm_failure_error"] = message
 	result.Trace["llm_action"] = string(input.Action)
 	return result, trace
+}
+
+type commGridLLMTaskFlagValues struct {
+	Width        int
+	Height       int
+	Key          string
+	Goal         string
+	AgentID      string
+	Agent        string
+	MessageLimit int
+}
+
+func commGridLLMTaskFromFlags(flags commGridLLMTaskFlagValues) (commGridLLMTaskConfig, error) {
+	if flags.Width <= 0 {
+		return commGridLLMTaskConfig{}, errors.New("width must be > 0")
+	}
+	if flags.Height <= 0 {
+		return commGridLLMTaskConfig{}, errors.New("height must be > 0")
+	}
+	if flags.MessageLimit <= 0 {
+		return commGridLLMTaskConfig{}, errors.New("message-limit must be > 0")
+	}
+	agentID := strings.TrimSpace(flags.AgentID)
+	if agentID == "" {
+		return commGridLLMTaskConfig{}, errors.New("agent must not be empty")
+	}
+	key, err := parseCommGridLLMPoint("key", flags.Key)
+	if err != nil {
+		return commGridLLMTaskConfig{}, err
+	}
+	goal, err := parseCommGridLLMPoint("goal", flags.Goal)
+	if err != nil {
+		return commGridLLMTaskConfig{}, err
+	}
+	agent, err := parseCommGridLLMPoint("agent-pos", flags.Agent)
+	if err != nil {
+		return commGridLLMTaskConfig{}, err
+	}
+	if !commGridLLMPointInBounds(key, flags.Width, flags.Height) {
+		return commGridLLMTaskConfig{}, fmt.Errorf("key out of bounds: %d,%d", key.X, key.Y)
+	}
+	if !commGridLLMPointInBounds(goal, flags.Width, flags.Height) {
+		return commGridLLMTaskConfig{}, fmt.Errorf("goal out of bounds: %d,%d", goal.X, goal.Y)
+	}
+	if !commGridLLMPointInBounds(agent, flags.Width, flags.Height) {
+		return commGridLLMTaskConfig{}, fmt.Errorf("agent-pos out of bounds: %d,%d", agent.X, agent.Y)
+	}
+	return commGridLLMTaskConfig{
+		Width:        flags.Width,
+		Height:       flags.Height,
+		Key:          key,
+		Goal:         goal,
+		AgentID:      agentID,
+		Agent:        agent,
+		MessageLimit: flags.MessageLimit,
+	}, nil
+}
+
+func defaultCommGridLLMTaskConfig() commGridLLMTaskConfig {
+	return commGridLLMTaskConfig{
+		Width:        3,
+		Height:       3,
+		Key:          scape.CommGridPoint{X: 1, Y: 0},
+		Goal:         scape.CommGridPoint{X: 2, Y: 0},
+		AgentID:      "agent-1",
+		Agent:        scape.CommGridPoint{},
+		MessageLimit: 80,
+	}
+}
+
+func parseCommGridLLMPoint(name, raw string) (scape.CommGridPoint, error) {
+	parts := strings.Split(strings.TrimSpace(raw), ",")
+	if len(parts) != 2 {
+		return scape.CommGridPoint{}, fmt.Errorf("%s must use x,y", name)
+	}
+	x, err := parseCommGridLLMNonNegativeInt(name+".x", parts[0])
+	if err != nil {
+		return scape.CommGridPoint{}, err
+	}
+	y, err := parseCommGridLLMNonNegativeInt(name+".y", parts[1])
+	if err != nil {
+		return scape.CommGridPoint{}, err
+	}
+	return scape.CommGridPoint{X: x, Y: y}, nil
+}
+
+func parseCommGridLLMNonNegativeInt(name, raw string) (int, error) {
+	value, err := strconv.Atoi(strings.TrimSpace(raw))
+	if err != nil {
+		return 0, fmt.Errorf("%s must be a non-negative integer: %w", name, err)
+	}
+	if value < 0 {
+		return 0, fmt.Errorf("%s must be a non-negative integer", name)
+	}
+	return value, nil
+}
+
+func commGridLLMPointInBounds(point scape.CommGridPoint, width, height int) bool {
+	return point.X >= 0 && point.Y >= 0 && point.X < width && point.Y < height
 }
 
 func commGridLLMFailureMessage(err error) string {
