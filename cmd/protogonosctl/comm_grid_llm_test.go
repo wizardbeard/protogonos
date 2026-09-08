@@ -141,6 +141,72 @@ func TestCommGridLLMCommandRunsOpenAICompatibleProvider(t *testing.T) {
 	}
 }
 
+func TestCommGridLLMCommandRetriesOpenAICompatibleProvider(t *testing.T) {
+	responses := []string{
+		`{"action":"east","message":"move to key","to":"all","tokens":3}`,
+		`{"action":"pick","message":"picked key","to":"all","tokens":2}`,
+		`{"action":"east","message":"move to goal","to":"all","tokens":3}`,
+		`{"action":"drop","message":"delivered key","to":"all","tokens":2}`,
+	}
+	var calls int
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		calls++
+		if calls == 1 {
+			http.Error(w, "temporary failure", http.StatusBadGateway)
+			return
+		}
+		idx := calls - 2
+		if idx >= len(responses) {
+			idx = len(responses) - 1
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{
+			"model": "retry-local",
+			"choices": [{
+				"finish_reason": "stop",
+				"message": {"content": ` + strconvQuoteForTest(responses[idx]) + `}
+			}],
+			"usage": {"prompt_tokens": 5, "completion_tokens": 3, "total_tokens": 8}
+		}`))
+	}))
+	defer server.Close()
+
+	out, err := captureStdoutForCommGridLLM(func() error {
+		return run(context.Background(), []string{
+			"comm-grid-llm",
+			"--provider", "openai-compatible",
+			"--base-url", server.URL + "/v1",
+			"--model", "retry-local",
+			"--provider-retries", "1",
+			"--retry-backoff-ms", "0",
+			"--json",
+			"--artifacts=false",
+		})
+	})
+	if err != nil {
+		t.Fatalf("retry command: %v", err)
+	}
+	var summary commGridLLMCommandSummary
+	if err := json.Unmarshal([]byte(out), &summary); err != nil {
+		t.Fatalf("decode retry json: %v\n%s", err, out)
+	}
+	if !summary.Completed || calls != 5 {
+		t.Fatalf("expected completed retry run and five provider calls, calls=%d summary=%+v", calls, summary)
+	}
+	if len(summary.Steps[0].Attempts) != 2 {
+		t.Fatalf("expected two attempts on first step, step=%+v", summary.Steps[0])
+	}
+	if summary.Steps[0].Attempts[0].Success || !strings.Contains(summary.Steps[0].Attempts[0].Error, "502") {
+		t.Fatalf("expected failed first attempt, attempts=%+v", summary.Steps[0].Attempts)
+	}
+	if !summary.Steps[0].Attempts[1].Success || summary.Steps[0].Attempts[1].Tokens != 8 {
+		t.Fatalf("expected successful second attempt, attempts=%+v", summary.Steps[0].Attempts)
+	}
+	if got, ok := summary.Steps[0].ProviderTrace["attempts"].(float64); !ok || got != 2 {
+		t.Fatalf("expected provider trace attempt count, trace=%+v", summary.Steps[0].ProviderTrace)
+	}
+}
+
 func TestCommGridLLMCommandConvertsProviderTimeoutToFailureStep(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		time.Sleep(25 * time.Millisecond)
@@ -542,6 +608,8 @@ func TestCommGridLLMCommandWritesProviderFailureArtifactAndReplays(t *testing.T)
 		"--run-id", "provider-error-artifact-run",
 		"--plan", "provider-error",
 		"--steps", "2",
+		"--provider-retries", "2",
+		"--retry-backoff-ms", "0",
 	}); err != nil {
 		t.Fatalf("comm-grid-llm provider error command: %v", err)
 	}
@@ -555,6 +623,17 @@ func TestCommGridLLMCommandWritesProviderFailureArtifactAndReplays(t *testing.T)
 	}
 	if first.Response.Message != "" || len(first.Response.ToolCalls) != 0 {
 		t.Fatalf("expected empty provider response on provider failure, step=%+v", first)
+	}
+	if len(first.Attempts) != 3 || first.Attempts[0].Success || first.Attempts[2].Success {
+		t.Fatalf("expected stored failed retry attempts, step=%+v", first)
+	}
+	transcriptPath := filepath.Join(workdir, "benchmarks", "provider-error-artifact-run", "comm_grid_llm_transcript.md")
+	transcript, err := os.ReadFile(transcriptPath)
+	if err != nil {
+		t.Fatalf("read provider failure transcript: %v", err)
+	}
+	if !strings.Contains(string(transcript), "### Provider Attempts") || !strings.Contains(string(transcript), "fixture provider failure") {
+		t.Fatalf("expected retry attempts in transcript, got %s", string(transcript))
 	}
 
 	out, err := captureStdoutForCommGridLLM(func() error {

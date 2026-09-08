@@ -569,6 +569,7 @@ Status keys:
 - Added multi-agent `comm-grid-llm` fixture runs with fixed sequential turns, shared message history, per-step actor IDs, artifact persistence, and replay reuse.
 - Added per-agent role and system-prompt controls for `comm-grid-llm`, with artifact persistence and replay reuse.
 - Added `comm_grid_llm_transcript.md` beside the JSON artifact for quick provider-turn inspection.
+- Added provider retry/backoff controls for `comm-grid-llm`, with stored retry attempts in JSON artifacts and transcripts.
 
 ## Current-scope parity declaration
 

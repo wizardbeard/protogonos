@@ -517,6 +517,17 @@ protogonosctl comm-grid-llm \
   --json
 ```
 
+Add retry controls for local or LAN inference servers:
+
+```bash
+protogonosctl comm-grid-llm \
+  --provider openai-compatible \
+  --base-url http://192.168.1.50:1234/v1 \
+  --model local-model \
+  --provider-retries 2 \
+  --retry-backoff-ms 250
+```
+
 Fixture mode remains the default. Live provider mode is explicit so local tests and examples do not call external services by accident.
 
 The artifact file stores:
@@ -527,6 +538,7 @@ The artifact file stores:
 - provider response,
 - parsed bounded action,
 - bounded failure text and kind,
+- provider retry attempts,
 - message history,
 - token counts,
 - final fitness and trace.
@@ -537,6 +549,7 @@ The transcript file stores:
 - task summary,
 - each actor prompt,
 - provider response payload,
+- provider retry attempts,
 - parsed action,
 - step fitness,
 - final trace.
@@ -566,6 +579,7 @@ A small first slice should avoid provider lock-in:
 - add multi-agent `comm-grid-llm` fixture runs with fixed sequential turns, shared message history, per-step actor IDs, artifact persistence, and replay reuse,
 - add per-agent role and system-prompt controls for `comm-grid-llm`, persisted in artifacts and reused on replay,
 - write `comm_grid_llm_transcript.md` beside the JSON artifact for quick provider-turn inspection,
+- add provider retry/backoff controls with stored attempts in JSON artifacts and transcripts,
 - add tests for deterministic replay, invalid output handling, timeout handling, and token-cost fitness.
 
 This gives the system a useful LLM integration path without making evolution depend on unbounded free-form text.

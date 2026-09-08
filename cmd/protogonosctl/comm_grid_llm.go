@@ -30,6 +30,7 @@ type commGridLLMCommandStep struct {
 	Fitness       float64                 `json:"fitness"`
 	Trace         map[string]any          `json:"trace"`
 	ProviderTrace map[string]any          `json:"provider_trace"`
+	Attempts      []commGridLLMAttempt    `json:"attempts,omitempty"`
 	Agent         map[string]any          `json:"agent"`
 	Messages      []scape.CommGridMessage `json:"messages,omitempty"`
 }
@@ -90,11 +91,90 @@ type commGridLLMArtifactStep struct {
 	Step      int                     `json:"step"`
 	Request   llm.Request             `json:"request"`
 	Response  llm.Response            `json:"response"`
+	Attempts  []commGridLLMAttempt    `json:"attempts,omitempty"`
 	Payload   string                  `json:"payload"`
 	Parsed    scape.CommGridStepInput `json:"parsed_action"`
 	Error     string                  `json:"error,omitempty"`
 	ErrorKind string                  `json:"error_kind,omitempty"`
 	Result    commGridLLMCommandStep  `json:"result"`
+}
+
+type commGridLLMAttempt struct {
+	Attempt      int    `json:"attempt"`
+	Success      bool   `json:"success"`
+	Error        string `json:"error,omitempty"`
+	BackoffMS    int    `json:"backoff_ms,omitempty"`
+	Model        string `json:"model,omitempty"`
+	FinishReason string `json:"finish_reason,omitempty"`
+	Tokens       int    `json:"tokens,omitempty"`
+}
+
+type commGridLLMRetryProvider struct {
+	inner     llm.Provider
+	retries   int
+	backoffMS int
+	attempts  [][]commGridLLMAttempt
+}
+
+func (p *commGridLLMRetryProvider) Complete(ctx context.Context, req llm.Request) (llm.Response, error) {
+	if p == nil || p.inner == nil {
+		return llm.Response{}, errors.New("comm-grid llm provider is nil")
+	}
+	maxAttempts := p.retries + 1
+	if maxAttempts <= 0 {
+		maxAttempts = 1
+	}
+	attempts := make([]commGridLLMAttempt, 0, maxAttempts)
+	var last llm.Response
+	var lastErr error
+	for i := 1; i <= maxAttempts; i++ {
+		res, err := p.inner.Complete(ctx, req)
+		attempt := commGridLLMAttempt{
+			Attempt:      i,
+			Success:      err == nil,
+			Model:        res.Model,
+			FinishReason: res.FinishReason,
+			Tokens:       res.TokenCount(),
+		}
+		if err != nil {
+			attempt.Error = strings.TrimSpace(err.Error())
+		}
+		if err != nil && i < maxAttempts {
+			attempt.BackoffMS = p.backoffMS
+		}
+		attempts = append(attempts, attempt)
+		last = res
+		lastErr = err
+		if err == nil {
+			break
+		}
+		if i < maxAttempts && p.backoffMS > 0 {
+			timer := time.NewTimer(time.Duration(p.backoffMS) * time.Millisecond)
+			select {
+			case <-ctx.Done():
+				timer.Stop()
+				attempts = append(attempts, commGridLLMAttempt{
+					Attempt: i + 1,
+					Success: false,
+					Error:   ctx.Err().Error(),
+				})
+				p.attempts = append(p.attempts, attempts)
+				return llm.Response{}, ctx.Err()
+			case <-timer.C:
+			}
+		}
+	}
+	p.attempts = append(p.attempts, attempts)
+	return last, lastErr
+}
+
+func (p *commGridLLMRetryProvider) PopAttempts() []commGridLLMAttempt {
+	if p == nil || len(p.attempts) == 0 {
+		return nil
+	}
+	attempts := p.attempts[0]
+	p.attempts = p.attempts[1:]
+	return attempts
 }
 
 type commGridLLMReplayProvider struct {
@@ -138,6 +218,8 @@ func runCommGridLLM(ctx context.Context, args []string) error {
 	apiKeyEnv := fs.String("api-key-env", "PROTOGONOS_LLM_API_KEY", "environment variable containing provider API key")
 	model := fs.String("model", "", "provider model id")
 	timeoutMS := fs.Int("timeout-ms", 30000, "provider request timeout in milliseconds")
+	providerRetries := fs.Int("provider-retries", 0, "provider retries after a failed request")
+	retryBackoffMS := fs.Int("retry-backoff-ms", 250, "provider retry backoff in milliseconds")
 	maxTokens := fs.Int("max-tokens", 64, "maximum completion tokens per decision")
 	temperature := fs.Float64("temperature", 0, "provider temperature")
 	seed := fs.Int64("seed", 1, "provider seed when supported")
@@ -150,6 +232,12 @@ func runCommGridLLM(ctx context.Context, args []string) error {
 	}
 	if *steps <= 0 {
 		return errors.New("steps must be > 0")
+	}
+	if *providerRetries < 0 {
+		return errors.New("provider-retries must be >= 0")
+	}
+	if *retryBackoffMS < 0 {
+		return errors.New("retry-backoff-ms must be >= 0")
 	}
 	task, err := commGridLLMTaskFromFlags(commGridLLMTaskFlagValues{
 		Width:        *width,
@@ -205,6 +293,8 @@ func runCommGridLLM(ctx context.Context, args []string) error {
 		SummaryPlan:     summaryPlan,
 		MaxSteps:        *steps,
 		Task:            task,
+		ProviderRetries: *providerRetries,
+		RetryBackoffMS:  *retryBackoffMS,
 		MaxTokens:       *maxTokens,
 		Temperature:     *temperature,
 		Seed:            *seed,
@@ -358,6 +448,8 @@ type commGridLLMExecutionConfig struct {
 	SummaryPlan     string
 	MaxSteps        int
 	Task            commGridLLMTaskConfig
+	ProviderRetries int
+	RetryBackoffMS  int
 	MaxTokens       int
 	Temperature     float64
 	Seed            int64
@@ -379,6 +471,11 @@ func executeCommGridLLM(ctx context.Context, cfg commGridLLMExecutionConfig) (co
 		Goal:         task.Goal,
 		Agents:       commGridLLMScapeAgents(task),
 	})
+	provider := &commGridLLMRetryProvider{
+		inner:     cfg.Provider,
+		retries:   cfg.ProviderRetries,
+		backoffMS: cfg.RetryBackoffMS,
+	}
 
 	summary := commGridLLMCommandSummary{
 		RunID:    cfg.RunID,
@@ -391,7 +488,7 @@ func executeCommGridLLM(ctx context.Context, cfg commGridLLMExecutionConfig) (co
 		actorID := task.TurnOrder[len(summary.Steps)%len(task.TurnOrder)]
 		actor := scape.CommGridLLMActor{
 			AgentID:       actorID,
-			Provider:      cfg.Provider,
+			Provider:      provider,
 			Model:         cfg.ActorModel,
 			SystemPrompt:  commGridLLMSystemPromptForActor(task, actorID),
 			MaxTokens:     cfg.MaxTokens,
@@ -403,6 +500,7 @@ func executeCommGridLLM(ctx context.Context, cfg commGridLLMExecutionConfig) (co
 		if err != nil {
 			result, trace = commGridLLMFailedStep(ctx, sim, actorID, len(summary.Steps)+1, trace, err)
 		}
+		attempts := provider.PopAttempts()
 		state, _ := sim.AgentState(actorID)
 		errText := ""
 		errKind := ""
@@ -428,7 +526,9 @@ func executeCommGridLLM(ctx context.Context, cfg commGridLLMExecutionConfig) (co
 				"model":         trace.Response.Model,
 				"tokens":        trace.Response.TokenCount(),
 				"payload":       trace.Payload,
+				"attempts":      len(attempts),
 			},
+			Attempts: attempts,
 			Agent: map[string]any{
 				"id":       state.ID,
 				"x":        state.Position.X,
@@ -442,6 +542,7 @@ func executeCommGridLLM(ctx context.Context, cfg commGridLLMExecutionConfig) (co
 			Step:      step.Step,
 			Request:   trace.Request,
 			Response:  trace.Response,
+			Attempts:  attempts,
 			Payload:   trace.Payload,
 			Parsed:    trace.StepInput,
 			Error:     errText,
@@ -923,6 +1024,9 @@ func renderCommGridLLMTranscriptStep(b *strings.Builder, step commGridLLMArtifac
 		fmt.Fprintf(b, "- error_kind: `%s`\n", step.ErrorKind)
 		fmt.Fprintf(b, "- error: `%s`\n", step.Error)
 	}
+	if len(step.Attempts) > 0 {
+		fmt.Fprintf(b, "- attempts: `%d`\n", len(step.Attempts))
+	}
 	fmt.Fprintf(b, "- message: `%s`\n", step.Result.Message)
 	fmt.Fprintf(b, "- to: `%s`\n\n", step.Result.To)
 
@@ -944,6 +1048,20 @@ func renderCommGridLLMTranscriptStep(b *strings.Builder, step commGridLLMArtifac
 		step.Parsed.To,
 		step.Parsed.Tokens,
 	)
+	if len(step.Attempts) > 0 {
+		fmt.Fprintf(b, "### Provider Attempts\n\n")
+		for _, attempt := range step.Attempts {
+			fmt.Fprintf(b, "- attempt `%d`: success=`%t` tokens=`%d` finish_reason=`%s` error=`%s` backoff_ms=`%d`\n",
+				attempt.Attempt,
+				attempt.Success,
+				attempt.Tokens,
+				attempt.FinishReason,
+				attempt.Error,
+				attempt.BackoffMS,
+			)
+		}
+		fmt.Fprintf(b, "\n")
+	}
 }
 
 func readCommGridLLMArtifact(baseDir, runID string) (commGridLLMArtifact, error) {
