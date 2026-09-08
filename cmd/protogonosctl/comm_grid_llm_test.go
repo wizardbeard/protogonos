@@ -313,6 +313,32 @@ func TestCommGridLLMCommandWritesArtifacts(t *testing.T) {
 			t.Fatalf("expected transcript to contain %q, got %s", want, transcriptText)
 		}
 	}
+
+	indexPath := filepath.Join(workdir, "benchmarks", "comm_grid_llm_runs.jsonl")
+	indexData, err := os.ReadFile(indexPath)
+	if err != nil {
+		t.Fatalf("read run index: %v", err)
+	}
+	lines := strings.Split(strings.TrimSpace(string(indexData)), "\n")
+	if len(lines) != 1 {
+		t.Fatalf("expected one index line, got %d: %s", len(lines), string(indexData))
+	}
+	var indexEntry commGridLLMRunIndexEntry
+	if err := json.Unmarshal([]byte(lines[0]), &indexEntry); err != nil {
+		t.Fatalf("decode run index line: %v\n%s", err, lines[0])
+	}
+	if indexEntry.RunID != "fixture-artifact-run" || indexEntry.Provider != "fixture" || !indexEntry.Completed || indexEntry.Steps != 4 {
+		t.Fatalf("unexpected run index entry: %+v", indexEntry)
+	}
+	if indexEntry.FailureCount != 0 || indexEntry.RetryCount != 0 {
+		t.Fatalf("unexpected run index counts: %+v", indexEntry)
+	}
+	if indexEntry.ArtifactPath != "benchmarks/fixture-artifact-run/comm_grid_llm.json" {
+		t.Fatalf("unexpected artifact path: %+v", indexEntry)
+	}
+	if indexEntry.TranscriptPath != "benchmarks/fixture-artifact-run/comm_grid_llm_transcript.md" {
+		t.Fatalf("unexpected transcript path: %+v", indexEntry)
+	}
 }
 
 func TestCommGridLLMCommandWritesCustomTaskArtifactAndReplays(t *testing.T) {
@@ -635,6 +661,17 @@ func TestCommGridLLMCommandWritesProviderFailureArtifactAndReplays(t *testing.T)
 	if !strings.Contains(string(transcript), "### Provider Attempts") || !strings.Contains(string(transcript), "fixture provider failure") {
 		t.Fatalf("expected retry attempts in transcript, got %s", string(transcript))
 	}
+	indexData, err := os.ReadFile(filepath.Join(workdir, "benchmarks", "comm_grid_llm_runs.jsonl"))
+	if err != nil {
+		t.Fatalf("read provider failure run index: %v", err)
+	}
+	var indexEntry commGridLLMRunIndexEntry
+	if err := json.Unmarshal([]byte(strings.TrimSpace(string(indexData))), &indexEntry); err != nil {
+		t.Fatalf("decode provider failure run index: %v\n%s", err, string(indexData))
+	}
+	if indexEntry.FailureCount != 2 || indexEntry.RetryCount != 4 || indexEntry.Completed {
+		t.Fatalf("unexpected provider failure index entry: %+v", indexEntry)
+	}
 
 	out, err := captureStdoutForCommGridLLM(func() error {
 		return run(context.Background(), []string{
@@ -652,6 +689,48 @@ func TestCommGridLLMCommandWritesProviderFailureArtifactAndReplays(t *testing.T)
 	}
 	if summary.Replay == nil || !summary.Replay.Matched {
 		t.Fatalf("expected matched replay, summary=%+v", summary)
+	}
+}
+
+func TestCommGridLLMCommandAppendsRunIndex(t *testing.T) {
+	origWD, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("getwd: %v", err)
+	}
+	workdir := t.TempDir()
+	if err := os.Chdir(workdir); err != nil {
+		t.Fatalf("chdir tempdir: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = os.Chdir(origWD)
+	})
+
+	for _, runID := range []string{"index-run-a", "index-run-b"} {
+		if err := run(context.Background(), []string{
+			"comm-grid-llm",
+			"--run-id", runID,
+			"--plan", "solve",
+		}); err != nil {
+			t.Fatalf("write indexed run %s: %v", runID, err)
+		}
+	}
+	data, err := os.ReadFile(filepath.Join(workdir, "benchmarks", "comm_grid_llm_runs.jsonl"))
+	if err != nil {
+		t.Fatalf("read appended index: %v", err)
+	}
+	lines := strings.Split(strings.TrimSpace(string(data)), "\n")
+	if len(lines) != 2 {
+		t.Fatalf("expected two index lines, got %d: %s", len(lines), string(data))
+	}
+	var first, second commGridLLMRunIndexEntry
+	if err := json.Unmarshal([]byte(lines[0]), &first); err != nil {
+		t.Fatalf("decode first index line: %v", err)
+	}
+	if err := json.Unmarshal([]byte(lines[1]), &second); err != nil {
+		t.Fatalf("decode second index line: %v", err)
+	}
+	if first.RunID != "index-run-a" || second.RunID != "index-run-b" {
+		t.Fatalf("unexpected index order: first=%+v second=%+v", first, second)
 	}
 }
 

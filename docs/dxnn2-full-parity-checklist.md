@@ -570,6 +570,7 @@ Status keys:
 - Added per-agent role and system-prompt controls for `comm-grid-llm`, with artifact persistence and replay reuse.
 - Added `comm_grid_llm_transcript.md` beside the JSON artifact for quick provider-turn inspection.
 - Added provider retry/backoff controls for `comm-grid-llm`, with stored retry attempts in JSON artifacts and transcripts.
+- Added `benchmarks/comm_grid_llm_runs.jsonl` append-only summary records for easier LLM run comparison.
 
 ## Current-scope parity declaration
 

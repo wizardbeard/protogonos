@@ -441,6 +441,7 @@ protogonosctl comm-grid-llm \
 ```
 
 It also writes `benchmarks/<run-id>/comm_grid_llm_transcript.md` for quick inspection.
+Each artifact write appends one summary line to `benchmarks/comm_grid_llm_runs.jsonl`.
 
 Disable artifact writes for quick console checks:
 
@@ -554,6 +555,17 @@ The transcript file stores:
 - step fitness,
 - final trace.
 
+The run index stores:
+
+- run ID,
+- provider and plan,
+- task config,
+- completion status,
+- fitness,
+- failure count,
+- retry count,
+- artifact paths.
+
 ## First Implementation Slice
 
 A small first slice should avoid provider lock-in:
@@ -580,6 +592,7 @@ A small first slice should avoid provider lock-in:
 - add per-agent role and system-prompt controls for `comm-grid-llm`, persisted in artifacts and reused on replay,
 - write `comm_grid_llm_transcript.md` beside the JSON artifact for quick provider-turn inspection,
 - add provider retry/backoff controls with stored attempts in JSON artifacts and transcripts,
+- append `benchmarks/comm_grid_llm_runs.jsonl` summary records for easier run comparison,
 - add tests for deterministic replay, invalid output handling, timeout handling, and token-cost fitness.
 
 This gives the system a useful LLM integration path without making evolution depend on unbounded free-form text.

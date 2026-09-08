@@ -99,6 +99,21 @@ type commGridLLMArtifactStep struct {
 	Result    commGridLLMCommandStep  `json:"result"`
 }
 
+type commGridLLMRunIndexEntry struct {
+	RunID          string                `json:"run_id"`
+	Provider       string                `json:"provider"`
+	Plan           string                `json:"plan"`
+	CreatedAt      string                `json:"created_at_utc"`
+	Task           commGridLLMTaskConfig `json:"task"`
+	Steps          int                   `json:"steps"`
+	Completed      bool                  `json:"completed"`
+	Fitness        float64               `json:"fitness"`
+	FailureCount   int                   `json:"failure_count"`
+	RetryCount     int                   `json:"retry_count"`
+	ArtifactPath   string                `json:"artifact_path"`
+	TranscriptPath string                `json:"transcript_path"`
+}
+
 type commGridLLMAttempt struct {
 	Attempt      int    `json:"attempt"`
 	Success      bool   `json:"success"`
@@ -983,7 +998,61 @@ func writeCommGridLLMArtifact(baseDir string, artifact commGridLLMArtifact) (str
 	if err := os.WriteFile(transcriptPath, []byte(transcript), 0o644); err != nil {
 		return "", err
 	}
+	if err := appendCommGridLLMRunIndex(baseDir, artifact, path, transcriptPath); err != nil {
+		return "", err
+	}
 	return filepath.Clean(runDir), nil
+}
+
+func appendCommGridLLMRunIndex(baseDir string, artifact commGridLLMArtifact, artifactPath, transcriptPath string) error {
+	entry := commGridLLMRunIndexEntry{
+		RunID:          artifact.RunID,
+		Provider:       artifact.Provider,
+		Plan:           artifact.Plan,
+		CreatedAt:      artifact.CreatedAt,
+		Task:           normalizeCommGridLLMTask(artifact.Task),
+		Steps:          len(artifact.Steps),
+		Completed:      artifact.Completed,
+		Fitness:        artifact.Fitness,
+		FailureCount:   commGridLLMFailureCount(artifact.Steps),
+		RetryCount:     commGridLLMRetryCount(artifact.Steps),
+		ArtifactPath:   filepath.ToSlash(filepath.Clean(artifactPath)),
+		TranscriptPath: filepath.ToSlash(filepath.Clean(transcriptPath)),
+	}
+	data, err := json.Marshal(entry)
+	if err != nil {
+		return err
+	}
+	indexPath := filepath.Join(baseDir, "comm_grid_llm_runs.jsonl")
+	file, err := os.OpenFile(indexPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o644)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+	if _, err := file.Write(append(data, '\n')); err != nil {
+		return err
+	}
+	return nil
+}
+
+func commGridLLMFailureCount(steps []commGridLLMArtifactStep) int {
+	count := 0
+	for _, step := range steps {
+		if step.ErrorKind != "" || step.Result.ErrorKind != "" {
+			count++
+		}
+	}
+	return count
+}
+
+func commGridLLMRetryCount(steps []commGridLLMArtifactStep) int {
+	count := 0
+	for _, step := range steps {
+		if len(step.Attempts) > 1 {
+			count += len(step.Attempts) - 1
+		}
+	}
+	return count
 }
 
 func renderCommGridLLMTranscript(artifact commGridLLMArtifact) string {
