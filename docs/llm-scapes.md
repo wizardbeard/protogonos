@@ -539,6 +539,14 @@ protogonosctl comm-grid-llm-suite \
   --fail-fast=false
 ```
 
+Emit suite rows as CSV:
+
+```bash
+protogonosctl comm-grid-llm-suite \
+  --manifest testdata/fixtures/comm_grid_llm_suite_manifest.json \
+  --csv
+```
+
 Disable artifact writes for quick console checks:
 
 ```bash
@@ -703,6 +711,7 @@ A small first slice should avoid provider lock-in:
 - add `protogonosctl comm-grid-llm-suite --emit-manifest` to print the effective suite manifest without running the suite,
 - add `protogonosctl comm-grid-llm-suite --dry-run` to preview the run matrix without provider calls or artifacts,
 - add `protogonosctl comm-grid-llm-suite --fail-fast=false` to continue after row-level suite errors,
+- add CSV output for `protogonosctl comm-grid-llm-suite` and `protogonosctl comm-grid-llm-suite --dry-run`,
 - add tests for deterministic replay, invalid output handling, timeout handling, and token-cost fitness.
 
 This gives the system a useful LLM integration path without making evolution depend on unbounded free-form text.

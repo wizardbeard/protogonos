@@ -1134,6 +1134,50 @@ func TestCommGridLLMSuiteCommandCanContinueAfterRowError(t *testing.T) {
 	}
 }
 
+func TestCommGridLLMSuiteCommandEmitsCSV(t *testing.T) {
+	origWD, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("getwd: %v", err)
+	}
+	workdir := t.TempDir()
+	if err := os.Chdir(workdir); err != nil {
+		t.Fatalf("chdir tempdir: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = os.Chdir(origWD)
+	})
+
+	out, err := captureStdoutForCommGridLLM(func() error {
+		return run(context.Background(), []string{
+			"comm-grid-llm-suite",
+			"--suite-id", "csv-suite",
+			"--plans", "solve,missing",
+			"--fail-fast=false",
+			"--artifacts=false",
+			"--csv",
+		})
+	})
+	if err != nil {
+		t.Fatalf("suite csv command: %v", err)
+	}
+	records, err := csv.NewReader(strings.NewReader(out)).ReadAll()
+	if err != nil {
+		t.Fatalf("parse suite csv: %v\n%s", err, out)
+	}
+	if len(records) != 3 {
+		t.Fatalf("expected header plus two rows, got %+v", records)
+	}
+	if records[0][0] != "suite_id" || records[0][4] != "run_id" || records[0][15] != "error" {
+		t.Fatalf("unexpected suite csv header: %+v", records[0])
+	}
+	if records[1][0] != "csv-suite" || records[1][1] != "2" || records[1][2] != "1" || records[1][3] != "1" || records[1][4] != "csv-suite-solve-default-r1" {
+		t.Fatalf("unexpected suite csv success row: %+v", records[1])
+	}
+	if records[2][4] != "csv-suite-missing-default-r1" || !strings.Contains(records[2][15], "unsupported comm-grid llm fixture plan") {
+		t.Fatalf("unexpected suite csv error row: %+v", records[2])
+	}
+}
+
 func TestCommGridLLMSuiteCommandContinueAfterRowErrorAsJSON(t *testing.T) {
 	out, err := captureStdoutForCommGridLLM(func() error {
 		return run(context.Background(), []string{
@@ -1207,6 +1251,49 @@ func TestCommGridLLMSuiteCommandDryRunPrintsMatrix(t *testing.T) {
 	}
 }
 
+func TestCommGridLLMSuiteCommandDryRunEmitsCSV(t *testing.T) {
+	origWD, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("getwd: %v", err)
+	}
+	workdir := t.TempDir()
+	if err := os.Chdir(workdir); err != nil {
+		t.Fatalf("chdir tempdir: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = os.Chdir(origWD)
+	})
+
+	out, err := captureStdoutForCommGridLLM(func() error {
+		return run(context.Background(), []string{
+			"comm-grid-llm-suite",
+			"--suite-id", "dry-csv",
+			"--plans", "solve,tool",
+			"--dry-run",
+			"--csv",
+		})
+	})
+	if err != nil {
+		t.Fatalf("dry-run csv suite command: %v", err)
+	}
+	records, err := csv.NewReader(strings.NewReader(out)).ReadAll()
+	if err != nil {
+		t.Fatalf("parse dry-run csv: %v\n%s", err, out)
+	}
+	if len(records) != 3 {
+		t.Fatalf("expected header plus two dry-run rows, got %+v", records)
+	}
+	if records[0][0] != "suite_id" || records[0][2] != "task_shape" || records[0][3] != "run_id" {
+		t.Fatalf("unexpected dry-run csv header: %+v", records[0])
+	}
+	if records[1][0] != "dry-csv" || records[1][1] != "2" || records[1][3] != "dry-csv-solve-default-r1" {
+		t.Fatalf("unexpected dry-run csv row: %+v", records[1])
+	}
+	if _, err := os.Stat(filepath.Join(workdir, "benchmarks")); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("dry-run csv should not create benchmarks, err=%v", err)
+	}
+}
+
 func TestCommGridLLMSuiteCommandDryRunEmitsJSON(t *testing.T) {
 	origWD, err := os.Getwd()
 	if err != nil {
@@ -1242,6 +1329,24 @@ func TestCommGridLLMSuiteCommandDryRunEmitsJSON(t *testing.T) {
 	}
 	if result.Runs[0].RunID != "dry-json-solve-default-r1" || result.Runs[1].RunID != "dry-json-solve-default-r2" {
 		t.Fatalf("unexpected dry-run rows: %+v", result.Runs)
+	}
+}
+
+func TestCommGridLLMSuiteCommandRejectsConflictingOutputFormats(t *testing.T) {
+	err := run(context.Background(), []string{"comm-grid-llm-suite", "--json", "--csv"})
+	if err == nil {
+		t.Fatal("expected conflicting output format error")
+	}
+	if !strings.Contains(err.Error(), "use only one output format") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	err = run(context.Background(), []string{"comm-grid-llm-suite", "--emit-manifest", "--csv"})
+	if err == nil {
+		t.Fatal("expected emit-manifest csv error")
+	}
+	if !strings.Contains(err.Error(), "--csv cannot be used with --emit-manifest") {
+		t.Fatalf("unexpected error: %v", err)
 	}
 }
 

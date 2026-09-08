@@ -664,6 +664,7 @@ func runCommGridLLMSuite(ctx context.Context, args []string) error {
 	writeArtifacts := fs.Bool("artifacts", true, "write comm-grid LLM artifacts under benchmarks/<run-id>")
 	failFast := fs.Bool("fail-fast", true, "stop suite at the first row error")
 	jsonOut := fs.Bool("json", false, "emit suite summary as JSON")
+	csvOut := fs.Bool("csv", false, "emit suite summary as CSV")
 	var promptFlags commGridLLMPromptFlag
 	fs.Var(&promptFlags, "prompt", "prompt variant as name=text; may be repeated")
 	if err := fs.Parse(args); err != nil {
@@ -723,6 +724,12 @@ func runCommGridLLMSuite(ctx context.Context, args []string) error {
 	}
 	if *retryBackoffMS < 0 {
 		return errors.New("retry-backoff-ms must be >= 0")
+	}
+	if *jsonOut && *csvOut {
+		return errors.New("use only one output format: --json or --csv")
+	}
+	if *emitManifest && *csvOut {
+		return errors.New("--csv cannot be used with --emit-manifest")
 	}
 	plans, err := parseCommGridLLMNameList(*plansRaw)
 	if err != nil {
@@ -800,6 +807,9 @@ func runCommGridLLMSuite(ctx context.Context, args []string) error {
 			enc := json.NewEncoder(os.Stdout)
 			enc.SetIndent("", "  ")
 			return enc.Encode(result)
+		}
+		if *csvOut {
+			return writeCommGridLLMSuiteDryRunCSV(os.Stdout, result)
 		}
 		printCommGridLLMSuiteDryRunTable(result)
 		return nil
@@ -892,6 +902,9 @@ func runCommGridLLMSuite(ctx context.Context, args []string) error {
 		enc := json.NewEncoder(os.Stdout)
 		enc.SetIndent("", "  ")
 		return enc.Encode(result)
+	}
+	if *csvOut {
+		return writeCommGridLLMSuiteCSV(os.Stdout, result)
 	}
 	printCommGridLLMSuiteTable(result)
 	return nil
@@ -2178,6 +2191,54 @@ func printCommGridLLMSuiteTable(result commGridLLMSuiteResult) {
 	}
 }
 
+func writeCommGridLLMSuiteCSV(file *os.File, result commGridLLMSuiteResult) error {
+	writer := csv.NewWriter(file)
+	if err := writer.Write([]string{
+		"suite_id",
+		"run_count",
+		"completed_count",
+		"error_count",
+		"run_id",
+		"provider",
+		"plan",
+		"prompt",
+		"completed",
+		"fitness",
+		"steps",
+		"total_tokens",
+		"average_tokens_per_step",
+		"duration_ms",
+		"artifacts_dir",
+		"error",
+	}); err != nil {
+		return err
+	}
+	for _, row := range result.Runs {
+		if err := writer.Write([]string{
+			result.SuiteID,
+			strconv.Itoa(result.RunCount),
+			strconv.Itoa(result.Completed),
+			strconv.Itoa(result.Errors),
+			row.RunID,
+			row.Provider,
+			row.Plan,
+			row.Prompt,
+			strconv.FormatBool(row.Completed),
+			strconv.FormatFloat(row.Fitness, 'f', 6, 64),
+			strconv.Itoa(row.Steps),
+			strconv.Itoa(row.TotalTokens),
+			strconv.FormatFloat(row.AverageTokensPerStep, 'f', 3, 64),
+			strconv.FormatInt(row.DurationMS, 10),
+			row.ArtifactsDir,
+			row.Error,
+		}); err != nil {
+			return err
+		}
+	}
+	writer.Flush()
+	return writer.Error()
+}
+
 func buildCommGridLLMSuiteDryRun(suiteID string, plans []string, prompts []commGridLLMPromptVariant, repeats int, task commGridLLMTaskConfig) commGridLLMSuiteDryRunResult {
 	result := commGridLLMSuiteDryRunResult{
 		SuiteID:   suiteID,
@@ -2211,6 +2272,36 @@ func printCommGridLLMSuiteDryRunTable(result commGridLLMSuiteDryRunResult) {
 			row.Repeat,
 		)
 	}
+}
+
+func writeCommGridLLMSuiteDryRunCSV(file *os.File, result commGridLLMSuiteDryRunResult) error {
+	writer := csv.NewWriter(file)
+	if err := writer.Write([]string{
+		"suite_id",
+		"run_count",
+		"task_shape",
+		"run_id",
+		"plan",
+		"prompt",
+		"repeat",
+	}); err != nil {
+		return err
+	}
+	for _, row := range result.Runs {
+		if err := writer.Write([]string{
+			result.SuiteID,
+			strconv.Itoa(result.RunCount),
+			result.TaskShape,
+			row.RunID,
+			row.Plan,
+			row.Prompt,
+			strconv.Itoa(row.Repeat),
+		}); err != nil {
+			return err
+		}
+	}
+	writer.Flush()
+	return writer.Error()
 }
 
 func parseOptionalBoolFlag(name, raw string) (bool, bool, error) {
