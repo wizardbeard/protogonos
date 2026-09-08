@@ -287,6 +287,8 @@ For LLM agents, the scape can pass text directly and decode the response into bo
 
 `comm-grid` is a good first prototype.
 
+The first implementation slice is deterministic and does not call an LLM. It defines the world, actions, messages, bounded scoring, and trace shape first. LLM actors can be added after this core loop is stable.
+
 World:
 
 - small grid,
