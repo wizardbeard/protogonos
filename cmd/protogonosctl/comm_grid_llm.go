@@ -52,15 +52,18 @@ type commGridLLMCommandSummary struct {
 }
 
 type commGridLLMArtifact struct {
-	RunID     string                    `json:"run_id"`
-	Provider  string                    `json:"provider"`
-	Plan      string                    `json:"plan"`
-	CreatedAt string                    `json:"created_at_utc"`
-	Task      commGridLLMTaskConfig     `json:"task"`
-	Steps     []commGridLLMArtifactStep `json:"steps"`
-	Completed bool                      `json:"completed"`
-	Fitness   float64                   `json:"fitness"`
-	Trace     map[string]any            `json:"trace"`
+	RunID                string                    `json:"run_id"`
+	Provider             string                    `json:"provider"`
+	Plan                 string                    `json:"plan"`
+	CreatedAt            string                    `json:"created_at_utc"`
+	DurationMS           int64                     `json:"duration_ms"`
+	Task                 commGridLLMTaskConfig     `json:"task"`
+	Steps                []commGridLLMArtifactStep `json:"steps"`
+	Completed            bool                      `json:"completed"`
+	Fitness              float64                   `json:"fitness"`
+	TotalTokens          int                       `json:"total_tokens"`
+	AverageTokensPerStep float64                   `json:"average_tokens_per_step"`
+	Trace                map[string]any            `json:"trace"`
 }
 
 type commGridLLMTaskConfig struct {
@@ -103,18 +106,21 @@ type commGridLLMArtifactStep struct {
 }
 
 type commGridLLMRunIndexEntry struct {
-	RunID          string                `json:"run_id"`
-	Provider       string                `json:"provider"`
-	Plan           string                `json:"plan"`
-	CreatedAt      string                `json:"created_at_utc"`
-	Task           commGridLLMTaskConfig `json:"task"`
-	Steps          int                   `json:"steps"`
-	Completed      bool                  `json:"completed"`
-	Fitness        float64               `json:"fitness"`
-	FailureCount   int                   `json:"failure_count"`
-	RetryCount     int                   `json:"retry_count"`
-	ArtifactPath   string                `json:"artifact_path"`
-	TranscriptPath string                `json:"transcript_path"`
+	RunID                string                `json:"run_id"`
+	Provider             string                `json:"provider"`
+	Plan                 string                `json:"plan"`
+	CreatedAt            string                `json:"created_at_utc"`
+	DurationMS           int64                 `json:"duration_ms"`
+	Task                 commGridLLMTaskConfig `json:"task"`
+	Steps                int                   `json:"steps"`
+	Completed            bool                  `json:"completed"`
+	Fitness              float64               `json:"fitness"`
+	TotalTokens          int                   `json:"total_tokens"`
+	AverageTokensPerStep float64               `json:"average_tokens_per_step"`
+	FailureCount         int                   `json:"failure_count"`
+	RetryCount           int                   `json:"retry_count"`
+	ArtifactPath         string                `json:"artifact_path"`
+	TranscriptPath       string                `json:"transcript_path"`
 }
 
 type commGridLLMRunIndexFilter struct {
@@ -126,18 +132,21 @@ type commGridLLMRunIndexFilter struct {
 }
 
 type commGridLLMRunComparison struct {
-	Group           string  `json:"group"`
-	Provider        string  `json:"provider"`
-	Plan            string  `json:"plan"`
-	TaskShape       string  `json:"task_shape"`
-	Runs            int     `json:"runs"`
-	Completed       int     `json:"completed"`
-	CompletionRate  float64 `json:"completion_rate"`
-	BestFitness     float64 `json:"best_fitness"`
-	AverageFitness  float64 `json:"average_fitness"`
-	AverageFailures float64 `json:"average_failures"`
-	AverageRetries  float64 `json:"average_retries"`
-	BestRunID       string  `json:"best_run_id"`
+	Group                string  `json:"group"`
+	Provider             string  `json:"provider"`
+	Plan                 string  `json:"plan"`
+	TaskShape            string  `json:"task_shape"`
+	Runs                 int     `json:"runs"`
+	Completed            int     `json:"completed"`
+	CompletionRate       float64 `json:"completion_rate"`
+	BestFitness          float64 `json:"best_fitness"`
+	AverageFitness       float64 `json:"average_fitness"`
+	AverageTokensPerRun  float64 `json:"average_tokens_per_run"`
+	AverageTokensPerStep float64 `json:"average_tokens_per_step"`
+	AverageDurationMS    float64 `json:"average_duration_ms"`
+	AverageFailures      float64 `json:"average_failures"`
+	AverageRetries       float64 `json:"average_retries"`
+	BestRunID            string  `json:"best_run_id"`
 }
 
 type commGridLLMAttempt struct {
@@ -318,10 +327,10 @@ func runCommGridLLM(ctx context.Context, args []string) error {
 		return err
 	}
 
-	now := time.Now().UTC()
+	startedAt := time.Now().UTC()
 	id := strings.TrimSpace(*runID)
 	if id == "" {
-		id = fmt.Sprintf("comm-grid-llm-%s-%d", summaryProvider, now.UnixNano())
+		id = fmt.Sprintf("comm-grid-llm-%s-%d", summaryProvider, startedAt.UnixNano())
 	}
 	if err := validateCommGridLLMRunID(id); err != nil {
 		return err
@@ -344,16 +353,21 @@ func runCommGridLLM(ctx context.Context, args []string) error {
 	if err != nil {
 		return err
 	}
+	durationMS := commGridLLMDurationMillis(time.Since(startedAt))
+	totalTokens := commGridLLMTotalTokens(artifactSteps)
 	artifact := commGridLLMArtifact{
-		RunID:     id,
-		Provider:  summaryProvider,
-		Plan:      summaryPlan,
-		CreatedAt: now.Format(time.RFC3339Nano),
-		Task:      task,
-		Steps:     artifactSteps,
-		Completed: summary.Completed,
-		Fitness:   summary.Fitness,
-		Trace:     summary.Trace,
+		RunID:                id,
+		Provider:             summaryProvider,
+		Plan:                 summaryPlan,
+		CreatedAt:            startedAt.Format(time.RFC3339Nano),
+		DurationMS:           durationMS,
+		Task:                 task,
+		Steps:                artifactSteps,
+		Completed:            summary.Completed,
+		Fitness:              summary.Fitness,
+		TotalTokens:          totalTokens,
+		AverageTokensPerStep: commGridLLMAverageTokensPerStep(totalTokens, len(artifactSteps)),
+		Trace:                summary.Trace,
 	}
 
 	if *writeArtifacts {
@@ -1070,6 +1084,32 @@ func commGridLLMFailureMessage(err error) string {
 	return "llm failure: " + text
 }
 
+func commGridLLMDurationMillis(duration time.Duration) int64 {
+	if duration <= 0 {
+		return 0
+	}
+	ms := duration.Milliseconds()
+	if ms == 0 {
+		return 1
+	}
+	return ms
+}
+
+func commGridLLMTotalTokens(steps []commGridLLMArtifactStep) int {
+	var total int
+	for _, step := range steps {
+		total += step.Response.TokenCount()
+	}
+	return total
+}
+
+func commGridLLMAverageTokensPerStep(totalTokens, steps int) float64 {
+	if steps <= 0 {
+		return 0
+	}
+	return float64(totalTokens) / float64(steps)
+}
+
 func writeCommGridLLMArtifact(baseDir string, artifact commGridLLMArtifact) (string, error) {
 	runID := strings.TrimSpace(artifact.RunID)
 	if err := validateCommGridLLMRunID(runID); err != nil {
@@ -1100,18 +1140,21 @@ func writeCommGridLLMArtifact(baseDir string, artifact commGridLLMArtifact) (str
 
 func appendCommGridLLMRunIndex(baseDir string, artifact commGridLLMArtifact, artifactPath, transcriptPath string) error {
 	entry := commGridLLMRunIndexEntry{
-		RunID:          artifact.RunID,
-		Provider:       artifact.Provider,
-		Plan:           artifact.Plan,
-		CreatedAt:      artifact.CreatedAt,
-		Task:           normalizeCommGridLLMTask(artifact.Task),
-		Steps:          len(artifact.Steps),
-		Completed:      artifact.Completed,
-		Fitness:        artifact.Fitness,
-		FailureCount:   commGridLLMFailureCount(artifact.Steps),
-		RetryCount:     commGridLLMRetryCount(artifact.Steps),
-		ArtifactPath:   filepath.ToSlash(filepath.Clean(artifactPath)),
-		TranscriptPath: filepath.ToSlash(filepath.Clean(transcriptPath)),
+		RunID:                artifact.RunID,
+		Provider:             artifact.Provider,
+		Plan:                 artifact.Plan,
+		CreatedAt:            artifact.CreatedAt,
+		DurationMS:           artifact.DurationMS,
+		Task:                 normalizeCommGridLLMTask(artifact.Task),
+		Steps:                len(artifact.Steps),
+		Completed:            artifact.Completed,
+		Fitness:              artifact.Fitness,
+		TotalTokens:          artifact.TotalTokens,
+		AverageTokensPerStep: artifact.AverageTokensPerStep,
+		FailureCount:         commGridLLMFailureCount(artifact.Steps),
+		RetryCount:           commGridLLMRetryCount(artifact.Steps),
+		ArtifactPath:         filepath.ToSlash(filepath.Clean(artifactPath)),
+		TranscriptPath:       filepath.ToSlash(filepath.Clean(transcriptPath)),
 	}
 	data, err := json.Marshal(entry)
 	if err != nil {
@@ -1185,15 +1228,18 @@ func filterCommGridLLMRunIndex(entries []commGridLLMRunIndexEntry, filter commGr
 }
 
 func printCommGridLLMRunIndexTable(entries []commGridLLMRunIndexEntry) {
-	fmt.Printf("RUN_ID\tPROVIDER\tPLAN\tSTEPS\tDONE\tFITNESS\tFAIL\tRETRY\tARTIFACT\n")
+	fmt.Printf("RUN_ID\tPROVIDER\tPLAN\tSTEPS\tDONE\tFITNESS\tTOKENS\tAVG_TOK\tMS\tFAIL\tRETRY\tARTIFACT\n")
 	for _, entry := range entries {
-		fmt.Printf("%s\t%s\t%s\t%d\t%t\t%.6f\t%d\t%d\t%s\n",
+		fmt.Printf("%s\t%s\t%s\t%d\t%t\t%.6f\t%d\t%.3f\t%d\t%d\t%d\t%s\n",
 			entry.RunID,
 			entry.Provider,
 			entry.Plan,
 			entry.Steps,
 			entry.Completed,
 			entry.Fitness,
+			entry.TotalTokens,
+			entry.AverageTokensPerStep,
+			entry.DurationMS,
 			entry.FailureCount,
 			entry.RetryCount,
 			entry.ArtifactPath,
@@ -1211,6 +1257,9 @@ func writeCommGridLLMRunIndexCSV(file *os.File, entries []commGridLLMRunIndexEnt
 		"steps",
 		"completed",
 		"fitness",
+		"total_tokens",
+		"average_tokens_per_step",
+		"duration_ms",
 		"failure_count",
 		"retry_count",
 		"artifact_path",
@@ -1227,6 +1276,9 @@ func writeCommGridLLMRunIndexCSV(file *os.File, entries []commGridLLMRunIndexEnt
 			strconv.Itoa(entry.Steps),
 			strconv.FormatBool(entry.Completed),
 			strconv.FormatFloat(entry.Fitness, 'f', 6, 64),
+			strconv.Itoa(entry.TotalTokens),
+			strconv.FormatFloat(entry.AverageTokensPerStep, 'f', 3, 64),
+			strconv.FormatInt(entry.DurationMS, 10),
 			strconv.Itoa(entry.FailureCount),
 			strconv.Itoa(entry.RetryCount),
 			entry.ArtifactPath,
@@ -1241,10 +1293,13 @@ func writeCommGridLLMRunIndexCSV(file *os.File, entries []commGridLLMRunIndexEnt
 
 func compareCommGridLLMRuns(entries []commGridLLMRunIndexEntry) []commGridLLMRunComparison {
 	type accumulator struct {
-		comparison    commGridLLMRunComparison
-		totalFitness  float64
-		totalFailures int
-		totalRetries  int
+		comparison      commGridLLMRunComparison
+		totalFitness    float64
+		totalTokens     int
+		totalTokenSteps float64
+		totalDurationMS int64
+		totalFailures   int
+		totalRetries    int
 	}
 	groups := map[string]*accumulator{}
 	for _, entry := range entries {
@@ -1273,6 +1328,9 @@ func compareCommGridLLMRuns(entries []commGridLLMRunIndexEntry) []commGridLLMRun
 			acc.comparison.BestRunID = entry.RunID
 		}
 		acc.totalFitness += entry.Fitness
+		acc.totalTokens += entry.TotalTokens
+		acc.totalTokenSteps += entry.AverageTokensPerStep
+		acc.totalDurationMS += entry.DurationMS
 		acc.totalFailures += entry.FailureCount
 		acc.totalRetries += entry.RetryCount
 	}
@@ -1282,6 +1340,9 @@ func compareCommGridLLMRuns(entries []commGridLLMRunIndexEntry) []commGridLLMRun
 		if runs > 0 {
 			acc.comparison.CompletionRate = float64(acc.comparison.Completed) / runs
 			acc.comparison.AverageFitness = acc.totalFitness / runs
+			acc.comparison.AverageTokensPerRun = float64(acc.totalTokens) / runs
+			acc.comparison.AverageTokensPerStep = acc.totalTokenSteps / runs
+			acc.comparison.AverageDurationMS = float64(acc.totalDurationMS) / runs
 			acc.comparison.AverageFailures = float64(acc.totalFailures) / runs
 			acc.comparison.AverageRetries = float64(acc.totalRetries) / runs
 		}
@@ -1300,14 +1361,17 @@ func compareCommGridLLMRuns(entries []commGridLLMRunIndexEntry) []commGridLLMRun
 }
 
 func printCommGridLLMRunComparisonTable(comparisons []commGridLLMRunComparison) {
-	fmt.Printf("GROUP\tRUNS\tDONE_RATE\tBEST\tAVG_FIT\tAVG_FAIL\tAVG_RETRY\tBEST_RUN\n")
+	fmt.Printf("GROUP\tRUNS\tDONE_RATE\tBEST\tAVG_FIT\tAVG_TOK_RUN\tAVG_TOK_STEP\tAVG_MS\tAVG_FAIL\tAVG_RETRY\tBEST_RUN\n")
 	for _, comparison := range comparisons {
-		fmt.Printf("%s\t%d\t%.3f\t%.6f\t%.6f\t%.3f\t%.3f\t%s\n",
+		fmt.Printf("%s\t%d\t%.3f\t%.6f\t%.6f\t%.3f\t%.3f\t%.3f\t%.3f\t%.3f\t%s\n",
 			comparison.Group,
 			comparison.Runs,
 			comparison.CompletionRate,
 			comparison.BestFitness,
 			comparison.AverageFitness,
+			comparison.AverageTokensPerRun,
+			comparison.AverageTokensPerStep,
+			comparison.AverageDurationMS,
 			comparison.AverageFailures,
 			comparison.AverageRetries,
 			comparison.BestRunID,
@@ -1327,6 +1391,9 @@ func writeCommGridLLMRunComparisonCSV(file *os.File, comparisons []commGridLLMRu
 		"completion_rate",
 		"best_fitness",
 		"average_fitness",
+		"average_tokens_per_run",
+		"average_tokens_per_step",
+		"average_duration_ms",
 		"average_failures",
 		"average_retries",
 		"best_run_id",
@@ -1344,6 +1411,9 @@ func writeCommGridLLMRunComparisonCSV(file *os.File, comparisons []commGridLLMRu
 			strconv.FormatFloat(comparison.CompletionRate, 'f', 3, 64),
 			strconv.FormatFloat(comparison.BestFitness, 'f', 6, 64),
 			strconv.FormatFloat(comparison.AverageFitness, 'f', 6, 64),
+			strconv.FormatFloat(comparison.AverageTokensPerRun, 'f', 3, 64),
+			strconv.FormatFloat(comparison.AverageTokensPerStep, 'f', 3, 64),
+			strconv.FormatFloat(comparison.AverageDurationMS, 'f', 3, 64),
 			strconv.FormatFloat(comparison.AverageFailures, 'f', 3, 64),
 			strconv.FormatFloat(comparison.AverageRetries, 'f', 3, 64),
 			comparison.BestRunID,

@@ -334,6 +334,9 @@ func TestCommGridLLMCommandWritesArtifacts(t *testing.T) {
 	if indexEntry.FailureCount != 0 || indexEntry.RetryCount != 0 {
 		t.Fatalf("unexpected run index counts: %+v", indexEntry)
 	}
+	if indexEntry.TotalTokens != 30 || indexEntry.AverageTokensPerStep != 7.5 || indexEntry.DurationMS <= 0 {
+		t.Fatalf("unexpected run index cost fields: %+v", indexEntry)
+	}
 	if indexEntry.ArtifactPath != "benchmarks/fixture-artifact-run/comm_grid_llm.json" {
 		t.Fatalf("unexpected artifact path: %+v", indexEntry)
 	}
@@ -761,7 +764,7 @@ func TestCommGridLLMRunsCommandPrintsTableAndFilters(t *testing.T) {
 	if err != nil {
 		t.Fatalf("list run index: %v", err)
 	}
-	if !strings.Contains(out, "RUN_ID\tPROVIDER\tPLAN\tSTEPS\tDONE\tFITNESS\tFAIL\tRETRY\tARTIFACT") {
+	if !strings.Contains(out, "RUN_ID\tPROVIDER\tPLAN\tSTEPS\tDONE\tFITNESS\tTOKENS\tAVG_TOK\tMS\tFAIL\tRETRY\tARTIFACT") {
 		t.Fatalf("expected table header, got %s", out)
 	}
 	if !strings.Contains(out, "runs-good") || !strings.Contains(out, "runs-bad") {
@@ -875,13 +878,13 @@ func TestCommGridLLMRunsCommandComparesRuns(t *testing.T) {
 	if err != nil {
 		t.Fatalf("compare run index: %v", err)
 	}
-	if !strings.Contains(out, "GROUP\tRUNS\tDONE_RATE\tBEST\tAVG_FIT\tAVG_FAIL\tAVG_RETRY\tBEST_RUN") {
+	if !strings.Contains(out, "GROUP\tRUNS\tDONE_RATE\tBEST\tAVG_FIT\tAVG_TOK_RUN\tAVG_TOK_STEP\tAVG_MS\tAVG_FAIL\tAVG_RETRY\tBEST_RUN") {
 		t.Fatalf("expected compare header, got %s", out)
 	}
-	if !strings.Contains(out, "fixture/solve/3x3:key(1,0):goal(2,0):agents1:turns[agent-1]:limit80\t2\t1.000\t1.450000") {
+	if !strings.Contains(out, "fixture/solve/3x3:key(1,0):goal(2,0):agents1:turns[agent-1]:limit80\t2\t1.000\t1.450000\t1.450000\t30.000\t7.500") {
 		t.Fatalf("expected solve aggregate, got %s", out)
 	}
-	if !strings.Contains(out, "fixture/provider-error/3x3:key(1,0):goal(2,0):agents1:turns[agent-1]:limit80\t1\t0.000\t0.000000") {
+	if !strings.Contains(out, "fixture/provider-error/3x3:key(1,0):goal(2,0):agents1:turns[agent-1]:limit80\t1\t0.000\t0.000000\t0.000000\t0.000\t0.000") {
 		t.Fatalf("expected provider-error aggregate, got %s", out)
 	}
 }
@@ -922,6 +925,9 @@ func TestCommGridLLMRunsCommandComparesRunsAsJSON(t *testing.T) {
 	if got.BestRunID != "compare-json-good" || got.BestFitness != 1.45 || got.AverageFitness != 1.45 {
 		t.Fatalf("unexpected fitness aggregate: %+v", got)
 	}
+	if got.AverageTokensPerRun != 30 || got.AverageTokensPerStep != 7.5 || got.AverageDurationMS <= 0 {
+		t.Fatalf("unexpected cost aggregate: %+v", got)
+	}
 }
 
 func TestCommGridLLMRunsCommandComparesRunsAsCSV(t *testing.T) {
@@ -953,7 +959,7 @@ func TestCommGridLLMRunsCommandComparesRunsAsCSV(t *testing.T) {
 	if err != nil {
 		t.Fatalf("compare csv run index: %v", err)
 	}
-	if !strings.Contains(out, "group,provider,plan,task_shape,runs,completed,completion_rate,best_fitness,average_fitness,average_failures,average_retries,best_run_id") {
+	if !strings.Contains(out, "group,provider,plan,task_shape,runs,completed,completion_rate,best_fitness,average_fitness,average_tokens_per_run,average_tokens_per_step,average_duration_ms,average_failures,average_retries,best_run_id") {
 		t.Fatalf("expected compare csv header, got %s", out)
 	}
 	records, err := csv.NewReader(strings.NewReader(out)).ReadAll()
@@ -968,11 +974,11 @@ func TestCommGridLLMRunsCommandComparesRunsAsCSV(t *testing.T) {
 		gotRows[row[2]] = row
 	}
 	solve := gotRows["solve"]
-	if len(solve) == 0 || solve[0] != "fixture/solve/3x3:key(1,0):goal(2,0):agents1:turns[agent-1]:limit80" || solve[4] != "2" || solve[5] != "2" || solve[7] != "1.450000" || solve[11] != "compare-csv-good-a" {
+	if len(solve) == 0 || solve[0] != "fixture/solve/3x3:key(1,0):goal(2,0):agents1:turns[agent-1]:limit80" || solve[4] != "2" || solve[5] != "2" || solve[7] != "1.450000" || solve[9] != "30.000" || solve[10] != "7.500" || solve[14] != "compare-csv-good-a" {
 		t.Fatalf("expected solve csv aggregate, got %+v", records)
 	}
 	failed := gotRows["provider-error"]
-	if len(failed) == 0 || failed[4] != "1" || failed[5] != "0" || failed[9] != "1.000" || failed[10] != "1.000" || failed[11] != "compare-csv-bad" {
+	if len(failed) == 0 || failed[4] != "1" || failed[5] != "0" || failed[12] != "1.000" || failed[13] != "1.000" || failed[14] != "compare-csv-bad" {
 		t.Fatalf("expected provider-error csv aggregate, got %+v", records)
 	}
 }
@@ -1044,7 +1050,7 @@ func TestCommGridLLMRunsCommandHandlesMissingIndex(t *testing.T) {
 	if err != nil {
 		t.Fatalf("missing run index: %v", err)
 	}
-	if strings.TrimSpace(out) != "RUN_ID\tPROVIDER\tPLAN\tSTEPS\tDONE\tFITNESS\tFAIL\tRETRY\tARTIFACT" {
+	if strings.TrimSpace(out) != "RUN_ID\tPROVIDER\tPLAN\tSTEPS\tDONE\tFITNESS\tTOKENS\tAVG_TOK\tMS\tFAIL\tRETRY\tARTIFACT" {
 		t.Fatalf("expected header only, got %q", out)
 	}
 }

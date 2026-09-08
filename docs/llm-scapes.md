@@ -595,6 +595,9 @@ The run index stores:
 - task config,
 - completion status,
 - fitness,
+- total tokens,
+- average tokens per step,
+- run duration in milliseconds,
 - failure count,
 - retry count,
 - artifact paths.
@@ -630,6 +633,7 @@ A small first slice should avoid provider lock-in:
 - add `protogonosctl comm-grid-llm-runs --transcript` to print the latest matching transcript,
 - add `protogonosctl comm-grid-llm-runs --compare` to group runs by task shape, provider, and plan,
 - add CSV output for `protogonosctl comm-grid-llm-runs` and `protogonosctl comm-grid-llm-runs --compare`,
+- add token and duration summaries to the run index and compare output,
 - add tests for deterministic replay, invalid output handling, timeout handling, and token-cost fitness.
 
 This gives the system a useful LLM integration path without making evolution depend on unbounded free-form text.

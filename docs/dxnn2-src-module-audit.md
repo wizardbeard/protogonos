@@ -389,6 +389,7 @@ Status legend:
 - 2026-09-08: added `protogonosctl comm-grid-llm-runs --transcript` to print the latest matching transcript from the run index.
 - 2026-09-08: added `protogonosctl comm-grid-llm-runs --compare` to group indexed runs by task shape, provider, and plan.
 - 2026-09-08: added CSV output for `protogonosctl comm-grid-llm-runs` and `protogonosctl comm-grid-llm-runs --compare`.
+- 2026-09-08: added token and duration summaries to the `comm-grid-llm` run index and compare output.
 
 ## Summary
 
