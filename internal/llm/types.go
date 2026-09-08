@@ -14,29 +14,29 @@ type ModelLister interface {
 }
 
 type ModelInfo struct {
-	ID      string
-	OwnedBy string
-	Raw     json.RawMessage
+	ID      string          `json:"id"`
+	OwnedBy string          `json:"owned_by,omitempty"`
+	Raw     json.RawMessage `json:"raw,omitempty"`
 }
 
 type Request struct {
-	Model          string
-	SystemPrompt   string
-	Messages       []Message
-	Tools          []ToolSpec
-	MaxTokens      int
-	Temperature    float64
-	Seed           int64
-	ResponseFormat string
+	Model          string     `json:"model,omitempty"`
+	SystemPrompt   string     `json:"system_prompt,omitempty"`
+	Messages       []Message  `json:"messages,omitempty"`
+	Tools          []ToolSpec `json:"tools,omitempty"`
+	MaxTokens      int        `json:"max_tokens,omitempty"`
+	Temperature    float64    `json:"temperature,omitempty"`
+	Seed           int64      `json:"seed,omitempty"`
+	ResponseFormat string     `json:"response_format,omitempty"`
 }
 
 type Response struct {
-	Message      string
-	ToolCalls    []ToolCall
-	Usage        Usage
-	FinishReason string
-	Model        string
-	Raw          json.RawMessage
+	Message      string          `json:"message,omitempty"`
+	ToolCalls    []ToolCall      `json:"tool_calls,omitempty"`
+	Usage        Usage           `json:"usage,omitempty"`
+	FinishReason string          `json:"finish_reason,omitempty"`
+	Model        string          `json:"model,omitempty"`
+	Raw          json.RawMessage `json:"raw,omitempty"`
 }
 
 func (r Response) TokenCount() int {
@@ -61,16 +61,16 @@ type ToolFunction struct {
 }
 
 type ToolCall struct {
-	ID            string
-	Type          string
-	Name          string
-	ArgumentsJSON string
+	ID            string `json:"id,omitempty"`
+	Type          string `json:"type,omitempty"`
+	Name          string `json:"name,omitempty"`
+	ArgumentsJSON string `json:"arguments_json,omitempty"`
 }
 
 type Usage struct {
-	PromptTokens     int
-	CompletionTokens int
-	TotalTokens      int
+	PromptTokens     int `json:"prompt_tokens,omitempty"`
+	CompletionTokens int `json:"completion_tokens,omitempty"`
+	TotalTokens      int `json:"total_tokens,omitempty"`
 }
 
 type ProviderConfig struct {

@@ -8,19 +8,21 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
 
 func TestCommGridLLMCommandRunsFixturePlan(t *testing.T) {
 	out, err := captureStdoutForCommGridLLM(func() error {
-		return run(context.Background(), []string{"comm-grid-llm", "--plan", "solve"})
+		return run(context.Background(), []string{"comm-grid-llm", "--plan", "solve", "--artifacts=false"})
 	})
 	if err != nil {
 		t.Fatalf("comm-grid-llm command: %v", err)
 	}
 	for _, want := range []string{
-		"comm_grid_llm provider=fixture plan=solve steps=4 completed=true",
+		"comm_grid_llm run_id=comm-grid-llm-fixture-",
+		"provider=fixture plan=solve steps=4 completed=true",
 		"step=1 action=east",
 		"step=4 action=drop",
 	} {
@@ -32,7 +34,7 @@ func TestCommGridLLMCommandRunsFixturePlan(t *testing.T) {
 
 func TestCommGridLLMCommandEmitsJSON(t *testing.T) {
 	out, err := captureStdoutForCommGridLLM(func() error {
-		return run(context.Background(), []string{"comm-grid-llm", "--plan", "tool", "--json"})
+		return run(context.Background(), []string{"comm-grid-llm", "--plan", "tool", "--json", "--artifacts=false"})
 	})
 	if err != nil {
 		t.Fatalf("comm-grid-llm command: %v", err)
@@ -108,6 +110,7 @@ func TestCommGridLLMCommandRunsOpenAICompatibleProvider(t *testing.T) {
 			"--seed", "9",
 			"--max-tokens", "32",
 			"--json",
+			"--artifacts=false",
 		})
 	})
 	if err != nil {
@@ -134,6 +137,74 @@ func TestCommGridLLMCommandRunsOpenAICompatibleProvider(t *testing.T) {
 	}
 	if gotReqs[0]["seed"].(float64) != 9 {
 		t.Fatalf("expected seed in request: %+v", gotReqs[0])
+	}
+}
+
+func TestCommGridLLMCommandWritesArtifacts(t *testing.T) {
+	origWD, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("getwd: %v", err)
+	}
+	workdir := t.TempDir()
+	if err := os.Chdir(workdir); err != nil {
+		t.Fatalf("chdir tempdir: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = os.Chdir(origWD)
+	})
+
+	out, err := captureStdoutForCommGridLLM(func() error {
+		return run(context.Background(), []string{
+			"comm-grid-llm",
+			"--run-id", "fixture-artifact-run",
+			"--plan", "solve",
+		})
+	})
+	if err != nil {
+		t.Fatalf("comm-grid-llm command: %v", err)
+	}
+	if !strings.Contains(out, "artifacts_dir=benchmarks/fixture-artifact-run") {
+		t.Fatalf("expected artifact directory in output, got %s", out)
+	}
+
+	path := filepath.Join(workdir, "benchmarks", "fixture-artifact-run", "comm_grid_llm.json")
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read artifact: %v", err)
+	}
+	var artifact commGridLLMArtifact
+	if err := json.Unmarshal(data, &artifact); err != nil {
+		t.Fatalf("decode artifact: %v", err)
+	}
+	if artifact.RunID != "fixture-artifact-run" || artifact.Provider != "fixture" || !artifact.Completed || len(artifact.Steps) != 4 {
+		t.Fatalf("unexpected artifact: %+v", artifact)
+	}
+	first := artifact.Steps[0]
+	if first.Request.SystemPrompt == "" || len(first.Request.Messages) != 1 {
+		t.Fatalf("expected captured request prompt, step=%+v", first)
+	}
+	if first.Response.Message == "" || first.Payload == "" || first.Parsed.Action != "east" {
+		t.Fatalf("expected captured response and parsed action, step=%+v", first)
+	}
+	if first.Result.Messages[0].Text != "move to key" {
+		t.Fatalf("expected captured messages, step=%+v", first)
+	}
+	if tokens, ok := first.Result.ProviderTrace["tokens"].(float64); !ok || tokens != 8 {
+		t.Fatalf("expected provider token trace, got %+v", first.Result.ProviderTrace)
+	}
+}
+
+func TestCommGridLLMCommandRejectsPathLikeRunID(t *testing.T) {
+	err := run(context.Background(), []string{
+		"comm-grid-llm",
+		"--run-id", "../escape",
+		"--artifacts=false",
+	})
+	if err == nil {
+		t.Fatal("expected path-like run id error")
+	}
+	if !strings.Contains(err.Error(), "single path segment") {
+		t.Fatalf("unexpected error: %v", err)
 	}
 }
 

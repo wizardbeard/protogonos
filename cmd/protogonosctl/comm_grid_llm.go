@@ -7,7 +7,9 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
+	"time"
 
 	"protogonos/internal/llm"
 	"protogonos/internal/scape"
@@ -29,16 +31,39 @@ type commGridLLMCommandStep struct {
 }
 
 type commGridLLMCommandSummary struct {
-	Provider  string                   `json:"provider"`
-	Plan      string                   `json:"plan"`
-	Steps     []commGridLLMCommandStep `json:"steps"`
-	Completed bool                     `json:"completed"`
-	Fitness   float64                  `json:"fitness"`
-	Trace     map[string]any           `json:"trace"`
+	RunID        string                   `json:"run_id"`
+	ArtifactsDir string                   `json:"artifacts_dir,omitempty"`
+	Provider     string                   `json:"provider"`
+	Plan         string                   `json:"plan"`
+	Steps        []commGridLLMCommandStep `json:"steps"`
+	Completed    bool                     `json:"completed"`
+	Fitness      float64                  `json:"fitness"`
+	Trace        map[string]any           `json:"trace"`
+}
+
+type commGridLLMArtifact struct {
+	RunID     string                    `json:"run_id"`
+	Provider  string                    `json:"provider"`
+	Plan      string                    `json:"plan"`
+	CreatedAt string                    `json:"created_at_utc"`
+	Steps     []commGridLLMArtifactStep `json:"steps"`
+	Completed bool                      `json:"completed"`
+	Fitness   float64                   `json:"fitness"`
+	Trace     map[string]any            `json:"trace"`
+}
+
+type commGridLLMArtifactStep struct {
+	Step     int                     `json:"step"`
+	Request  llm.Request             `json:"request"`
+	Response llm.Response            `json:"response"`
+	Payload  string                  `json:"payload"`
+	Parsed   scape.CommGridStepInput `json:"parsed_action"`
+	Result   commGridLLMCommandStep  `json:"result"`
 }
 
 func runCommGridLLM(ctx context.Context, args []string) error {
 	fs := flag.NewFlagSet("comm-grid-llm", flag.ContinueOnError)
+	runID := fs.String("run-id", "", "artifact run id")
 	providerName := fs.String("provider", "fixture", "provider: fixture|openai-compatible")
 	plan := fs.String("plan", "solve", "fixture plan: solve|tool|invalid")
 	steps := fs.Int("steps", 8, "maximum fixture LLM decisions")
@@ -51,6 +76,7 @@ func runCommGridLLM(ctx context.Context, args []string) error {
 	seed := fs.Int64("seed", 1, "provider seed when supported")
 	jsonMode := fs.Bool("json-mode", true, "request OpenAI-compatible JSON mode")
 	tools := fs.Bool("tools", false, "request tool-call action output when supported")
+	writeArtifacts := fs.Bool("artifacts", true, "write comm-grid LLM artifacts under benchmarks/<run-id>")
 	jsonOut := fs.Bool("json", false, "emit summary as JSON")
 	if err := fs.Parse(args); err != nil {
 		return err
@@ -96,9 +122,24 @@ func runCommGridLLM(ctx context.Context, args []string) error {
 		ResponseTools: useTools,
 	}
 
+	now := time.Now().UTC()
+	id := strings.TrimSpace(*runID)
+	if id == "" {
+		id = fmt.Sprintf("comm-grid-llm-%s-%d", summaryProvider, now.UnixNano())
+	}
+	if err := validateCommGridLLMRunID(id); err != nil {
+		return err
+	}
 	summary := commGridLLMCommandSummary{
+		RunID:    id,
 		Provider: summaryProvider,
 		Plan:     summaryPlan,
+	}
+	artifact := commGridLLMArtifact{
+		RunID:     id,
+		Provider:  summaryProvider,
+		Plan:      summaryPlan,
+		CreatedAt: now.Format(time.RFC3339Nano),
 	}
 	for !sim.Done() && len(summary.Steps) < *steps {
 		result, trace, err := actor.Step(ctx, sim)
@@ -106,7 +147,7 @@ func runCommGridLLM(ctx context.Context, args []string) error {
 			return err
 		}
 		state, _ := sim.AgentState("agent-1")
-		summary.Steps = append(summary.Steps, commGridLLMCommandStep{
+		step := commGridLLMCommandStep{
 			Step:          len(summary.Steps) + 1,
 			Action:        string(trace.ParsedAction),
 			Message:       trace.StepInput.Message,
@@ -129,18 +170,38 @@ func runCommGridLLM(ctx context.Context, args []string) error {
 				"carrying": state.Carrying,
 			},
 			Messages: sim.Messages(),
+		}
+		summary.Steps = append(summary.Steps, step)
+		artifact.Steps = append(artifact.Steps, commGridLLMArtifactStep{
+			Step:     step.Step,
+			Request:  trace.Request,
+			Response: trace.Response,
+			Payload:  trace.Payload,
+			Parsed:   trace.StepInput,
+			Result:   step,
 		})
 	}
 	summary.Completed = sim.Done() && sim.Trace()["completed"] == true
 	summary.Fitness = float64(sim.Fitness())
 	summary.Trace = map[string]any(sim.Trace())
+	artifact.Completed = summary.Completed
+	artifact.Fitness = summary.Fitness
+	artifact.Trace = summary.Trace
+
+	if *writeArtifacts {
+		artifactDir, err := writeCommGridLLMArtifact(benchmarksDir, artifact)
+		if err != nil {
+			return err
+		}
+		summary.ArtifactsDir = artifactDir
+	}
 
 	if *jsonOut {
 		enc := json.NewEncoder(os.Stdout)
 		enc.SetIndent("", "  ")
 		return enc.Encode(summary)
 	}
-	fmt.Printf("comm_grid_llm provider=%s plan=%s steps=%d completed=%t fitness=%.6f\n", summary.Provider, summary.Plan, len(summary.Steps), summary.Completed, summary.Fitness)
+	fmt.Printf("comm_grid_llm run_id=%s provider=%s plan=%s steps=%d completed=%t fitness=%.6f\n", summary.RunID, summary.Provider, summary.Plan, len(summary.Steps), summary.Completed, summary.Fitness)
 	for _, step := range summary.Steps {
 		fmt.Printf("step=%d action=%s invalid=%t done=%t fitness=%.6f message=%q to=%q\n",
 			step.Step,
@@ -153,6 +214,39 @@ func runCommGridLLM(ctx context.Context, args []string) error {
 		)
 	}
 	fmt.Printf("trace=%v\n", summary.Trace)
+	if summary.ArtifactsDir != "" {
+		fmt.Printf("artifacts_dir=%s\n", filepath.Clean(summary.ArtifactsDir))
+	}
+	return nil
+}
+
+func writeCommGridLLMArtifact(baseDir string, artifact commGridLLMArtifact) (string, error) {
+	runID := strings.TrimSpace(artifact.RunID)
+	if err := validateCommGridLLMRunID(runID); err != nil {
+		return "", err
+	}
+	runDir := filepath.Join(baseDir, runID)
+	if err := os.MkdirAll(runDir, 0o755); err != nil {
+		return "", err
+	}
+	path := filepath.Join(runDir, "comm_grid_llm.json")
+	data, err := json.MarshalIndent(artifact, "", "  ")
+	if err != nil {
+		return "", err
+	}
+	if err := os.WriteFile(path, append(data, '\n'), 0o644); err != nil {
+		return "", err
+	}
+	return filepath.Clean(runDir), nil
+}
+
+func validateCommGridLLMRunID(runID string) error {
+	if strings.TrimSpace(runID) == "" {
+		return errors.New("comm-grid llm run id required")
+	}
+	if runID == "." || runID == ".." || strings.ContainsAny(runID, `/\`) {
+		return fmt.Errorf("comm-grid llm run id must be a single path segment: %s", runID)
+	}
 	return nil
 }
 
