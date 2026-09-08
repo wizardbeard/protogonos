@@ -397,6 +397,7 @@ Status legend:
 - 2026-09-08: added `protogonosctl comm-grid-llm-suite --dry-run` to preview the run matrix without provider calls or artifacts.
 - 2026-09-08: added `protogonosctl comm-grid-llm-suite --fail-fast=false` to continue after row-level suite errors.
 - 2026-09-08: added CSV output for `protogonosctl comm-grid-llm-suite` and `protogonosctl comm-grid-llm-suite --dry-run`.
+- 2026-09-08: added `protogonosctl comm-grid-llm-suite --summary` to aggregate a suite by plan and prompt.
 
 ## Summary
 

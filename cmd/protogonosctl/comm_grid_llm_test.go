@@ -1178,6 +1178,100 @@ func TestCommGridLLMSuiteCommandEmitsCSV(t *testing.T) {
 	}
 }
 
+func TestCommGridLLMSuiteCommandPrintsSummary(t *testing.T) {
+	out, err := captureStdoutForCommGridLLM(func() error {
+		return run(context.Background(), []string{
+			"comm-grid-llm-suite",
+			"--suite-id", "summary-suite",
+			"--plans", "solve,missing",
+			"--fail-fast=false",
+			"--artifacts=false",
+			"--summary",
+		})
+	})
+	if err != nil {
+		t.Fatalf("suite summary command: %v", err)
+	}
+	if !strings.Contains(out, "GROUP\tRUNS\tDONE\tERRORS\tDONE_RATE\tBEST\tAVG_FIT\tAVG_TOK_RUN\tAVG_TOK_STEP\tAVG_MS\tBEST_RUN") {
+		t.Fatalf("expected summary header, got %s", out)
+	}
+	if !strings.Contains(out, "solve/default\t1\t1\t0\t1.000\t1.450000\t1.450000\t30.000\t7.500") {
+		t.Fatalf("expected solve summary row, got %s", out)
+	}
+	if !strings.Contains(out, "missing/default\t1\t0\t1\t0.000\t0.000000\t0.000000\t0.000\t0.000") {
+		t.Fatalf("expected missing summary row, got %s", out)
+	}
+}
+
+func TestCommGridLLMSuiteCommandEmitsSummaryJSON(t *testing.T) {
+	out, err := captureStdoutForCommGridLLM(func() error {
+		return run(context.Background(), []string{
+			"comm-grid-llm-suite",
+			"--suite-id", "summary-json",
+			"--plans", "solve,tool",
+			"--artifacts=false",
+			"--summary",
+			"--json",
+		})
+	})
+	if err != nil {
+		t.Fatalf("suite summary json command: %v", err)
+	}
+	var summary []commGridLLMSuiteSummaryRow
+	if err := json.Unmarshal([]byte(out), &summary); err != nil {
+		t.Fatalf("decode suite summary json: %v\n%s", err, out)
+	}
+	if len(summary) != 2 {
+		t.Fatalf("expected two summary rows, got %+v", summary)
+	}
+	if summary[0].SuiteID != "summary-json" || summary[0].Runs != 1 || summary[0].Completed != 1 || summary[0].AverageTokensPerRun != 30 {
+		t.Fatalf("unexpected summary row: %+v", summary[0])
+	}
+}
+
+func TestCommGridLLMSuiteCommandEmitsSummaryCSV(t *testing.T) {
+	out, err := captureStdoutForCommGridLLM(func() error {
+		return run(context.Background(), []string{
+			"comm-grid-llm-suite",
+			"--suite-id", "summary-csv",
+			"--plans", "solve,missing",
+			"--fail-fast=false",
+			"--artifacts=false",
+			"--summary",
+			"--csv",
+		})
+	})
+	if err != nil {
+		t.Fatalf("suite summary csv command: %v", err)
+	}
+	records, err := csv.NewReader(strings.NewReader(out)).ReadAll()
+	if err != nil {
+		t.Fatalf("parse suite summary csv: %v\n%s", err, out)
+	}
+	if len(records) != 3 {
+		t.Fatalf("expected header plus two summary rows, got %+v", records)
+	}
+	if records[0][0] != "suite_id" || records[0][1] != "group" || records[0][13] != "best_run_id" {
+		t.Fatalf("unexpected suite summary csv header: %+v", records[0])
+	}
+	if records[1][0] != "summary-csv" || records[1][1] != "missing/default" || records[1][6] != "1" {
+		t.Fatalf("unexpected missing summary csv row: %+v", records[1])
+	}
+	if records[2][1] != "solve/default" || records[2][5] != "1" || records[2][10] != "30.000" {
+		t.Fatalf("unexpected solve summary csv row: %+v", records[2])
+	}
+}
+
+func TestCommGridLLMSuiteCommandRejectsDryRunSummary(t *testing.T) {
+	err := run(context.Background(), []string{"comm-grid-llm-suite", "--dry-run", "--summary"})
+	if err == nil {
+		t.Fatal("expected dry-run summary error")
+	}
+	if !strings.Contains(err.Error(), "--summary cannot be used with --dry-run") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
 func TestCommGridLLMSuiteCommandContinueAfterRowErrorAsJSON(t *testing.T) {
 	out, err := captureStdoutForCommGridLLM(func() error {
 		return run(context.Background(), []string{

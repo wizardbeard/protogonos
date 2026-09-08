@@ -172,6 +172,23 @@ type commGridLLMSuiteRunRow struct {
 	Error                string  `json:"error,omitempty"`
 }
 
+type commGridLLMSuiteSummaryRow struct {
+	SuiteID              string  `json:"suite_id"`
+	Group                string  `json:"group"`
+	Plan                 string  `json:"plan"`
+	Prompt               string  `json:"prompt"`
+	Runs                 int     `json:"runs"`
+	Completed            int     `json:"completed"`
+	Errors               int     `json:"errors"`
+	CompletionRate       float64 `json:"completion_rate"`
+	BestFitness          float64 `json:"best_fitness"`
+	AverageFitness       float64 `json:"average_fitness"`
+	AverageTokensPerRun  float64 `json:"average_tokens_per_run"`
+	AverageTokensPerStep float64 `json:"average_tokens_per_step"`
+	AverageDurationMS    float64 `json:"average_duration_ms"`
+	BestRunID            string  `json:"best_run_id"`
+}
+
 type commGridLLMSuiteDryRunResult struct {
 	SuiteID   string                      `json:"suite_id"`
 	RunCount  int                         `json:"run_count"`
@@ -663,6 +680,7 @@ func runCommGridLLMSuite(ctx context.Context, args []string) error {
 	tools := fs.Bool("tools", false, "request tool-call action output when supported")
 	writeArtifacts := fs.Bool("artifacts", true, "write comm-grid LLM artifacts under benchmarks/<run-id>")
 	failFast := fs.Bool("fail-fast", true, "stop suite at the first row error")
+	summaryOut := fs.Bool("summary", false, "emit aggregate suite summary by plan and prompt")
 	jsonOut := fs.Bool("json", false, "emit suite summary as JSON")
 	csvOut := fs.Bool("csv", false, "emit suite summary as CSV")
 	var promptFlags commGridLLMPromptFlag
@@ -730,6 +748,9 @@ func runCommGridLLMSuite(ctx context.Context, args []string) error {
 	}
 	if *emitManifest && *csvOut {
 		return errors.New("--csv cannot be used with --emit-manifest")
+	}
+	if *dryRun && *summaryOut {
+		return errors.New("--summary cannot be used with --dry-run")
 	}
 	plans, err := parseCommGridLLMNameList(*plansRaw)
 	if err != nil {
@@ -898,6 +919,19 @@ func runCommGridLLMSuite(ctx context.Context, args []string) error {
 		}
 	}
 	result.RunCount = len(result.Runs)
+	if *summaryOut {
+		summary := summarizeCommGridLLMSuite(result)
+		if *jsonOut {
+			enc := json.NewEncoder(os.Stdout)
+			enc.SetIndent("", "  ")
+			return enc.Encode(summary)
+		}
+		if *csvOut {
+			return writeCommGridLLMSuiteSummaryCSV(os.Stdout, summary)
+		}
+		printCommGridLLMSuiteSummaryTable(summary)
+		return nil
+	}
 	if *jsonOut {
 		enc := json.NewEncoder(os.Stdout)
 		enc.SetIndent("", "  ")
@@ -2231,6 +2265,131 @@ func writeCommGridLLMSuiteCSV(file *os.File, result commGridLLMSuiteResult) erro
 			strconv.FormatInt(row.DurationMS, 10),
 			row.ArtifactsDir,
 			row.Error,
+		}); err != nil {
+			return err
+		}
+	}
+	writer.Flush()
+	return writer.Error()
+}
+
+func summarizeCommGridLLMSuite(result commGridLLMSuiteResult) []commGridLLMSuiteSummaryRow {
+	type accumulator struct {
+		row             commGridLLMSuiteSummaryRow
+		totalFitness    float64
+		totalTokens     int
+		totalTokenSteps float64
+		totalDurationMS int64
+	}
+	groups := map[string]*accumulator{}
+	for _, run := range result.Runs {
+		key := run.Plan + "\x00" + run.Prompt
+		acc, ok := groups[key]
+		if !ok {
+			acc = &accumulator{
+				row: commGridLLMSuiteSummaryRow{
+					SuiteID:     result.SuiteID,
+					Group:       run.Plan + "/" + run.Prompt,
+					Plan:        run.Plan,
+					Prompt:      run.Prompt,
+					BestFitness: run.Fitness,
+					BestRunID:   run.RunID,
+				},
+			}
+			groups[key] = acc
+		}
+		acc.row.Runs++
+		if run.Completed {
+			acc.row.Completed++
+		}
+		if run.Error != "" {
+			acc.row.Errors++
+		}
+		if run.Fitness > acc.row.BestFitness || acc.row.Runs == 1 {
+			acc.row.BestFitness = run.Fitness
+			acc.row.BestRunID = run.RunID
+		}
+		acc.totalFitness += run.Fitness
+		acc.totalTokens += run.TotalTokens
+		acc.totalTokenSteps += run.AverageTokensPerStep
+		acc.totalDurationMS += run.DurationMS
+	}
+	out := make([]commGridLLMSuiteSummaryRow, 0, len(groups))
+	for _, acc := range groups {
+		runs := float64(acc.row.Runs)
+		if runs > 0 {
+			acc.row.CompletionRate = float64(acc.row.Completed) / runs
+			acc.row.AverageFitness = acc.totalFitness / runs
+			acc.row.AverageTokensPerRun = float64(acc.totalTokens) / runs
+			acc.row.AverageTokensPerStep = acc.totalTokenSteps / runs
+			acc.row.AverageDurationMS = float64(acc.totalDurationMS) / runs
+		}
+		out = append(out, acc.row)
+	}
+	sort.Slice(out, func(i, j int) bool {
+		if out[i].Plan != out[j].Plan {
+			return out[i].Plan < out[j].Plan
+		}
+		return out[i].Prompt < out[j].Prompt
+	})
+	return out
+}
+
+func printCommGridLLMSuiteSummaryTable(summary []commGridLLMSuiteSummaryRow) {
+	fmt.Printf("GROUP\tRUNS\tDONE\tERRORS\tDONE_RATE\tBEST\tAVG_FIT\tAVG_TOK_RUN\tAVG_TOK_STEP\tAVG_MS\tBEST_RUN\n")
+	for _, row := range summary {
+		fmt.Printf("%s\t%d\t%d\t%d\t%.3f\t%.6f\t%.6f\t%.3f\t%.3f\t%.3f\t%s\n",
+			row.Group,
+			row.Runs,
+			row.Completed,
+			row.Errors,
+			row.CompletionRate,
+			row.BestFitness,
+			row.AverageFitness,
+			row.AverageTokensPerRun,
+			row.AverageTokensPerStep,
+			row.AverageDurationMS,
+			row.BestRunID,
+		)
+	}
+}
+
+func writeCommGridLLMSuiteSummaryCSV(file *os.File, summary []commGridLLMSuiteSummaryRow) error {
+	writer := csv.NewWriter(file)
+	if err := writer.Write([]string{
+		"suite_id",
+		"group",
+		"plan",
+		"prompt",
+		"runs",
+		"completed",
+		"errors",
+		"completion_rate",
+		"best_fitness",
+		"average_fitness",
+		"average_tokens_per_run",
+		"average_tokens_per_step",
+		"average_duration_ms",
+		"best_run_id",
+	}); err != nil {
+		return err
+	}
+	for _, row := range summary {
+		if err := writer.Write([]string{
+			row.SuiteID,
+			row.Group,
+			row.Plan,
+			row.Prompt,
+			strconv.Itoa(row.Runs),
+			strconv.Itoa(row.Completed),
+			strconv.Itoa(row.Errors),
+			strconv.FormatFloat(row.CompletionRate, 'f', 3, 64),
+			strconv.FormatFloat(row.BestFitness, 'f', 6, 64),
+			strconv.FormatFloat(row.AverageFitness, 'f', 6, 64),
+			strconv.FormatFloat(row.AverageTokensPerRun, 'f', 3, 64),
+			strconv.FormatFloat(row.AverageTokensPerStep, 'f', 3, 64),
+			strconv.FormatFloat(row.AverageDurationMS, 'f', 3, 64),
+			row.BestRunID,
 		}); err != nil {
 			return err
 		}
