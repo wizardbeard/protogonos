@@ -393,6 +393,7 @@ func runCommGridLLMRuns(ctx context.Context, args []string) error {
 	}
 	fs := flag.NewFlagSet("comm-grid-llm-runs", flag.ContinueOnError)
 	jsonOut := fs.Bool("json", false, "emit run index as JSON")
+	transcript := fs.Bool("transcript", false, "print latest matching transcript")
 	limit := fs.Int("limit", 0, "maximum rows to print, 0 means all")
 	provider := fs.String("provider", "", "filter by provider")
 	plan := fs.String("plan", "", "filter by plan")
@@ -418,6 +419,9 @@ func runCommGridLLMRuns(ctx context.Context, args []string) error {
 		FilterCompleted: filterCompleted,
 		Completed:       completedFilter,
 	})
+	if *transcript {
+		return printLatestCommGridLLMTranscript(entries)
+	}
 	if *jsonOut {
 		enc := json.NewEncoder(os.Stdout)
 		enc.SetIndent("", "  ")
@@ -1154,6 +1158,38 @@ func printCommGridLLMRunIndexTable(entries []commGridLLMRunIndexEntry) {
 			entry.ArtifactPath,
 		)
 	}
+}
+
+func printLatestCommGridLLMTranscript(entries []commGridLLMRunIndexEntry) error {
+	if len(entries) == 0 {
+		return errors.New("no comm-grid llm runs match filters")
+	}
+	entry := entries[len(entries)-1]
+	path, err := validateCommGridLLMTranscriptPath(entry.TranscriptPath)
+	if err != nil {
+		return err
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return err
+	}
+	_, err = os.Stdout.Write(data)
+	return err
+}
+
+func validateCommGridLLMTranscriptPath(raw string) (string, error) {
+	path := filepath.Clean(strings.TrimSpace(raw))
+	if path == "" || path == "." {
+		return "", errors.New("comm-grid llm transcript path missing")
+	}
+	parts := strings.Split(filepath.ToSlash(path), "/")
+	if len(parts) != 3 || parts[0] != benchmarksDir || parts[2] != "comm_grid_llm_transcript.md" {
+		return "", fmt.Errorf("invalid comm-grid llm transcript path: %s", raw)
+	}
+	if err := validateCommGridLLMRunID(parts[1]); err != nil {
+		return "", err
+	}
+	return filepath.Join(parts[0], parts[1], parts[2]), nil
 }
 
 func parseOptionalBoolFlag(name, raw string) (bool, bool, error) {

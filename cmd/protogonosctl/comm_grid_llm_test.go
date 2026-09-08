@@ -811,6 +811,78 @@ func TestCommGridLLMRunsCommandEmitsJSONWithLimit(t *testing.T) {
 	}
 }
 
+func TestCommGridLLMRunsCommandPrintsLatestFilteredTranscript(t *testing.T) {
+	origWD, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("getwd: %v", err)
+	}
+	workdir := t.TempDir()
+	if err := os.Chdir(workdir); err != nil {
+		t.Fatalf("chdir tempdir: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = os.Chdir(origWD)
+	})
+
+	if err := run(context.Background(), []string{"comm-grid-llm", "--run-id", "transcript-index-a", "--plan", "solve"}); err != nil {
+		t.Fatalf("write first transcript run: %v", err)
+	}
+	if err := run(context.Background(), []string{"comm-grid-llm", "--run-id", "transcript-index-b", "--plan", "invalid"}); err != nil {
+		t.Fatalf("write second transcript run: %v", err)
+	}
+
+	out, err := captureStdoutForCommGridLLM(func() error {
+		return run(context.Background(), []string{"comm-grid-llm-runs", "--plan", "invalid", "--transcript"})
+	})
+	if err != nil {
+		t.Fatalf("print latest transcript: %v", err)
+	}
+	if !strings.Contains(out, "- run_id: `transcript-index-b`") || !strings.Contains(out, "## Step 1: agent-1") {
+		t.Fatalf("expected latest filtered transcript, got %s", out)
+	}
+	if strings.Contains(out, "- run_id: `transcript-index-a`") {
+		t.Fatalf("expected filtered transcript only, got %s", out)
+	}
+}
+
+func TestCommGridLLMRunsCommandRejectsUnsafeTranscriptPath(t *testing.T) {
+	origWD, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("getwd: %v", err)
+	}
+	workdir := t.TempDir()
+	if err := os.Chdir(workdir); err != nil {
+		t.Fatalf("chdir tempdir: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = os.Chdir(origWD)
+	})
+	if err := os.MkdirAll("benchmarks", 0o755); err != nil {
+		t.Fatalf("mkdir benchmarks: %v", err)
+	}
+	entry := commGridLLMRunIndexEntry{
+		RunID:          "unsafe",
+		Provider:       "fixture",
+		Plan:           "solve",
+		TranscriptPath: "../outside.md",
+	}
+	data, err := json.Marshal(entry)
+	if err != nil {
+		t.Fatalf("marshal unsafe entry: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join("benchmarks", "comm_grid_llm_runs.jsonl"), append(data, '\n'), 0o644); err != nil {
+		t.Fatalf("write unsafe index: %v", err)
+	}
+
+	err = run(context.Background(), []string{"comm-grid-llm-runs", "--transcript"})
+	if err == nil {
+		t.Fatal("expected unsafe transcript path error")
+	}
+	if !strings.Contains(err.Error(), "invalid comm-grid llm transcript path") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
 func TestCommGridLLMRunsCommandHandlesMissingIndex(t *testing.T) {
 	origWD, err := os.Getwd()
 	if err != nil {
