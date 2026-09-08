@@ -444,6 +444,19 @@ Fixture plans:
 - `tool`: uses tool-call argument JSON and completes the same task,
 - `invalid`: starts with one invalid wall move, then recovers.
 
+The same command can use a live OpenAI-compatible endpoint when requested:
+
+```bash
+protogonosctl comm-grid-llm \
+  --provider openai-compatible \
+  --base-url http://192.168.1.50:1234/v1 \
+  --model local-model \
+  --api-key-env PROTOGONOS_LLM_API_KEY \
+  --json
+```
+
+Fixture mode remains the default. Live provider mode is explicit so local tests and examples do not call external services by accident.
+
 ## First Implementation Slice
 
 A small first slice should avoid provider lock-in:
@@ -461,6 +474,7 @@ A small first slice should avoid provider lock-in:
 - add a fixture-backed LLM actor adapter for `comm-grid` that requests structured JSON from `internal/llm.Provider`,
 - prefer tool-call argument JSON when available, with plain message JSON as the fallback,
 - expose `protogonosctl comm-grid-llm` for deterministic fixture demos without external provider calls,
+- add explicit `openai-compatible` provider flags to `protogonosctl comm-grid-llm`, covered by fake-server tests,
 - add tests for deterministic replay, invalid output handling, timeout handling, and token-cost fitness.
 
 This gives the system a useful LLM integration path without making evolution depend on unbounded free-form text.

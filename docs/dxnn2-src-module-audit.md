@@ -375,6 +375,7 @@ Status legend:
 - 2026-09-07: added `comm-grid` language IO names and structured language-action decoding so future LLM output can map to bounded simulator actions and messages without provider-specific scape logic.
 - 2026-09-07: added a fixture-backed `comm-grid` LLM actor adapter that requests structured JSON through `internal/llm.Provider`, prefers tool-call argument payloads when present, applies decoded bounded actions to the simulator, and records provider/action trace data without real provider calls in tests.
 - 2026-09-07: added `protogonosctl comm-grid-llm` as a deterministic fixture demo for `comm-grid` LLM actors, with text and JSON trace output and no external provider calls.
+- 2026-09-07: added explicit OpenAI-compatible provider flags to `protogonosctl comm-grid-llm` (`--provider openai-compatible`, `--base-url`, `--model`, `--api-key-env`, `--json-mode`, `--tools`) with fake-server test coverage and fixture mode as the default.
 
 ## Summary
 

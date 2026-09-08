@@ -29,6 +29,7 @@ type commGridLLMCommandStep struct {
 }
 
 type commGridLLMCommandSummary struct {
+	Provider  string                   `json:"provider"`
 	Plan      string                   `json:"plan"`
 	Steps     []commGridLLMCommandStep `json:"steps"`
 	Completed bool                     `json:"completed"`
@@ -38,8 +39,18 @@ type commGridLLMCommandSummary struct {
 
 func runCommGridLLM(ctx context.Context, args []string) error {
 	fs := flag.NewFlagSet("comm-grid-llm", flag.ContinueOnError)
+	providerName := fs.String("provider", "fixture", "provider: fixture|openai-compatible")
 	plan := fs.String("plan", "solve", "fixture plan: solve|tool|invalid")
 	steps := fs.Int("steps", 8, "maximum fixture LLM decisions")
+	baseURL := fs.String("base-url", "", "OpenAI-compatible base URL ending in /v1")
+	apiKeyEnv := fs.String("api-key-env", "PROTOGONOS_LLM_API_KEY", "environment variable containing provider API key")
+	model := fs.String("model", "", "provider model id")
+	timeoutMS := fs.Int("timeout-ms", 30000, "provider request timeout in milliseconds")
+	maxTokens := fs.Int("max-tokens", 64, "maximum completion tokens per decision")
+	temperature := fs.Float64("temperature", 0, "provider temperature")
+	seed := fs.Int64("seed", 1, "provider seed when supported")
+	jsonMode := fs.Bool("json-mode", true, "request OpenAI-compatible JSON mode")
+	tools := fs.Bool("tools", false, "request tool-call action output when supported")
 	jsonOut := fs.Bool("json", false, "emit summary as JSON")
 	if err := fs.Parse(args); err != nil {
 		return err
@@ -48,7 +59,19 @@ func runCommGridLLM(ctx context.Context, args []string) error {
 		return errors.New("steps must be > 0")
 	}
 
-	responses, useTools, err := commGridLLMFixturePlan(*plan)
+	provider, actorModel, useTools, summaryProvider, summaryPlan, err := commGridLLMProviderFromFlags(commGridLLMProviderFlags{
+		Provider:    *providerName,
+		Plan:        *plan,
+		BaseURL:     *baseURL,
+		APIKeyEnv:   *apiKeyEnv,
+		Model:       *model,
+		TimeoutMS:   *timeoutMS,
+		MaxTokens:   *maxTokens,
+		Temperature: *temperature,
+		Seed:        *seed,
+		JSONMode:    *jsonMode,
+		Tools:       *tools,
+	})
 	if err != nil {
 		return err
 	}
@@ -65,15 +88,18 @@ func runCommGridLLM(ctx context.Context, args []string) error {
 	})
 	actor := scape.CommGridLLMActor{
 		AgentID:       "agent-1",
-		Provider:      llm.NewFixtureProvider(responses),
-		Model:         "fixture-comm-grid",
-		MaxTokens:     64,
-		Temperature:   0,
-		Seed:          1,
+		Provider:      provider,
+		Model:         actorModel,
+		MaxTokens:     *maxTokens,
+		Temperature:   *temperature,
+		Seed:          *seed,
 		ResponseTools: useTools,
 	}
 
-	summary := commGridLLMCommandSummary{Plan: strings.TrimSpace(strings.ToLower(*plan))}
+	summary := commGridLLMCommandSummary{
+		Provider: summaryProvider,
+		Plan:     summaryPlan,
+	}
 	for !sim.Done() && len(summary.Steps) < *steps {
 		result, trace, err := actor.Step(ctx, sim)
 		if err != nil {
@@ -114,7 +140,7 @@ func runCommGridLLM(ctx context.Context, args []string) error {
 		enc.SetIndent("", "  ")
 		return enc.Encode(summary)
 	}
-	fmt.Printf("comm_grid_llm_fixture plan=%s steps=%d completed=%t fitness=%.6f\n", summary.Plan, len(summary.Steps), summary.Completed, summary.Fitness)
+	fmt.Printf("comm_grid_llm provider=%s plan=%s steps=%d completed=%t fitness=%.6f\n", summary.Provider, summary.Plan, len(summary.Steps), summary.Completed, summary.Fitness)
 	for _, step := range summary.Steps {
 		fmt.Printf("step=%d action=%s invalid=%t done=%t fitness=%.6f message=%q to=%q\n",
 			step.Step,
@@ -128,6 +154,59 @@ func runCommGridLLM(ctx context.Context, args []string) error {
 	}
 	fmt.Printf("trace=%v\n", summary.Trace)
 	return nil
+}
+
+type commGridLLMProviderFlags struct {
+	Provider    string
+	Plan        string
+	BaseURL     string
+	APIKeyEnv   string
+	Model       string
+	TimeoutMS   int
+	MaxTokens   int
+	Temperature float64
+	Seed        int64
+	JSONMode    bool
+	Tools       bool
+}
+
+func commGridLLMProviderFromFlags(flags commGridLLMProviderFlags) (llm.Provider, string, bool, string, string, error) {
+	providerName := strings.TrimSpace(strings.ToLower(flags.Provider))
+	switch providerName {
+	case "", "fixture":
+		responses, useTools, err := commGridLLMFixturePlan(flags.Plan)
+		if err != nil {
+			return nil, "", false, "", "", err
+		}
+		return llm.NewFixtureProvider(responses), "fixture-comm-grid", useTools, "fixture", strings.TrimSpace(strings.ToLower(flags.Plan)), nil
+	case "openai-compatible":
+		model := strings.TrimSpace(flags.Model)
+		if model == "" {
+			return nil, "", false, "", "", llm.ErrModelRequired
+		}
+		provider, err := llm.NewOpenAICompatibleProvider(llm.ProviderConfig{
+			BaseURL:     flags.BaseURL,
+			APIKeyEnv:   flags.APIKeyEnv,
+			Model:       model,
+			TimeoutMS:   flags.TimeoutMS,
+			MaxTokens:   flags.MaxTokens,
+			Temperature: flags.Temperature,
+			Seed:        flags.Seed,
+			Capabilities: llm.Capabilities{
+				ChatCompletions: true,
+				JSONMode:        flags.JSONMode,
+				Tools:           flags.Tools,
+				Seed:            flags.Seed != 0,
+				UsageTokens:     true,
+			},
+		})
+		if err != nil {
+			return nil, "", false, "", "", err
+		}
+		return provider, model, flags.Tools, "openai-compatible", "live", nil
+	default:
+		return nil, "", false, "", "", fmt.Errorf("unsupported comm-grid llm provider: %s", flags.Provider)
+	}
 }
 
 func commGridLLMFixturePlan(plan string) ([]llm.Response, bool, error) {
