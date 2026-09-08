@@ -4,6 +4,8 @@ This document sketches a possible `v0.2.x` feature line: scapes where some actor
 
 This is a concept note, not an implementation contract.
 
+See [LLM Scape Spec](llm-scape-spec.md) for the first bounded training target.
+
 ## Position
 
 LLM-backed scapes are larger than a patch release.
@@ -727,6 +729,7 @@ A small first slice should avoid provider lock-in:
 - add `protogonosctl comm-grid-llm-suite --fail-fast=false` to continue after row-level suite errors,
 - add CSV output for `protogonosctl comm-grid-llm-suite` and `protogonosctl comm-grid-llm-suite --dry-run`,
 - add `protogonosctl comm-grid-llm-suite --summary` to aggregate a suite by plan and prompt,
+- add `docs/llm-scape-spec.md` to bound the first real LLM scape around a mentor actor, fixed `comm-grid` task, and deterministic fitness,
 - add tests for deterministic replay, invalid output handling, timeout handling, and token-cost fitness.
 
 This gives the system a useful LLM integration path without making evolution depend on unbounded free-form text.

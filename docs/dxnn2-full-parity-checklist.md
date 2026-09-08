@@ -585,6 +585,7 @@ Status keys:
 - Added `protogonosctl comm-grid-llm-suite --fail-fast=false` to continue after row-level suite errors.
 - Added CSV output for `protogonosctl comm-grid-llm-suite` and `protogonosctl comm-grid-llm-suite --dry-run`.
 - Added `protogonosctl comm-grid-llm-suite --summary` to aggregate a suite by plan and prompt.
+- Added `docs/llm-scape-spec.md` to bound the first real LLM scape around a mentor actor, fixed `comm-grid` task, and deterministic fitness.
 
 ## Current-scope parity declaration
 
