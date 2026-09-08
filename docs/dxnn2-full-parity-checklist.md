@@ -574,6 +574,7 @@ Status keys:
 - Added read-only `protogonosctl comm-grid-llm-runs` table and JSON views over the JSONL run index.
 - Added `protogonosctl comm-grid-llm-runs --transcript` to print the latest matching transcript from the run index.
 - Added `protogonosctl comm-grid-llm-runs --compare` to group indexed runs by task shape, provider, and plan.
+- Added CSV output for `protogonosctl comm-grid-llm-runs` and `protogonosctl comm-grid-llm-runs --compare`.
 
 ## Current-scope parity declaration
 

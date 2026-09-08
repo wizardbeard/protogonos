@@ -456,6 +456,12 @@ protogonosctl comm-grid-llm-runs --completed false
 protogonosctl comm-grid-llm-runs --provider fixture --plan solve --json
 ```
 
+Emit CSV for spreadsheet analysis:
+
+```bash
+protogonosctl comm-grid-llm-runs --csv
+```
+
 Print the latest matching transcript:
 
 ```bash
@@ -467,6 +473,7 @@ Compare indexed runs by task shape, provider, and plan:
 ```bash
 protogonosctl comm-grid-llm-runs --compare
 protogonosctl comm-grid-llm-runs --compare --json
+protogonosctl comm-grid-llm-runs --compare --csv
 ```
 
 Disable artifact writes for quick console checks:
@@ -622,6 +629,7 @@ A small first slice should avoid provider lock-in:
 - add read-only `protogonosctl comm-grid-llm-runs` table and JSON views over the JSONL run index,
 - add `protogonosctl comm-grid-llm-runs --transcript` to print the latest matching transcript,
 - add `protogonosctl comm-grid-llm-runs --compare` to group runs by task shape, provider, and plan,
+- add CSV output for `protogonosctl comm-grid-llm-runs` and `protogonosctl comm-grid-llm-runs --compare`,
 - add tests for deterministic replay, invalid output handling, timeout handling, and token-cost fitness.
 
 This gives the system a useful LLM integration path without making evolution depend on unbounded free-form text.

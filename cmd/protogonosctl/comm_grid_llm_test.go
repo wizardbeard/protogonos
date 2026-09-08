@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"context"
+	"encoding/csv"
 	"encoding/json"
 	"io"
 	"net/http"
@@ -920,6 +921,69 @@ func TestCommGridLLMRunsCommandComparesRunsAsJSON(t *testing.T) {
 	}
 	if got.BestRunID != "compare-json-good" || got.BestFitness != 1.45 || got.AverageFitness != 1.45 {
 		t.Fatalf("unexpected fitness aggregate: %+v", got)
+	}
+}
+
+func TestCommGridLLMRunsCommandComparesRunsAsCSV(t *testing.T) {
+	origWD, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("getwd: %v", err)
+	}
+	workdir := t.TempDir()
+	if err := os.Chdir(workdir); err != nil {
+		t.Fatalf("chdir tempdir: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = os.Chdir(origWD)
+	})
+
+	for _, args := range [][]string{
+		{"comm-grid-llm", "--run-id", "compare-csv-good-a", "--plan", "solve"},
+		{"comm-grid-llm", "--run-id", "compare-csv-good-b", "--plan", "solve"},
+		{"comm-grid-llm", "--run-id", "compare-csv-bad", "--plan", "provider-error", "--steps", "1", "--provider-retries", "1", "--retry-backoff-ms", "0"},
+	} {
+		if err := run(context.Background(), args); err != nil {
+			t.Fatalf("write compare csv run %v: %v", args, err)
+		}
+	}
+
+	out, err := captureStdoutForCommGridLLM(func() error {
+		return run(context.Background(), []string{"comm-grid-llm-runs", "--compare", "--csv"})
+	})
+	if err != nil {
+		t.Fatalf("compare csv run index: %v", err)
+	}
+	if !strings.Contains(out, "group,provider,plan,task_shape,runs,completed,completion_rate,best_fitness,average_fitness,average_failures,average_retries,best_run_id") {
+		t.Fatalf("expected compare csv header, got %s", out)
+	}
+	records, err := csv.NewReader(strings.NewReader(out)).ReadAll()
+	if err != nil {
+		t.Fatalf("parse compare csv: %v\n%s", err, out)
+	}
+	if len(records) != 3 {
+		t.Fatalf("expected header plus two rows, got %+v", records)
+	}
+	gotRows := map[string][]string{}
+	for _, row := range records[1:] {
+		gotRows[row[2]] = row
+	}
+	solve := gotRows["solve"]
+	if len(solve) == 0 || solve[0] != "fixture/solve/3x3:key(1,0):goal(2,0):agents1:turns[agent-1]:limit80" || solve[4] != "2" || solve[5] != "2" || solve[7] != "1.450000" || solve[11] != "compare-csv-good-a" {
+		t.Fatalf("expected solve csv aggregate, got %+v", records)
+	}
+	failed := gotRows["provider-error"]
+	if len(failed) == 0 || failed[4] != "1" || failed[5] != "0" || failed[9] != "1.000" || failed[10] != "1.000" || failed[11] != "compare-csv-bad" {
+		t.Fatalf("expected provider-error csv aggregate, got %+v", records)
+	}
+}
+
+func TestCommGridLLMRunsCommandRejectsConflictingOutputFormats(t *testing.T) {
+	err := run(context.Background(), []string{"comm-grid-llm-runs", "--json", "--csv"})
+	if err == nil {
+		t.Fatal("expected conflicting output format error")
+	}
+	if !strings.Contains(err.Error(), "use only one output format") {
+		t.Fatalf("unexpected error: %v", err)
 	}
 }
 

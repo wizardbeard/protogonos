@@ -3,6 +3,7 @@ package main
 import (
 	"bufio"
 	"context"
+	"encoding/csv"
 	"encoding/json"
 	"errors"
 	"flag"
@@ -409,6 +410,7 @@ func runCommGridLLMRuns(ctx context.Context, args []string) error {
 	}
 	fs := flag.NewFlagSet("comm-grid-llm-runs", flag.ContinueOnError)
 	jsonOut := fs.Bool("json", false, "emit run index as JSON")
+	csvOut := fs.Bool("csv", false, "emit run index as CSV")
 	transcript := fs.Bool("transcript", false, "print latest matching transcript")
 	compare := fs.Bool("compare", false, "compare indexed runs by task, provider, and plan")
 	limit := fs.Int("limit", 0, "maximum rows to print, 0 means all")
@@ -420,6 +422,12 @@ func runCommGridLLMRuns(ctx context.Context, args []string) error {
 	}
 	if *limit < 0 {
 		return errors.New("limit must be >= 0")
+	}
+	if *jsonOut && *csvOut {
+		return errors.New("use only one output format: --json or --csv")
+	}
+	if *transcript && *csvOut {
+		return errors.New("--csv cannot be used with --transcript")
 	}
 	completedFilter, filterCompleted, err := parseOptionalBoolFlag("completed", *completed)
 	if err != nil {
@@ -446,6 +454,9 @@ func runCommGridLLMRuns(ctx context.Context, args []string) error {
 			enc.SetIndent("", "  ")
 			return enc.Encode(comparisons)
 		}
+		if *csvOut {
+			return writeCommGridLLMRunComparisonCSV(os.Stdout, comparisons)
+		}
 		printCommGridLLMRunComparisonTable(comparisons)
 		return nil
 	}
@@ -453,6 +464,9 @@ func runCommGridLLMRuns(ctx context.Context, args []string) error {
 		enc := json.NewEncoder(os.Stdout)
 		enc.SetIndent("", "  ")
 		return enc.Encode(entries)
+	}
+	if *csvOut {
+		return writeCommGridLLMRunIndexCSV(os.Stdout, entries)
 	}
 	printCommGridLLMRunIndexTable(entries)
 	return nil
@@ -1187,6 +1201,44 @@ func printCommGridLLMRunIndexTable(entries []commGridLLMRunIndexEntry) {
 	}
 }
 
+func writeCommGridLLMRunIndexCSV(file *os.File, entries []commGridLLMRunIndexEntry) error {
+	writer := csv.NewWriter(file)
+	if err := writer.Write([]string{
+		"run_id",
+		"provider",
+		"plan",
+		"created_at_utc",
+		"steps",
+		"completed",
+		"fitness",
+		"failure_count",
+		"retry_count",
+		"artifact_path",
+		"transcript_path",
+	}); err != nil {
+		return err
+	}
+	for _, entry := range entries {
+		if err := writer.Write([]string{
+			entry.RunID,
+			entry.Provider,
+			entry.Plan,
+			entry.CreatedAt,
+			strconv.Itoa(entry.Steps),
+			strconv.FormatBool(entry.Completed),
+			strconv.FormatFloat(entry.Fitness, 'f', 6, 64),
+			strconv.Itoa(entry.FailureCount),
+			strconv.Itoa(entry.RetryCount),
+			entry.ArtifactPath,
+			entry.TranscriptPath,
+		}); err != nil {
+			return err
+		}
+	}
+	writer.Flush()
+	return writer.Error()
+}
+
 func compareCommGridLLMRuns(entries []commGridLLMRunIndexEntry) []commGridLLMRunComparison {
 	type accumulator struct {
 		comparison    commGridLLMRunComparison
@@ -1261,6 +1313,46 @@ func printCommGridLLMRunComparisonTable(comparisons []commGridLLMRunComparison) 
 			comparison.BestRunID,
 		)
 	}
+}
+
+func writeCommGridLLMRunComparisonCSV(file *os.File, comparisons []commGridLLMRunComparison) error {
+	writer := csv.NewWriter(file)
+	if err := writer.Write([]string{
+		"group",
+		"provider",
+		"plan",
+		"task_shape",
+		"runs",
+		"completed",
+		"completion_rate",
+		"best_fitness",
+		"average_fitness",
+		"average_failures",
+		"average_retries",
+		"best_run_id",
+	}); err != nil {
+		return err
+	}
+	for _, comparison := range comparisons {
+		if err := writer.Write([]string{
+			comparison.Group,
+			comparison.Provider,
+			comparison.Plan,
+			comparison.TaskShape,
+			strconv.Itoa(comparison.Runs),
+			strconv.Itoa(comparison.Completed),
+			strconv.FormatFloat(comparison.CompletionRate, 'f', 3, 64),
+			strconv.FormatFloat(comparison.BestFitness, 'f', 6, 64),
+			strconv.FormatFloat(comparison.AverageFitness, 'f', 6, 64),
+			strconv.FormatFloat(comparison.AverageFailures, 'f', 3, 64),
+			strconv.FormatFloat(comparison.AverageRetries, 'f', 3, 64),
+			comparison.BestRunID,
+		}); err != nil {
+			return err
+		}
+	}
+	writer.Flush()
+	return writer.Error()
 }
 
 func commGridLLMTaskShape(task commGridLLMTaskConfig) string {
