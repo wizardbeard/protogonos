@@ -86,6 +86,8 @@ func run(ctx context.Context, args []string) error {
 		return runExport(ctx, args[1:])
 	case "data-extract":
 		return runDataExtract(ctx, args[1:])
+	case "comm-grid-llm":
+		return runCommGridLLM(ctx, args[1:])
 	default:
 		return usageError(fmt.Sprintf("unknown command: %s", args[0]))
 	}
@@ -2008,7 +2010,7 @@ func defaultMutationPolicy(
 }
 
 func usageError(msg string) error {
-	return fmt.Errorf("%s\nusage: protogonosctl <init|reset|start|run|benchmark|benchmark-experiment|profile|runs|lineage|fitness|diagnostics|species|species-diff|monitor|population|top|scape-summary|epitopes-test|export> [flags]", msg)
+	return fmt.Errorf("%s\nusage: protogonosctl <init|reset|start|run|benchmark|benchmark-experiment|profile|runs|lineage|fitness|diagnostics|species|species-diff|monitor|population|top|scape-summary|epitopes-test|comm-grid-llm|export> [flags]", msg)
 }
 
 func selectionFromName(name string) (evo.Selector, error) {

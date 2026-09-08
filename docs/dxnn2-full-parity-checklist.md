@@ -560,6 +560,7 @@ Status keys:
 - Added the experimental deterministic `comm-grid` scape foundation with bounded actions, message records, delivery fitness, trace output, and non-LLM simulator/evaluator tests before any provider calls are wired into scape execution.
 - Added `comm-grid` language IO names and structured language-action decoding so future LLM output can map to bounded simulator actions and messages without provider-specific scape logic.
 - Added a fixture-backed `comm-grid` LLM actor adapter that requests structured JSON through `internal/llm.Provider`, prefers tool-call argument payloads when present, applies decoded bounded actions to the simulator, and records provider/action trace data without real provider calls in tests.
+- Added `protogonosctl comm-grid-llm` as a deterministic fixture demo for `comm-grid` LLM actors, with text and JSON trace output and no external provider calls.
 
 ## Current-scope parity declaration
 
