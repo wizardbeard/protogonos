@@ -1082,6 +1082,92 @@ func TestCommGridLLMSuiteCommandEmitsJSON(t *testing.T) {
 	}
 }
 
+func TestCommGridLLMSuiteCommandReadsManifest(t *testing.T) {
+	origWD, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("getwd: %v", err)
+	}
+	workdir := t.TempDir()
+	if err := os.Chdir(workdir); err != nil {
+		t.Fatalf("chdir tempdir: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = os.Chdir(origWD)
+	})
+	manifest := `{
+		"suite_id": "manifest-suite",
+		"plans": ["solve", "provider-error"],
+		"repeats": 1,
+		"provider_retries": 1,
+		"retry_backoff_ms": 0,
+		"prompts": [
+			{"name": "strict", "system_prompt": "Return JSON only."}
+		]
+	}`
+	if err := os.WriteFile("suite.json", []byte(manifest), 0o644); err != nil {
+		t.Fatalf("write manifest: %v", err)
+	}
+
+	out, err := captureStdoutForCommGridLLM(func() error {
+		return run(context.Background(), []string{"comm-grid-llm-suite", "--manifest", "suite.json"})
+	})
+	if err != nil {
+		t.Fatalf("suite manifest command: %v", err)
+	}
+	if !strings.Contains(out, "manifest-suite\t2\t1") || !strings.Contains(out, "manifest-suite-solve-strict-r1") {
+		t.Fatalf("expected manifest suite output, got %s", out)
+	}
+	artifact := readCommGridLLMTestArtifact(t, workdir, "manifest-suite-solve-strict-r1")
+	if artifact.Task.SystemPrompt != "Return JSON only." || artifact.TotalTokens != 30 {
+		t.Fatalf("unexpected manifest artifact: %+v", artifact)
+	}
+}
+
+func TestCommGridLLMSuiteCommandManifestAllowsCLIOverrides(t *testing.T) {
+	origWD, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("getwd: %v", err)
+	}
+	workdir := t.TempDir()
+	if err := os.Chdir(workdir); err != nil {
+		t.Fatalf("chdir tempdir: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = os.Chdir(origWD)
+	})
+	manifest := `{
+		"suite_id": "manifest-base",
+		"plans": ["provider-error"],
+		"repeats": 2,
+		"prompts": [
+			{"name": "loose", "system_prompt": "Use JSON."}
+		]
+	}`
+	if err := os.WriteFile("suite.json", []byte(manifest), 0o644); err != nil {
+		t.Fatalf("write manifest: %v", err)
+	}
+
+	out, err := captureStdoutForCommGridLLM(func() error {
+		return run(context.Background(), []string{
+			"comm-grid-llm-suite",
+			"--manifest", "suite.json",
+			"--suite-id", "manifest-override",
+			"--plans", "solve",
+			"--repeats", "1",
+			"--prompt", "strict=Return JSON only.",
+		})
+	})
+	if err != nil {
+		t.Fatalf("suite manifest override command: %v", err)
+	}
+	if !strings.Contains(out, "manifest-override\t1\t1") || !strings.Contains(out, "manifest-override-solve-strict-r1") {
+		t.Fatalf("expected overridden manifest suite output, got %s", out)
+	}
+	if strings.Contains(out, "provider-error") || strings.Contains(out, "loose") {
+		t.Fatalf("expected CLI overrides to replace manifest plan and prompt, got %s", out)
+	}
+}
+
 func TestCommGridLLMRunsCommandRejectsUnsafeTranscriptPath(t *testing.T) {
 	origWD, err := os.Getwd()
 	if err != nil {

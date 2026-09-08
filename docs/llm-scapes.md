@@ -486,6 +486,26 @@ protogonosctl comm-grid-llm-suite \
   --repeats 2
 ```
 
+Run the same suite from a JSON manifest:
+
+```json
+{
+  "suite_id": "comm-grid-suite-001",
+  "plans": ["solve", "tool", "invalid"],
+  "repeats": 2,
+  "prompts": [
+    {
+      "name": "strict",
+      "system_prompt": "Return JSON only."
+    }
+  ]
+}
+```
+
+```bash
+protogonosctl comm-grid-llm-suite --manifest suite.json
+```
+
 Disable artifact writes for quick console checks:
 
 ```bash
@@ -645,6 +665,7 @@ A small first slice should avoid provider lock-in:
 - add CSV output for `protogonosctl comm-grid-llm-runs` and `protogonosctl comm-grid-llm-runs --compare`,
 - add token and duration summaries to the run index and compare output,
 - add `protogonosctl comm-grid-llm-suite` to run plan and prompt-variant batches through the normal artifact/index path,
+- add JSON manifest input for `protogonosctl comm-grid-llm-suite`, with explicit CLI flags taking precedence,
 - add tests for deterministic replay, invalid output handling, timeout handling, and token-cost fitness.
 
 This gives the system a useful LLM integration path without making evolution depend on unbounded free-form text.

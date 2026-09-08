@@ -391,6 +391,7 @@ Status legend:
 - 2026-09-08: added CSV output for `protogonosctl comm-grid-llm-runs` and `protogonosctl comm-grid-llm-runs --compare`.
 - 2026-09-08: added token and duration summaries to the `comm-grid-llm` run index and compare output.
 - 2026-09-08: added `protogonosctl comm-grid-llm-suite` to run plan and prompt-variant batches through the normal artifact and run-index path.
+- 2026-09-08: added JSON manifest input for `protogonosctl comm-grid-llm-suite`, with explicit CLI flags taking precedence.
 
 ## Summary
 
