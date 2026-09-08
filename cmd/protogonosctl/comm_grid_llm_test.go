@@ -845,6 +845,84 @@ func TestCommGridLLMRunsCommandPrintsLatestFilteredTranscript(t *testing.T) {
 	}
 }
 
+func TestCommGridLLMRunsCommandComparesRuns(t *testing.T) {
+	origWD, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("getwd: %v", err)
+	}
+	workdir := t.TempDir()
+	if err := os.Chdir(workdir); err != nil {
+		t.Fatalf("chdir tempdir: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = os.Chdir(origWD)
+	})
+
+	for _, args := range [][]string{
+		{"comm-grid-llm", "--run-id", "compare-good-a", "--plan", "solve"},
+		{"comm-grid-llm", "--run-id", "compare-good-b", "--plan", "solve"},
+		{"comm-grid-llm", "--run-id", "compare-bad", "--plan", "provider-error", "--steps", "1", "--provider-retries", "1", "--retry-backoff-ms", "0"},
+	} {
+		if err := run(context.Background(), args); err != nil {
+			t.Fatalf("write compare run %v: %v", args, err)
+		}
+	}
+
+	out, err := captureStdoutForCommGridLLM(func() error {
+		return run(context.Background(), []string{"comm-grid-llm-runs", "--compare"})
+	})
+	if err != nil {
+		t.Fatalf("compare run index: %v", err)
+	}
+	if !strings.Contains(out, "GROUP\tRUNS\tDONE_RATE\tBEST\tAVG_FIT\tAVG_FAIL\tAVG_RETRY\tBEST_RUN") {
+		t.Fatalf("expected compare header, got %s", out)
+	}
+	if !strings.Contains(out, "fixture/solve/3x3:key(1,0):goal(2,0):agents1:turns[agent-1]:limit80\t2\t1.000\t1.450000") {
+		t.Fatalf("expected solve aggregate, got %s", out)
+	}
+	if !strings.Contains(out, "fixture/provider-error/3x3:key(1,0):goal(2,0):agents1:turns[agent-1]:limit80\t1\t0.000\t0.000000") {
+		t.Fatalf("expected provider-error aggregate, got %s", out)
+	}
+}
+
+func TestCommGridLLMRunsCommandComparesRunsAsJSON(t *testing.T) {
+	origWD, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("getwd: %v", err)
+	}
+	workdir := t.TempDir()
+	if err := os.Chdir(workdir); err != nil {
+		t.Fatalf("chdir tempdir: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = os.Chdir(origWD)
+	})
+
+	if err := run(context.Background(), []string{"comm-grid-llm", "--run-id", "compare-json-good", "--plan", "solve"}); err != nil {
+		t.Fatalf("write compare json run: %v", err)
+	}
+	out, err := captureStdoutForCommGridLLM(func() error {
+		return run(context.Background(), []string{"comm-grid-llm-runs", "--compare", "--json"})
+	})
+	if err != nil {
+		t.Fatalf("compare json run index: %v", err)
+	}
+	var comparisons []commGridLLMRunComparison
+	if err := json.Unmarshal([]byte(out), &comparisons); err != nil {
+		t.Fatalf("decode compare json: %v\n%s", err, out)
+	}
+	if len(comparisons) != 1 {
+		t.Fatalf("expected one comparison, got %+v", comparisons)
+	}
+	got := comparisons[0]
+	if got.Provider != "fixture" || got.Plan != "solve" || got.Runs != 1 || got.Completed != 1 || got.CompletionRate != 1 {
+		t.Fatalf("unexpected comparison: %+v", got)
+	}
+	if got.BestRunID != "compare-json-good" || got.BestFitness != 1.45 || got.AverageFitness != 1.45 {
+		t.Fatalf("unexpected fitness aggregate: %+v", got)
+	}
+}
+
 func TestCommGridLLMRunsCommandRejectsUnsafeTranscriptPath(t *testing.T) {
 	origWD, err := os.Getwd()
 	if err != nil {

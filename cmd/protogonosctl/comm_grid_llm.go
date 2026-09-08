@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -121,6 +122,21 @@ type commGridLLMRunIndexFilter struct {
 	Plan            string
 	FilterCompleted bool
 	Completed       bool
+}
+
+type commGridLLMRunComparison struct {
+	Group           string  `json:"group"`
+	Provider        string  `json:"provider"`
+	Plan            string  `json:"plan"`
+	TaskShape       string  `json:"task_shape"`
+	Runs            int     `json:"runs"`
+	Completed       int     `json:"completed"`
+	CompletionRate  float64 `json:"completion_rate"`
+	BestFitness     float64 `json:"best_fitness"`
+	AverageFitness  float64 `json:"average_fitness"`
+	AverageFailures float64 `json:"average_failures"`
+	AverageRetries  float64 `json:"average_retries"`
+	BestRunID       string  `json:"best_run_id"`
 }
 
 type commGridLLMAttempt struct {
@@ -394,6 +410,7 @@ func runCommGridLLMRuns(ctx context.Context, args []string) error {
 	fs := flag.NewFlagSet("comm-grid-llm-runs", flag.ContinueOnError)
 	jsonOut := fs.Bool("json", false, "emit run index as JSON")
 	transcript := fs.Bool("transcript", false, "print latest matching transcript")
+	compare := fs.Bool("compare", false, "compare indexed runs by task, provider, and plan")
 	limit := fs.Int("limit", 0, "maximum rows to print, 0 means all")
 	provider := fs.String("provider", "", "filter by provider")
 	plan := fs.String("plan", "", "filter by plan")
@@ -421,6 +438,16 @@ func runCommGridLLMRuns(ctx context.Context, args []string) error {
 	})
 	if *transcript {
 		return printLatestCommGridLLMTranscript(entries)
+	}
+	if *compare {
+		comparisons := compareCommGridLLMRuns(entries)
+		if *jsonOut {
+			enc := json.NewEncoder(os.Stdout)
+			enc.SetIndent("", "  ")
+			return enc.Encode(comparisons)
+		}
+		printCommGridLLMRunComparisonTable(comparisons)
+		return nil
 	}
 	if *jsonOut {
 		enc := json.NewEncoder(os.Stdout)
@@ -1158,6 +1185,97 @@ func printCommGridLLMRunIndexTable(entries []commGridLLMRunIndexEntry) {
 			entry.ArtifactPath,
 		)
 	}
+}
+
+func compareCommGridLLMRuns(entries []commGridLLMRunIndexEntry) []commGridLLMRunComparison {
+	type accumulator struct {
+		comparison    commGridLLMRunComparison
+		totalFitness  float64
+		totalFailures int
+		totalRetries  int
+	}
+	groups := map[string]*accumulator{}
+	for _, entry := range entries {
+		taskShape := commGridLLMTaskShape(entry.Task)
+		key := entry.Provider + "\x00" + entry.Plan + "\x00" + taskShape
+		acc, ok := groups[key]
+		if !ok {
+			acc = &accumulator{
+				comparison: commGridLLMRunComparison{
+					Group:       entry.Provider + "/" + entry.Plan + "/" + taskShape,
+					Provider:    entry.Provider,
+					Plan:        entry.Plan,
+					TaskShape:   taskShape,
+					BestFitness: entry.Fitness,
+					BestRunID:   entry.RunID,
+				},
+			}
+			groups[key] = acc
+		}
+		acc.comparison.Runs++
+		if entry.Completed {
+			acc.comparison.Completed++
+		}
+		if entry.Fitness > acc.comparison.BestFitness || acc.comparison.Runs == 1 {
+			acc.comparison.BestFitness = entry.Fitness
+			acc.comparison.BestRunID = entry.RunID
+		}
+		acc.totalFitness += entry.Fitness
+		acc.totalFailures += entry.FailureCount
+		acc.totalRetries += entry.RetryCount
+	}
+	out := make([]commGridLLMRunComparison, 0, len(groups))
+	for _, acc := range groups {
+		runs := float64(acc.comparison.Runs)
+		if runs > 0 {
+			acc.comparison.CompletionRate = float64(acc.comparison.Completed) / runs
+			acc.comparison.AverageFitness = acc.totalFitness / runs
+			acc.comparison.AverageFailures = float64(acc.totalFailures) / runs
+			acc.comparison.AverageRetries = float64(acc.totalRetries) / runs
+		}
+		out = append(out, acc.comparison)
+	}
+	sort.Slice(out, func(i, j int) bool {
+		if out[i].TaskShape != out[j].TaskShape {
+			return out[i].TaskShape < out[j].TaskShape
+		}
+		if out[i].Provider != out[j].Provider {
+			return out[i].Provider < out[j].Provider
+		}
+		return out[i].Plan < out[j].Plan
+	})
+	return out
+}
+
+func printCommGridLLMRunComparisonTable(comparisons []commGridLLMRunComparison) {
+	fmt.Printf("GROUP\tRUNS\tDONE_RATE\tBEST\tAVG_FIT\tAVG_FAIL\tAVG_RETRY\tBEST_RUN\n")
+	for _, comparison := range comparisons {
+		fmt.Printf("%s\t%d\t%.3f\t%.6f\t%.6f\t%.3f\t%.3f\t%s\n",
+			comparison.Group,
+			comparison.Runs,
+			comparison.CompletionRate,
+			comparison.BestFitness,
+			comparison.AverageFitness,
+			comparison.AverageFailures,
+			comparison.AverageRetries,
+			comparison.BestRunID,
+		)
+	}
+}
+
+func commGridLLMTaskShape(task commGridLLMTaskConfig) string {
+	task = normalizeCommGridLLMTask(task)
+	return fmt.Sprintf("%dx%d:key(%d,%d):goal(%d,%d):agents%d:turns[%s]:limit%d",
+		task.Width,
+		task.Height,
+		task.Key.X,
+		task.Key.Y,
+		task.Goal.X,
+		task.Goal.Y,
+		len(task.Agents),
+		strings.Join(task.TurnOrder, ","),
+		task.MessageLimit,
+	)
 }
 
 func printLatestCommGridLLMTranscript(entries []commGridLLMRunIndexEntry) error {
