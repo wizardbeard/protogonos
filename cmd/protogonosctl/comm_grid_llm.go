@@ -64,6 +64,7 @@ type commGridLLMTaskConfig struct {
 	Height       int                 `json:"height"`
 	Key          scape.CommGridPoint `json:"key"`
 	Goal         scape.CommGridPoint `json:"goal"`
+	SystemPrompt string              `json:"system_prompt,omitempty"`
 	AgentID      string              `json:"agent_id"`
 	Agent        scape.CommGridPoint `json:"agent"`
 	Agents       []commGridLLMAgent  `json:"agents,omitempty"`
@@ -72,8 +73,10 @@ type commGridLLMTaskConfig struct {
 }
 
 type commGridLLMAgent struct {
-	ID       string              `json:"id"`
-	Position scape.CommGridPoint `json:"position"`
+	ID           string              `json:"id"`
+	Position     scape.CommGridPoint `json:"position"`
+	Role         string              `json:"role,omitempty"`
+	SystemPrompt string              `json:"system_prompt,omitempty"`
 }
 
 type commGridLLMReplayResult struct {
@@ -127,6 +130,9 @@ func runCommGridLLM(ctx context.Context, args []string) error {
 	agentPos := fs.String("agent-pos", "0,0", "comm-grid agent start position as x,y")
 	agents := fs.String("agents", "", "comm-grid agents as id@x,y:id@x,y")
 	turnOrder := fs.String("turn-order", "", "comm-grid turn order as comma-separated agent ids")
+	systemPrompt := fs.String("system-prompt", "", "default comm-grid LLM system prompt")
+	agentRoles := fs.String("agent-roles", "", "comm-grid agent roles as id=role:id=role")
+	agentPrompts := fs.String("agent-prompts", "", "comm-grid agent system prompts as id=prompt:id=prompt")
 	messageLimit := fs.Int("message-limit", 80, "maximum stored message characters")
 	baseURL := fs.String("base-url", "", "OpenAI-compatible base URL ending in /v1")
 	apiKeyEnv := fs.String("api-key-env", "PROTOGONOS_LLM_API_KEY", "environment variable containing provider API key")
@@ -154,6 +160,9 @@ func runCommGridLLM(ctx context.Context, args []string) error {
 		Agent:        *agentPos,
 		Agents:       *agents,
 		TurnOrder:    *turnOrder,
+		SystemPrompt: strings.TrimSpace(*systemPrompt),
+		AgentRoles:   *agentRoles,
+		AgentPrompts: *agentPrompts,
 		MessageLimit: *messageLimit,
 	})
 	if err != nil {
@@ -384,6 +393,7 @@ func executeCommGridLLM(ctx context.Context, cfg commGridLLMExecutionConfig) (co
 			AgentID:       actorID,
 			Provider:      cfg.Provider,
 			Model:         cfg.ActorModel,
+			SystemPrompt:  commGridLLMSystemPromptForActor(task, actorID),
 			MaxTokens:     cfg.MaxTokens,
 			Temperature:   cfg.Temperature,
 			Seed:          cfg.Seed,
@@ -503,10 +513,13 @@ type commGridLLMTaskFlagValues struct {
 	Height       int
 	Key          string
 	Goal         string
+	SystemPrompt string
 	AgentID      string
 	Agent        string
 	Agents       string
 	TurnOrder    string
+	AgentRoles   string
+	AgentPrompts string
 	MessageLimit int
 }
 
@@ -548,6 +561,9 @@ func commGridLLMTaskFromFlags(flags commGridLLMTaskFlagValues) (commGridLLMTaskC
 		agentID = agents[0].ID
 		agent = agents[0].Position
 	}
+	if err := applyCommGridLLMAgentSettings(agents, flags.AgentRoles, flags.AgentPrompts); err != nil {
+		return commGridLLMTaskConfig{}, err
+	}
 	if !commGridLLMPointInBounds(key, flags.Width, flags.Height) {
 		return commGridLLMTaskConfig{}, fmt.Errorf("key out of bounds: %d,%d", key.X, key.Y)
 	}
@@ -571,6 +587,7 @@ func commGridLLMTaskFromFlags(flags commGridLLMTaskFlagValues) (commGridLLMTaskC
 		Height:       flags.Height,
 		Key:          key,
 		Goal:         goal,
+		SystemPrompt: strings.TrimSpace(flags.SystemPrompt),
 		AgentID:      agentID,
 		Agent:        agent,
 		Agents:       agents,
@@ -597,6 +614,7 @@ func defaultCommGridLLMTaskConfig() commGridLLMTaskConfig {
 }
 
 func normalizeCommGridLLMTask(task commGridLLMTaskConfig) commGridLLMTaskConfig {
+	task.SystemPrompt = strings.TrimSpace(task.SystemPrompt)
 	task.AgentID = strings.TrimSpace(task.AgentID)
 	if len(task.Agents) == 0 {
 		task.Agents = []commGridLLMAgent{{
@@ -606,6 +624,8 @@ func normalizeCommGridLLMTask(task commGridLLMTaskConfig) commGridLLMTaskConfig 
 	}
 	for i := range task.Agents {
 		task.Agents[i].ID = strings.TrimSpace(task.Agents[i].ID)
+		task.Agents[i].Role = strings.TrimSpace(task.Agents[i].Role)
+		task.Agents[i].SystemPrompt = strings.TrimSpace(task.Agents[i].SystemPrompt)
 	}
 	if task.AgentID == "" && len(task.Agents) > 0 {
 		task.AgentID = task.Agents[0].ID
@@ -623,6 +643,85 @@ func normalizeCommGridLLMTask(task commGridLLMTaskConfig) commGridLLMTaskConfig 
 		task.TurnOrder = []string{task.AgentID}
 	}
 	return task
+}
+
+func applyCommGridLLMAgentSettings(agents []commGridLLMAgent, rawRoles, rawPrompts string) error {
+	roleByAgent, err := parseCommGridLLMAgentTextMap("agent-roles", rawRoles)
+	if err != nil {
+		return err
+	}
+	promptByAgent, err := parseCommGridLLMAgentTextMap("agent-prompts", rawPrompts)
+	if err != nil {
+		return err
+	}
+	known := map[string]int{}
+	for i, agent := range agents {
+		known[agent.ID] = i
+	}
+	for id, role := range roleByAgent {
+		index, ok := known[id]
+		if !ok {
+			return fmt.Errorf("agent-roles references unknown agent: %s", id)
+		}
+		agents[index].Role = role
+	}
+	for id, prompt := range promptByAgent {
+		index, ok := known[id]
+		if !ok {
+			return fmt.Errorf("agent-prompts references unknown agent: %s", id)
+		}
+		agents[index].SystemPrompt = prompt
+	}
+	return nil
+}
+
+func parseCommGridLLMAgentTextMap(name, raw string) (map[string]string, error) {
+	out := map[string]string{}
+	if strings.TrimSpace(raw) == "" {
+		return out, nil
+	}
+	for _, part := range strings.Split(raw, ":") {
+		part = strings.TrimSpace(part)
+		if part == "" {
+			continue
+		}
+		id, value, ok := strings.Cut(part, "=")
+		if !ok {
+			return nil, fmt.Errorf("%s entries must use id=value: %s", name, part)
+		}
+		id = strings.TrimSpace(id)
+		value = strings.TrimSpace(value)
+		if id == "" || value == "" {
+			return nil, fmt.Errorf("%s entries must use non-empty id and value: %s", name, part)
+		}
+		if _, exists := out[id]; exists {
+			return nil, fmt.Errorf("%s has duplicate agent id: %s", name, id)
+		}
+		out[id] = value
+	}
+	return out, nil
+}
+
+func commGridLLMSystemPromptForActor(task commGridLLMTaskConfig, actorID string) string {
+	base := strings.TrimSpace(task.SystemPrompt)
+	var role string
+	for _, agent := range task.Agents {
+		if agent.ID != actorID {
+			continue
+		}
+		if agent.SystemPrompt != "" {
+			return agent.SystemPrompt
+		}
+		role = agent.Role
+		break
+	}
+	if role == "" {
+		return base
+	}
+	if base == "" {
+		base = "Return one compact JSON object with fields action, message, to, and tokens. Use only these actions: stay, north, south, east, west, pick, drop."
+	}
+	return base + "\nRole: " + role
 }
 
 func parseCommGridLLMAgents(raw string) ([]commGridLLMAgent, error) {

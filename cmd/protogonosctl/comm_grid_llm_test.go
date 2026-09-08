@@ -361,6 +361,83 @@ func TestCommGridLLMCommandWritesMultiAgentTurnsAndReplays(t *testing.T) {
 	}
 }
 
+func TestCommGridLLMCommandWritesAgentRolesAndPrompts(t *testing.T) {
+	origWD, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("getwd: %v", err)
+	}
+	workdir := t.TempDir()
+	if err := os.Chdir(workdir); err != nil {
+		t.Fatalf("chdir tempdir: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = os.Chdir(origWD)
+	})
+
+	if err := run(context.Background(), []string{
+		"comm-grid-llm",
+		"--run-id", "role-prompt-run",
+		"--plan", "multi-solve",
+		"--agents", "agent-a@0,0:agent-b@0,1",
+		"--turn-order", "agent-a,agent-b",
+		"--system-prompt", "Return JSON only.",
+		"--agent-roles", "agent-a=carrier:agent-b=observer",
+		"--agent-prompts", "agent-b=Return JSON only. Wait unless asked.",
+	}); err != nil {
+		t.Fatalf("role prompt command: %v", err)
+	}
+
+	artifact := readCommGridLLMTestArtifact(t, workdir, "role-prompt-run")
+	if artifact.Task.SystemPrompt != "Return JSON only." {
+		t.Fatalf("unexpected global prompt: %+v", artifact.Task)
+	}
+	if artifact.Task.Agents[0].Role != "carrier" || artifact.Task.Agents[1].Role != "observer" {
+		t.Fatalf("unexpected stored roles: %+v", artifact.Task.Agents)
+	}
+	if artifact.Task.Agents[1].SystemPrompt != "Return JSON only. Wait unless asked." {
+		t.Fatalf("unexpected stored prompt: %+v", artifact.Task.Agents[1])
+	}
+	if artifact.Steps[0].Request.SystemPrompt != "Return JSON only.\nRole: carrier" {
+		t.Fatalf("expected role prompt for agent-a, got %q", artifact.Steps[0].Request.SystemPrompt)
+	}
+	if artifact.Steps[1].Request.SystemPrompt != "Return JSON only. Wait unless asked." {
+		t.Fatalf("expected explicit prompt for agent-b, got %q", artifact.Steps[1].Request.SystemPrompt)
+	}
+
+	out, err := captureStdoutForCommGridLLM(func() error {
+		return run(context.Background(), []string{
+			"comm-grid-llm",
+			"--replay-run-id", "role-prompt-run",
+			"--json",
+		})
+	})
+	if err != nil {
+		t.Fatalf("replay role prompt command: %v", err)
+	}
+	var summary commGridLLMCommandSummary
+	if err := json.Unmarshal([]byte(out), &summary); err != nil {
+		t.Fatalf("decode role prompt replay json: %v\n%s", err, out)
+	}
+	if summary.Replay == nil || !summary.Replay.Matched {
+		t.Fatalf("expected matched role prompt replay, summary=%+v", summary)
+	}
+}
+
+func TestCommGridLLMCommandRejectsUnknownAgentRole(t *testing.T) {
+	err := run(context.Background(), []string{
+		"comm-grid-llm",
+		"--agents", "agent-a@0,0",
+		"--agent-roles", "missing=observer",
+		"--artifacts=false",
+	})
+	if err == nil {
+		t.Fatal("expected unknown agent role error")
+	}
+	if !strings.Contains(err.Error(), "agent-roles references unknown agent") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
 func TestCommGridLLMCommandRejectsOutOfBoundsCustomTask(t *testing.T) {
 	err := run(context.Background(), []string{
 		"comm-grid-llm",

@@ -482,6 +482,19 @@ protogonosctl comm-grid-llm \
   --turn-order agent-a,agent-b
 ```
 
+Give agents different roles or exact system prompts:
+
+```bash
+protogonosctl comm-grid-llm \
+  --run-id comm-grid-roles-001 \
+  --plan multi-solve \
+  --agents 'agent-a@0,0:agent-b@0,1' \
+  --turn-order agent-a,agent-b \
+  --system-prompt 'Return JSON only.' \
+  --agent-roles 'agent-a=carrier:agent-b=observer' \
+  --agent-prompts 'agent-b=Return JSON only. Wait unless asked.'
+```
+
 Fixture plans:
 
 - `solve`: uses assistant message JSON and completes the key-delivery task,
@@ -507,7 +520,7 @@ Fixture mode remains the default. Live provider mode is explicit so local tests 
 The artifact file stores:
 
 - provider mode and run ID,
-- task geometry, key, goal, agents, turn order, and message limit,
+- task geometry, key, goal, agents, roles, prompts, turn order, and message limit,
 - prompt request,
 - provider response,
 - parsed bounded action,
@@ -539,6 +552,7 @@ A small first slice should avoid provider lock-in:
 - convert malformed output, provider errors, and provider timeouts into bounded failed steps that remain artifact-backed and replayable,
 - add configurable `comm-grid-llm` task geometry, key, goal, agent ID, agent start, and message limit, persisted in artifacts and reused on replay,
 - add multi-agent `comm-grid-llm` fixture runs with fixed sequential turns, shared message history, per-step actor IDs, artifact persistence, and replay reuse,
+- add per-agent role and system-prompt controls for `comm-grid-llm`, persisted in artifacts and reused on replay,
 - add tests for deterministic replay, invalid output handling, timeout handling, and token-cost fitness.
 
 This gives the system a useful LLM integration path without making evolution depend on unbounded free-form text.

@@ -381,6 +381,7 @@ Status legend:
 - 2026-09-07: added bounded `comm-grid-llm` failure-step handling for malformed output, provider errors, and provider timeouts, with artifact and replay coverage.
 - 2026-09-07: added configurable `comm-grid-llm` task geometry, key, goal, agent ID, agent start, and message limit, with artifact persistence and replay reuse.
 - 2026-09-07: added multi-agent `comm-grid-llm` fixture runs with fixed sequential turns, shared message history, per-step actor IDs, artifact persistence, and replay reuse.
+- 2026-09-08: added per-agent role and system-prompt controls for `comm-grid-llm`, with artifact persistence and replay reuse.
 
 ## Summary
 
