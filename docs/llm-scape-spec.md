@@ -111,12 +111,12 @@ Implemented:
 - raw mentor request, response, hint, token count, and failure data in trace output,
 - bounded provider failure handling with empty hints and a final fitness penalty,
 - fixture-provider tests for completion, failure handling, and hint encoding,
-- `protogonosctl comm-grid-mentor` as a fixture-only console runner with text and JSON output.
+- `protogonosctl comm-grid-mentor` as a fixture-only console runner with text and JSON output,
+- file-backed `comm_grid_mentor.json` artifacts for mentor runs,
+- replay from stored mentor artifacts with final trace matching.
 
 Not implemented yet:
 
-- file-backed artifacts for mentor runs,
-- replay from stored mentor artifacts,
 - end-to-end evolutionary comparison against a no-mentor baseline.
 
 ## CLI Example
@@ -131,6 +131,12 @@ Print JSON for trace inspection:
 
 ```bash
 protogonosctl comm-grid-mentor --plan solve --json
+```
+
+Replay a stored mentor artifact:
+
+```bash
+protogonosctl comm-grid-mentor --replay-run-id comm-grid-mentor-fixture-001
 ```
 
 ## Training Question

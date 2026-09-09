@@ -402,6 +402,7 @@ Status legend:
 - 2026-09-08: added `docs/llm-scape-spec.md` to bound the first real LLM scape around a mentor actor, fixed `comm-grid` task, and deterministic fitness.
 - 2026-09-08: added `CommGridMentorScape` as a fixture-backed LLM mentor wrapper around `comm-grid`, with numeric hint observations, replayable trace fields, bounded provider failure handling, and focused tests.
 - 2026-09-08: added `protogonosctl comm-grid-mentor` as a fixture-only console runner with text and JSON output for the first mentor scape slice.
+- 2026-09-08: added file-backed `comm_grid_mentor.json` artifacts and replay with final trace matching for `protogonosctl comm-grid-mentor`.
 
 ## Summary
 
