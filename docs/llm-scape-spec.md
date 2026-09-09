@@ -110,14 +110,28 @@ Implemented:
 - numeric learner observation extension for the latest mentor hint,
 - raw mentor request, response, hint, token count, and failure data in trace output,
 - bounded provider failure handling with empty hints and a final fitness penalty,
-- fixture-provider tests for completion, failure handling, and hint encoding.
+- fixture-provider tests for completion, failure handling, and hint encoding,
+- `protogonosctl comm-grid-mentor` as a fixture-only console runner with text and JSON output.
 
 Not implemented yet:
 
-- CLI command wiring,
 - file-backed artifacts for mentor runs,
 - replay from stored mentor artifacts,
 - end-to-end evolutionary comparison against a no-mentor baseline.
+
+## CLI Example
+
+Run the fixture mentor path:
+
+```bash
+protogonosctl comm-grid-mentor --plan solve
+```
+
+Print JSON for trace inspection:
+
+```bash
+protogonosctl comm-grid-mentor --plan solve --json
+```
 
 ## Training Question
 

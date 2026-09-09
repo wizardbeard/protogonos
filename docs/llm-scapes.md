@@ -568,6 +568,13 @@ Disable artifact writes for quick console checks:
 protogonosctl comm-grid-llm --plan solve --artifacts=false
 ```
 
+Run the first fixture-only mentor scape:
+
+```bash
+protogonosctl comm-grid-mentor --plan solve
+protogonosctl comm-grid-mentor --plan solve --json
+```
+
 Replay a stored artifact through the fixture provider and compare the final trace:
 
 ```bash
@@ -731,5 +738,6 @@ A small first slice should avoid provider lock-in:
 - add `protogonosctl comm-grid-llm-suite --summary` to aggregate a suite by plan and prompt,
 - add `docs/llm-scape-spec.md` to bound the first real LLM scape around a mentor actor, fixed `comm-grid` task, and deterministic fitness,
 - add tests for deterministic replay, invalid output handling, timeout handling, and token-cost fitness.
+- add `protogonosctl comm-grid-mentor` as a fixture-only console runner for the first mentor scape slice.
 
 This gives the system a useful LLM integration path without making evolution depend on unbounded free-form text.

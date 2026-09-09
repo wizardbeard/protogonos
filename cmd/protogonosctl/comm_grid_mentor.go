@@ -1,0 +1,227 @@
+package main
+
+import (
+	"context"
+	"encoding/json"
+	"errors"
+	"flag"
+	"fmt"
+	"os"
+	"strings"
+	"time"
+
+	"protogonos/internal/llm"
+	"protogonos/internal/scape"
+)
+
+type commGridMentorCommandSummary struct {
+	RunID     string                          `json:"run_id"`
+	Provider  string                          `json:"provider"`
+	Plan      string                          `json:"plan"`
+	Task      commGridLLMTaskConfig           `json:"task"`
+	Steps     []scape.CommGridMentorStepTrace `json:"steps"`
+	Completed bool                            `json:"completed"`
+	Fitness   float64                         `json:"fitness"`
+	Trace     map[string]any                  `json:"trace"`
+}
+
+type commGridMentorPolicyAgent struct {
+	id string
+}
+
+func (a commGridMentorPolicyAgent) ID() string { return a.id }
+
+func (a commGridMentorPolicyAgent) RunStep(_ context.Context, input []float64) ([]float64, error) {
+	if len(input) >= 8 && input[7] > 0 {
+		return []float64{input[4], input[5], input[6]}, nil
+	}
+	if len(input) < 3 {
+		return []float64{0, 0, 0}, nil
+	}
+	if input[2] > 0.5 {
+		return []float64{0, 0, -1}, nil
+	}
+	if input[0] == 0 && input[1] == 0 {
+		return []float64{0, 0, 1}, nil
+	}
+	return []float64{input[0], input[1], 0}, nil
+}
+
+func runCommGridMentor(ctx context.Context, args []string) error {
+	fs := flag.NewFlagSet("comm-grid-mentor", flag.ContinueOnError)
+	runID := fs.String("run-id", "", "run id; generated when empty")
+	plan := fs.String("plan", "solve", "fixture mentor plan: solve|silent|provider-error")
+	jsonOut := fs.Bool("json", false, "print JSON summary")
+	steps := fs.Int("steps", 8, "maximum learner turns")
+	width := fs.Int("width", 3, "grid width")
+	height := fs.Int("height", 3, "grid height")
+	keyRaw := fs.String("key", "1,0", "key point as x,y")
+	goalRaw := fs.String("goal", "2,0", "goal point as x,y")
+	agentID := fs.String("agent", "agent-1", "learner agent id")
+	agentPosRaw := fs.String("agent-pos", "0,0", "learner start point as x,y")
+	model := fs.String("model", "fixture-mentor", "fixture model name")
+	maxTokens := fs.Int("max-tokens", 16, "mentor max tokens")
+	seed := fs.Int64("seed", 1, "mentor request seed")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	if *steps <= 0 {
+		return errors.New("steps must be > 0")
+	}
+	if *width <= 0 {
+		return errors.New("width must be > 0")
+	}
+	if *height <= 0 {
+		return errors.New("height must be > 0")
+	}
+	if *maxTokens <= 0 {
+		return errors.New("max-tokens must be > 0")
+	}
+	id := strings.TrimSpace(*runID)
+	if id == "" {
+		id = fmt.Sprintf("comm-grid-mentor-fixture-%d", time.Now().UTC().UnixNano())
+	}
+	if err := validateCommGridLLMRunID(id); err != nil {
+		return err
+	}
+	key, err := parseCommGridLLMPoint("key", *keyRaw)
+	if err != nil {
+		return err
+	}
+	goal, err := parseCommGridLLMPoint("goal", *goalRaw)
+	if err != nil {
+		return err
+	}
+	agentPos, err := parseCommGridLLMPoint("agent-pos", *agentPosRaw)
+	if err != nil {
+		return err
+	}
+	agentName := strings.TrimSpace(*agentID)
+	if agentName == "" {
+		return errors.New("agent must not be empty")
+	}
+
+	provider, normalizedPlan, err := commGridMentorFixtureProvider(*plan)
+	if err != nil {
+		return err
+	}
+	cfg := scape.CommGridMentorConfig{
+		CommGridConfig: scape.CommGridConfig{
+			Width:        *width,
+			Height:       *height,
+			MaxSteps:     *steps,
+			MessageLimit: 80,
+			Key:          key,
+			Goal:         goal,
+			Agents: []scape.CommGridAgentState{{
+				ID:       agentName,
+				Position: agentPos,
+			}},
+		},
+		Provider:  provider,
+		Model:     strings.TrimSpace(*model),
+		MaxTokens: *maxTokens,
+		Seed:      *seed,
+	}
+	sc := scape.CommGridMentorScape{Config: cfg}
+	fitness, trace, err := sc.Evaluate(ctx, commGridMentorPolicyAgent{id: agentName})
+	if err != nil {
+		return err
+	}
+	summary := commGridMentorCommandSummary{
+		RunID:    id,
+		Provider: "fixture",
+		Plan:     normalizedPlan,
+		Task: commGridLLMTaskConfig{
+			Width:        *width,
+			Height:       *height,
+			Key:          key,
+			Goal:         goal,
+			AgentID:      agentName,
+			Agent:        agentPos,
+			MessageLimit: 80,
+		},
+		Steps:     commGridMentorSteps(trace),
+		Completed: trace["completed"] == true,
+		Fitness:   float64(fitness),
+		Trace:     map[string]any(trace),
+	}
+	if *jsonOut {
+		enc := json.NewEncoder(os.Stdout)
+		enc.SetIndent("", "  ")
+		return enc.Encode(summary)
+	}
+	printCommGridMentorSummary(summary)
+	return nil
+}
+
+func commGridMentorFixtureProvider(plan string) (llm.Provider, string, error) {
+	normalized := strings.TrimSpace(strings.ToLower(plan))
+	switch normalized {
+	case "", "solve":
+		return llm.NewFixtureProvider([]llm.Response{
+			commGridMentorFixtureHint("east", 1),
+			commGridMentorFixtureHint("pick", 1),
+			commGridMentorFixtureHint("east", 1),
+			commGridMentorFixtureHint("drop", 1),
+		}), "solve", nil
+	case "silent":
+		return llm.NewFixtureProvider([]llm.Response{
+			commGridMentorFixtureHint("", 0),
+			commGridMentorFixtureHint("", 0),
+			commGridMentorFixtureHint("", 0),
+			commGridMentorFixtureHint("", 0),
+		}), "silent", nil
+	case "provider-error":
+		return llm.NewFixtureProviderWithError(errors.New("fixture mentor provider failure")), "provider-error", nil
+	default:
+		return nil, "", fmt.Errorf("unsupported comm-grid mentor fixture plan: %s", plan)
+	}
+}
+
+func commGridMentorFixtureHint(hint string, tokens int) llm.Response {
+	return llm.Response{
+		Message:      hint,
+		Usage:        llm.Usage{TotalTokens: tokens},
+		FinishReason: "stop",
+		Model:        "fixture-mentor",
+	}
+}
+
+func commGridMentorSteps(trace map[string]any) []scape.CommGridMentorStepTrace {
+	steps, ok := trace["mentor_steps"].([]scape.CommGridMentorStepTrace)
+	if !ok {
+		return nil
+	}
+	return steps
+}
+
+func printCommGridMentorSummary(summary commGridMentorCommandSummary) {
+	fmt.Printf("comm_grid_mentor run_id=%s provider=%s plan=%s grid=%dx%d key=(%d,%d) goal=(%d,%d) agent=%s@(%d,%d) steps=%d completed=%t fitness=%.6f\n",
+		summary.RunID,
+		summary.Provider,
+		summary.Plan,
+		summary.Task.Width,
+		summary.Task.Height,
+		summary.Task.Key.X,
+		summary.Task.Key.Y,
+		summary.Task.Goal.X,
+		summary.Task.Goal.Y,
+		summary.Task.AgentID,
+		summary.Task.Agent.X,
+		summary.Task.Agent.Y,
+		len(summary.Steps),
+		summary.Completed,
+		summary.Fitness,
+	)
+	for _, step := range summary.Steps {
+		fmt.Printf("step=%d hint=%q hint_action=%s action=%s invalid=%t provider_error=%q\n",
+			step.Step+1,
+			step.Hint,
+			step.HintAction,
+			step.Action,
+			step.InvalidAction,
+			step.ProviderError,
+		)
+	}
+}
