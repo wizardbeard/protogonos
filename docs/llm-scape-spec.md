@@ -113,11 +113,12 @@ Implemented:
 - fixture-provider tests for completion, failure handling, and hint encoding,
 - `protogonosctl comm-grid-mentor` as a fixture-only console runner with text and JSON output,
 - file-backed `comm_grid_mentor.json` artifacts for mentor runs,
-- replay from stored mentor artifacts with final trace matching.
+- replay from stored mentor artifacts with final trace matching,
+- no-mentor baseline comparison through `protogonosctl comm-grid-mentor --compare-baseline`.
 
 Not implemented yet:
 
-- end-to-end evolutionary comparison against a no-mentor baseline.
+- end-to-end evolutionary runs that compare mentor and no-mentor populations.
 
 ## CLI Example
 
@@ -137,6 +138,12 @@ Replay a stored mentor artifact:
 
 ```bash
 protogonosctl comm-grid-mentor --replay-run-id comm-grid-mentor-fixture-001
+```
+
+Compare the fixture mentor with the no-hint baseline:
+
+```bash
+protogonosctl comm-grid-mentor --plan solve --compare-baseline
 ```
 
 ## Training Question

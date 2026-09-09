@@ -49,6 +49,32 @@ func TestCommGridMentorCommandEmitsJSON(t *testing.T) {
 	}
 }
 
+func TestCommGridMentorCommandComparesBaseline(t *testing.T) {
+	out, err := captureStdoutForCommGridLLM(func() error {
+		return run(context.Background(), []string{
+			"comm-grid-mentor",
+			"--run-id", "mentor-compare",
+			"--plan", "solve",
+			"--compare-baseline",
+			"--json",
+			"--artifacts=false",
+		})
+	})
+	if err != nil {
+		t.Fatalf("comm-grid-mentor compare command: %v", err)
+	}
+	var summary commGridMentorCommandSummary
+	if err := json.Unmarshal([]byte(out), &summary); err != nil {
+		t.Fatalf("decode mentor compare json: %v\n%s", err, out)
+	}
+	if !summary.Completed || summary.Baseline == nil {
+		t.Fatalf("expected completed run with baseline summary: %+v", summary)
+	}
+	if summary.Baseline.Completed || summary.Baseline.Fitness >= summary.Fitness || summary.Baseline.Improvement <= 0 {
+		t.Fatalf("expected mentor to improve over no-hint baseline: %+v", summary.Baseline)
+	}
+}
+
 func TestCommGridMentorCommandRejectsUnknownFixturePlan(t *testing.T) {
 	err := run(context.Background(), []string{"comm-grid-mentor", "--plan", "missing"})
 	if err == nil {
@@ -73,7 +99,7 @@ func TestCommGridMentorCommandWritesArtifactAndReplays(t *testing.T) {
 	})
 
 	out, err := captureStdoutForCommGridLLM(func() error {
-		return run(context.Background(), []string{"comm-grid-mentor", "--run-id", "mentor-artifact", "--plan", "solve"})
+		return run(context.Background(), []string{"comm-grid-mentor", "--run-id", "mentor-artifact", "--plan", "solve", "--compare-baseline"})
 	})
 	if err != nil {
 		t.Fatalf("comm-grid-mentor artifact command: %v", err)
@@ -95,6 +121,9 @@ func TestCommGridMentorCommandWritesArtifactAndReplays(t *testing.T) {
 	}
 	if artifact.TotalTokens != 4 || len(artifact.Steps) != 4 || artifact.Steps[0].Hint != "east" {
 		t.Fatalf("unexpected mentor artifact steps: %+v", artifact)
+	}
+	if artifact.Baseline == nil || artifact.Baseline.Completed || artifact.Baseline.Improvement <= 0 {
+		t.Fatalf("expected artifact baseline comparison, got %+v", artifact.Baseline)
 	}
 
 	out, err = captureStdoutForCommGridLLM(func() error {

@@ -19,6 +19,7 @@ type commGridMentorCommandSummary struct {
 	RunID        string                          `json:"run_id"`
 	ArtifactsDir string                          `json:"artifacts_dir,omitempty"`
 	Replay       *commGridLLMReplayResult        `json:"replay,omitempty"`
+	Baseline     *commGridMentorBaselineSummary  `json:"baseline,omitempty"`
 	Provider     string                          `json:"provider"`
 	Plan         string                          `json:"plan"`
 	Task         commGridLLMTaskConfig           `json:"task"`
@@ -26,6 +27,14 @@ type commGridMentorCommandSummary struct {
 	Completed    bool                            `json:"completed"`
 	Fitness      float64                         `json:"fitness"`
 	Trace        map[string]any                  `json:"trace"`
+}
+
+type commGridMentorBaselineSummary struct {
+	Plan        string         `json:"plan"`
+	Completed   bool           `json:"completed"`
+	Fitness     float64        `json:"fitness"`
+	Improvement float64        `json:"improvement"`
+	Trace       map[string]any `json:"trace,omitempty"`
 }
 
 type commGridMentorArtifact struct {
@@ -39,6 +48,7 @@ type commGridMentorArtifact struct {
 	Completed   bool                            `json:"completed"`
 	Fitness     float64                         `json:"fitness"`
 	TotalTokens int                             `json:"total_tokens"`
+	Baseline    *commGridMentorBaselineSummary  `json:"baseline,omitempty"`
 	Trace       map[string]any                  `json:"trace"`
 }
 
@@ -57,16 +67,7 @@ func (a commGridMentorPolicyAgent) RunStep(_ context.Context, input []float64) (
 	if len(input) >= 8 && input[7] > 0 {
 		return []float64{input[4], input[5], input[6]}, nil
 	}
-	if len(input) < 3 {
-		return []float64{0, 0, 0}, nil
-	}
-	if input[2] > 0.5 {
-		return []float64{0, 0, -1}, nil
-	}
-	if input[0] == 0 && input[1] == 0 {
-		return []float64{0, 0, 1}, nil
-	}
-	return []float64{input[0], input[1], 0}, nil
+	return []float64{0, 0, 0}, nil
 }
 
 func (p *commGridMentorReplayProvider) Complete(_ context.Context, _ llm.Request) (llm.Response, error) {
@@ -87,6 +88,7 @@ func runCommGridMentor(ctx context.Context, args []string) error {
 	runID := fs.String("run-id", "", "run id; generated when empty")
 	replayRunID := fs.String("replay-run-id", "", "replay stored artifact from benchmarks/<run-id>/comm_grid_mentor.json")
 	plan := fs.String("plan", "solve", "fixture mentor plan: solve|silent|provider-error")
+	compareBaseline := fs.Bool("compare-baseline", false, "compare against the same learner with no mentor hints")
 	jsonOut := fs.Bool("json", false, "print JSON summary")
 	writeArtifacts := fs.Bool("artifacts", true, "write comm-grid mentor artifact under benchmarks/<run-id>")
 	steps := fs.Int("steps", 8, "maximum learner turns")
@@ -183,6 +185,14 @@ func runCommGridMentor(ctx context.Context, args []string) error {
 	if err != nil {
 		return err
 	}
+	if *compareBaseline {
+		baseline, err := runCommGridMentorBaseline(ctx, cfg, summary)
+		if err != nil {
+			return err
+		}
+		summary.Baseline = &baseline
+		artifact.Baseline = &baseline
+	}
 	if *writeArtifacts {
 		artifactDir, err := writeCommGridMentorArtifact(benchmarksDir, artifact)
 		if err != nil {
@@ -249,6 +259,31 @@ func runCommGridMentorSingle(ctx context.Context, cfg commGridMentorRunConfig) (
 		Trace:       summary.Trace,
 	}
 	return summary, artifact, nil
+}
+
+func runCommGridMentorBaseline(ctx context.Context, cfg scape.CommGridMentorConfig, summary commGridMentorCommandSummary) (commGridMentorBaselineSummary, error) {
+	provider, plan, err := commGridMentorFixtureProvider("silent")
+	if err != nil {
+		return commGridMentorBaselineSummary{}, err
+	}
+	cfg.Provider = provider
+	baseline, _, err := runCommGridMentorSingle(ctx, commGridMentorRunConfig{
+		RunID:    summary.RunID + "-baseline",
+		Provider: provider,
+		Plan:     plan,
+		Task:     summary.Task,
+		Config:   cfg,
+	})
+	if err != nil {
+		return commGridMentorBaselineSummary{}, err
+	}
+	return commGridMentorBaselineSummary{
+		Plan:        plan,
+		Completed:   baseline.Completed,
+		Fitness:     baseline.Fitness,
+		Improvement: summary.Fitness - baseline.Fitness,
+		Trace:       baseline.Trace,
+	}, nil
 }
 
 func runCommGridMentorReplay(ctx context.Context, runID string, jsonOut bool) error {
@@ -398,6 +433,14 @@ func printCommGridMentorSummary(summary commGridMentorCommandSummary) {
 	}
 	if summary.ArtifactsDir != "" {
 		fmt.Printf("artifacts_dir=%s\n", filepath.Clean(summary.ArtifactsDir))
+	}
+	if summary.Baseline != nil {
+		fmt.Printf("baseline plan=%s completed=%t fitness=%.6f improvement=%.6f\n",
+			summary.Baseline.Plan,
+			summary.Baseline.Completed,
+			summary.Baseline.Fitness,
+			summary.Baseline.Improvement,
+		)
 	}
 }
 
