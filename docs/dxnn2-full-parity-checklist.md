@@ -590,6 +590,7 @@ Status keys:
 - Added `protogonosctl comm-grid-mentor` as a fixture-only console runner with text and JSON output for the first mentor scape slice.
 - Added file-backed `comm_grid_mentor.json` artifacts and replay with final trace matching for `protogonosctl comm-grid-mentor`.
 - Added `protogonosctl comm-grid-mentor --compare-baseline` to compare the mentor path with the same learner policy and no hints.
+- Added a focused `Polis.RunEvolution` test that compares fixture-mentor and no-hint baseline `comm-grid-mentor` scapes end to end.
 
 ## Current-scope parity declaration
 

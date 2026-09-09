@@ -743,5 +743,6 @@ A small first slice should avoid provider lock-in:
 - add `protogonosctl comm-grid-mentor` as a fixture-only console runner for the first mentor scape slice.
 - add file-backed `comm_grid_mentor.json` artifacts and replay with final trace matching for `protogonosctl comm-grid-mentor`.
 - add `protogonosctl comm-grid-mentor --compare-baseline` to compare the mentor path with the same learner policy and no hints.
+- add a focused `Polis.RunEvolution` test that compares fixture-mentor and no-hint baseline scapes end to end.
 
 This gives the system a useful LLM integration path without making evolution depend on unbounded free-form text.
