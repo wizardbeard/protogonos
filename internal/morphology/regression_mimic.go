@@ -11,6 +11,8 @@ import (
 
 type RegressionMimicMorphology struct{}
 
+type CommGridMentorMorphology struct{}
+
 func (RegressionMimicMorphology) Name() string {
 	return "regression-mimic-v1"
 }
@@ -25,6 +27,26 @@ func (RegressionMimicMorphology) Actuators() []string {
 
 func (RegressionMimicMorphology) Compatible(scape string) bool {
 	return scape == "regression-mimic"
+}
+
+func (CommGridMentorMorphology) Name() string {
+	return "comm-grid-mentor-v1"
+}
+
+func (CommGridMentorMorphology) Sensors() []string {
+	return []string{
+		protoio.CommGridTaskBriefSensorName,
+		protoio.CommGridLanguageInboxSensorName,
+		protoio.CommGridClaimScoreSensorName,
+	}
+}
+
+func (CommGridMentorMorphology) Actuators() []string {
+	return []string{protoio.CommGridMoveActuatorName}
+}
+
+func (CommGridMentorMorphology) Compatible(scape string) bool {
+	return scape == "comm-grid-mentor"
 }
 
 func EnsureScapeCompatibility(scapeName string) error {
@@ -157,6 +179,8 @@ func defaultMorphologyForScape(scapeName string) (Morphology, bool) {
 		return EpitopesMorphology{}, true
 	case "llvm-phase-ordering":
 		return LLVMPhaseOrderingMorphology{}, true
+	case "comm-grid-mentor":
+		return CommGridMentorMorphology{}, true
 	default:
 		return nil, false
 	}

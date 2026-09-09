@@ -715,6 +715,12 @@ func TestScalarComponentsRegistered(t *testing.T) {
 	if commGridMove.Name() != VectorOutputActuatorName {
 		t.Fatalf("unexpected comm-grid move actuator name: %s", commGridMove.Name())
 	}
+	if _, err := ResolveSensor(CommGridLanguageInboxSensorName, "comm-grid-mentor"); err != nil {
+		t.Fatalf("resolve comm-grid mentor inbox sensor: %v", err)
+	}
+	if _, err := ResolveActuator(CommGridMoveActuatorName, "comm-grid-mentor"); err != nil {
+		t.Fatalf("resolve comm-grid mentor move actuator: %v", err)
+	}
 	if SensorCompatibleWithScape(CommGridLanguageInboxSensorName, "flatland") {
 		t.Fatal("expected comm-grid language inbox to be incompatible with flatland")
 	}

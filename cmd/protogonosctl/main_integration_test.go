@@ -87,6 +87,44 @@ func TestRunCommandSQLiteCreatesArtifacts(t *testing.T) {
 	}
 }
 
+func TestRunCommandSQLiteSupportsCommGridMentor(t *testing.T) {
+	origWD, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("getwd: %v", err)
+	}
+	workdir := t.TempDir()
+	if err := os.Chdir(workdir); err != nil {
+		t.Fatalf("chdir tempdir: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = os.Chdir(origWD)
+	})
+
+	dbPath := filepath.Join(workdir, "protogonos.db")
+	out, err := captureStdout(func() error {
+		return run(context.Background(), []string{
+			"run",
+			"--store", "sqlite",
+			"--db-path", dbPath,
+			"--scape", "comm-grid-mentor",
+			"--pop", "4",
+			"--gens", "1",
+			"--seed", "91",
+			"--workers", "1",
+			"--run-id", "comm-grid-mentor-normal-run",
+		})
+	})
+	if err != nil {
+		t.Fatalf("run command: %v", err)
+	}
+	if !strings.Contains(out, "run completed run_id=comm-grid-mentor-normal-run scape=comm-grid-mentor pop=4 gens=1 seed=91") {
+		t.Fatalf("unexpected run output: %s", out)
+	}
+	if _, err := os.Stat(filepath.Join("benchmarks", "comm-grid-mentor-normal-run", "fitness_history.json")); err != nil {
+		t.Fatalf("expected comm-grid mentor fitness history: %v", err)
+	}
+}
+
 func TestResetCommandSQLiteClearsStore(t *testing.T) {
 	origWD, err := os.Getwd()
 	if err != nil {

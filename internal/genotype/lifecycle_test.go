@@ -54,6 +54,28 @@ func TestConstructSeedPopulationRegressionMimic(t *testing.T) {
 	}
 }
 
+func TestConstructSeedPopulationCommGridMentor(t *testing.T) {
+	seed, err := ConstructSeedPopulation("scape_comm_grid_mentor_sim", 2, 11)
+	if err != nil {
+		t.Fatalf("construct comm-grid mentor population: %v", err)
+	}
+	if len(seed.Genomes) != 2 {
+		t.Fatalf("expected 2 genomes, got %d", len(seed.Genomes))
+	}
+	if len(seed.InputNeuronIDs) != 8 || seed.InputNeuronIDs[0] != "target-x" || seed.InputNeuronIDs[7] != "hint-valid" {
+		t.Fatalf("unexpected input ids: %#v", seed.InputNeuronIDs)
+	}
+	if len(seed.OutputNeuronIDs) != 3 || seed.OutputNeuronIDs[0] != "out-x" || seed.OutputNeuronIDs[2] != "out-tool" {
+		t.Fatalf("unexpected output ids: %#v", seed.OutputNeuronIDs)
+	}
+	if len(seed.Genomes[0].SensorIDs) != 3 || seed.Genomes[0].SensorIDs[0] != protoio.CommGridTaskBriefSensorName {
+		t.Fatalf("unexpected comm-grid mentor sensor ids: %#v", seed.Genomes[0].SensorIDs)
+	}
+	if len(seed.Genomes[0].ActuatorIDs) != 1 || seed.Genomes[0].ActuatorIDs[0] != protoio.CommGridMoveActuatorName {
+		t.Fatalf("unexpected comm-grid mentor actuator ids: %#v", seed.Genomes[0].ActuatorIDs)
+	}
+}
+
 func TestConstructSeedPopulationCartPoleLite(t *testing.T) {
 	seed, err := ConstructSeedPopulation("cart-pole-lite", 2, 13)
 	if err != nil {

@@ -577,6 +577,12 @@ protogonosctl comm-grid-mentor --plan solve --compare-baseline
 protogonosctl comm-grid-mentor --replay-run-id comm-grid-mentor-fixture-001
 ```
 
+Run fixture-backed mentor evolution through the normal scape registry:
+
+```bash
+protogonosctl run --scape comm-grid-mentor --pop 4 --gens 1 --seed 91
+```
+
 Replay a stored artifact through the fixture provider and compare the final trace:
 
 ```bash
@@ -744,5 +750,6 @@ A small first slice should avoid provider lock-in:
 - add file-backed `comm_grid_mentor.json` artifacts and replay with final trace matching for `protogonosctl comm-grid-mentor`.
 - add `protogonosctl comm-grid-mentor --compare-baseline` to compare the mentor path with the same learner policy and no hints.
 - add a focused `Polis.RunEvolution` test that compares fixture-mentor and no-hint baseline scapes end to end.
+- add fixture-backed `protogonosctl run --scape comm-grid-mentor` support through the normal scape registry.
 
 This gives the system a useful LLM integration path without making evolution depend on unbounded free-form text.

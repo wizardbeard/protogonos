@@ -17,3 +17,16 @@ func TestEnsureScapeCompatibilityRegressionMimic(t *testing.T) {
 		t.Fatalf("ensure compatibility: %v", err)
 	}
 }
+
+func TestEnsureScapeCompatibilityCommGridMentor(t *testing.T) {
+	m := CommGridMentorMorphology{}
+	if !m.Compatible("comm-grid-mentor") {
+		t.Fatal("expected comm-grid-mentor to be compatible")
+	}
+	if m.Compatible("comm-grid") {
+		t.Fatal("expected comm-grid to be incompatible")
+	}
+	if err := EnsureScapeCompatibility("scape_comm_grid_mentor_sim"); err != nil {
+		t.Fatalf("ensure comm-grid mentor compatibility: %v", err)
+	}
+}

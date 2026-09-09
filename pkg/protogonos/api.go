@@ -2198,6 +2198,15 @@ func registerDefaultScapes(p *platform.Polis) error {
 	if err := p.RegisterScape(scape.LLVMPhaseOrderingScape{}); err != nil {
 		return err
 	}
+	if err := p.RegisterScape(scape.CommGridMentorFixtureScape{Config: scape.CommGridConfig{
+		Width:    3,
+		Height:   1,
+		MaxSteps: 4,
+		Key:      scape.CommGridPoint{X: 1, Y: 0},
+		Goal:     scape.CommGridPoint{X: 2, Y: 0},
+	}}); err != nil {
+		return err
+	}
 	return nil
 }
 

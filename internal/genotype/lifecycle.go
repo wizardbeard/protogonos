@@ -110,6 +110,12 @@ func ConstructSeedPopulationWithOptions(scapeName string, size int, seed int64, 
 		return constructEpitopesSeedPopulation(size, seed, options)
 	case "llvm-phase-ordering":
 		return constructLLVMSeedPopulation(size, seed, options)
+	case "comm-grid-mentor":
+		return SeedPopulation{
+			Genomes:         seedCommGridMentorPopulation(size, seed),
+			InputNeuronIDs:  commGridMentorSeedInputNeuronIDs(),
+			OutputNeuronIDs: []string{"out-x", "out-y", "out-tool"},
+		}, nil
 	default:
 		return SeedPopulation{}, fmt.Errorf("unsupported scape: %s", scapeName)
 	}
@@ -1100,6 +1106,44 @@ func seedLLVMPhaseOrderingPopulationCore(size int, seed int64) []model.Genome {
 		})
 	}
 	return population
+}
+
+func seedCommGridMentorPopulation(size int, seed int64) []model.Genome {
+	rng := rand.New(rand.NewSource(seed))
+	population := make([]model.Genome, 0, size)
+	inputIDs := commGridMentorSeedInputNeuronIDs()
+	for i := 0; i < size; i++ {
+		neurons := make([]model.Neuron, 0, len(inputIDs)+3)
+		for _, id := range inputIDs {
+			neurons = append(neurons, model.Neuron{ID: id, Activation: "identity", Bias: 0})
+		}
+		neurons = append(neurons,
+			model.Neuron{ID: "out-x", Activation: "identity", Bias: jitter(rng, 0.02)},
+			model.Neuron{ID: "out-y", Activation: "identity", Bias: jitter(rng, 0.02)},
+			model.Neuron{ID: "out-tool", Activation: "identity", Bias: jitter(rng, 0.02)},
+		)
+		population = append(population, model.Genome{
+			VersionedRecord: model.VersionedRecord{SchemaVersion: storage.CurrentSchemaVersion, CodecVersion: storage.CurrentCodecVersion},
+			ID:              fmt.Sprintf("comm-grid-mentor-g0-%d", i),
+			SensorIDs: []string{
+				protoio.CommGridTaskBriefSensorName,
+				protoio.CommGridLanguageInboxSensorName,
+				protoio.CommGridClaimScoreSensorName,
+			},
+			ActuatorIDs: []string{protoio.CommGridMoveActuatorName},
+			Neurons:     neurons,
+			Synapses: []model.Synapse{
+				{ID: "s-hint-x", From: "hint-x", To: "out-x", Weight: 1 + jitter(rng, 0.05), Enabled: true},
+				{ID: "s-hint-y", From: "hint-y", To: "out-y", Weight: 1 + jitter(rng, 0.05), Enabled: true},
+				{ID: "s-hint-tool", From: "hint-tool", To: "out-tool", Weight: 1 + jitter(rng, 0.05), Enabled: true},
+			},
+		})
+	}
+	return population
+}
+
+func commGridMentorSeedInputNeuronIDs() []string {
+	return []string{"target-x", "target-y", "carrying", "step", "hint-x", "hint-y", "hint-tool", "hint-valid"}
 }
 
 func llvmSeedOutputNeuronIDs() []string {

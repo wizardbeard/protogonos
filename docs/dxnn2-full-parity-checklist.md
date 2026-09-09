@@ -591,6 +591,7 @@ Status keys:
 - Added file-backed `comm_grid_mentor.json` artifacts and replay with final trace matching for `protogonosctl comm-grid-mentor`.
 - Added `protogonosctl comm-grid-mentor --compare-baseline` to compare the mentor path with the same learner policy and no hints.
 - Added a focused `Polis.RunEvolution` test that compares fixture-mentor and no-hint baseline `comm-grid-mentor` scapes end to end.
+- Added fixture-backed `protogonosctl run --scape comm-grid-mentor` support through the normal scape registry, including seed, morphology, IO compatibility, and sqlite CLI smoke coverage.
 
 ## Current-scope parity declaration
 

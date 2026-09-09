@@ -115,6 +115,10 @@ type ScalarInputSensor struct {
 	value float64
 }
 
+func commGridCompatibleScape(scape string) bool {
+	return scape == "comm-grid" || scape == "comm-grid-mentor"
+}
+
 func NewScalarInputSensor(initial float64) *ScalarInputSensor {
 	return &ScalarInputSensor{value: initial}
 }
@@ -1243,7 +1247,7 @@ func initializeDefaultComponents() {
 			SchemaVersion: SupportedSchemaVersion,
 			CodecVersion:  SupportedCodecVersion,
 			Compatible: func(scape string) error {
-				if scape != "comm-grid" {
+				if !commGridCompatibleScape(scape) {
 					return fmt.Errorf("unsupported scape: %s", scape)
 				}
 				return nil
@@ -1259,7 +1263,7 @@ func initializeDefaultComponents() {
 		SchemaVersion: SupportedSchemaVersion,
 		CodecVersion:  SupportedCodecVersion,
 		Compatible: func(scape string) error {
-			if scape != "comm-grid" {
+			if !commGridCompatibleScape(scape) {
 				return fmt.Errorf("unsupported scape: %s", scape)
 			}
 			return nil
@@ -1492,7 +1496,7 @@ func initializeDefaultComponents() {
 			SchemaVersion: SupportedSchemaVersion,
 			CodecVersion:  SupportedCodecVersion,
 			Compatible: func(scape string) error {
-				if scape != "comm-grid" {
+				if !commGridCompatibleScape(scape) {
 					return fmt.Errorf("unsupported scape: %s", scape)
 				}
 				return nil

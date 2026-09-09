@@ -26,6 +26,18 @@ type CommGridMentorScape struct {
 	Config CommGridMentorConfig
 }
 
+type CommGridMentorFixtureScape struct {
+	Config         CommGridConfig
+	Plan           string
+	Model          string
+	SystemPrompt   string
+	MaxTokens      int
+	Temperature    float64
+	Seed           int64
+	TokenCost      float64
+	FailurePenalty float64
+}
+
 type CommGridMentorStepTrace struct {
 	Step          int           `json:"step"`
 	AgentID       string        `json:"agent_id"`
@@ -44,6 +56,36 @@ type CommGridTrace map[string]any
 
 func (CommGridMentorScape) Name() string {
 	return "comm-grid-mentor"
+}
+
+func (CommGridMentorFixtureScape) Name() string {
+	return "comm-grid-mentor"
+}
+
+func (s CommGridMentorFixtureScape) Evaluate(ctx context.Context, agent Agent) (Fitness, Trace, error) {
+	cfg := normalizeCommGridConfig(s.Config)
+	start := CommGridPoint{}
+	if len(cfg.Agents) > 0 {
+		start = cfg.Agents[0].Position
+	}
+	cfg.Agents = []CommGridAgentState{{
+		ID:       agent.ID(),
+		Position: start,
+	}}
+	mentor := CommGridMentorScape{Config: CommGridMentorConfig{
+		CommGridConfig: cfg,
+		Provider: commGridMentorFixtureProvider{
+			Silent: strings.EqualFold(strings.TrimSpace(s.Plan), "silent"),
+		},
+		Model:          s.Model,
+		SystemPrompt:   s.SystemPrompt,
+		MaxTokens:      s.MaxTokens,
+		Temperature:    s.Temperature,
+		Seed:           s.Seed,
+		TokenCost:      s.TokenCost,
+		FailurePenalty: s.FailurePenalty,
+	}}
+	return mentor.Evaluate(ctx, agent)
 }
 
 func (s CommGridMentorScape) Evaluate(ctx context.Context, agent Agent) (Fitness, Trace, error) {
@@ -120,6 +162,31 @@ func (s CommGridMentorScape) Evaluate(ctx context.Context, agent Agent) (Fitness
 	trace["mentor_failures"] = mentorFailures
 	trace["fitness"] = fitness
 	return Fitness(fitness), trace, nil
+}
+
+type commGridMentorFixtureProvider struct {
+	Silent bool
+}
+
+func (p commGridMentorFixtureProvider) Complete(ctx context.Context, req llm.Request) (llm.Response, error) {
+	if err := ctx.Err(); err != nil {
+		return llm.Response{}, err
+	}
+	if p.Silent {
+		return llm.Response{Usage: llm.Usage{TotalTokens: 1}}, nil
+	}
+	content := ""
+	if len(req.Messages) > 0 {
+		content = strings.ToLower(req.Messages[len(req.Messages)-1].Content)
+	}
+	action := "east"
+	switch {
+	case strings.Contains(content, "position=(1,0)") && strings.Contains(content, "carrying_key=false"):
+		action = "pick"
+	case strings.Contains(content, "position=(2,0)") && strings.Contains(content, "carrying_key=true"):
+		action = "drop"
+	}
+	return llm.Response{Message: action, Usage: llm.Usage{TotalTokens: 1}}, nil
 }
 
 func commGridMentorRequest(cfg CommGridMentorConfig, sim *CommGridSimulator, state CommGridAgentState) llm.Request {

@@ -104,6 +104,8 @@ func canonicalScapeName(alias string) (string, bool) {
 		return "epitopes", true
 	case "llvm-phase-ordering":
 		return "llvm-phase-ordering", true
+	case "comm-grid-mentor":
+		return "comm-grid-mentor", true
 	}
 
 	compact := strings.ReplaceAll(alias, "-", "")
@@ -128,6 +130,8 @@ func canonicalScapeName(alias string) (string, bool) {
 		return "epitopes", true
 	case "llvmphaseordering":
 		return "llvm-phase-ordering", true
+	case "commgridmentor":
+		return "comm-grid-mentor", true
 	default:
 		return "", false
 	}
