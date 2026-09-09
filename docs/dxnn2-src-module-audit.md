@@ -400,6 +400,7 @@ Status legend:
 - 2026-09-08: added CSV output for `protogonosctl comm-grid-llm-suite` and `protogonosctl comm-grid-llm-suite --dry-run`.
 - 2026-09-08: added `protogonosctl comm-grid-llm-suite --summary` to aggregate a suite by plan and prompt.
 - 2026-09-08: added `docs/llm-scape-spec.md` to bound the first real LLM scape around a mentor actor, fixed `comm-grid` task, and deterministic fitness.
+- 2026-09-08: added `CommGridMentorScape` as a fixture-backed LLM mentor wrapper around `comm-grid`, with numeric hint observations, replayable trace fields, bounded provider failure handling, and focused tests.
 
 ## Summary
 

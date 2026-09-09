@@ -101,6 +101,24 @@ Implement only these additions:
 
 Do not add more suite, CSV, dashboard, or report features for this spec.
 
+## Current Slice
+
+Implemented:
+
+- `CommGridMentorScape` as a thin wrapper around `comm-grid`,
+- fixture-backed mentor calls through `llm.Provider`,
+- numeric learner observation extension for the latest mentor hint,
+- raw mentor request, response, hint, token count, and failure data in trace output,
+- bounded provider failure handling with empty hints and a final fitness penalty,
+- fixture-provider tests for completion, failure handling, and hint encoding.
+
+Not implemented yet:
+
+- CLI command wiring,
+- file-backed artifacts for mentor runs,
+- replay from stored mentor artifacts,
+- end-to-end evolutionary comparison against a no-mentor baseline.
+
 ## Training Question
 
 This scape tests one question:
