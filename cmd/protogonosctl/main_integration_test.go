@@ -1515,6 +1515,79 @@ func TestBenchmarkCommandWritesSummary(t *testing.T) {
 	}
 }
 
+func TestBenchmarkCommandWritesSummaryCommGridMentor(t *testing.T) {
+	origWD, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("getwd: %v", err)
+	}
+	workdir := t.TempDir()
+	if err := os.Chdir(workdir); err != nil {
+		t.Fatalf("chdir tempdir: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = os.Chdir(origWD)
+	})
+
+	dbPath := filepath.Join(workdir, "protogonos.db")
+	runID := "benchmark-comm-grid-mentor-silent"
+	out, err := captureStdout(func() error {
+		return run(context.Background(), []string{
+			"benchmark",
+			"--store", "sqlite",
+			"--db-path", dbPath,
+			"--scape", "comm-grid-mentor",
+			"--comm-grid-mentor-plan", "silent",
+			"--pop", "4",
+			"--gens", "1",
+			"--seed", "91",
+			"--workers", "1",
+			"--run-id", runID,
+			"--min-improvement", "0",
+		})
+	})
+	if err != nil {
+		t.Fatalf("benchmark command: %v", err)
+	}
+	if !strings.Contains(out, "benchmark run_id=benchmark-comm-grid-mentor-silent scape=comm-grid-mentor") {
+		t.Fatalf("unexpected benchmark output: %s", out)
+	}
+	if !strings.Contains(out, "benchmark_summary=benchmarks/benchmark-comm-grid-mentor-silent/benchmark_summary.json") {
+		t.Fatalf("expected benchmark summary path in output: %s", out)
+	}
+	if !strings.Contains(out, "benchmark_series=benchmarks/benchmark-comm-grid-mentor-silent/benchmark_series.csv") {
+		t.Fatalf("expected benchmark series path in output: %s", out)
+	}
+
+	cfg, ok, err := stats.ReadRunConfig("benchmarks", runID)
+	if err != nil {
+		t.Fatalf("read comm-grid mentor benchmark config: %v", err)
+	}
+	if !ok {
+		t.Fatal("expected comm-grid mentor benchmark config")
+	}
+	if cfg.CommGridMentorPlan != "silent" {
+		t.Fatalf("expected silent comm-grid mentor plan, got %q", cfg.CommGridMentorPlan)
+	}
+
+	data, err := os.ReadFile(filepath.Join("benchmarks", runID, "benchmark_summary.json"))
+	if err != nil {
+		t.Fatalf("read benchmark summary: %v", err)
+	}
+	var summary stats.BenchmarkSummary
+	if err := json.Unmarshal(data, &summary); err != nil {
+		t.Fatalf("decode benchmark summary: %v", err)
+	}
+	if summary.RunID != runID {
+		t.Fatalf("run id mismatch: got=%s want=%s", summary.RunID, runID)
+	}
+	if summary.Scape != "comm-grid-mentor" {
+		t.Fatalf("unexpected scape in summary: %s", summary.Scape)
+	}
+	if !summary.Passed {
+		t.Fatalf("expected benchmark to pass with zero improvement threshold: %+v", summary)
+	}
+}
+
 func TestBenchmarkExperimentStartListAndShow(t *testing.T) {
 	origWD, err := os.Getwd()
 	if err != nil {

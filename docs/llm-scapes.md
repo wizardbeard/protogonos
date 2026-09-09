@@ -589,6 +589,13 @@ protogonosctl runs --scape comm-grid-mentor --comm-grid-mentor-plan solve
 protogonosctl runs --scape comm-grid-mentor --comm-grid-mentor-plan silent --json
 ```
 
+Write normal benchmark artifacts for the mentor and no-hint variants:
+
+```bash
+protogonosctl benchmark --scape comm-grid-mentor --comm-grid-mentor-plan solve --pop 4 --gens 1 --seed 91 --min-improvement 0
+protogonosctl benchmark --scape comm-grid-mentor --comm-grid-mentor-plan silent --pop 4 --gens 1 --seed 91 --min-improvement 0
+```
+
 Replay a stored artifact through the fixture provider and compare the final trace:
 
 ```bash
@@ -761,5 +768,6 @@ A small first slice should avoid provider lock-in:
 - add `--comm-grid-mentor-compare-baseline` so normal runs can write paired solve/silent artifacts and print the fitness delta.
 - show stored `comm_grid_mentor_plan` values in `protogonosctl runs` text and JSON output.
 - add `protogonosctl runs --scape comm-grid-mentor --comm-grid-mentor-plan solve|silent` filters.
+- add `protogonosctl benchmark --scape comm-grid-mentor --comm-grid-mentor-plan solve|silent` so normal benchmark artifacts cover mentor and no-hint fixture variants.
 
 This gives the system a useful LLM integration path without making evolution depend on unbounded free-form text.

@@ -596,6 +596,7 @@ Status keys:
 - Added `protogonosctl run --scape comm-grid-mentor --comm-grid-mentor-compare-baseline` to execute paired solve/silent normal runs, write both artifact sets, and print the fitness delta.
 - Added stored `comm_grid_mentor_plan` display to `protogonosctl runs` text and JSON output, with public API `Runs` support.
 - Added `protogonosctl runs --scape comm-grid-mentor --comm-grid-mentor-plan solve|silent` filters, with matching public API `RunsRequest` filters.
+- Added `protogonosctl benchmark --scape comm-grid-mentor --comm-grid-mentor-plan solve|silent` support so normal benchmark summaries and series cover mentor and no-hint fixture variants.
 
 ## Current-scope parity declaration
 
@@ -613,5 +614,6 @@ Explicit exclusions:
 ## Highest-priority remaining gaps to reach strict parity
 
 1. Run `./scripts/done_check.sh` from a clean tree immediately before tagging or announcing full current-scope parity.
-2. Decide whether the parity-doc gate should remain shell-only in `done_check.sh` or move into a dedicated Go test for easier CI integration.
-3. If desired, tag a release after rerunning the clean-tree done-check gate.
+2. Add a paired benchmark helper for `comm-grid-mentor` if repeated solve/silent benchmark comparisons become common.
+3. Decide whether the parity-doc gate should remain shell-only in `done_check.sh` or move into a dedicated Go test for easier CI integration.
+4. If desired, tag a release after rerunning the clean-tree done-check gate.

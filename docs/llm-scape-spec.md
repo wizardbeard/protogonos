@@ -120,7 +120,8 @@ Implemented:
 - configurable normal-run fixture plans through `--comm-grid-mentor-plan solve|silent`,
 - normal-run mentor baseline comparison through `--comm-grid-mentor-compare-baseline`,
 - stored plan display in `protogonosctl runs` text and JSON output,
-- history filtering with `protogonosctl runs --scape comm-grid-mentor --comm-grid-mentor-plan solve|silent`.
+- history filtering with `protogonosctl runs --scape comm-grid-mentor --comm-grid-mentor-plan solve|silent`,
+- benchmark artifacts through `protogonosctl benchmark --scape comm-grid-mentor --comm-grid-mentor-plan solve|silent`.
 
 Not implemented yet:
 
@@ -154,6 +155,13 @@ protogonosctl run --scape comm-grid-mentor --comm-grid-mentor-plan silent --pop 
 protogonosctl run --scape comm-grid-mentor --comm-grid-mentor-compare-baseline --pop 4 --gens 1 --seed 91
 protogonosctl runs --json
 protogonosctl runs --scape comm-grid-mentor --comm-grid-mentor-plan solve
+```
+
+Write normal benchmark artifacts for a mentor or no-hint run:
+
+```bash
+protogonosctl benchmark --scape comm-grid-mentor --comm-grid-mentor-plan solve --pop 4 --gens 1 --seed 91 --min-improvement 0
+protogonosctl benchmark --scape comm-grid-mentor --comm-grid-mentor-plan silent --pop 4 --gens 1 --seed 91 --min-improvement 0
 ```
 
 Compare the fixture mentor with the no-hint baseline:
