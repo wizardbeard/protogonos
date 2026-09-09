@@ -1137,6 +1137,7 @@ func TestMaterializeRunConfigFromRequestNormalizesReferenceScapeAlias(t *testing
 		"scape_epitopes_sim":      "epitopes",
 		"gtsa_sim":                "gtsa",
 		"scape_fx_sim":            "fx",
+		"scape_comm_grid_mentor":  "comm-grid-mentor",
 	}
 	for alias, want := range cases {
 		cfg, err := materializeRunConfigFromRequest(RunRequest{
@@ -1151,6 +1152,62 @@ func TestMaterializeRunConfigFromRequestNormalizesReferenceScapeAlias(t *testing
 		if cfg.Request.Scape != want {
 			t.Fatalf("expected normalized scape %s for alias=%s, got %s", want, alias, cfg.Request.Scape)
 		}
+	}
+}
+
+func TestMaterializeRunConfigFromRequestNormalizesCommGridMentorPlan(t *testing.T) {
+	cfg, err := materializeRunConfigFromRequest(RunRequest{
+		Scape:              "comm_grid_mentor_sim",
+		CommGridMentorPlan: "baseline",
+		Population:         6,
+		Generations:        1,
+		OpMode:             "gt",
+	})
+	if err != nil {
+		t.Fatalf("materialize comm-grid mentor plan: %v", err)
+	}
+	if cfg.Request.Scape != "comm-grid-mentor" {
+		t.Fatalf("expected normalized comm-grid mentor scape, got %s", cfg.Request.Scape)
+	}
+	if cfg.Request.CommGridMentorPlan != "silent" {
+		t.Fatalf("expected silent mentor plan, got %s", cfg.Request.CommGridMentorPlan)
+	}
+
+	cfg, err = materializeRunConfigFromRequest(RunRequest{
+		Scape:       "comm-grid-mentor",
+		Population:  6,
+		Generations: 1,
+		OpMode:      "gt",
+	})
+	if err != nil {
+		t.Fatalf("materialize default comm-grid mentor plan: %v", err)
+	}
+	if cfg.Request.CommGridMentorPlan != "solve" {
+		t.Fatalf("expected default solve mentor plan, got %s", cfg.Request.CommGridMentorPlan)
+	}
+}
+
+func TestMaterializeRunConfigFromRequestRejectsInvalidCommGridMentorPlan(t *testing.T) {
+	_, err := materializeRunConfigFromRequest(RunRequest{
+		Scape:              "comm-grid-mentor",
+		CommGridMentorPlan: "wander",
+		Population:         6,
+		Generations:        1,
+		OpMode:             "gt",
+	})
+	if err == nil || !strings.Contains(err.Error(), "unsupported comm-grid mentor plan") {
+		t.Fatalf("expected invalid mentor plan error, got %v", err)
+	}
+
+	_, err = materializeRunConfigFromRequest(RunRequest{
+		Scape:              "xor",
+		CommGridMentorPlan: "silent",
+		Population:         6,
+		Generations:        1,
+		OpMode:             "gt",
+	})
+	if err == nil || !strings.Contains(err.Error(), "requires scape comm-grid-mentor") {
+		t.Fatalf("expected non-mentor plan error, got %v", err)
 	}
 }
 

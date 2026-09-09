@@ -77,6 +77,7 @@ type RunRequest struct {
 	EpitopesProfile         string
 	LLVMProfile             string
 	FlatlandScannerProfile  string
+	CommGridMentorPlan      string
 	FlatlandScannerSpread   *float64
 	FlatlandScannerOffset   *float64
 	FlatlandLayoutRandomize *bool
@@ -414,7 +415,7 @@ func (c *Client) Start(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	return registerDefaultScapes(p)
+	return registerDefaultScapes(p, "")
 }
 
 func (c *Client) Run(ctx context.Context, req RunRequest) (RunSummary, error) {
@@ -432,7 +433,7 @@ func (c *Client) Run(ctx context.Context, req RunRequest) (RunSummary, error) {
 	if err != nil {
 		return RunSummary{}, err
 	}
-	if err := registerDefaultScapes(p); err != nil {
+	if err := registerDefaultScapes(p, req.CommGridMentorPlan); err != nil {
 		return RunSummary{}, err
 	}
 
@@ -655,6 +656,7 @@ func (c *Client) Run(ctx context.Context, req RunRequest) (RunSummary, error) {
 			EpitopesProfile:         req.EpitopesProfile,
 			LLVMProfile:             req.LLVMProfile,
 			FlatlandScannerProfile:  req.FlatlandScannerProfile,
+			CommGridMentorPlan:      req.CommGridMentorPlan,
 			FlatlandScannerSpread:   cloneFloat64Ptr(req.FlatlandScannerSpread),
 			FlatlandScannerOffset:   cloneFloat64Ptr(req.FlatlandScannerOffset),
 			FlatlandLayoutRandomize: cloneBoolPtr(req.FlatlandLayoutRandomize),
@@ -832,6 +834,7 @@ func runRequestFromArtifactsConfig(cfg stats.RunConfig) RunRequest {
 		EpitopesProfile:         cfg.EpitopesProfile,
 		LLVMProfile:             cfg.LLVMProfile,
 		FlatlandScannerProfile:  cfg.FlatlandScannerProfile,
+		CommGridMentorPlan:      cfg.CommGridMentorPlan,
 		FlatlandScannerSpread:   cloneFloat64Ptr(cfg.FlatlandScannerSpread),
 		FlatlandScannerOffset:   cloneFloat64Ptr(cfg.FlatlandScannerOffset),
 		FlatlandLayoutRandomize: cloneBoolPtr(cfg.FlatlandLayoutRandomize),
@@ -973,6 +976,25 @@ func seedPopulationOptionsFromRequest(req RunRequest) genotype.SeedPopulationOpt
 		EpitopesProfile:        req.EpitopesProfile,
 		LLVMProfile:            req.LLVMProfile,
 		FlatlandScannerProfile: req.FlatlandScannerProfile,
+	}
+}
+
+func normalizeCommGridMentorPlan(scapeName, raw string) (string, error) {
+	plan := strings.ToLower(strings.TrimSpace(raw))
+	plan = strings.ReplaceAll(plan, "_", "-")
+	if scapeid.Normalize(scapeName) != "comm-grid-mentor" {
+		if plan != "" {
+			return "", errors.New("comm-grid mentor plan requires scape comm-grid-mentor")
+		}
+		return "", nil
+	}
+	switch plan {
+	case "", "solve", "default":
+		return "solve", nil
+	case "silent", "none", "baseline", "no-hint", "no-hints":
+		return "silent", nil
+	default:
+		return "", fmt.Errorf("unsupported comm-grid mentor plan: %s", raw)
 	}
 }
 
@@ -1686,7 +1708,7 @@ func (c *Client) SubstrateEpisodeReplay(ctx context.Context, req SubstrateEpisod
 	if err != nil {
 		return SubstrateEpisodeReplaySummary{}, err
 	}
-	if err := registerDefaultScapes(p); err != nil {
+	if err := registerDefaultScapes(p, runCfg.CommGridMentorPlan); err != nil {
 		return SubstrateEpisodeReplaySummary{}, err
 	}
 	targetScape, ok := p.GetScape(runCfg.Scape)
@@ -1838,7 +1860,7 @@ func (c *Client) EpitopesReplay(ctx context.Context, req EpitopesReplayRequest) 
 	if err != nil {
 		return EpitopesReplaySummary{}, err
 	}
-	if err := registerDefaultScapes(p); err != nil {
+	if err := registerDefaultScapes(p, ""); err != nil {
 		return EpitopesReplaySummary{}, err
 	}
 	targetScape, ok := p.GetScape("epitopes")
@@ -2167,7 +2189,7 @@ func (c *Client) ensurePolis(ctx context.Context) (*platform.Polis, error) {
 	return c.polis, nil
 }
 
-func registerDefaultScapes(p *platform.Polis) error {
+func registerDefaultScapes(p *platform.Polis, commGridMentorPlan string) error {
 	if err := p.RegisterScape(scape.XORScape{}); err != nil {
 		return err
 	}
@@ -2198,7 +2220,7 @@ func registerDefaultScapes(p *platform.Polis) error {
 	if err := p.RegisterScape(scape.LLVMPhaseOrderingScape{}); err != nil {
 		return err
 	}
-	if err := p.RegisterScape(scape.CommGridMentorFixtureScape{Config: scape.CommGridConfig{
+	if err := p.RegisterScape(scape.CommGridMentorFixtureScape{Plan: commGridMentorPlan, Config: scape.CommGridConfig{
 		Width:    3,
 		Height:   1,
 		MaxSteps: 4,
@@ -2244,6 +2266,11 @@ func materializeRunConfigFromRequest(req RunRequest) (materializedRunConfig, err
 		req.Scape = "xor"
 	}
 	req.Scape = scapeid.Normalize(req.Scape)
+	commGridMentorPlan, err := normalizeCommGridMentorPlan(req.Scape, req.CommGridMentorPlan)
+	if err != nil {
+		return materializedRunConfig{}, err
+	}
+	req.CommGridMentorPlan = commGridMentorPlan
 	if req.GTSATrainEnd < 0 {
 		return materializedRunConfig{}, errors.New("gtsa train end must be >= 0")
 	}

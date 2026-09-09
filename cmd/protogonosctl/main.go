@@ -169,7 +169,7 @@ func runStart(ctx context.Context, args []string) error {
 	if err := polis.Init(ctx); err != nil {
 		return err
 	}
-	if err := registerDefaultScapes(polis); err != nil {
+	if err := registerDefaultScapes(polis, ""); err != nil {
 		return err
 	}
 
@@ -200,6 +200,7 @@ func runRun(ctx context.Context, args []string) error {
 	llvmProfile := fs.String("llvm-profile", "", "optional llvm-phase-ordering seed profile override: default|core")
 	llvmWorkflowJSON := fs.String("llvm-workflow-json", "", "optional LLVM workflow JSON path")
 	flatlandScannerProfile := fs.String("flatland-scanner-profile", "", "optional flatland scanner profile override: balanced5|core3|forward5")
+	commGridMentorPlan := fs.String("comm-grid-mentor-plan", "", "optional comm-grid-mentor fixture plan override: solve|silent")
 	flatlandScannerSpread := fs.Float64("flatland-scanner-spread", 0, "optional flatland scanner spread override in [0.05,1]")
 	flatlandScannerOffset := fs.Float64("flatland-scanner-offset", 0, "optional flatland scanner offset override in [-1,1]")
 	flatlandLayoutRandomize := fs.Bool("flatland-layout-randomize", false, "optional flatland layout randomization override")
@@ -289,6 +290,7 @@ func runRun(ctx context.Context, args []string) error {
 			LLVMProfile:             *llvmProfile,
 			LLVMWorkflowJSONPath:    *llvmWorkflowJSON,
 			FlatlandScannerProfile:  *flatlandScannerProfile,
+			CommGridMentorPlan:      *commGridMentorPlan,
 			EpitopesGTStart:         *epitopesGTStart,
 			EpitopesGTEnd:           *epitopesGTEnd,
 			EpitopesValidationStart: *epitopesValidationStart,
@@ -361,6 +363,7 @@ func runRun(ctx context.Context, args []string) error {
 			"epitopes-table":            *epitopesTable,
 			"llvm-profile":              *llvmProfile,
 			"llvm-workflow-json":        *llvmWorkflowJSON,
+			"comm-grid-mentor-plan":     *commGridMentorPlan,
 			"epitopes-gt-start":         *epitopesGTStart,
 			"epitopes-gt-end":           *epitopesGTEnd,
 			"epitopes-validation-start": *epitopesValidationStart,
@@ -1927,7 +1930,7 @@ func runPopulation(ctx context.Context, args []string) error {
 	}
 }
 
-func registerDefaultScapes(p *platform.Polis) error {
+func registerDefaultScapes(p *platform.Polis, commGridMentorPlan string) error {
 	if err := p.RegisterScape(scape.XORScape{}); err != nil {
 		return err
 	}
@@ -1958,7 +1961,7 @@ func registerDefaultScapes(p *platform.Polis) error {
 	if err := p.RegisterScape(scape.LLVMPhaseOrderingScape{}); err != nil {
 		return err
 	}
-	if err := p.RegisterScape(scape.CommGridMentorFixtureScape{Config: scape.CommGridConfig{
+	if err := p.RegisterScape(scape.CommGridMentorFixtureScape{Plan: commGridMentorPlan, Config: scape.CommGridConfig{
 		Width:    3,
 		Height:   1,
 		MaxSteps: 4,

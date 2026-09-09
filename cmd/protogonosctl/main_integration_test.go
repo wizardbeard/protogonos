@@ -112,6 +112,7 @@ func TestRunCommandSQLiteSupportsCommGridMentor(t *testing.T) {
 			"--seed", "91",
 			"--workers", "1",
 			"--run-id", "comm-grid-mentor-normal-run",
+			"--comm-grid-mentor-plan", "silent",
 		})
 	})
 	if err != nil {
@@ -122,6 +123,16 @@ func TestRunCommandSQLiteSupportsCommGridMentor(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join("benchmarks", "comm-grid-mentor-normal-run", "fitness_history.json")); err != nil {
 		t.Fatalf("expected comm-grid mentor fitness history: %v", err)
+	}
+	cfg, ok, err := stats.ReadRunConfig("benchmarks", "comm-grid-mentor-normal-run")
+	if err != nil {
+		t.Fatalf("read comm-grid mentor run config: %v", err)
+	}
+	if !ok {
+		t.Fatal("expected comm-grid mentor run config")
+	}
+	if cfg.CommGridMentorPlan != "silent" {
+		t.Fatalf("expected silent comm-grid mentor plan, got %q", cfg.CommGridMentorPlan)
 	}
 }
 

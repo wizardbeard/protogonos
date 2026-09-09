@@ -116,7 +116,8 @@ Implemented:
 - replay from stored mentor artifacts with final trace matching,
 - no-mentor baseline comparison through `protogonosctl comm-grid-mentor --compare-baseline`,
 - a focused `Polis.RunEvolution` test that compares fixture-mentor and no-hint baseline scapes end to end,
-- fixture-backed `protogonosctl run --scape comm-grid-mentor` support through the normal scape registry.
+- fixture-backed `protogonosctl run --scape comm-grid-mentor` support through the normal scape registry,
+- configurable normal-run fixture plans through `--comm-grid-mentor-plan solve|silent`.
 
 Not implemented yet:
 
@@ -146,6 +147,7 @@ Run fixture-backed mentor evolution through the normal CLI path:
 
 ```bash
 protogonosctl run --scape comm-grid-mentor --pop 4 --gens 1 --seed 91
+protogonosctl run --scape comm-grid-mentor --comm-grid-mentor-plan silent --pop 4 --gens 1 --seed 91
 ```
 
 Compare the fixture mentor with the no-hint baseline:

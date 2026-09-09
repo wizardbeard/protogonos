@@ -101,6 +101,9 @@ func loadRunRequestFromConfig(path string) (protoapi.RunRequest, error) {
 	if v, ok := asString(raw["flatland_scanner_profile"]); ok {
 		req.FlatlandScannerProfile = v
 	}
+	if v, ok := asString(raw["comm_grid_mentor_plan"]); ok {
+		req.CommGridMentorPlan = v
+	}
 	if v, ok := asFloat64(raw["flatland_scanner_spread"]); ok {
 		req.FlatlandScannerSpread = float64Ptr(v)
 	}
@@ -694,6 +697,8 @@ func overrideFromFlags(req *protoapi.RunRequest, set map[string]bool, flagValue 
 			req.TopologicalParam = v.(float64)
 		case "topo-max":
 			req.TopologicalMax = v.(int)
+		case "comm-grid-mentor-plan":
+			req.CommGridMentorPlan = v.(string)
 		case "attempts":
 			req.TuneAttempts = v.(int)
 		case "tune-steps":

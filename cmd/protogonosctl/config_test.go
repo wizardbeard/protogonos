@@ -17,6 +17,7 @@ func TestLoadRunRequestFromConfigUsesConstraintAndPMP(t *testing.T) {
 		"seed":                    77,
 		"workers":                 3,
 		"io_execution":            "actor",
+		"comm_grid_mentor_plan":   "silent",
 		"start_paused":            true,
 		"auto_continue_ms":        25,
 		"tune_perturbation_range": 1.8,
@@ -78,6 +79,9 @@ func TestLoadRunRequestFromConfigUsesConstraintAndPMP(t *testing.T) {
 	}
 	if req.IOExecution != "actor" {
 		t.Fatalf("expected io execution actor, got %q", req.IOExecution)
+	}
+	if req.CommGridMentorPlan != "silent" {
+		t.Fatalf("expected comm-grid mentor plan silent, got %q", req.CommGridMentorPlan)
 	}
 	if req.Population != 12 || req.Generations != 9 {
 		t.Fatalf("expected pmp derived population/generations, got pop=%d gens=%d", req.Population, req.Generations)
