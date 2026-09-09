@@ -211,6 +211,26 @@ func TestRunCommandSQLiteComparesCommGridMentorBaseline(t *testing.T) {
 	if !strings.Contains(jsonOut, `"comm_grid_mentor_plan": "silent"`) || !strings.Contains(jsonOut, `"comm_grid_mentor_plan": "solve"`) {
 		t.Fatalf("expected mentor plans in runs json output: %s", jsonOut)
 	}
+
+	filteredSolveOut, err := captureStdout(func() error {
+		return run(context.Background(), []string{"runs", "--scape", "comm_grid_mentor", "--comm-grid-mentor-plan", "solve", "--limit", "5"})
+	})
+	if err != nil {
+		t.Fatalf("filtered solve runs command: %v", err)
+	}
+	if !strings.Contains(filteredSolveOut, "run_id=comm-grid-mentor-compare-solve") || strings.Contains(filteredSolveOut, "run_id=comm-grid-mentor-compare-silent") {
+		t.Fatalf("expected only solve mentor run in filtered output: %s", filteredSolveOut)
+	}
+
+	filteredSilentJSON, err := captureStdout(func() error {
+		return run(context.Background(), []string{"runs", "--scape", "comm-grid-mentor", "--comm-grid-mentor-plan", "silent", "--limit", "5", "--json"})
+	})
+	if err != nil {
+		t.Fatalf("filtered silent runs json command: %v", err)
+	}
+	if !strings.Contains(filteredSilentJSON, `"run_id": "comm-grid-mentor-compare-silent"`) || strings.Contains(filteredSilentJSON, `"run_id": "comm-grid-mentor-compare-solve"`) {
+		t.Fatalf("expected only silent mentor run in filtered json output: %s", filteredSilentJSON)
+	}
 }
 
 func TestResetCommandSQLiteClearsStore(t *testing.T) {

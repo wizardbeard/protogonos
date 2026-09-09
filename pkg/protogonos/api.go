@@ -154,8 +154,10 @@ type materializedRunConfig struct {
 }
 
 type RunsRequest struct {
-	Limit       int
-	ShowCompare bool
+	Limit              int
+	ShowCompare        bool
+	Scape              string
+	CommGridMentorPlan string
 }
 
 type RunItem struct {
@@ -999,6 +1001,21 @@ func normalizeCommGridMentorPlan(scapeName, raw string) (string, error) {
 	}
 }
 
+func normalizeCommGridMentorPlanFilter(raw string) (string, error) {
+	plan := strings.ToLower(strings.TrimSpace(raw))
+	plan = strings.ReplaceAll(plan, "_", "-")
+	switch plan {
+	case "":
+		return "", nil
+	case "solve", "default":
+		return "solve", nil
+	case "silent", "none", "baseline", "no-hint", "no-hints":
+		return "silent", nil
+	default:
+		return "", fmt.Errorf("unsupported comm-grid mentor plan filter: %s", raw)
+	}
+}
+
 func runConfigCommGridMentorPlan(baseDir, runID string) string {
 	cfg, ok, err := stats.ReadRunConfig(baseDir, runID)
 	if err != nil || !ok {
@@ -1148,28 +1165,40 @@ func (c *Client) Runs(_ context.Context, req RunsRequest) ([]RunItem, error) {
 	if req.Limit <= 0 {
 		req.Limit = 20
 	}
+	scapeFilter := scapeid.Normalize(req.Scape)
+	mentorPlanFilter, err := normalizeCommGridMentorPlanFilter(req.CommGridMentorPlan)
+	if err != nil {
+		return nil, err
+	}
+	if mentorPlanFilter != "" && scapeFilter != "" && scapeFilter != "comm-grid-mentor" {
+		return nil, errors.New("comm-grid mentor plan filter requires scape comm-grid-mentor or no scape filter")
+	}
 
 	entries, err := stats.ListRunIndex(c.benchmarksDir)
 	if err != nil {
 		return nil, err
 	}
-	if len(entries) > req.Limit {
-		entries = entries[:req.Limit]
-	}
 
 	out := make([]RunItem, 0, len(entries))
 	for _, e := range entries {
+		mentorPlan := runConfigCommGridMentorPlan(c.benchmarksDir, e.RunID)
 		item := RunItem{
 			RunID:              e.RunID,
 			CreatedAtUTC:       e.CreatedAtUTC,
 			Scape:              e.Scape,
 			Morphology:         e.Morphology,
-			CommGridMentorPlan: runConfigCommGridMentorPlan(c.benchmarksDir, e.RunID),
+			CommGridMentorPlan: mentorPlan,
 			Seed:               e.Seed,
 			Population:         e.PopulationSize,
 			Generations:        e.Generations,
 			TuningEnabled:      e.TuningEnabled,
 			FinalBestFitness:   e.FinalBestFitness,
+		}
+		if scapeFilter != "" && scapeid.Normalize(item.Scape) != scapeFilter {
+			continue
+		}
+		if mentorPlanFilter != "" && item.CommGridMentorPlan != mentorPlanFilter {
+			continue
 		}
 		if req.ShowCompare {
 			report, ok, err := stats.ReadTuningComparison(c.benchmarksDir, e.RunID)
@@ -1182,6 +1211,9 @@ func (c *Client) Runs(_ context.Context, req RunsRequest) ([]RunItem, error) {
 			}
 		}
 		out = append(out, item)
+		if len(out) >= req.Limit {
+			break
+		}
 	}
 	return out, nil
 }

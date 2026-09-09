@@ -570,6 +570,8 @@ func runCommGridMentorNormalCompare(ctx context.Context, client *protoapi.Client
 func runRuns(_ context.Context, args []string) error {
 	fs := flag.NewFlagSet("runs", flag.ContinueOnError)
 	limit := fs.Int("limit", 20, "max runs to list")
+	scapeFilterRaw := fs.String("scape", "", "optional scape filter")
+	commGridMentorPlanFilterRaw := fs.String("comm-grid-mentor-plan", "", "optional comm-grid-mentor plan filter: solve|silent")
 	showCompare := fs.Bool("show-compare", false, "show compare-tuning improvement when available")
 	jsonOut := fs.Bool("json", false, "emit runs list as JSON")
 	if err := fs.Parse(args); err != nil {
@@ -577,6 +579,14 @@ func runRuns(_ context.Context, args []string) error {
 	}
 	if *limit <= 0 {
 		return errors.New("limit must be > 0")
+	}
+	scapeFilter := scapeid.Normalize(*scapeFilterRaw)
+	commGridMentorPlanFilter, err := normalizeCommGridMentorPlanFilter(*commGridMentorPlanFilterRaw)
+	if err != nil {
+		return err
+	}
+	if commGridMentorPlanFilter != "" && scapeFilter != "" && scapeFilter != "comm-grid-mentor" {
+		return errors.New("comm-grid mentor plan filter requires scape comm-grid-mentor or no scape filter")
 	}
 
 	entries, err := stats.ListRunIndex(benchmarksDir)
@@ -588,9 +598,6 @@ func runRuns(_ context.Context, args []string) error {
 		return nil
 	}
 
-	if len(entries) > *limit {
-		entries = entries[:*limit]
-	}
 	if *jsonOut {
 		type runsItem struct {
 			RunID              string   `json:"run_id"`
@@ -609,6 +616,9 @@ func runRuns(_ context.Context, args []string) error {
 		for _, e := range entries {
 			var compare *float64
 			mentorPlan := runConfigCommGridMentorPlan(benchmarksDir, e.RunID)
+			if !runIndexEntryMatchesRunsFilters(e, mentorPlan, scapeFilter, commGridMentorPlanFilter) {
+				continue
+			}
 			if *showCompare {
 				report, ok, err := stats.ReadTuningComparison(benchmarksDir, e.RunID)
 				if err != nil {
@@ -632,15 +642,22 @@ func runRuns(_ context.Context, args []string) error {
 				FinalBestFitness:   e.FinalBestFitness,
 				CompareImprovement: compare,
 			})
+			if len(items) >= *limit {
+				break
+			}
 		}
 		enc := json.NewEncoder(os.Stdout)
 		enc.SetIndent("", "  ")
 		return enc.Encode(items)
 	}
 
+	printed := 0
 	for _, e := range entries {
 		compareDisplay := "n/a"
 		mentorPlan := runConfigCommGridMentorPlan(benchmarksDir, e.RunID)
+		if !runIndexEntryMatchesRunsFilters(e, mentorPlan, scapeFilter, commGridMentorPlanFilter) {
+			continue
+		}
 		if *showCompare {
 			report, ok, err := stats.ReadTuningComparison(benchmarksDir, e.RunID)
 			if err != nil {
@@ -669,8 +686,37 @@ func runRuns(_ context.Context, args []string) error {
 			e.FinalBestFitness,
 			compareDisplay,
 		)
+		printed++
+		if printed >= *limit {
+			break
+		}
 	}
 	return nil
+}
+
+func runIndexEntryMatchesRunsFilters(e stats.RunIndexEntry, commGridMentorPlan, scapeFilter, commGridMentorPlanFilter string) bool {
+	if scapeFilter != "" && scapeid.Normalize(e.Scape) != scapeFilter {
+		return false
+	}
+	if commGridMentorPlanFilter != "" && strings.TrimSpace(commGridMentorPlan) != commGridMentorPlanFilter {
+		return false
+	}
+	return true
+}
+
+func normalizeCommGridMentorPlanFilter(raw string) (string, error) {
+	plan := strings.ToLower(strings.TrimSpace(raw))
+	plan = strings.ReplaceAll(plan, "_", "-")
+	switch plan {
+	case "":
+		return "", nil
+	case "solve", "default":
+		return "solve", nil
+	case "silent", "none", "baseline", "no-hint", "no-hints":
+		return "silent", nil
+	default:
+		return "", fmt.Errorf("unsupported comm-grid mentor plan filter: %s", raw)
+	}
 }
 
 func runConfigCommGridMentorPlan(baseDir, runID string) string {

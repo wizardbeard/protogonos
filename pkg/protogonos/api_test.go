@@ -2000,6 +2000,26 @@ func TestClientRunsExposeCommGridMentorPlan(t *testing.T) {
 	if runs[0].CommGridMentorPlan != "silent" {
 		t.Fatalf("expected silent mentor plan in runs list, got %+v", runs[0])
 	}
+
+	_, err = client.Run(context.Background(), RunRequest{
+		RunID:              "mentor-runs-list-solve",
+		Scape:              "comm-grid-mentor",
+		CommGridMentorPlan: "solve",
+		Population:         4,
+		Generations:        1,
+		Seed:               91,
+		Workers:            1,
+	})
+	if err != nil {
+		t.Fatalf("run solve mentor: %v", err)
+	}
+	filtered, err := client.Runs(context.Background(), RunsRequest{Limit: 5, Scape: "comm_grid_mentor", CommGridMentorPlan: "baseline"})
+	if err != nil {
+		t.Fatalf("filtered runs: %v", err)
+	}
+	if len(filtered) != 1 || filtered[0].RunID != summary.RunID || filtered[0].CommGridMentorPlan != "silent" {
+		t.Fatalf("expected only silent mentor run after filter, got %+v", filtered)
+	}
 }
 
 func TestClientExportFallsBackToStoredMorphologyForLegacyConfig(t *testing.T) {

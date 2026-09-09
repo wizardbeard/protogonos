@@ -409,6 +409,7 @@ Status legend:
 - 2026-09-09: added `protogonosctl run --scape comm-grid-mentor --comm-grid-mentor-plan solve|silent` so normal-run artifacts can record mentor and no-hint fixture variants.
 - 2026-09-09: added `protogonosctl run --scape comm-grid-mentor --comm-grid-mentor-compare-baseline` to execute paired solve/silent normal runs, write both artifact sets, and print the fitness delta.
 - 2026-09-09: added stored `comm_grid_mentor_plan` display to `protogonosctl runs` text and JSON output, with public API `Runs` support.
+- 2026-09-09: added `protogonosctl runs --scape comm-grid-mentor --comm-grid-mentor-plan solve|silent` filters, with matching public API `RunsRequest` filters.
 
 ## Summary
 
