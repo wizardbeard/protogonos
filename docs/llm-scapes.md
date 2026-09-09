@@ -583,6 +583,8 @@ Run fixture-backed mentor evolution through the normal scape registry:
 protogonosctl run --scape comm-grid-mentor --pop 4 --gens 1 --seed 91
 protogonosctl run --scape comm-grid-mentor --comm-grid-mentor-plan silent --pop 4 --gens 1 --seed 91
 protogonosctl run --scape comm-grid-mentor --comm-grid-mentor-compare-baseline --pop 4 --gens 1 --seed 91
+protogonosctl runs
+protogonosctl runs --json
 ```
 
 Replay a stored artifact through the fixture provider and compare the final trace:
@@ -755,5 +757,6 @@ A small first slice should avoid provider lock-in:
 - add fixture-backed `protogonosctl run --scape comm-grid-mentor` support through the normal scape registry.
 - add `--comm-grid-mentor-plan solve|silent` so normal runs can execute mentor and no-hint baseline variants.
 - add `--comm-grid-mentor-compare-baseline` so normal runs can write paired solve/silent artifacts and print the fitness delta.
+- show stored `comm_grid_mentor_plan` values in `protogonosctl runs` text and JSON output.
 
 This gives the system a useful LLM integration path without making evolution depend on unbounded free-form text.

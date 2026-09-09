@@ -597,6 +597,7 @@ func runRuns(_ context.Context, args []string) error {
 			CreatedAtUTC       string   `json:"created_at_utc"`
 			Scape              string   `json:"scape"`
 			Morphology         string   `json:"morphology"`
+			CommGridMentorPlan string   `json:"comm_grid_mentor_plan,omitempty"`
 			Seed               int64    `json:"seed"`
 			PopulationSize     int      `json:"population_size"`
 			Generations        int      `json:"generations"`
@@ -607,6 +608,7 @@ func runRuns(_ context.Context, args []string) error {
 		items := make([]runsItem, 0, len(entries))
 		for _, e := range entries {
 			var compare *float64
+			mentorPlan := runConfigCommGridMentorPlan(benchmarksDir, e.RunID)
 			if *showCompare {
 				report, ok, err := stats.ReadTuningComparison(benchmarksDir, e.RunID)
 				if err != nil {
@@ -622,6 +624,7 @@ func runRuns(_ context.Context, args []string) error {
 				CreatedAtUTC:       e.CreatedAtUTC,
 				Scape:              e.Scape,
 				Morphology:         e.Morphology,
+				CommGridMentorPlan: mentorPlan,
 				Seed:               e.Seed,
 				PopulationSize:     e.PopulationSize,
 				Generations:        e.Generations,
@@ -637,6 +640,7 @@ func runRuns(_ context.Context, args []string) error {
 
 	for _, e := range entries {
 		compareDisplay := "n/a"
+		mentorPlan := runConfigCommGridMentorPlan(benchmarksDir, e.RunID)
 		if *showCompare {
 			report, ok, err := stats.ReadTuningComparison(benchmarksDir, e.RunID)
 			if err != nil {
@@ -647,11 +651,17 @@ func runRuns(_ context.Context, args []string) error {
 			}
 		}
 
-		fmt.Printf("run_id=%s created_at=%s scape=%s morphology=%s seed=%d pop=%d gens=%d tuning=%t final_best_fitness=%.6f compare_improvement=%s\n",
+		mentorPlanDisplay := ""
+		if mentorPlan != "" {
+			mentorPlanDisplay = fmt.Sprintf(" comm_grid_mentor_plan=%s", mentorPlan)
+		}
+
+		fmt.Printf("run_id=%s created_at=%s scape=%s morphology=%s%s seed=%d pop=%d gens=%d tuning=%t final_best_fitness=%.6f compare_improvement=%s\n",
 			e.RunID,
 			e.CreatedAtUTC,
 			e.Scape,
 			e.Morphology,
+			mentorPlanDisplay,
 			e.Seed,
 			e.PopulationSize,
 			e.Generations,
@@ -661,6 +671,14 @@ func runRuns(_ context.Context, args []string) error {
 		)
 	}
 	return nil
+}
+
+func runConfigCommGridMentorPlan(baseDir, runID string) string {
+	cfg, ok, err := stats.ReadRunConfig(baseDir, runID)
+	if err != nil || !ok {
+		return ""
+	}
+	return strings.TrimSpace(cfg.CommGridMentorPlan)
 }
 
 func runLineage(ctx context.Context, args []string) error {

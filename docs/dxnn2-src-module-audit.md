@@ -408,6 +408,7 @@ Status legend:
 - 2026-09-09: added fixture-backed `protogonosctl run --scape comm-grid-mentor` support through the normal scape registry, including seed, morphology, IO compatibility, and sqlite CLI smoke coverage.
 - 2026-09-09: added `protogonosctl run --scape comm-grid-mentor --comm-grid-mentor-plan solve|silent` so normal-run artifacts can record mentor and no-hint fixture variants.
 - 2026-09-09: added `protogonosctl run --scape comm-grid-mentor --comm-grid-mentor-compare-baseline` to execute paired solve/silent normal runs, write both artifact sets, and print the fitness delta.
+- 2026-09-09: added stored `comm_grid_mentor_plan` display to `protogonosctl runs` text and JSON output, with public API `Runs` support.
 
 ## Summary
 

@@ -163,6 +163,7 @@ type RunItem struct {
 	CreatedAtUTC       string
 	Scape              string
 	Morphology         string
+	CommGridMentorPlan string
 	Seed               int64
 	Population         int
 	Generations        int
@@ -998,6 +999,14 @@ func normalizeCommGridMentorPlan(scapeName, raw string) (string, error) {
 	}
 }
 
+func runConfigCommGridMentorPlan(baseDir, runID string) string {
+	cfg, ok, err := stats.ReadRunConfig(baseDir, runID)
+	if err != nil || !ok {
+		return ""
+	}
+	return strings.TrimSpace(cfg.CommGridMentorPlan)
+}
+
 func buildReplayIO(scapeName string, genome model.Genome) (map[string]protoio.Sensor, map[string]protoio.Actuator, error) {
 	var sensors map[string]protoio.Sensor
 	if len(genome.SensorIDs) > 0 {
@@ -1151,15 +1160,16 @@ func (c *Client) Runs(_ context.Context, req RunsRequest) ([]RunItem, error) {
 	out := make([]RunItem, 0, len(entries))
 	for _, e := range entries {
 		item := RunItem{
-			RunID:            e.RunID,
-			CreatedAtUTC:     e.CreatedAtUTC,
-			Scape:            e.Scape,
-			Morphology:       e.Morphology,
-			Seed:             e.Seed,
-			Population:       e.PopulationSize,
-			Generations:      e.Generations,
-			TuningEnabled:    e.TuningEnabled,
-			FinalBestFitness: e.FinalBestFitness,
+			RunID:              e.RunID,
+			CreatedAtUTC:       e.CreatedAtUTC,
+			Scape:              e.Scape,
+			Morphology:         e.Morphology,
+			CommGridMentorPlan: runConfigCommGridMentorPlan(c.benchmarksDir, e.RunID),
+			Seed:               e.Seed,
+			Population:         e.PopulationSize,
+			Generations:        e.Generations,
+			TuningEnabled:      e.TuningEnabled,
+			FinalBestFitness:   e.FinalBestFitness,
 		}
 		if req.ShowCompare {
 			report, ok, err := stats.ReadTuningComparison(c.benchmarksDir, e.RunID)

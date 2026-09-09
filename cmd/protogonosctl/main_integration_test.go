@@ -188,6 +188,29 @@ func TestRunCommandSQLiteComparesCommGridMentorBaseline(t *testing.T) {
 	if !ok || silentCfg.CommGridMentorPlan != "silent" {
 		t.Fatalf("unexpected silent config ok=%t cfg=%+v", ok, silentCfg)
 	}
+
+	runsOut, err := captureStdout(func() error {
+		return run(context.Background(), []string{"runs", "--limit", "2"})
+	})
+	if err != nil {
+		t.Fatalf("runs command: %v", err)
+	}
+	if !strings.Contains(runsOut, "run_id=comm-grid-mentor-compare-silent") || !strings.Contains(runsOut, "comm_grid_mentor_plan=silent") {
+		t.Fatalf("expected silent mentor plan in runs output: %s", runsOut)
+	}
+	if !strings.Contains(runsOut, "run_id=comm-grid-mentor-compare-solve") || !strings.Contains(runsOut, "comm_grid_mentor_plan=solve") {
+		t.Fatalf("expected solve mentor plan in runs output: %s", runsOut)
+	}
+
+	jsonOut, err := captureStdout(func() error {
+		return run(context.Background(), []string{"runs", "--limit", "2", "--json"})
+	})
+	if err != nil {
+		t.Fatalf("runs json command: %v", err)
+	}
+	if !strings.Contains(jsonOut, `"comm_grid_mentor_plan": "silent"`) || !strings.Contains(jsonOut, `"comm_grid_mentor_plan": "solve"`) {
+		t.Fatalf("expected mentor plans in runs json output: %s", jsonOut)
+	}
 }
 
 func TestResetCommandSQLiteClearsStore(t *testing.T) {

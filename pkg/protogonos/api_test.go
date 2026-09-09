@@ -1963,6 +1963,45 @@ func TestClientRunsAndExportExposeProfiledMorphology(t *testing.T) {
 	}
 }
 
+func TestClientRunsExposeCommGridMentorPlan(t *testing.T) {
+	base := t.TempDir()
+	client, err := New(Options{
+		StoreKind:     "memory",
+		BenchmarksDir: filepath.Join(base, "benchmarks"),
+		ExportsDir:    filepath.Join(base, "exports"),
+	})
+	if err != nil {
+		t.Fatalf("new client: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = client.Close()
+	})
+
+	summary, err := client.Run(context.Background(), RunRequest{
+		RunID:              "mentor-runs-list",
+		Scape:              "comm-grid-mentor",
+		CommGridMentorPlan: "silent",
+		Population:         4,
+		Generations:        1,
+		Seed:               91,
+		Workers:            1,
+	})
+	if err != nil {
+		t.Fatalf("run: %v", err)
+	}
+
+	runs, err := client.Runs(context.Background(), RunsRequest{Limit: 1})
+	if err != nil {
+		t.Fatalf("runs: %v", err)
+	}
+	if len(runs) != 1 || runs[0].RunID != summary.RunID {
+		t.Fatalf("expected mentor run in list, got %+v", runs)
+	}
+	if runs[0].CommGridMentorPlan != "silent" {
+		t.Fatalf("expected silent mentor plan in runs list, got %+v", runs[0])
+	}
+}
+
 func TestClientExportFallsBackToStoredMorphologyForLegacyConfig(t *testing.T) {
 	base := t.TempDir()
 	client, err := New(Options{
