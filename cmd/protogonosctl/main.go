@@ -18,6 +18,7 @@ import (
 	"protogonos/internal/morphology"
 	"protogonos/internal/platform"
 	"protogonos/internal/scape"
+	"protogonos/internal/scapeid"
 	"protogonos/internal/stats"
 	"protogonos/internal/storage"
 	"protogonos/internal/tuning"
@@ -232,6 +233,7 @@ func runRun(ctx context.Context, args []string) error {
 	dbPath := fs.String("db-path", "protogonos.db", "sqlite database path")
 	enableTuning := fs.Bool("tuning", false, "enable exoself tuning")
 	compareTuning := fs.Bool("compare-tuning", false, "run with and without tuning and emit side-by-side metrics")
+	commGridMentorCompareBaseline := fs.Bool("comm-grid-mentor-compare-baseline", false, "run comm-grid-mentor solve and silent fixture plans with matched settings")
 	validationProbe := fs.Bool("validation-probe", false, "evaluate per-species champions in validation probe during gt runs")
 	testProbe := fs.Bool("test-probe", false, "evaluate per-species champions in test probe during gt runs")
 	profileName := fs.String("profile", "", "optional parity profile id (from testdata/fixtures/parity/ref_benchmarker_profiles.json)")
@@ -486,10 +488,22 @@ func runRun(ctx context.Context, args []string) error {
 		return err
 	}
 
+	if *commGridMentorCompareBaseline {
+		if err := runCommGridMentorNormalCompare(ctx, client, req); err != nil {
+			return err
+		}
+		return nil
+	}
+
 	runSummary, err := client.Run(ctx, req)
 	if err != nil {
 		return err
 	}
+	printRunSummary(req, runSummary)
+	return nil
+}
+
+func printRunSummary(req protoapi.RunRequest, runSummary protoapi.RunSummary) {
 	fmt.Printf("run completed run_id=%s scape=%s pop=%d gens=%d seed=%d\n", runSummary.RunID, req.Scape, req.Population, req.Generations, req.Seed)
 	for i, best := range runSummary.BestByGeneration {
 		fmt.Printf("generation=%d best_fitness=%.6f\n", i+1, best)
@@ -503,6 +517,53 @@ func runRun(ctx context.Context, args []string) error {
 		)
 	}
 	fmt.Printf("artifacts_dir=%s\n", filepath.Clean(runSummary.ArtifactsDir))
+}
+
+func runCommGridMentorNormalCompare(ctx context.Context, client *protoapi.Client, req protoapi.RunRequest) error {
+	if scapeid.Normalize(req.Scape) != "comm-grid-mentor" {
+		return errors.New("comm-grid mentor baseline comparison requires scape comm-grid-mentor")
+	}
+	if strings.TrimSpace(req.CommGridMentorPlan) != "" {
+		return errors.New("use either --comm-grid-mentor-plan or --comm-grid-mentor-compare-baseline, not both")
+	}
+	if strings.TrimSpace(req.ContinuePopulationID) != "" {
+		return errors.New("comm-grid mentor baseline comparison does not support --continue-pop-id")
+	}
+	if req.StartPaused {
+		return errors.New("comm-grid mentor baseline comparison does not support --start-paused")
+	}
+
+	baseRunID := strings.TrimSpace(req.RunID)
+	if baseRunID == "" {
+		baseRunID = fmt.Sprintf("comm-grid-mentor-compare-%d", time.Now().UTC().UnixNano())
+	}
+
+	solveReq := req
+	solveReq.RunID = baseRunID + "-solve"
+	solveReq.CommGridMentorPlan = "solve"
+	solveSummary, err := client.Run(ctx, solveReq)
+	if err != nil {
+		return fmt.Errorf("run comm-grid mentor solve plan: %w", err)
+	}
+
+	silentReq := req
+	silentReq.RunID = baseRunID + "-silent"
+	silentReq.CommGridMentorPlan = "silent"
+	silentSummary, err := client.Run(ctx, silentReq)
+	if err != nil {
+		return fmt.Errorf("run comm-grid mentor silent plan: %w", err)
+	}
+
+	delta := solveSummary.FinalBestFitness - silentSummary.FinalBestFitness
+	fmt.Printf("comm_grid_mentor_compare solve_run_id=%s silent_run_id=%s solve_final=%.6f silent_final=%.6f delta=%.6f\n",
+		solveSummary.RunID,
+		silentSummary.RunID,
+		solveSummary.FinalBestFitness,
+		silentSummary.FinalBestFitness,
+		delta,
+	)
+	fmt.Printf("solve_artifacts_dir=%s\n", filepath.Clean(solveSummary.ArtifactsDir))
+	fmt.Printf("silent_artifacts_dir=%s\n", filepath.Clean(silentSummary.ArtifactsDir))
 	return nil
 }
 

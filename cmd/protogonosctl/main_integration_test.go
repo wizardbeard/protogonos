@@ -136,6 +136,60 @@ func TestRunCommandSQLiteSupportsCommGridMentor(t *testing.T) {
 	}
 }
 
+func TestRunCommandSQLiteComparesCommGridMentorBaseline(t *testing.T) {
+	origWD, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("getwd: %v", err)
+	}
+	workdir := t.TempDir()
+	if err := os.Chdir(workdir); err != nil {
+		t.Fatalf("chdir tempdir: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = os.Chdir(origWD)
+	})
+
+	dbPath := filepath.Join(workdir, "protogonos.db")
+	out, err := captureStdout(func() error {
+		return run(context.Background(), []string{
+			"run",
+			"--store", "sqlite",
+			"--db-path", dbPath,
+			"--scape", "comm-grid-mentor",
+			"--pop", "4",
+			"--gens", "1",
+			"--seed", "91",
+			"--workers", "1",
+			"--run-id", "comm-grid-mentor-compare",
+			"--comm-grid-mentor-compare-baseline",
+		})
+	})
+	if err != nil {
+		t.Fatalf("run command: %v", err)
+	}
+	if !strings.Contains(out, "comm_grid_mentor_compare solve_run_id=comm-grid-mentor-compare-solve silent_run_id=comm-grid-mentor-compare-silent") {
+		t.Fatalf("unexpected compare output: %s", out)
+	}
+	if !strings.Contains(out, "delta=1.460000") {
+		t.Fatalf("expected positive compare delta, got: %s", out)
+	}
+
+	solveCfg, ok, err := stats.ReadRunConfig("benchmarks", "comm-grid-mentor-compare-solve")
+	if err != nil {
+		t.Fatalf("read solve run config: %v", err)
+	}
+	if !ok || solveCfg.CommGridMentorPlan != "solve" {
+		t.Fatalf("unexpected solve config ok=%t cfg=%+v", ok, solveCfg)
+	}
+	silentCfg, ok, err := stats.ReadRunConfig("benchmarks", "comm-grid-mentor-compare-silent")
+	if err != nil {
+		t.Fatalf("read silent run config: %v", err)
+	}
+	if !ok || silentCfg.CommGridMentorPlan != "silent" {
+		t.Fatalf("unexpected silent config ok=%t cfg=%+v", ok, silentCfg)
+	}
+}
+
 func TestResetCommandSQLiteClearsStore(t *testing.T) {
 	origWD, err := os.Getwd()
 	if err != nil {
