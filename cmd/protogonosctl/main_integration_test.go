@@ -6,7 +6,10 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
@@ -133,6 +136,114 @@ func TestRunCommandSQLiteSupportsCommGridMentor(t *testing.T) {
 	}
 	if cfg.CommGridMentorPlan != "silent" {
 		t.Fatalf("expected silent comm-grid mentor plan, got %q", cfg.CommGridMentorPlan)
+	}
+}
+
+func TestRunCommandSQLiteSupportsLiveCommGridMentorProvider(t *testing.T) {
+	origWD, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("getwd: %v", err)
+	}
+	workdir := t.TempDir()
+	if err := os.Chdir(workdir); err != nil {
+		t.Fatalf("chdir tempdir: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = os.Chdir(origWD)
+	})
+	t.Setenv("PROTOGONOS_TEST_LLM_KEY", "secret")
+
+	requests := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v1/chat/completions" {
+			t.Fatalf("unexpected provider path: %s", r.URL.Path)
+		}
+		if got := r.Header.Get("Authorization"); got != "Bearer secret" {
+			t.Fatalf("unexpected auth header: %q", got)
+		}
+		var req struct {
+			Model    string `json:"model"`
+			Messages []struct {
+				Role    string `json:"role"`
+				Content string `json:"content"`
+			} `json:"messages"`
+			MaxTokens int `json:"max_tokens"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			t.Fatalf("decode provider request: %v", err)
+		}
+		if req.Model != "fake-mentor" {
+			t.Fatalf("unexpected provider model: %s", req.Model)
+		}
+		if req.MaxTokens != 6 {
+			t.Fatalf("unexpected provider max tokens: %d", req.MaxTokens)
+		}
+		requests++
+
+		content := ""
+		if len(req.Messages) > 0 {
+			content = strings.ToLower(req.Messages[len(req.Messages)-1].Content)
+		}
+		hint := "east"
+		switch {
+		case strings.Contains(content, "position=(1,0)") && strings.Contains(content, "carrying_key=false"):
+			hint = "pick"
+		case strings.Contains(content, "position=(2,0)") && strings.Contains(content, "carrying_key=true"):
+			hint = "drop"
+		}
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprintf(w, `{"model":"fake-mentor","choices":[{"finish_reason":"stop","message":{"content":%q}}],"usage":{"prompt_tokens":2,"completion_tokens":1,"total_tokens":3}}`, hint)
+	}))
+	t.Cleanup(server.Close)
+
+	dbPath := filepath.Join(workdir, "protogonos.db")
+	runID := "comm-grid-mentor-live-provider-run"
+	out, err := captureStdout(func() error {
+		return run(context.Background(), []string{
+			"run",
+			"--store", "sqlite",
+			"--db-path", dbPath,
+			"--scape", "comm-grid-mentor",
+			"--comm-grid-mentor-provider", "openai-compatible",
+			"--comm-grid-mentor-base-url", server.URL + "/v1",
+			"--comm-grid-mentor-api-key-env", "PROTOGONOS_TEST_LLM_KEY",
+			"--comm-grid-mentor-model", "fake-mentor",
+			"--comm-grid-mentor-max-tokens", "6",
+			"--pop", "4",
+			"--gens", "1",
+			"--seed", "91",
+			"--workers", "1",
+			"--run-id", runID,
+		})
+	})
+	if err != nil {
+		t.Fatalf("run command: %v", err)
+	}
+	if requests == 0 {
+		t.Fatal("expected live mentor provider requests")
+	}
+	if !strings.Contains(out, "run completed run_id=comm-grid-mentor-live-provider-run scape=comm-grid-mentor pop=4 gens=1 seed=91") {
+		t.Fatalf("unexpected run output: %s", out)
+	}
+
+	cfg, ok, err := stats.ReadRunConfig("benchmarks", runID)
+	if err != nil {
+		t.Fatalf("read live comm-grid mentor config: %v", err)
+	}
+	if !ok {
+		t.Fatal("expected live comm-grid mentor config")
+	}
+	if cfg.CommGridMentorProvider != "openai-compatible" {
+		t.Fatalf("expected openai-compatible provider, got %q", cfg.CommGridMentorProvider)
+	}
+	if cfg.CommGridMentorPlan != "" {
+		t.Fatalf("expected live run to omit fixture plan, got %q", cfg.CommGridMentorPlan)
+	}
+	if cfg.CommGridMentorBaseURL != server.URL+"/v1" || cfg.CommGridMentorModel != "fake-mentor" {
+		t.Fatalf("unexpected live provider config: %+v", cfg)
+	}
+	if cfg.CommGridMentorMaxTokens != 6 {
+		t.Fatalf("expected max tokens 6, got %d", cfg.CommGridMentorMaxTokens)
 	}
 }
 

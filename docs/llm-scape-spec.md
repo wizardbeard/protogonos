@@ -121,11 +121,12 @@ Implemented:
 - normal-run mentor baseline comparison through `--comm-grid-mentor-compare-baseline`,
 - stored plan display in `protogonosctl runs` text and JSON output,
 - history filtering with `protogonosctl runs --scape comm-grid-mentor --comm-grid-mentor-plan solve|silent`,
-- benchmark artifacts through `protogonosctl benchmark --scape comm-grid-mentor --comm-grid-mentor-plan solve|silent`.
+- benchmark artifacts through `protogonosctl benchmark --scape comm-grid-mentor --comm-grid-mentor-plan solve|silent`,
+- live OpenAI-compatible mentor population runs through `protogonosctl run --scape comm-grid-mentor`.
 
 Not implemented yet:
 
-- live OpenAI-compatible mentor population runs.
+- streaming mentor calls.
 
 ## CLI Example
 
@@ -162,6 +163,21 @@ Write normal benchmark artifacts for a mentor or no-hint run:
 ```bash
 protogonosctl benchmark --scape comm-grid-mentor --comm-grid-mentor-plan solve --pop 4 --gens 1 --seed 91 --min-improvement 0
 protogonosctl benchmark --scape comm-grid-mentor --comm-grid-mentor-plan silent --pop 4 --gens 1 --seed 91 --min-improvement 0
+```
+
+Run the mentor scape with a live OpenAI-compatible endpoint:
+
+```bash
+protogonosctl run \
+  --scape comm-grid-mentor \
+  --comm-grid-mentor-provider openai-compatible \
+  --comm-grid-mentor-base-url http://192.168.1.50:1234/v1 \
+  --comm-grid-mentor-model local-model \
+  --comm-grid-mentor-api-key-env PROTOGONOS_LLM_API_KEY \
+  --comm-grid-mentor-max-tokens 8 \
+  --pop 4 \
+  --gens 1 \
+  --seed 91
 ```
 
 Compare the fixture mentor with the no-hint baseline:

@@ -98,6 +98,14 @@ func (s CommGridMentorScape) Evaluate(ctx context.Context, agent Agent) (Fitness
 	}
 
 	cfg := s.Config
+	start := CommGridPoint{}
+	if len(cfg.Agents) > 0 {
+		start = cfg.Agents[0].Position
+	}
+	cfg.Agents = []CommGridAgentState{{
+		ID:       agent.ID(),
+		Position: start,
+	}}
 	sim := NewCommGridSimulator(cfg.CommGridConfig)
 	var steps []CommGridMentorStepTrace
 	mentorFailures := 0

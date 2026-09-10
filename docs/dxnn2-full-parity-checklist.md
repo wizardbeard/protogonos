@@ -597,6 +597,7 @@ Status keys:
 - Added stored `comm_grid_mentor_plan` display to `protogonosctl runs` text and JSON output, with public API `Runs` support.
 - Added `protogonosctl runs --scape comm-grid-mentor --comm-grid-mentor-plan solve|silent` filters, with matching public API `RunsRequest` filters.
 - Added `protogonosctl benchmark --scape comm-grid-mentor --comm-grid-mentor-plan solve|silent` support so normal benchmark summaries and series cover mentor and no-hint fixture variants.
+- Added live OpenAI-compatible provider wiring for `protogonosctl run --scape comm-grid-mentor`, with fixture mode still the default.
 
 ## Current-scope parity declaration
 

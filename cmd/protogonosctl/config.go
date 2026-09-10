@@ -104,6 +104,30 @@ func loadRunRequestFromConfig(path string) (protoapi.RunRequest, error) {
 	if v, ok := asString(raw["comm_grid_mentor_plan"]); ok {
 		req.CommGridMentorPlan = v
 	}
+	if v, ok := asString(raw["comm_grid_mentor_provider"]); ok {
+		req.CommGridMentorProvider = v
+	}
+	if v, ok := asString(raw["comm_grid_mentor_base_url"]); ok {
+		req.CommGridMentorBaseURL = v
+	}
+	if v, ok := asString(raw["comm_grid_mentor_api_key_env"]); ok {
+		req.CommGridMentorAPIKeyEnv = v
+	}
+	if v, ok := asString(raw["comm_grid_mentor_model"]); ok {
+		req.CommGridMentorModel = v
+	}
+	if v, ok := asInt(raw["comm_grid_mentor_timeout_ms"]); ok {
+		req.CommGridMentorTimeoutMS = v
+	}
+	if v, ok := asInt(raw["comm_grid_mentor_max_tokens"]); ok {
+		req.CommGridMentorMaxTokens = v
+	}
+	if v, ok := asFloat64(raw["comm_grid_mentor_temperature"]); ok {
+		req.CommGridMentorTemp = v
+	}
+	if v, ok := asInt(raw["comm_grid_mentor_seed"]); ok {
+		req.CommGridMentorSeed = int64(v)
+	}
 	if v, ok := asFloat64(raw["flatland_scanner_spread"]); ok {
 		req.FlatlandScannerSpread = float64Ptr(v)
 	}
@@ -699,6 +723,22 @@ func overrideFromFlags(req *protoapi.RunRequest, set map[string]bool, flagValue 
 			req.TopologicalMax = v.(int)
 		case "comm-grid-mentor-plan":
 			req.CommGridMentorPlan = v.(string)
+		case "comm-grid-mentor-provider":
+			req.CommGridMentorProvider = v.(string)
+		case "comm-grid-mentor-base-url":
+			req.CommGridMentorBaseURL = v.(string)
+		case "comm-grid-mentor-api-key-env":
+			req.CommGridMentorAPIKeyEnv = v.(string)
+		case "comm-grid-mentor-model":
+			req.CommGridMentorModel = v.(string)
+		case "comm-grid-mentor-timeout-ms":
+			req.CommGridMentorTimeoutMS = v.(int)
+		case "comm-grid-mentor-max-tokens":
+			req.CommGridMentorMaxTokens = v.(int)
+		case "comm-grid-mentor-temperature":
+			req.CommGridMentorTemp = v.(float64)
+		case "comm-grid-mentor-seed":
+			req.CommGridMentorSeed = v.(int64)
 		case "attempts":
 			req.TuneAttempts = v.(int)
 		case "tune-steps":

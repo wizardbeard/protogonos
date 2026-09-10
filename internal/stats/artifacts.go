@@ -48,6 +48,14 @@ type RunConfig struct {
 	LLVMProfile             string   `json:"llvm_profile,omitempty"`
 	FlatlandScannerProfile  string   `json:"flatland_scanner_profile,omitempty"`
 	CommGridMentorPlan      string   `json:"comm_grid_mentor_plan,omitempty"`
+	CommGridMentorProvider  string   `json:"comm_grid_mentor_provider,omitempty"`
+	CommGridMentorBaseURL   string   `json:"comm_grid_mentor_base_url,omitempty"`
+	CommGridMentorAPIKeyEnv string   `json:"comm_grid_mentor_api_key_env,omitempty"`
+	CommGridMentorModel     string   `json:"comm_grid_mentor_model,omitempty"`
+	CommGridMentorTimeoutMS int      `json:"comm_grid_mentor_timeout_ms,omitempty"`
+	CommGridMentorMaxTokens int      `json:"comm_grid_mentor_max_tokens,omitempty"`
+	CommGridMentorTemp      float64  `json:"comm_grid_mentor_temperature,omitempty"`
+	CommGridMentorSeed      int64    `json:"comm_grid_mentor_seed,omitempty"`
 	FlatlandScannerSpread   *float64 `json:"flatland_scanner_spread,omitempty"`
 	FlatlandScannerOffset   *float64 `json:"flatland_scanner_offset,omitempty"`
 	FlatlandLayoutRandomize *bool    `json:"flatland_layout_randomize,omitempty"`

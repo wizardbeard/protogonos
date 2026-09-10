@@ -15,6 +15,7 @@ import (
 	"protogonos/internal/evo"
 	"protogonos/internal/genotype"
 	protoio "protogonos/internal/io"
+	"protogonos/internal/llm"
 	"protogonos/internal/model"
 	"protogonos/internal/morphology"
 	"protogonos/internal/nn"
@@ -78,6 +79,14 @@ type RunRequest struct {
 	LLVMProfile             string
 	FlatlandScannerProfile  string
 	CommGridMentorPlan      string
+	CommGridMentorProvider  string
+	CommGridMentorBaseURL   string
+	CommGridMentorAPIKeyEnv string
+	CommGridMentorModel     string
+	CommGridMentorTimeoutMS int
+	CommGridMentorMaxTokens int
+	CommGridMentorTemp      float64
+	CommGridMentorSeed      int64
 	FlatlandScannerSpread   *float64
 	FlatlandScannerOffset   *float64
 	FlatlandLayoutRandomize *bool
@@ -418,7 +427,7 @@ func (c *Client) Start(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	return registerDefaultScapes(p, "")
+	return registerDefaultScapes(p, RunRequest{})
 }
 
 func (c *Client) Run(ctx context.Context, req RunRequest) (RunSummary, error) {
@@ -436,7 +445,7 @@ func (c *Client) Run(ctx context.Context, req RunRequest) (RunSummary, error) {
 	if err != nil {
 		return RunSummary{}, err
 	}
-	if err := registerDefaultScapes(p, req.CommGridMentorPlan); err != nil {
+	if err := registerDefaultScapes(p, req); err != nil {
 		return RunSummary{}, err
 	}
 
@@ -660,6 +669,14 @@ func (c *Client) Run(ctx context.Context, req RunRequest) (RunSummary, error) {
 			LLVMProfile:             req.LLVMProfile,
 			FlatlandScannerProfile:  req.FlatlandScannerProfile,
 			CommGridMentorPlan:      req.CommGridMentorPlan,
+			CommGridMentorProvider:  req.CommGridMentorProvider,
+			CommGridMentorBaseURL:   req.CommGridMentorBaseURL,
+			CommGridMentorAPIKeyEnv: req.CommGridMentorAPIKeyEnv,
+			CommGridMentorModel:     req.CommGridMentorModel,
+			CommGridMentorTimeoutMS: req.CommGridMentorTimeoutMS,
+			CommGridMentorMaxTokens: req.CommGridMentorMaxTokens,
+			CommGridMentorTemp:      req.CommGridMentorTemp,
+			CommGridMentorSeed:      req.CommGridMentorSeed,
 			FlatlandScannerSpread:   cloneFloat64Ptr(req.FlatlandScannerSpread),
 			FlatlandScannerOffset:   cloneFloat64Ptr(req.FlatlandScannerOffset),
 			FlatlandLayoutRandomize: cloneBoolPtr(req.FlatlandLayoutRandomize),
@@ -838,6 +855,14 @@ func runRequestFromArtifactsConfig(cfg stats.RunConfig) RunRequest {
 		LLVMProfile:             cfg.LLVMProfile,
 		FlatlandScannerProfile:  cfg.FlatlandScannerProfile,
 		CommGridMentorPlan:      cfg.CommGridMentorPlan,
+		CommGridMentorProvider:  cfg.CommGridMentorProvider,
+		CommGridMentorBaseURL:   cfg.CommGridMentorBaseURL,
+		CommGridMentorAPIKeyEnv: cfg.CommGridMentorAPIKeyEnv,
+		CommGridMentorModel:     cfg.CommGridMentorModel,
+		CommGridMentorTimeoutMS: cfg.CommGridMentorTimeoutMS,
+		CommGridMentorMaxTokens: cfg.CommGridMentorMaxTokens,
+		CommGridMentorTemp:      cfg.CommGridMentorTemp,
+		CommGridMentorSeed:      cfg.CommGridMentorSeed,
 		FlatlandScannerSpread:   cloneFloat64Ptr(cfg.FlatlandScannerSpread),
 		FlatlandScannerOffset:   cloneFloat64Ptr(cfg.FlatlandScannerOffset),
 		FlatlandLayoutRandomize: cloneBoolPtr(cfg.FlatlandLayoutRandomize),
@@ -999,6 +1024,44 @@ func normalizeCommGridMentorPlan(scapeName, raw string) (string, error) {
 	default:
 		return "", fmt.Errorf("unsupported comm-grid mentor plan: %s", raw)
 	}
+}
+
+func normalizeCommGridMentorProvider(scapeName, raw string) (string, error) {
+	provider := strings.ToLower(strings.TrimSpace(raw))
+	provider = strings.ReplaceAll(provider, "_", "-")
+	if scapeid.Normalize(scapeName) != "comm-grid-mentor" {
+		if provider != "" {
+			return "", errors.New("comm-grid mentor provider requires scape comm-grid-mentor")
+		}
+		return "", nil
+	}
+	switch provider {
+	case "", "fixture":
+		return "", nil
+	case "openai-compatible":
+		return "openai-compatible", nil
+	default:
+		return "", fmt.Errorf("unsupported comm-grid mentor provider: %s", raw)
+	}
+}
+
+func validateCommGridMentorProvider(req RunRequest) error {
+	if req.CommGridMentorProvider == "" {
+		return nil
+	}
+	if strings.TrimSpace(req.CommGridMentorPlan) != "" && req.CommGridMentorPlan != "solve" {
+		return errors.New("comm-grid mentor plan is fixture-only when provider is openai-compatible")
+	}
+	if strings.TrimSpace(req.CommGridMentorModel) == "" {
+		return llm.ErrModelRequired
+	}
+	if req.CommGridMentorTimeoutMS < 0 {
+		return errors.New("comm-grid mentor timeout must be >= 0")
+	}
+	if req.CommGridMentorMaxTokens < 0 {
+		return errors.New("comm-grid mentor max tokens must be >= 0")
+	}
+	return nil
 }
 
 func normalizeCommGridMentorPlanFilter(raw string) (string, error) {
@@ -1750,7 +1813,7 @@ func (c *Client) SubstrateEpisodeReplay(ctx context.Context, req SubstrateEpisod
 	if err != nil {
 		return SubstrateEpisodeReplaySummary{}, err
 	}
-	if err := registerDefaultScapes(p, runCfg.CommGridMentorPlan); err != nil {
+	if err := registerDefaultScapes(p, RunRequest{CommGridMentorPlan: runCfg.CommGridMentorPlan}); err != nil {
 		return SubstrateEpisodeReplaySummary{}, err
 	}
 	targetScape, ok := p.GetScape(runCfg.Scape)
@@ -1902,7 +1965,7 @@ func (c *Client) EpitopesReplay(ctx context.Context, req EpitopesReplayRequest) 
 	if err != nil {
 		return EpitopesReplaySummary{}, err
 	}
-	if err := registerDefaultScapes(p, ""); err != nil {
+	if err := registerDefaultScapes(p, RunRequest{}); err != nil {
 		return EpitopesReplaySummary{}, err
 	}
 	targetScape, ok := p.GetScape("epitopes")
@@ -2231,7 +2294,7 @@ func (c *Client) ensurePolis(ctx context.Context) (*platform.Polis, error) {
 	return c.polis, nil
 }
 
-func registerDefaultScapes(p *platform.Polis, commGridMentorPlan string) error {
+func registerDefaultScapes(p *platform.Polis, req RunRequest) error {
 	if err := p.RegisterScape(scape.XORScape{}); err != nil {
 		return err
 	}
@@ -2262,16 +2325,56 @@ func registerDefaultScapes(p *platform.Polis, commGridMentorPlan string) error {
 	if err := p.RegisterScape(scape.LLVMPhaseOrderingScape{}); err != nil {
 		return err
 	}
-	if err := p.RegisterScape(scape.CommGridMentorFixtureScape{Plan: commGridMentorPlan, Config: scape.CommGridConfig{
+	mentorScape, err := commGridMentorScapeFromRequest(req)
+	if err != nil {
+		return err
+	}
+	if err := p.RegisterScape(mentorScape); err != nil {
+		return err
+	}
+	return nil
+}
+
+func commGridMentorScapeFromRequest(req RunRequest) (scape.Scape, error) {
+	cfg := scape.CommGridConfig{
 		Width:    3,
 		Height:   1,
 		MaxSteps: 4,
 		Key:      scape.CommGridPoint{X: 1, Y: 0},
 		Goal:     scape.CommGridPoint{X: 2, Y: 0},
-	}}); err != nil {
-		return err
 	}
-	return nil
+	switch strings.TrimSpace(req.CommGridMentorProvider) {
+	case "", "fixture":
+		return scape.CommGridMentorFixtureScape{Plan: req.CommGridMentorPlan, Config: cfg}, nil
+	case "openai-compatible":
+		provider, err := llm.NewOpenAICompatibleProvider(llm.ProviderConfig{
+			BaseURL:     req.CommGridMentorBaseURL,
+			APIKeyEnv:   req.CommGridMentorAPIKeyEnv,
+			Model:       req.CommGridMentorModel,
+			TimeoutMS:   req.CommGridMentorTimeoutMS,
+			MaxTokens:   req.CommGridMentorMaxTokens,
+			Temperature: req.CommGridMentorTemp,
+			Seed:        req.CommGridMentorSeed,
+			Capabilities: llm.Capabilities{
+				ChatCompletions: true,
+				Seed:            req.CommGridMentorSeed != 0,
+				UsageTokens:     true,
+			},
+		})
+		if err != nil {
+			return nil, err
+		}
+		return scape.CommGridMentorScape{Config: scape.CommGridMentorConfig{
+			CommGridConfig: cfg,
+			Provider:       provider,
+			Model:          req.CommGridMentorModel,
+			MaxTokens:      req.CommGridMentorMaxTokens,
+			Temperature:    req.CommGridMentorTemp,
+			Seed:           req.CommGridMentorSeed,
+		}}, nil
+	default:
+		return nil, fmt.Errorf("unsupported comm-grid mentor provider: %s", req.CommGridMentorProvider)
+	}
 }
 
 func materializeRunConfigFromRequest(req RunRequest) (materializedRunConfig, error) {
@@ -2313,6 +2416,25 @@ func materializeRunConfigFromRequest(req RunRequest) (materializedRunConfig, err
 		return materializedRunConfig{}, err
 	}
 	req.CommGridMentorPlan = commGridMentorPlan
+	commGridMentorProvider, err := normalizeCommGridMentorProvider(req.Scape, req.CommGridMentorProvider)
+	if err != nil {
+		return materializedRunConfig{}, err
+	}
+	req.CommGridMentorProvider = commGridMentorProvider
+	if err := validateCommGridMentorProvider(req); err != nil {
+		return materializedRunConfig{}, err
+	}
+	if req.CommGridMentorProvider != "" {
+		req.CommGridMentorPlan = ""
+	} else {
+		req.CommGridMentorBaseURL = ""
+		req.CommGridMentorAPIKeyEnv = ""
+		req.CommGridMentorModel = ""
+		req.CommGridMentorTimeoutMS = 0
+		req.CommGridMentorMaxTokens = 0
+		req.CommGridMentorTemp = 0
+		req.CommGridMentorSeed = 0
+	}
 	if req.GTSATrainEnd < 0 {
 		return materializedRunConfig{}, errors.New("gtsa train end must be >= 0")
 	}

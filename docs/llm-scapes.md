@@ -596,6 +596,21 @@ protogonosctl benchmark --scape comm-grid-mentor --comm-grid-mentor-plan solve -
 protogonosctl benchmark --scape comm-grid-mentor --comm-grid-mentor-plan silent --pop 4 --gens 1 --seed 91 --min-improvement 0
 ```
 
+Run the mentor scape with a live OpenAI-compatible endpoint:
+
+```bash
+protogonosctl run \
+  --scape comm-grid-mentor \
+  --comm-grid-mentor-provider openai-compatible \
+  --comm-grid-mentor-base-url http://192.168.1.50:1234/v1 \
+  --comm-grid-mentor-model local-model \
+  --comm-grid-mentor-api-key-env PROTOGONOS_LLM_API_KEY \
+  --comm-grid-mentor-max-tokens 8 \
+  --pop 4 \
+  --gens 1 \
+  --seed 91
+```
+
 Replay a stored artifact through the fixture provider and compare the final trace:
 
 ```bash
@@ -769,5 +784,6 @@ A small first slice should avoid provider lock-in:
 - show stored `comm_grid_mentor_plan` values in `protogonosctl runs` text and JSON output.
 - add `protogonosctl runs --scape comm-grid-mentor --comm-grid-mentor-plan solve|silent` filters.
 - add `protogonosctl benchmark --scape comm-grid-mentor --comm-grid-mentor-plan solve|silent` so normal benchmark artifacts cover mentor and no-hint fixture variants.
+- add live OpenAI-compatible provider wiring for `protogonosctl run --scape comm-grid-mentor`, with fixture mode still the default.
 
 This gives the system a useful LLM integration path without making evolution depend on unbounded free-form text.
